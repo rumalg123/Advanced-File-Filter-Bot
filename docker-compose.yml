@@ -22,7 +22,7 @@ services:
     container_name: media-bot
     restart: unless-stopped
     ports:
-      - "8009:8000"
+      - "8000:8000"
     depends_on:
       redis:
         condition: service_healthy
