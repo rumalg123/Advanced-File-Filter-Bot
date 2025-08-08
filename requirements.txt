@@ -1,0 +1,30 @@
+# Core dependencies
+pyrofork
+tgcrypto
+
+# Database
+pymongo
+motor
+
+# Data validation and serialization
+marshmallow
+umongo
+
+# Web and async
+aiohttp
+requests
+
+# Redis cache
+redis
+
+# Utilities
+python-dotenv
+pytz
+psutil
+
+# Optional dependencies for enhanced functionality
+Pillow  # For image processing
+python-dateutil  # For date handling
+
+backoff
+uvloop

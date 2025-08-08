@@ -1,0 +1,45 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: bot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bot-network
+
+  worker:
+    build: .
+    container_name: media-bot
+    restart: unless-stopped
+    ports:
+      - "8009:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URI=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - bot-network
+
+
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
