@@ -109,7 +109,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
             file_identifier = file.file_unique_id if file.file_unique_id else file.file_id
             file_button = InlineKeyboardButton(
                 f"📁 {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
-                callback_data=f"file#{file_identifier}"
+                callback_data=f"file#{file_identifier}#{callback_user_id}"
             )
             buttons.append([file_button])
 
