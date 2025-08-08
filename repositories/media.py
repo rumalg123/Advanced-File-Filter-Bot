@@ -25,6 +25,7 @@ class FileType(Enum):
     DOCUMENT = "document"
     PHOTO = "photo"
     ANIMATION = "animation"
+    APPLICATION = "application"
 
 
 @dataclass
