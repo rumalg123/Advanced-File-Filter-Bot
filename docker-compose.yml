@@ -8,7 +8,8 @@ services:
     volumes:
       - redis_data:/data
       - /etc/localtime:/etc/localtime:ro  # Add this line
-    command: redis-server --appendonly yes --appendfsync everysec
+      - ./redis-config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
