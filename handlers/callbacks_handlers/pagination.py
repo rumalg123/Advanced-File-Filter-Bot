@@ -75,6 +75,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         files_data = []
         for f in files:
             files_data.append({
+                'file_unique_id': f.file_unique_id,
                 'file_id': f.file_id,
                 'file_ref': f.file_ref,
                 'file_name': f.file_name,
@@ -105,7 +106,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
             ])
 
         for file in files:
-            file_identifier = file.file_ref if file.file_ref else file.file_id
+            file_identifier = file.file_unique_id if file.file_unique_id else file.file_id
             file_button = InlineKeyboardButton(
                 f"📁 {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
                 callback_data=f"file#{file_identifier}"
