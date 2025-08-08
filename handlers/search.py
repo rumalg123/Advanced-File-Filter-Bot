@@ -98,8 +98,10 @@ class SearchHandler:
         # Check if it's a private chat
         if message.chat.type == enums.ChatType.PRIVATE:
             await self._handle_private_search(client, message, query, user_id)
-        else:
+        elif message.chat.type == enums.ChatType.GROUP:
             # Group search - implement based on your needs
+            await self._handle_group_search(client, message, query, user_id)
+        elif message.chat.type == enums.ChatType.SUPERGROUP:
             await self._handle_group_search(client, message, query, user_id)
 
 
