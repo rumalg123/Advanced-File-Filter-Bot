@@ -216,50 +216,6 @@ class ConnectionService:
 
         return removed_count
 
-    async def validate_active_connection(self, user_id: str) -> Optional[str]:
-        """Validate that active connection still exists in group_details"""
-        user_id = str(user_id)
-        user_conn = await self.find_by_id(user_id)
-
-        if not user_conn:
-            return None
-
-        if not user_conn.active_group:
-            return None
-
-        # Check if active group is still in group_details
-        group_ids = [g["group_id"] for g in user_conn.group_details]
-
-        if user_conn.active_group not in group_ids:
-            # Active group is invalid, reset it
-            logger.warning(f"Invalid active group {user_conn.active_group} for user {user_id}, resetting")
-
-            if group_ids:
-                # Set to first available group
-                new_active = group_ids[0]
-                await self.update(
-                    user_id,
-                    {
-                        "active_group": new_active,
-                        "updated_at": datetime.utcnow()
-                    }
-                )
-                await self.cache_invalidator.invalidate_connection_cache(user_id)
-                return new_active
-            else:
-                # No groups available
-                await self.update(
-                    user_id,
-                    {
-                        "active_group": None,
-                        "updated_at": datetime.utcnow()
-                    }
-                )
-                await self.cache_invalidator.invalidate_connection_cache(user_id)
-                return None
-
-        return user_conn.active_group
-
     async def validate_all_connections(self) -> int:
         """Validate all user connections periodically"""
         invalid_count = 0
@@ -268,9 +224,18 @@ class ConnectionService:
             all_connections = await self.connection_repo.find_many({})
 
             for conn in all_connections:
-                active = await self.connection_repo.validate_active_connection(conn.user_id)
-                if active != conn.active_group:
-                    invalid_count += 1
+                # Check if active group is still in group_details
+                if conn.active_group:
+                    group_ids = [g["group_id"] for g in conn.group_details]
+                    if conn.active_group not in group_ids:
+                        invalid_count += 1
+                        # Reset invalid active group
+                        if group_ids:
+                            # Set to first available group
+                            await self.connection_repo.make_active(conn.user_id, group_ids[0])
+                        else:
+                            # No groups available
+                            await self.connection_repo.make_inactive(conn.user_id)
 
             if invalid_count > 0:
                 logger.info(f"Fixed {invalid_count} invalid active connections")

@@ -11,6 +11,15 @@ logger = get_logger(__name__)
 
 class BotSettingsHandler:
     """Handler for bot settings management"""
+    PROTECTED_SETTINGS = [
+        'DATABASE_URI',
+        'DATABASE_NAME',
+        'REDIS_URI',
+        'API_ID',
+        'API_HASH',
+        'BOT_TOKEN',
+        'SESSION'
+    ]
 
     def __init__(self, bot):
         self.bot = bot
@@ -18,6 +27,7 @@ class BotSettingsHandler:
         self.edit_sessions = {}  # Store active edit sessions
         self.ttl = CacheTTLConfig()
         asyncio.create_task(self._cleanup_stale_sessions())
+
 
     async def _cleanup_stale_sessions(self):
         """Periodically clean up stale edit sessions"""
@@ -212,48 +222,52 @@ class BotSettingsHandler:
         else:
             current_display = str(current_value)
             default_display = str(default_value)
+        protection_status = ""
+        if key in self.PROTECTED_SETTINGS:
+            protection_status = "\n🔒 **Protected:** This setting cannot be changed via bot"
 
         text = (
             f"⚙️ **Setting: {self._get_display_name(key)}**\n\n"
             f"📝 **Description:** {description}\n"
             f"🔧 **Type:** `{setting_type}`\n"
             f"📌 **Current Value:** `{current_display}`\n"
-            f"🔄 **Default Value:** `{default_display}`"
+            f"🔄 **Default Value:** `{default_display}`\n"
+            f"{protection_status}"
         )
 
         buttons = []
+        if key not in self.PROTECTED_SETTINGS:
+            if setting_type == 'bool':
+                # Boolean settings get True/False buttons
+                buttons.append([
+                    InlineKeyboardButton(
+                        "✅ True" if current_value else "☐ True",
+                        callback_data=f"bset_bool_{key}_true"
+                    ),
+                    InlineKeyboardButton(
+                        "✅ False" if not current_value else "☐ False",
+                        callback_data=f"bset_bool_{key}_false"
+                    )
+                ])
+            else:
+                # Other types get Edit button
+                buttons.append([
+                    InlineKeyboardButton("✏️ Edit Value", callback_data=f"bset_edit_{key}")
+                ])
 
-        if setting_type == 'bool':
-            # Boolean settings get True/False buttons
+            # Use Default button if current != default
+            if current_display != default_display:
+                buttons.append([
+                    InlineKeyboardButton("🔄 Use Default Value", callback_data=f"bset_default_{key}")
+                ])
+
+            # Back and Close buttons
             buttons.append([
-                InlineKeyboardButton(
-                    "✅ True" if current_value else "☐ True",
-                    callback_data=f"bset_bool_{key}_true"
-                ),
-                InlineKeyboardButton(
-                    "✅ False" if not current_value else "☐ False",
-                    callback_data=f"bset_bool_{key}_false"
-                )
-            ])
-        else:
-            # Other types get Edit button
-            buttons.append([
-                InlineKeyboardButton("✏️ Edit Value", callback_data=f"bset_edit_{key}")
+                InlineKeyboardButton("⬅️ Back", callback_data="bset_back"),
+                InlineKeyboardButton("❌ Close", callback_data="bset_close")
             ])
 
-        # Use Default button if current != default
-        if current_display != default_display:
-            buttons.append([
-                InlineKeyboardButton("🔄 Use Default Value", callback_data=f"bset_default_{key}")
-            ])
-
-        # Back and Close buttons
-        buttons.append([
-            InlineKeyboardButton("⬅️ Back", callback_data="bset_back"),
-            InlineKeyboardButton("❌ Close", callback_data="bset_close")
-        ])
-
-        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+            await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting"""
@@ -350,10 +364,14 @@ class BotSettingsHandler:
         new_value = message.text
 
         try:
-            if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
+            if key in self.PROTECTED_SETTINGS:
                 await message.reply_text(
-                    f"⚠️ **Warning:** Changing {key} requires manual restart.\n"
-                    f"This setting cannot be changed via bot for safety reasons."
+                    f"⚠️ **Security Warning**\n\n"
+                    f"The setting `{key}` is protected and cannot be changed via bot.\n"
+                    f"Changing this setting requires:\n"
+                    f"1. Manual update in environment variables\n"
+                    f"2. Complete bot restart\n\n"
+                    f"This protection prevents accidental bot lockouts."
                 )
                 del self.edit_sessions[user_id]
                 await self.bot.cache.delete(session_key)

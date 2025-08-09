@@ -148,10 +148,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.cache.delete(CacheKeyGenerator.user(user_id))
             #await self.cache.delete(CacheKeyGenerator.banned_users())
             # Update cache with banned users list
-            banned_key = CacheKeyGenerator.banned_users()
-            banned_users = await self.find_many({'status': UserStatus.BANNED.value})
-            banned_ids = [u.id for u in banned_users]
-            await self.cache.set(banned_key, banned_ids, expire=300)  # 5 minutes instead of 1 hour
+            await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
             user.ban_reason = reason
             user.updated_at = datetime.utcnow()
@@ -179,10 +176,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if success:
             # Update cache
             await self.cache.delete(CacheKeyGenerator.user(user_id))
-            banned_key = CacheKeyGenerator.banned_users()
-            banned_users = await self.find_many({'status': UserStatus.BANNED.value})
-            banned_ids = [u.id for u in banned_users]
-            await self.cache.set(banned_key, banned_ids, expire=300)  # 5 minutes TTL
+            await self.refresh_banned_users_cache()
 
             user.status = UserStatus.ACTIVE
             user.ban_reason = None
@@ -226,7 +220,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if user.is_premium == is_premium:
             status_text = "premium" if is_premium else "non-premium"
             return False, f"❌ User is already {status_text}!", user
-        update_data = {
+        update_data: Dict[str, Any] = {
             'is_premium': is_premium,
             'premium_activation_date': datetime.utcnow() if is_premium else None,
             'updated_at': datetime.utcnow()
@@ -243,6 +237,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.updated_at = datetime.utcnow()
             if not is_premium:
                 user.daily_retrieval_count = 0
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
 
         action = "added" if is_premium else "removed"
         return success, f"✅ Premium status {action} successfully!" if success else f"❌ Failed to {action.replace('ed', '')} premium status.", user

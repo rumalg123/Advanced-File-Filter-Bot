@@ -284,19 +284,14 @@ class DeleteHandler:
 
     async def _delete_file(self, file_id: str) -> bool:
         """Delete a single file from database"""
-        logger.info(f"Inside _delete_file function: {file_id}")
         try:
             # Find file first to get file_ref
             file = await self.bot.media_repo.find_file(file_id)
-            logger.info(f"File found: {file}")
-
             if not file:
                 return False
 
             # Delete from database
             deleted = await self.bot.media_repo.delete(file.file_unique_id)
-            logger.info(f"Deleted file: {file.file_unique_id}")
-            logger.info(f"File deleted: {deleted}")
 
             # Clear cache entries
             if deleted:
@@ -310,6 +305,11 @@ class DeleteHandler:
                 if file.file_unique_id:
                     unique_cache_key = CacheKeyGenerator.media(file.file_unique_id)
                     await self.bot.cache.delete(unique_cache_key)
+                await self.bot.cache.delete_pattern("search:*")
+                await self.bot.cache.delete_pattern("search_results_*")
+                await self.bot.cache.delete(CacheKeyGenerator.file_stats())
+                logger.info(f"Cleared all caches for deleted file: {file.file_unique_id}")
+
 
             return deleted
 

@@ -118,7 +118,7 @@ class ChannelHandler:
                     while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 5:
                         item = self.overflow_queue.pop(0)
                         try:
-                            await self.message_queue.put_nowait(item)
+                            self.message_queue.put_nowait(item)
                             moved += 1
                         except asyncio.QueueFull:
                             # Put it back and stop
