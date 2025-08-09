@@ -5,7 +5,7 @@ from typing import Optional
 
 import backoff
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, DuplicateKeyError
 
 from core.utils.logger import get_logger
 
@@ -111,6 +111,8 @@ class DatabaseConnectionPool:
                     logger.error(f"Database operation failed after {max_retries} attempts: {e}")
                     raise
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            except DuplicateKeyError as dp:
+                logger.warning(f"Duplicate key detected. Skippng..")
             except Exception as e:
                 logger.error(f"Unexpected database error: {e}")
                 raise

@@ -98,8 +98,6 @@ class SubscriptionRequired:
 
         # Build buttons for required subscriptions
         buttons = []
-        logger.info(f"message: {message}")
-
         # AUTH_CHANNEL button
         if bot.config.AUTH_CHANNEL:
             try:

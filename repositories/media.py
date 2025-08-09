@@ -140,7 +140,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             else:
                 return False, 2, None
         except DuplicateKeyError as e:
-            logger.warning(f"Duplicate key error for file: {media.file_name} Error {e}")
+            logger.warning(f"Duplicate key error for file: {media.file_name}")
             existing = await self.find_file(media.file_unique_id)
             return False, 0, existing
         except Exception as e:
