@@ -222,6 +222,7 @@ class BotSettingsHandler:
         else:
             current_display = str(current_value)
             default_display = str(default_value)
+
         protection_status = ""
         if key in self.PROTECTED_SETTINGS:
             protection_status = "\n🔒 **Protected:** This setting cannot be changed via bot"
@@ -261,13 +262,13 @@ class BotSettingsHandler:
                     InlineKeyboardButton("🔄 Use Default Value", callback_data=f"bset_default_{key}")
                 ])
 
-            # Back and Close buttons
-            buttons.append([
-                InlineKeyboardButton("⬅️ Back", callback_data="bset_back"),
-                InlineKeyboardButton("❌ Close", callback_data="bset_close")
-            ])
+        # Always add Back and Close buttons (for both protected and non-protected)
+        buttons.append([
+            InlineKeyboardButton("⬅️ Back", callback_data="bset_back"),
+            InlineKeyboardButton("❌ Close", callback_data="bset_close")
+        ])
 
-            await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting"""
