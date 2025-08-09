@@ -426,25 +426,10 @@ class SearchHandler:
             if not is_private or delete_time > 0:
                 caption += f"\n\n⏱ **Note:** Results will be auto-deleted after {delete_minutes} minutes"
 
-            photo = None
-            if self.bot.config.PICS:
-                pic_url = random.choice(self.bot.config.PICS)
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(pic_url, timeout=5) as resp:
-                            if resp.status == 200:
-                                photo_bytes = await resp.read()
-                                # Convert bytes to BytesIO object
-                                photo = io.BytesIO(photo_bytes)
-                                photo.name = 'search_result.jpg'
-                except Exception as e:
-                    logger.warning(f"Failed to download pic from {pic_url}: {e}")
-                    photo = None
-
             # Send message with or without photo
-            if photo:
+            if self.bot.config.PICS:
                 sent_msg = await message.reply_photo(
-                    photo=photo,
+                    photo=random.choice(self.bot.config.PICS),
                     caption=caption,
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )

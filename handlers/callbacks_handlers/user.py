@@ -144,7 +144,7 @@ class UserCallbackHandler(BaseCommandHandler):
                 text += f"📁 Remaining: {remaining}\n"
 
         buttons = [
-            [InlineKeyboardButton("💳 Get Premium", url="https://your-payment-link.com")],
+            [InlineKeyboardButton("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)],
             [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]
         ]
 

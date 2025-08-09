@@ -1,4 +1,5 @@
 import logging
+import random
 
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
@@ -82,10 +83,17 @@ class UserCommandHandler(BaseCommandHandler):
         mention = message.from_user.mention
         welcome_text = config_messages.START_MSG.format(mention=mention)
 
-        await message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+        if self.bot.config.PICS:
+            await message.reply_photo(
+                photo=random.choice(self.bot.config.PICS),
+                caption=welcome_text,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            await message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
 
     @check_ban()
     @require_subscription()
@@ -186,7 +194,7 @@ class UserCommandHandler(BaseCommandHandler):
                 text += f"📁 Remaining: {remaining}\n"
 
         buttons = [[
-            InlineKeyboardButton("💳 Get Premium", url="https://your-payment-link.com")
+            InlineKeyboardButton("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)
         ]]
 
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
