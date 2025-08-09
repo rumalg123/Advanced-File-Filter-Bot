@@ -28,7 +28,7 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - **🗑️ Auto-Delete**: Automatically delete messages after specified time
 - **📱 Inline Search**: Search files directly from any chat
 - **📝 Content Requests**: Users can request content via #request in support group
-- **🔍 Duplicate Detection**: Advanced duplicate detection using file hashes
+- **🔍 Duplicate Detection**: Advanced duplicate detection using file unique id
 - **⚙️ Bot Settings**: Comprehensive settings management via commands
 
 ### 👨‍💼 Admin Features
@@ -52,6 +52,10 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - Linux OS (recommended for uvloop optimization)
 
 ## 🛠️ Installation
+
+### In Local Deployment make sure to uncomment these lines in bot.py file (remove the # before each line)
+    #from dotenv import load_dotenv
+    #load_dotenv()
 
 ### 1. Clone the Repository
 ```bash
@@ -180,14 +184,15 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 
 ### Optional Features
 
-| Variable | Description | Required |
-|----------|-------------|----------|
+| Variable | Description               | Required |
+|----|---------------------------|----------|
 | `AUTH_CHANNEL` | Force subscription channel | Optional |
 | `AUTH_GROUPS` | Force subscription groups | Optional |
 | `FILE_STORE_CHANNEL` | Channels for file storage | Optional |
 | `SUPPORT_GROUP_ID` | Support group for #request | Optional |
 | `INDEX_REQ_CHANNEL` | Channel for index requests | Optional |
 | `DELETE_CHANNEL` | Channel for file deletion | Optional |
+| `PAYMENT_LINK` | Payment Method Link       | Optional |
 
 ## 📚 Usage Guide
 

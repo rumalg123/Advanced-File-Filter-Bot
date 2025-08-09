@@ -28,7 +28,7 @@ from typing import Optional, AsyncGenerator, Union
 
 import pytz
 from aiohttp import web
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 from pyrogram import Client, __version__
 from pyrogram.raw.all import layer
 from pyrogram.types import Message
@@ -57,7 +57,7 @@ from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-load_dotenv()
+#load_dotenv()
 performance_monitor = PerformanceMonitor()
 
 
