@@ -1,0 +1,36 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python bot.py"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "always"
+numReplicas = 1
+
+[[services]]
+name = "media-bot"
+source = "."
+
+[services.variables]
+PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+USE_UVLOOP = "1"
+PORT = "8000"
+WORKERS = "50"
+SESSION = "Media_search"
+DATABASE_NAME = "PIRO"
+COLLECTION_NAME = "FILES"
+USE_CAPTION_FILTER = "True"
+DISABLE_PREMIUM = "True"
+DISABLE_FILTER = "False"
+PUBLIC_FILE_STORE = "False"
+KEEP_ORIGINAL_CAPTION = "True"
+NON_PREMIUM_DAILY_LIMIT = "10"
+MESSAGE_DELETE_SECONDS = "300"
+MAX_BTN_SIZE = "10"
+PREMIUM_DURATION_DAYS = "30"
+SUPPORT_GROUP_NAME = "Support Group"
+UPSTREAM_REPO = "https://github.com/rumalg123/Advanced-File-Filter-Bot"
+UPSTREAM_BRANCH = "railway-deployment"
