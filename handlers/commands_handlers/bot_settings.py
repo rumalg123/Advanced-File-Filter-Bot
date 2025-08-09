@@ -17,8 +17,64 @@ class BotSettingsHandler:
         self.settings_service = bot.bot_settings_service
         self.edit_sessions = {}  # Store active edit sessions
         self.ttl = CacheTTLConfig()
+        asyncio.create_task(self._cleanup_stale_sessions())
 
+    async def _cleanup_stale_sessions(self):
+        """Periodically clean up stale edit sessions"""
+        while True:
+            try:
+                await asyncio.sleep(300)  # Run every 5 minutes
 
+                current_time = asyncio.get_event_loop().time()
+                stale_sessions = []
+
+                for user_id, session in self.edit_sessions.items():
+                    # Check if session is older than 2 minutes
+                    if 'created_at' in session:
+                        if current_time - session['created_at'] > 120:
+                            stale_sessions.append(user_id)
+
+                # Clean up stale sessions
+                for user_id in stale_sessions:
+                    logger.info(f"Cleaning up stale edit session for user {user_id}")
+                    del self.edit_sessions[user_id]
+                    # Also clear cache
+                    session_key = CacheKeyGenerator.edit_session(user_id)
+                    await self.bot.cache.delete(session_key)
+
+                # Log cleanup stats
+                if stale_sessions:
+                    logger.info(f"Cleaned up {len(stale_sessions)} stale edit sessions")
+
+            except Exception as e:
+                logger.error(f"Error in session cleanup task: {e}")
+
+    async def invalidate_related_caches(self, key: str):
+        """Invalidate caches related to a specific setting"""
+        # Map settings to their related cache patterns
+        cache_invalidation_map = {
+            'ADMINS': ['user:*', 'banned_users'],
+            'AUTH_CHANNEL': ['subscription:*'],
+            'AUTH_GROUPS': ['subscription:*'],
+            'CHANNELS': ['active_channels_list', 'channel:*'],
+            'MAX_BTN_SIZE': ['search:*'],
+            'USE_CAPTION_FILTER': ['search:*'],
+            'NON_PREMIUM_DAILY_LIMIT': ['user:*'],
+            'PREMIUM_DURATION_DAYS': ['user:*'],
+            'MESSAGE_DELETE_SECONDS': ['search:*'],
+            'DISABLE_FILTER': ['filter:*', 'filters_list:*'],
+            'DISABLE_PREMIUM': ['user:*'],
+            'FILE_STORE_CHANNEL': ['filestore:*'],
+        }
+
+        patterns = cache_invalidation_map.get(key, [])
+        for pattern in patterns:
+            await self.bot.cache.delete_pattern(pattern)
+
+        # Clear general settings cache
+        await self.bot.cache.delete(CacheKeyGenerator.all_settings())
+
+        logger.info(f"Invalidated caches for setting: {key}")
 
     async def bsetting_command(self, client: Client, message: Message):
         """Handle /bsetting command"""
@@ -100,6 +156,9 @@ class BotSettingsHandler:
             # Clear any active edit session
             if user_id in self.edit_sessions:
                 del self.edit_sessions[user_id]
+                session_key = CacheKeyGenerator.edit_session(user_id)
+                await self.bot.cache.delete(session_key)
+            return
 
         elif data == "bset_noop":
             await query.answer()
@@ -198,11 +257,15 @@ class BotSettingsHandler:
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting"""
+        if user_id in self.edit_sessions:
+            logger.warning(f"Cleaning up existing edit session for user {user_id}")
+            del self.edit_sessions[user_id]
         session_key = CacheKeyGenerator.edit_session(user_id)
         session_data = {
             'key': key,
             'message_id': message.id,
-            'chat_id': message.chat.id
+            'chat_id': message.chat.id,
+            'created_at': asyncio.get_event_loop().time()  # Add timestamp
         }
         await self.bot.cache.set(
             session_key,
@@ -222,7 +285,8 @@ class BotSettingsHandler:
         self.edit_sessions[user_id] = {
             'key': key,
             'message_id': message.id,
-            'chat_id': message.chat.id
+            'chat_id': message.chat.id,
+            'created_at': asyncio.get_event_loop().time()
         }
 
         # Format instructions based on type
@@ -271,6 +335,7 @@ class BotSettingsHandler:
         # Handle cancel
         if message.text.lower() == '/cancel':
             del self.edit_sessions[user_id]
+            await self.bot.cache.delete(session_key)  # Clear cache session
             await message.reply_text("❌ Edit cancelled.")
             try:
                 # Show settings menu again
@@ -285,9 +350,18 @@ class BotSettingsHandler:
         new_value = message.text
 
         try:
+            if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
+                await message.reply_text(
+                    f"⚠️ **Warning:** Changing {key} requires manual restart.\n"
+                    f"This setting cannot be changed via bot for safety reasons."
+                )
+                del self.edit_sessions[user_id]
+                await self.bot.cache.delete(session_key)
+                return
             success = await self.settings_service.update_setting(key, new_value)
 
             if success:
+                await self.invalidate_related_caches(key)
                 await self.bot.cache.set(
                     CacheKeyGenerator.recent_settings_edit(user_id),
                     True,
@@ -310,6 +384,7 @@ class BotSettingsHandler:
 
                 # Clean up session
                 del self.edit_sessions[user_id]
+                await self.bot.cache.delete(session_key)
 
                 # Auto-delete success message after 10 seconds
                 await asyncio.sleep(10)
@@ -320,10 +395,12 @@ class BotSettingsHandler:
             else:
                 # Clean up session on failure too
                 del self.edit_sessions[user_id]
+                await self.bot.cache.delete(session_key)
                 await message.reply_text("❌ Failed to update setting.")
         except Exception as e:
             # Clean up session on error
             del self.edit_sessions[user_id]
+            await self.bot.cache.delete(session_key)
             await message.reply_text(f"❌ Error: {str(e)}")
             return
 
@@ -340,6 +417,8 @@ class BotSettingsHandler:
 
         if user_id in self.edit_sessions:
             del self.edit_sessions[user_id]
+            session_key = CacheKeyGenerator.edit_session(user_id)
+            await self.bot.cache.delete(session_key)
             logger.info(f"Edit session timed out for user {user_id}")
 
     async def update_boolean_setting(self, query: CallbackQuery, key: str, value: bool):
@@ -349,6 +428,13 @@ class BotSettingsHandler:
             success = await self.settings_service.update_setting(key, value)
 
             if success:
+                await self.invalidate_related_caches(key)
+                if key == 'DISABLE_FILTER' and hasattr(self.bot, 'filter_handler'):
+                    # Re-register or unregister filter handlers
+                    if value:  # If disabling filters
+                        logger.info("Disabling filter handlers")
+                    else:
+                        logger.info("Enabling filter handlers")
                 await self.show_setting_details(query.message, key)
                 await query.answer(
                     f"✅ Setting updated! Restart bot for changes to take effect.",

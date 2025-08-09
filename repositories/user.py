@@ -146,16 +146,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if success:
             await self.cache.delete(CacheKeyGenerator.user(user_id))
-            await self.cache.delete(CacheKeyGenerator.banned_users())
+            #await self.cache.delete(CacheKeyGenerator.banned_users())
             # Update cache with banned users list
             banned_key = CacheKeyGenerator.banned_users()
-            banned_users = await self.cache.get(banned_key) or []
-            if user_id not in banned_users:
-                banned_users.append(user_id)
-                await self.cache.set(banned_key, banned_users, expire=self.ttl.BANNED_USERS_LIST)
+            banned_users = await self.find_many({'status': UserStatus.BANNED.value})
+            banned_ids = [u.id for u in banned_users]
+            await self.cache.set(banned_key, banned_ids, expire=300)  # 5 minutes instead of 1 hour
             user.status = UserStatus.BANNED
             user.ban_reason = reason
             user.updated_at = datetime.utcnow()
+            logger.info(f"User {user_id} banned and cache updated")
 
         return success, "✅ User banned successfully!" if success else "❌ Failed to ban user.", user
 
@@ -178,15 +178,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if success:
             # Update cache
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
             banned_key = CacheKeyGenerator.banned_users()
-            banned_users = await self.cache.get(banned_key) or []
-            if user_id in banned_users:
-                banned_users.remove(user_id)
-                await self.cache.set(banned_key, banned_users, expire=self.ttl.BANNED_USERS_LIST)
+            banned_users = await self.find_many({'status': UserStatus.BANNED.value})
+            banned_ids = [u.id for u in banned_users]
+            await self.cache.set(banned_key, banned_ids, expire=300)  # 5 minutes TTL
 
             user.status = UserStatus.ACTIVE
             user.ban_reason = None
             user.updated_at = datetime.utcnow()
+            logger.info(f"User {user_id} unbanned and cache updated")
 
         return success, "✅ User unbanned successfully!" if success else "❌ Failed to unban user.", user
 
@@ -201,6 +202,17 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         banned_ids = [user.id for user in users]
 
         await self.cache.set(cache_key, banned_ids, expire=self.ttl.BANNED_USERS_LIST)
+        return banned_ids
+
+    async def refresh_banned_users_cache(self) -> List[int]:
+        """Refresh banned users cache from database"""
+        users = await self.find_many({'status': UserStatus.BANNED.value})
+        banned_ids = [user.id for user in users]
+
+        cache_key = CacheKeyGenerator.banned_users()
+        await self.cache.set(cache_key, banned_ids, expire=300)  # 5 minutes TTL
+
+        logger.debug(f"Refreshed banned users cache: {len(banned_ids)} users")
         return banned_ids
 
     async def update_premium_status(self, user_id: int, is_premium: bool) -> Tuple[bool, str, Optional[User]]:

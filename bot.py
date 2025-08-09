@@ -448,12 +448,32 @@ class MediaSearchBot(Client):
             await self.channel_repo.create_index([('enabled', 1)])  # Add index for channels
             logger.info("Database indexes created")
 
+            self.bot_settings_service = BotSettingsService(
+                self.bot_settings_repo,
+                self.cache
+            )
+
+            # Initialize settings from environment
+            await self.bot_settings_service.initialize_settings()
+            logger.info("Bot settings initialized")
+
+            # CRITICAL: Load settings from database and update config
+            db_settings = await self.bot_settings_service.get_all_settings()
+            for key, setting_data in db_settings.items():
+                if hasattr(self.config, key):
+                    # Store original value for critical settings
+                    if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
+                        setattr(self.config, f'_original_{key}', getattr(self.config, key))
+                    setattr(self.config, key, setting_data['value'])
+            logger.info("Loaded settings from database")
+
             # Initialize services (not using singletons)
             self.file_service = FileAccessService(
                 self.user_repo,
                 self.media_repo,
                 self.cache,
-                self.rate_limiter
+                self.rate_limiter,
+                self.config
             )
             self.broadcast_service = BroadcastService(
                 self.user_repo,
@@ -481,7 +501,6 @@ class MediaSearchBot(Client):
             if not self.config.DISABLE_FILTER:
                 self.connection_service = ConnectionService(
                     self.connection_repo,
-                    # self.settings_repo,
                     self.cache,
                     self.config.ADMINS
                 )
@@ -497,12 +516,6 @@ class MediaSearchBot(Client):
                 self.filter_service = None
                 logger.info("Filter and connection services disabled via DISABLE_FILTER config")
 
-            self.bot_settings_service = BotSettingsService(
-                self.bot_settings_repo,
-                self.cache
-            )
-
-            # Add this after other service initializations:
             self.filestore_service = FileStoreService(
                 self.media_repo,
                 self.cache,
@@ -514,15 +527,8 @@ class MediaSearchBot(Client):
             )
 
             logger.info("Services initialized")
+            logger.info("Services initialized with database settings")
 
-            await self.bot_settings_service.initialize_settings()
-            logger.info("Bot settings initialized")
-
-            db_settings = await self.bot_settings_service.get_all_settings()
-            for key, setting_data in db_settings.items():
-                if hasattr(self.config, key):
-                    setattr(self.config, key, setting_data['value'])
-            logger.info("Loaded settings from database")
 
             # Load banned users/chats
             banned_users = await self.user_repo.get_banned_users()

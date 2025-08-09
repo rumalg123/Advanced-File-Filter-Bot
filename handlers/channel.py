@@ -29,11 +29,18 @@ class ChannelHandler:
 
         # Add rate limiting for bulk messages
         self.message_queue = asyncio.Queue(maxsize=1000)
+        self.overflow_queue = []  # Backup queue for overflow
+        self.max_overflow_size = 500  # Maximum overflow items
+        self.queue_full_warnings = 0
+        self.last_warning_time = 0
         self.user_message_counts = defaultdict(lambda: {'count': 0, 'reset_time': time.time()})
         self.processing = False
 
         # Start background processor
         asyncio.create_task(self._process_message_queue())
+
+        # Start overflow processor
+        asyncio.create_task(self._process_overflow_queue())
 
         # Start with channels from config
         self._initialize_channels()
@@ -62,7 +69,67 @@ class ChannelHandler:
                 'timestamp': time.time()
             })
         except asyncio.QueueFull:
-            logger.warning("Message queue is full, skipping message")
+            if len(self.overflow_queue) < self.max_overflow_size:
+                self.overflow_queue.append({
+                    'message': message,
+                    'timestamp': time.time()
+                })
+                logger.debug(f"Message added to overflow queue. Overflow size: {len(self.overflow_queue)}")
+            else:
+                # Drop oldest message from overflow if at max capacity
+                dropped = self.overflow_queue.pop(0)
+                self.overflow_queue.append({
+                    'message': message,
+                    'timestamp': time.time()
+                })
+
+                # Rate limit warnings
+                current_time = time.time()
+                if current_time - self.last_warning_time > 60:  # One warning per minute
+                    logger.warning(f"Message queue overflow! Dropped message from {dropped['timestamp']}")
+                    self.last_warning_time = current_time
+                    self.queue_full_warnings += 1
+
+                    # Send alert to log channel if too many warnings
+                    if self.queue_full_warnings % 10 == 0 and self.bot.config.LOG_CHANNEL:
+                        try:
+                            await self.bot.send_message(
+                                self.bot.config.LOG_CHANNEL,
+                                f"⚠️ **Queue Overflow Alert**\n\n"
+                                f"The message queue has overflowed {self.queue_full_warnings} times.\n"
+                                f"Current queue size: {self.message_queue.qsize()}/{self.message_queue.maxsize}\n"
+                                f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n\n"
+                                f"Consider reducing the indexing rate or increasing queue size."
+                            )
+                        except:
+                            pass
+        except Exception as e:
+            logger.error(f"Error adding message to queue: {e}")
+
+    async def _process_overflow_queue(self):
+        """Process overflow queue when main queue has space"""
+        while True:
+            try:
+                await asyncio.sleep(5)  # Check every 5 seconds
+
+                if self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 10:
+                    # Move items from overflow to main queue
+                    moved = 0
+                    while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 5:
+                        item = self.overflow_queue.pop(0)
+                        try:
+                            await self.message_queue.put_nowait(item)
+                            moved += 1
+                        except asyncio.QueueFull:
+                            # Put it back and stop
+                            self.overflow_queue.insert(0, item)
+                            break
+
+                    if moved > 0:
+                        logger.info(f"Moved {moved} items from overflow queue to main queue")
+
+            except Exception as e:
+                logger.error(f"Error processing overflow queue: {e}")
 
     # handlers/channel.py
     async def _process_message_queue(self):
@@ -71,8 +138,18 @@ class ChannelHandler:
             try:
                 batch = []
                 deadline = asyncio.get_event_loop().time() + 5  # 5 second window
+                queue_size = self.message_queue.qsize()
+                if queue_size > 500:
+                    max_batch_size = 50  # Process more when queue is full
+                    wait_time = 2
+                elif queue_size > 200:
+                    max_batch_size = 30
+                    wait_time = 3
+                else:
+                    max_batch_size = 20
+                    wait_time = 5
 
-                while len(batch) < 20:
+                while len(batch) < max_batch_size:
                     try:
                         timeout = max(0.0, deadline - asyncio.get_event_loop().time())
                         # Convert to int for timeout parameter
@@ -83,12 +160,22 @@ class ChannelHandler:
                         batch.append(item)
                     except asyncio.TimeoutError:
                         break
-                # ... rest of the method
 
                 if batch:
                     await self._process_message_batch(batch)
+                    if queue_size > 100 and self.bot.config.LOG_CHANNEL:
+                        try:
+                            await self.bot.send_message(
+                                self.bot.config.LOG_CHANNEL,
+                                f"📊 **Queue Status**\n"
+                                f"Main Queue: {queue_size}/1000\n"
+                                f"Overflow Queue: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
+                                f"Batch Processed: {len(batch)} messages"
+                            )
+                        except:
+                            pass
                 else:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(wait_time)
 
             except Exception as e:
                 logger.error(f"Error processing message queue: {e}")
