@@ -411,10 +411,8 @@ heroku config:set $(cat .env | xargs)
 git push heroku main
 ```
 
-### Railway/Render Deployment
-1. Connect your GitHub repository
-2. Add environment variables
-3. Deploy with one click
+### Railway Deployment
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/2IIv1o?referralCode=ZaL8lf)
 
 ## 🔒 Security Best Practices
 
