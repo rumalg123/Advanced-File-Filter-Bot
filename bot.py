@@ -2,6 +2,8 @@ import sys
 import asyncio
 from pathlib import Path
 
+import aiohttp_cors
+
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.performance import performance_monitor, PerformanceMonitor
 UVLOOP_AVAILABLE = False
