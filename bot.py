@@ -660,7 +660,7 @@ class MediaSearchBot(Client):
             f"📅 Date: <code>{now.strftime('%Y-%m-%d')}</code>\n"
             f"⏰ Time: <code>{now.strftime('%H:%M:%S %p')}</code>\n"
             f"🌐 Timezone: <code>Asia/Kolkata</code>\n"
-            f"🛠 Version: <code>2.0.8 [Optimized]</code>\n"
+            f"🛠 Version: <code>2.0.9 [Optimized]</code>\n"
             f"⚡ Status: <code>Online</code>"
         )
         if self.subscription_manager:
@@ -725,6 +725,16 @@ class MediaSearchBot(Client):
         app.router.add_get('/metrics', performance_metrics)
         app.router.add_get('/performance', performance_metrics)
 
+        cors = aiohttp_cors.setup(app, defaults={
+            "*": aiohttp_cors.ResourceOptions(
+                allow_credentials=True,
+                expose_headers="*",
+                allow_headers="*",
+                allow_methods="*"
+            )
+        })
+        for route in list(app.router.routes()):
+            cors.add(route)
         runner = web.AppRunner(app)
         await runner.setup()
 

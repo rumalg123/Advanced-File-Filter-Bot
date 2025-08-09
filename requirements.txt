@@ -14,6 +14,7 @@ umongo
 # Web and async
 aiohttp
 requests
+aiohttp-cors
 
 # Redis cache
 redis
