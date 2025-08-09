@@ -660,7 +660,7 @@ class MediaSearchBot(Client):
             f"📅 Date: <code>{now.strftime('%Y-%m-%d')}</code>\n"
             f"⏰ Time: <code>{now.strftime('%H:%M:%S %p')}</code>\n"
             f"🌐 Timezone: <code>Asia/Kolkata</code>\n"
-            f"🛠 Version: <code>2.0.7 [Optimized]</code>\n"
+            f"🛠 Version: <code>2.0.8 [Optimized]</code>\n"
             f"⚡ Status: <code>Online</code>"
         )
         if self.subscription_manager:

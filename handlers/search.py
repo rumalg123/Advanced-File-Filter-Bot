@@ -200,10 +200,18 @@ class SearchHandler:
             results = []
             for i, file in enumerate(files):
                 # Create unique ID for each result using offset and index
-                unique_id = f"{offset}_{i}_{file.file_id[:10]}"
+                unique_id = f"{offset}_{i}_{file.file_unique_id}"
 
-                # Format caption
-                caption = self._format_inline_caption(file)
+                delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
+                delete_minutes = delete_time // 60
+                caption = CaptionFormatter.format_file_caption(
+                    file=file,
+                    custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
+                    batch_caption=self.bot.config.BATCH_FILE_CAPTION,
+                    keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
+                    is_batch=False,
+                    auto_delete_minutes=delete_minutes if delete_time > 0 else None
+                )
 
                 # Create inline result without buttons - file will be sent when clicked
                 result = InlineQueryResultCachedDocument(
@@ -574,20 +582,4 @@ class SearchHandler:
         except Exception as e:
             logger.debug(f"Failed to delete message: {e}")
 
-    def _format_inline_caption(self, file) -> str:
-        """Format caption for inline results"""
-        # For inline results, we always show a simple format
-        from core.utils.messages import FILE_MSG
-        caption = FILE_MSG.format(
-            file_name=file.file_name,
-            file_size=format_file_size(file.file_size),
-            file_type=file.file_type.value.title()
-        )
-
-        # Add original caption if exists and keep_original is True
-        if self.bot.config.KEEP_ORIGINAL_CAPTION and file.caption:
-            truncated = file.caption[:150] + "..." if len(file.caption) > 150 else file.caption
-            caption += f"\n\n💬 {truncated}"
-
-        return caption
 
