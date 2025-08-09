@@ -156,6 +156,7 @@ class BotConfig:
         self.SUPPORT_GROUP_NAME = os.environ.get('SUPPORT_GROUP_NAME', 'Support Group')
         self.SUPPORT_GROUP_ID = int(os.environ.get('SUPPORT_GROUP_ID', '0')) if os.environ.get(
             'SUPPORT_GROUP_ID') else None
+        self.PAYMENT_LINK = os.environ.get('PAYMENT_LINK', 'https://buymeacoffee.com/matthewmurdock001')
 
     @staticmethod
     def _str_to_bool(value: str) -> bool:
@@ -659,7 +660,7 @@ class MediaSearchBot(Client):
             f"📅 Date: <code>{now.strftime('%Y-%m-%d')}</code>\n"
             f"⏰ Time: <code>{now.strftime('%H:%M:%S %p')}</code>\n"
             f"🌐 Timezone: <code>Asia/Kolkata</code>\n"
-            f"🛠 Version: <code>2.0.4 [Optimized]</code>\n"
+            f"🛠 Version: <code>2.0.5 [Optimized]</code>\n"
             f"⚡ Status: <code>Online</code>"
         )
         if self.subscription_manager:

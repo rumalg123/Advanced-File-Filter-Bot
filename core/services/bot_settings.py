@@ -235,6 +235,12 @@ class BotSettingsService:
             'description': 'Support group ID for #request feature',
             'category': 'support'
         },
+        'PAYMENT_LINK': {
+            'type': 'str',
+            'default': 'https://buymeacoffee.com/matthewmurdock001',
+            'description': 'Payment link',
+            'category': 'payment'
+        }
     }
 
     def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager):

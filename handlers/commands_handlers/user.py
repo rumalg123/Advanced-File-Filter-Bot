@@ -74,6 +74,10 @@ class UserCommandHandler(BaseCommandHandler):
             ])
         buttons.append([
                 InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
+        ]
+        )
+        buttons.append([
+            InlineKeyboardButton("🍺 Buy me a Beer",url=self.bot.config.PAYMENT_LINK)
         ])
         mention = message.from_user.mention
         welcome_text = config_messages.START_MSG.format(mention=mention)
