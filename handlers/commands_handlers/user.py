@@ -72,13 +72,9 @@ class UserCommandHandler(BaseCommandHandler):
                     url=self.bot.config.SUPPORT_GROUP_URL
                 )
             ])
-
-        # welcome_text = (
-        #     f"👋 Welcome {}!\n\n"
-        #     f"I'm a powerful media search bot that can help you find files quickly.\n\n"
-        #     f"{'✅ Premium features are disabled - enjoy unlimited access!' if self.bot.config.DISABLE_PREMIUM else f'🆓 Free users can retrieve up to {self.bot.config.NON_PREMIUM_DAILY_LIMIT} files per day.'}\n\n"
-        #     f"Use /help to learn more about my features."
-        # )
+        buttons.append([
+                InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
+        ])
         mention = message.from_user.mention
         welcome_text = config_messages.START_MSG.format(mention=mention)
 
