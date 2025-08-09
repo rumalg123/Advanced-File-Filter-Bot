@@ -502,11 +502,6 @@ class MediaSearchBot(Client):
                 self.cache
             )
 
-            self.subscription_manager = SubscriptionManager(
-                auth_channel=self.config.AUTH_CHANNEL,
-                auth_groups=self.config.AUTH_GROUPS
-            )
-
             # Add this after other service initializations:
             self.filestore_service = FileStoreService(
                 self.media_repo,
@@ -536,6 +531,10 @@ class MediaSearchBot(Client):
                 CacheKeyGenerator.banned_users(),
                 banned_users,
                 expire=CacheTTLConfig.BANNED_USERS_LIST
+            )
+            self.subscription_manager = SubscriptionManager(
+                auth_channel=self.config.AUTH_CHANNEL,
+                auth_groups=self.config.AUTH_GROUPS  # Now uses database values!
             )
 
             # Start Pyrogram client

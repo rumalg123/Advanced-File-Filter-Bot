@@ -467,6 +467,7 @@ class BotSettingsHandler:
             'SUPPORT_GROUP_URL': 'Support URL',
             'SUPPORT_GROUP_NAME': 'Support Name',
             'SUPPORT_GROUP_ID': 'Support ID',
+            'PAYMENT_LINK': 'Payment Link',
         }
 
         return display_map.get(key, key)
