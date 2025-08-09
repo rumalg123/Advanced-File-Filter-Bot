@@ -2,6 +2,7 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.utils.helpers import format_file_size
+import core.utils.messages as config_messages
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 
@@ -15,18 +16,7 @@ class UserCallbackHandler(BaseCommandHandler):
     @require_subscription()
     async def handle_help_callback(self, client: Client, query: CallbackQuery):
         """Handle help button callback"""
-        help_text = (
-            "🔍 <b>How to Use Me</b>\n\n"
-            "• Just send me a search query and I'll find matching files\n"
-            "• Use inline mode: <code>@{bot_username} query</code>\n"
-            "• Forward messages to index files (admins only)\n\n"
-            "<b>Commands:</b>\n"
-            "• /start - Start the bot\n"
-            "• /help - Show this help\n"
-            "• /about - About the bot\n"
-            "• /stats - Bot statistics\n"
-            "• /plans - View premium plans\n"
-        ).format(bot_username=self.bot.bot_username)
+        help_text = config_messages.HELP_MSG.format(bot_username=self.bot.bot_username)
 
         if query.from_user and query.from_user.id in self.bot.config.ADMINS:
             help_text += (
@@ -55,19 +45,7 @@ class UserCallbackHandler(BaseCommandHandler):
     @require_subscription()
     async def handle_about_callback(self, client: Client, query: CallbackQuery):
         """Handle about button callback"""
-        about_text = (
-            "📚 <b>About Me</b>\n\n"
-            f"Bot Name: {self.bot.bot_name}\n"
-            f"Username: @{self.bot.bot_username}\n"
-            "Version: 2.0.0 [Optimized]\n\n"
-            "🛠 <b>Features:</b>\n"
-            "• Fast indexed search\n"
-            "• Premium subscriptions\n"
-            "• File indexing from channels\n"
-            "• Inline search support\n"
-            "• Advanced filtering\n\n"
-            "Built with ❤️ using Pyrogram"
-        )
+        about_text = config_messages.ABOUT_MSG.format(bot_username=self.bot.bot_username, bot_name=self.bot.bot_name)
 
         back_button = InlineKeyboardMarkup([
             [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]
@@ -180,12 +158,22 @@ class UserCallbackHandler(BaseCommandHandler):
             ]
         ]
 
-        welcome_text = (
-            f"👋 Welcome {query.from_user.mention}!\n\n"
-            f"I'm a powerful media search bot that can help you find files quickly.\n\n"
-            f"{'✅ Premium features are disabled - enjoy unlimited access!' if self.bot.config.DISABLE_PREMIUM else f'🆓 Free users can retrieve up to {self.bot.config.NON_PREMIUM_DAILY_LIMIT} files per day.'}\n\n"
-            f"Use /help to learn more about my features."
+        if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
+            buttons.append([
+                InlineKeyboardButton(
+                    f"💬 {self.bot.config.SUPPORT_GROUP_NAME}",
+                    url=self.bot.config.SUPPORT_GROUP_URL
+                )
+            ])
+        buttons.append([
+            InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
+        ]
         )
+        buttons.append([
+            InlineKeyboardButton("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
+        ])
+        mention = query.from_user.mention
+        welcome_text = config_messages.START_MSG.format(mention=mention)
 
         await query.message.edit_text(
             welcome_text,
