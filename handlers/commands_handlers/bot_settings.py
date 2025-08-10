@@ -25,6 +25,7 @@ class BotSettingsHandler:
         self.bot = bot
         self.settings_service = bot.bot_settings_service
         self.edit_sessions = {}  # Store active edit sessions
+        self.current_page = 0
         self.ttl = CacheTTLConfig()
         asyncio.create_task(self._cleanup_stale_sessions())
 
@@ -91,21 +92,36 @@ class BotSettingsHandler:
         await self.show_settings_menu(message, page=0)
 
     async def show_settings_menu(self, message: Message, page: int = 0):
-        """Show settings menu with pagination"""
+        """Show settings menu - all at once if <= 88 settings, paginated otherwise"""
         settings = await self.settings_service.get_all_settings()
 
         # Get all setting keys
         all_keys = list(settings.keys())
         total_settings = len(all_keys)
-        settings_per_page = 8
-        total_pages = (total_settings + settings_per_page - 1) // settings_per_page
 
-        # Get settings for current page
-        start = page * settings_per_page
-        end = min(start + settings_per_page, total_settings)
-        page_keys = all_keys[start:end]
+        # Determine if we should show all or paginate
+        # Maximum 11 pages worth of settings (11 * 8 = 88 settings) can be shown at once
+        MAX_SETTINGS_WITHOUT_PAGINATION = 88
+        use_pagination = total_settings > MAX_SETTINGS_WITHOUT_PAGINATION
 
-        # Build buttons
+        if use_pagination:
+            # Use pagination for large number of settings
+            settings_per_page = 8
+            total_pages = (total_settings + settings_per_page - 1) // settings_per_page
+
+            # Get settings for current page
+            start = page * settings_per_page
+            end = min(start + settings_per_page, total_settings)
+            page_keys = all_keys[start:end]
+
+            # Build navigation info text
+            nav_text = f"\nPage {page + 1} of {total_pages}"
+        else:
+            # Show all settings at once
+            page_keys = all_keys
+            nav_text = f"\nShowing all {total_settings} settings"
+
+        # Build buttons (2 settings per row)
         buttons = []
         for i in range(0, len(page_keys), 2):
             row = []
@@ -116,28 +132,29 @@ class BotSettingsHandler:
                     display_name = self._get_display_name(key)
                     row.append(InlineKeyboardButton(
                         display_name,
-                        callback_data=f"bset_view_{key}"
+                        callback_data=f"bset_view_{key}_{page}"  # Include page number in callback
                     ))
             buttons.append(row)
 
-        # Navigation buttons
-        nav_row = []
-        if page > 0:
-            nav_row.append(InlineKeyboardButton("◀️ Previous", callback_data=f"bset_page_{page - 1}"))
-        nav_row.append(InlineKeyboardButton(f"📄 {page + 1}/{total_pages}", callback_data="bset_noop"))
-        if page < total_pages - 1:
-            nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"bset_page_{page + 1}"))
+        # Add navigation buttons only if using pagination
+        if use_pagination:
+            nav_row = []
+            if page > 0:
+                nav_row.append(InlineKeyboardButton("◀️ Previous", callback_data=f"bset_page_{page - 1}"))
+            nav_row.append(InlineKeyboardButton(f"📄 {page + 1}/{total_pages}", callback_data="bset_noop"))
+            if page < total_pages - 1:
+                nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"bset_page_{page + 1}"))
 
-        if nav_row:
-            buttons.append(nav_row)
+            if nav_row:
+                buttons.append(nav_row)
 
         # Close button
         buttons.append([InlineKeyboardButton("❌ Close", callback_data="bset_close")])
 
         text = (
             "⚙️ **Bot Settings**\n\n"
-            "Select a setting to view or modify.\n"
-            f"Page {page + 1} of {total_pages}"
+            "Select a setting to view or modify."
+            f"{nav_text}"
         )
 
         if hasattr(message, 'edit_text') and hasattr(message, 'id') and message.chat:
@@ -178,7 +195,14 @@ class BotSettingsHandler:
             await self.show_settings_menu(query.message, page)
 
         elif data.startswith("bset_view_"):
-            key = data.replace("bset_view_", "")
+            # Extract key and page number from callback data
+            parts = data.replace("bset_view_", "").rsplit("_", 1)
+            if len(parts) == 2:
+                key = parts[0]
+                self.current_page = int(parts[1])  # Store current page
+            else:
+                key = data.replace("bset_view_", "")
+                self.current_page = 0
             await self.show_setting_details(query.message, key)
 
         elif data.startswith("bset_edit_"):
@@ -196,7 +220,9 @@ class BotSettingsHandler:
             await self.update_boolean_setting(query, key, value)
 
         elif data == "bset_back":
-            await self.show_settings_menu(query.message, page=0)
+            # Go back to the correct page
+            page = getattr(self, 'current_page', 0)
+            await self.show_settings_menu(query.message, page)
 
     async def show_setting_details(self, message: Message, key: str):
         """Show details for a specific setting"""
