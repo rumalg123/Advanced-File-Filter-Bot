@@ -79,7 +79,7 @@ class BotConfig:
         self.COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'FILES')
 
         # Redis settings
-        self.REDIS_URI = os.environ.get('REDIS_URI', 'redis://localhost:6379')
+        self.REDIS_URI = os.environ.get('REDIS_URI', '')
 
         # Server settings
         self.PORT = int(os.environ.get('PORT', '8000'))
