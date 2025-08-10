@@ -18,6 +18,7 @@ from handlers.decorators import require_subscription, check_ban
 
 from core.utils.logger import get_logger
 from repositories.user import UserStatus
+from core.utils.pagination import PaginationBuilder
 
 logger = get_logger(__name__)
 
@@ -352,8 +353,6 @@ class SearchHandler:
             is_private: bool
     ) -> bool:
         """Send search results - returns True if sent successfully"""
-
-
         try:
             # Generate a unique key for this search result set
             session_id = uuid.uuid4().hex[:8]
@@ -377,9 +376,15 @@ class SearchHandler:
                 expire=self.bot.cache.ttl_config.SEARCH_SESSION  # 1 hour expiry
             )
 
-            # Calculate pagination info
-            current_page = 1
-            total_pages = ((total - 1) // page_size) + 1
+            # Create pagination builder
+            pagination = PaginationBuilder(
+                total_items=total,
+                page_size=page_size,
+                current_offset=0,  # Initial search starts at offset 0
+                query=query,
+                user_id=user_id,
+                callback_prefix="search"
+            )
 
             # Build file buttons
             buttons = []
@@ -414,12 +419,10 @@ class SearchHandler:
                 )
                 buttons.append([file_button])
 
-            # Add pagination buttons if there are multiple pages
+            # Add smart pagination buttons if there are multiple pages
             if total > page_size:
-                nav_buttons = self._build_pagination_buttons(
-                    current_page, total_pages, query, 0, total, user_id
-                )
-                buttons.append(nav_buttons)
+                pagination_buttons = pagination.build_pagination_buttons()
+                buttons.extend(pagination_buttons)
 
             # Build caption
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
@@ -428,7 +431,7 @@ class SearchHandler:
             caption = (
                 f"🔍 **Search Results for:** {query}\n\n"
                 f"📁 Found {total} files\n"
-                f"📊 Page {current_page} of {total_pages}"
+                f"📊 Page {pagination.current_page} of {pagination.total_pages}"
             )
 
             if not is_private or delete_time > 0:
@@ -527,52 +530,7 @@ class SearchHandler:
             logger.error(f"Error checking filter: {e}")
             return False
 
-    def _build_pagination_buttons(
-            self,
-            current_page: int,
-            total_pages: int,
-            query: str,
-            offset: int,
-            total: int,
-            user_id: int
-    ) -> list:
-        """Build pagination buttons"""
-        nav_buttons = []
 
-        # First and Previous buttons
-        if offset > 0:
-            nav_buttons.append(
-                InlineKeyboardButton("⏮ First",
-                                     callback_data=f"search#first#{query}#0#{total}#{user_id}")
-            )
-            nav_buttons.append(
-                InlineKeyboardButton("◀️ Prev",
-                                     callback_data=f"search#prev#{query}#{offset}#{total}#{user_id}")
-            )
-        else:
-            nav_buttons.append(InlineKeyboardButton("⏮", callback_data=f"noop#{user_id}"))
-            nav_buttons.append(InlineKeyboardButton("◀️", callback_data=f"noop#{user_id}"))
-
-        # Current page indicator
-        nav_buttons.append(
-            InlineKeyboardButton(f"📄 {current_page}/{total_pages}", callback_data=f"noop#{user_id}")
-        )
-
-        # Next and Last buttons
-        if current_page < total_pages:
-            nav_buttons.append(
-                InlineKeyboardButton("Next ▶️",
-                                     callback_data=f"search#next#{query}#{offset}#{total}#{user_id}")
-            )
-            nav_buttons.append(
-                InlineKeyboardButton("Last ⏭",
-                                     callback_data=f"search#last#{query}#{offset}#{total}#{user_id}")
-            )
-        else:
-            nav_buttons.append(InlineKeyboardButton("▶️", callback_data=f"noop#{user_id}"))
-            nav_buttons.append(InlineKeyboardButton("⏭", callback_data=f"noop#{user_id}"))
-
-        return nav_buttons
 
     async def _auto_delete_message(self, message: Message, delay: int):
         """Auto-delete message after delay"""

@@ -5,8 +5,9 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from handlers.commands_handlers.base import BaseCommandHandler
-
+from core.utils.pagination import PaginationBuilder, PaginationHelper
 from core.utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -17,40 +18,35 @@ class PaginationCallbackHandler(BaseCommandHandler):
         """Handle search pagination callbacks"""
         callback_user_id = query.from_user.id
 
-        # Parse callback data: search#action#query#offset#total#user_id
-        parts = query.data.split("#")
-        if len(parts) < 6:
-            # Check for old format
-            if len(parts) < 5:
-                return await query.answer("Invalid data", show_alert=True)
-            # Old format without user_id
-            _, action, search_query, current_offset, total = parts
-            original_user_id = None
-        else:
-            _, action, search_query, current_offset, total, original_user_id = parts
-            original_user_id = int(original_user_id)
+        # Parse callback data using helper
+        parsed_data = PaginationHelper.parse_callback_data(query.data)
+
+        if not parsed_data:
+            return await query.answer("Invalid data", show_alert=True)
+
+        # Extract parsed values
+        action = parsed_data['action']
+        search_query = parsed_data['query']
+        current_offset = parsed_data['offset']
+        total = parsed_data['total']
+        original_user_id = parsed_data['user_id']
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
             await query.answer("❌ You cannot interact with this message!", show_alert=True)
             return
 
-        current_offset = int(current_offset)
-        total = int(total)
         page_size = self.bot.config.MAX_BTN_SIZE
         user_id = callback_user_id
 
         # Calculate new offset based on action
-        if action == "first":
-            new_offset = 0
-        elif action == "prev":
-            new_offset = max(0, current_offset - page_size)
-        elif action == "next":
-            new_offset = current_offset + page_size
-        elif action == "last":
-            new_offset = ((total - 1) // page_size) * page_size
+        if action == "page":
+            # Direct page navigation - offset is already in the callback data
+            new_offset = current_offset
         else:
-            return await query.answer("Invalid action", show_alert=True)
+            new_offset = PaginationHelper.calculate_new_offset(
+                action, current_offset, page_size, total
+            )
 
         # Search for files
         files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
@@ -68,7 +64,6 @@ class PaginationCallbackHandler(BaseCommandHandler):
             return await query.answer("No more results", show_alert=True)
 
         # Generate a unique key for this search result set
-
         search_key = f"search_results_{user_id}_{uuid.uuid4().hex[:8]}"
 
         # Store file IDs in cache for "Send All" functionality
@@ -89,9 +84,15 @@ class PaginationCallbackHandler(BaseCommandHandler):
             expire=self.bot.cache.ttl_config.SEARCH_SESSION  # 1 hour expiry
         )
 
-        # Build response
-        current_page = (new_offset // page_size) + 1
-        total_pages = ((total - 1) // page_size) + 1
+        # Build response with new pagination builder
+        pagination = PaginationBuilder(
+            total_items=total,
+            page_size=page_size,
+            current_offset=new_offset,
+            query=search_query,
+            user_id=callback_user_id,
+            callback_prefix="search"
+        )
 
         # Build file buttons
         buttons = []
@@ -113,47 +114,15 @@ class PaginationCallbackHandler(BaseCommandHandler):
             )
             buttons.append([file_button])
 
-        # Add pagination buttons
-        nav_buttons = []
-
-        # First and Previous buttons
-        if new_offset > 0:
-            nav_buttons.append(
-                InlineKeyboardButton("⏮ First",
-                                     callback_data=f"search#first#{search_query}#0#{total}#{callback_user_id}")
-            )
-            nav_buttons.append(
-                InlineKeyboardButton("◀️ Prev",
-                                     callback_data=f"search#prev#{search_query}#{new_offset}#{total}#{callback_user_id}")
-            )
-        else:
-            nav_buttons.append(InlineKeyboardButton("⏮", callback_data=f"noop#{callback_user_id}"))
-            nav_buttons.append(InlineKeyboardButton("◀️", callback_data=f"noop#{callback_user_id}"))
-
-        # Current page indicator
-        nav_buttons.append(
-            InlineKeyboardButton(f"📄 {current_page}/{total_pages}", callback_data=f"noop#{callback_user_id}")
-        )
-
-        # Next and Last buttons
-        if new_offset + page_size < total:
-            nav_buttons.append(
-                InlineKeyboardButton("Next ▶️", callback_data=f"search#next#{search_query}#{new_offset}#{total}#{callback_user_id}")
-            )
-            nav_buttons.append(
-                InlineKeyboardButton("Last ⏭", callback_data=f"search#last#{search_query}#{new_offset}#{total}#{callback_user_id}")
-            )
-        else:
-            nav_buttons.append(InlineKeyboardButton("▶️", callback_data=f"noop#{callback_user_id}"))
-            nav_buttons.append(InlineKeyboardButton("⏭", callback_data=f"noop#{callback_user_id}"))
-
-        buttons.append(nav_buttons)
+        # Add smart pagination buttons
+        pagination_buttons = pagination.build_pagination_buttons()
+        buttons.extend(pagination_buttons)
 
         # Update message
         await query.message.edit_text(
             f"🔍 **Search Results for:** {search_query}\n\n"
             f"📁 Found {total} files\n"
-            f"📊 Page {current_page} of {total_pages}",
+            f"📊 Page {pagination.current_page} of {pagination.total_pages}",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
