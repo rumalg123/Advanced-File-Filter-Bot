@@ -419,6 +419,42 @@ git push heroku main
 ### Railway Deployment
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/48ph1A?referralCode=ZaL8lf)
 
+#### Follow the below steps
+##### Step 1
+![Step 1](Railway_deployment_steps/1.png)
+##### Step 2
+![Step 2](Railway_deployment_steps/2.png)
+##### Step 3
+![Step 3](Railway_deployment_steps/3.png)
+##### Step 4
+![Step 4](Railway_deployment_steps/4.png)
+##### Step 5
+![Step 5](Railway_deployment_steps/5.png)
+##### Step 6
+![Step 6](Railway_deployment_steps/6.png)
+##### Step 7
+![Step 7](Railway_deployment_steps/7.png)
+##### Step 8
+![Step 8](Railway_deployment_steps/8.png)
+##### Step 9
+![Step 9](Railway_deployment_steps/9.png)
+##### Step 10
+![Step 10](Railway_deployment_steps/10.png)
+##### Step 11
+![Step 11](Railway_deployment_steps/11.png)
+##### Step 12
+![Step 12](Railway_deployment_steps/12.png)
+##### Step 13
+![Step 13](Railway_deployment_steps/13.png)
+##### Step 14
+![Step 14](Railway_deployment_steps/14.png)
+##### Step 15
+![Step 15](Railway_deployment_steps/15.png)
+##### Step 16
+![Step 16](Railway_deployment_steps/16.png)
+##### Step 17
+![Step 17](Railway_deployment_steps/17.png)
+
 ## 🔒 Security Best Practices
 
 1. **Environment Variables**
