@@ -417,7 +417,7 @@ git push heroku main
 ```
 
 ### Railway Deployment
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/2IIv1o?referralCode=ZaL8lf)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/48ph1A?referralCode=ZaL8lf)
 
 ## 🔒 Security Best Practices
 
