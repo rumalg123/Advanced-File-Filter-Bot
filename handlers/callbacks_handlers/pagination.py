@@ -39,15 +39,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         page_size = self.bot.config.MAX_BTN_SIZE
         user_id = callback_user_id
 
-        # Calculate new offset based on action
-        if action == "page":
-            # Direct page navigation - offset is already in the callback data
-            new_offset = current_offset
-        else:
-            new_offset = PaginationHelper.calculate_new_offset(
-                action, current_offset, page_size, total
-            )
-
+        new_offset = current_offset
         # Search for files
         files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
             user_id=user_id,
