@@ -113,6 +113,7 @@ class DatabaseConnectionPool:
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
             except DuplicateKeyError as dp:
                 logger.warning(f"Duplicate key detected. Skippng..")
+                raise
             except Exception as e:
                 logger.error(f"Unexpected database error: {e}")
                 raise
