@@ -52,6 +52,7 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(
                 url=pm_link
             )
+            return
 
         # Check if user has started the bot
         try:
