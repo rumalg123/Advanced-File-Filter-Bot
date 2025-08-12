@@ -41,11 +41,11 @@ class BotSettingsHandler:
         else:
             self.cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
 
-        def _register_handlers(self):
-            """Register all handlers with tracking"""
-            # This method should be called instead of directly registering in __init__
-            # The handlers should be registered through the main command handler
-            pass
+    def _register_handlers(self):
+        """Register all handlers with tracking"""
+        # This method should be called instead of directly registering in __init__
+        # The handlers should be registered through the main command handler
+        pass
 
     async def cleanup(self):
         """Clean up handler resources"""
