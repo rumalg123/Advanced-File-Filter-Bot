@@ -53,12 +53,22 @@ class SearchHandler:
             self.handle_text_search,
             filters.text & filters.incoming & ~filters.command(excluded_commands)
         )
-        self.bot.add_handler(text_handler)
+
+        # Use handler_manager if available
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            self.bot.handler_manager.add_handler(text_handler)
+        else:
+            self.bot.add_handler(text_handler)
         self._handlers.append(text_handler)
 
         # Register inline query handler
         inline_handler = InlineQueryHandler(self.handle_inline_query)
-        self.bot.add_handler(inline_handler)
+
+        # Use handler_manager if available
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            self.bot.handler_manager.add_handler(inline_handler)
+        else:
+            self.bot.add_handler(inline_handler)
         self._handlers.append(inline_handler)
 
         logger.info(f"SearchHandler registered {len(self._handlers)} handlers")
@@ -75,9 +85,11 @@ class SearchHandler:
             coro.close()
             return None
 
-        if hasattr(self.bot, 'handler_manager'):
+        # Use handler_manager if available
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             return self.bot.handler_manager.create_auto_delete_task(coro)
         else:
+            # Fallback to local tracking
             task = asyncio.create_task(coro)
             self.auto_delete_tasks.add(task)
             return task
@@ -102,32 +114,36 @@ class SearchHandler:
         # Signal shutdown
         self._shutdown.set()
 
-        # Cancel remaining auto-delete tasks
-        active_tasks = list(self.auto_delete_tasks)
-        cancelled_count = 0
+        # If handler_manager is available, it will handle task cleanup
+        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
+            # Manual cleanup if no handler_manager
+            # Cancel remaining auto-delete tasks
+            active_tasks = list(self.auto_delete_tasks)
+            cancelled_count = 0
 
-        for task in active_tasks:
-            if not task.done():
-                task.cancel()
-                cancelled_count += 1
+            for task in active_tasks:
+                if not task.done():
+                    task.cancel()
+                    cancelled_count += 1
 
-        # Wait for tasks to complete
-        if active_tasks:
-            await asyncio.gather(*active_tasks, return_exceptions=True)
+            # Wait for tasks to complete
+            if active_tasks:
+                await asyncio.gather(*active_tasks, return_exceptions=True)
 
-        logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
+            logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
 
         # Remove handlers from bot
-        handlers_removed = 0
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-                handlers_removed += 1
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self._handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self._handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
 
         self._handlers.clear()
-        logger.info(f"Removed {handlers_removed} handlers")
         logger.info("SearchHandler cleanup complete")
 
 

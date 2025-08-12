@@ -20,17 +20,20 @@ class DeleteHandler:
         self.delete_queue = asyncio.Queue(maxsize=1000)
         self._shutdown = asyncio.Event()
         self.handlers = []  # Store handlers for cleanup
+        self.background_task = None  # Track background task
 
         # Register handlers first
         self._register_handlers()
 
         # Create background task with proper tracking
-        if hasattr(bot, 'handler_manager'):
+        if hasattr(bot, 'handler_manager') and bot.handler_manager:
             self.background_task = bot.handler_manager.create_background_task(
                 self._process_delete_queue(),
                 name="delete_queue_processor"
             )
         else:
+            # Fallback if handler_manager not available
+            logger.warning("HandlerManager not available for DeleteHandler")
             self.background_task = asyncio.create_task(self._process_delete_queue())
 
     def _register_handlers(self):
@@ -43,7 +46,13 @@ class DeleteHandler:
                 self.handle_delete_channel_message,
                 filters.chat(self.bot.config.DELETE_CHANNEL)
             )
-            self.bot.add_handler(handler)
+
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler)
+            else:
+                self.bot.add_handler(handler)
+
             self.handlers.append(handler)
             handlers_registered += 1
             logger.info(f"Registered DELETE_CHANNEL handler for channel {self.bot.config.DELETE_CHANNEL}")
@@ -54,15 +63,20 @@ class DeleteHandler:
                 self.handle_delete_command,
                 filters.command("delete") & filters.user(self.bot.config.ADMINS)
             )
-            self.bot.add_handler(handler1)
-            self.handlers.append(handler1)
-
             handler2 = MessageHandler(
                 self.handle_deleteall_command,
                 filters.command("deleteall") & filters.user(self.bot.config.ADMINS)
             )
-            self.bot.add_handler(handler2)
-            self.handlers.append(handler2)
+
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler1)
+                self.bot.handler_manager.add_handler(handler2)
+            else:
+                self.bot.add_handler(handler1)
+                self.bot.add_handler(handler2)
+
+            self.handlers.extend([handler1, handler2])
             handlers_registered += 2
             logger.info(f"Registered delete commands for {len(self.bot.config.ADMINS)} admins")
 
@@ -76,13 +90,15 @@ class DeleteHandler:
         # Signal shutdown
         self._shutdown.set()
 
-        # Cancel background task
-        if hasattr(self, 'background_task') and not self.background_task.done():
-            self.background_task.cancel()
-            try:
-                await self.background_task
-            except asyncio.CancelledError:
-                logger.info("Background task cancelled successfully")
+        # Handler manager will handle task cancellation if available
+        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
+            # Manual cleanup if no handler_manager
+            if hasattr(self, 'background_task') and self.background_task and not self.background_task.done():
+                self.background_task.cancel()
+                try:
+                    await self.background_task
+                except asyncio.CancelledError:
+                    logger.info("Background task cancelled successfully")
 
         # Clear queue
         items_cleared = 0
@@ -95,17 +111,18 @@ class DeleteHandler:
 
         logger.info(f"Cleared {items_cleared} items from delete queue")
 
-        # Remove handlers
-        handlers_removed = 0
-        for handler in self.handlers:
-            try:
-                self.bot.remove_handler(handler)
-                handlers_removed += 1
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-        self.handlers.clear()
+        # Remove handlers (handler_manager will track these too)
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self.handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self.handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
 
-        logger.info(f"Removed {handlers_removed} handlers")
+        self.handlers.clear()
         logger.info("DeleteHandler cleanup complete")
 
     async def _process_delete_queue(self):
@@ -119,7 +136,6 @@ class DeleteHandler:
 
                 while len(batch) < 50 and not self._shutdown.is_set():
                     try:
-                        # FIX: Calculate timeout properly, ensure it's positive
                         remaining = deadline - asyncio.get_event_loop().time()
                         if remaining <= 0:
                             break  # Deadline passed, process what we have
@@ -322,7 +338,6 @@ class DeleteHandler:
         }
 
         for item in batch:
-            # FIX: Check for shutdown during batch processing
             if self._shutdown.is_set():
                 logger.info("Shutdown requested, stopping batch processing")
                 break
