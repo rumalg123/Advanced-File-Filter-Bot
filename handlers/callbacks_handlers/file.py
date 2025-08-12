@@ -149,6 +149,7 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(
                 url=pm_link
             )
+            return
 
             # from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
             # await query.message.edit_reply_markup(
