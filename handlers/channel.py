@@ -41,65 +41,46 @@ class ChannelHandler:
         self.init_task = None
 
         # Use the handler manager if available
-        if hasattr(bot, 'handler_manager'):
-            self.handler_manager = bot.handler_manager
+        if hasattr(bot, 'handler_manager') and bot.handler_manager:
             # Create managed background tasks
             self.background_tasks = [
-                self.handler_manager.create_background_task(
+                bot.handler_manager.create_background_task(
                     self._process_message_queue(),
                     name="channel_message_queue"
                 ),
-                self.handler_manager.create_background_task(
+                bot.handler_manager.create_background_task(
                     self._process_overflow_queue(),
                     name="channel_overflow_queue"
                 ),
-                self.handler_manager.create_background_task(
+                bot.handler_manager.create_background_task(
                     self._periodic_handler_update(),
                     name="channel_handler_update"
                 ),
-                self.handler_manager.create_background_task(
+                bot.handler_manager.create_background_task(
                     self._cleanup_user_counts(),
                     name="channel_user_cleanup"
                 )
             ]
+
+            # Initialize channels after manager is ready
+            bot.handler_manager.create_background_task(
+                self._setup_initial_channels(),
+                name="channel_initial_setup"
+            )
         else:
-            # Fallback to old method
-            self.background_tasks = [
-                asyncio.create_task(self._process_message_queue()),
-                asyncio.create_task(self._process_overflow_queue()),
-                asyncio.create_task(self._periodic_handler_update()),
-                asyncio.create_task(self._cleanup_user_counts())
-            ]
-        self._initialize_channels()
+            # This should not happen if properly integrated
+            logger.error("HandlerManager not available! Channel handler may not work properly.")
+            raise RuntimeError("HandlerManager is required for ChannelHandler")
 
     async def cleanup(self):
         """Clean up handler resources"""
         logger.info("Cleaning up ChannelHandler...")
-        logger.info(f"Active queues - Main: {self.message_queue.qsize()}, Overflow: {len(self.overflow_queue)}")
 
         # Signal shutdown
         self._shutdown.set()
 
-        # FIX 3: Cancel initialization task if it exists
-        if self.init_task and not self.init_task.done():
-            self.init_task.cancel()
-            try:
-                await self.init_task
-            except asyncio.CancelledError:
-                pass
-
-        # Cancel all background tasks
-        cancelled_count = 0
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
-                cancelled_count += 1
-
-        # Wait for tasks to complete
-        if self.background_tasks:
-            await asyncio.gather(*self.background_tasks, return_exceptions=True)
-
-        logger.info(f"Cancelled {cancelled_count} background tasks")
+        # Handler manager will handle task cancellation
+        # We just need to clean up our own resources
 
         # Clear queues
         queue_items_cleared = 0
@@ -116,16 +97,17 @@ class ChannelHandler:
 
         logger.info(f"Cleared {queue_items_cleared} items from main queue, {overflow_items} from overflow")
 
-        # Remove handlers
-        handlers_removed = len(self._handlers)
+        # Remove handlers (handler manager will track these too)
         for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-        self._handlers.clear()
+            if hasattr(self.bot, 'handler_manager'):
+                self.bot.handler_manager.remove_handler(handler)
+            else:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
 
-        logger.info(f"Removed {handlers_removed} handlers")
+        self._handlers.clear()
         logger.info("ChannelHandler cleanup complete")
 
     async def _cleanup_user_counts(self):
@@ -486,12 +468,13 @@ class ChannelHandler:
                     combined_filter = combined_filter | f
 
                 # Create and register handler
-                handler = MessageHandler(
-                    self.handle_channel_media,
-                    combined_filter & self.media_filter
-                )
-                self.bot.add_handler(handler)
-                self._handlers.append(handler)
+                if self.bot.handler_manager:
+                    handler = MessageHandler(
+                        self.handle_channel_media,
+                        combined_filter & self.media_filter
+                    )
+                    self.bot.handler_manager.add_handler(handler)
+                    self._handlers.append(handler)
 
                 logger.info(f"Updated automatic indexing for {len(channels)} active channels")
 

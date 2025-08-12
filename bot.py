@@ -6,6 +6,8 @@ import aiohttp_cors
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.performance import performance_monitor, PerformanceMonitor
+from handlers.manager import HandlerManager
+
 UVLOOP_AVAILABLE = False
 if sys.platform != 'win32':
     try:
@@ -260,6 +262,7 @@ class MediaSearchBot(Client):
             workers=config.WORKERS,
             sleep_threshold=5,
         )
+        self.handler_manager = HandlerManager(self)
 
     async def _set_bot_commands(self):
         """Set bot commands for the menu"""
@@ -567,6 +570,11 @@ class MediaSearchBot(Client):
             # Initialize handlers after bot is started
             await self._initialize_handlers()
 
+            self.handler_manager.create_background_task(
+                self._run_maintenance_tasks(),
+                name="maintenance_tasks"
+            )
+
             # Send startup message
             await self._send_startup_message()
 
@@ -591,57 +599,33 @@ class MediaSearchBot(Client):
         from handlers.filestore import FileStoreHandler
         from handlers.search import SearchHandler
         from handlers.delete import DeleteHandler
-        self.delete_handler = DeleteHandler(self)
-
-        # Initialize command handler
-        self.command_handler = CommandHandler(self)
-
-        self.filestore_handler = FileStoreHandler(self)
-
-        # Initialize indexing handler
-        self.indexing_handler = IndexingHandler(
+        self.handler_manager.handler_instances['delete'] = DeleteHandler(self)
+        self.handler_manager.handler_instances['command'] = CommandHandler(self)
+        self.handler_manager.handler_instances['filestore'] = FileStoreHandler(self)
+        self.handler_manager.handler_instances['indexing'] = IndexingHandler(
             self,
             self.indexing_service,
             self.index_request_service
         )
-
-        self.channel_handler = ChannelHandler(self, self.channel_repo)
-
-        self.request_handler = RequestHandler(self)
-        # Initialize search handler
-        self.search_handler = SearchHandler(self)
+        self.handler_manager.handler_instances['channel'] = ChannelHandler(self, self.channel_repo)
+        self.handler_manager.handler_instances['request'] = RequestHandler(self)
+        self.handler_manager.handler_instances['search'] = SearchHandler(self)
 
         if not self.config.DISABLE_FILTER:
             from handlers.connection import ConnectionHandler
             from handlers.filter import FilterHandler
 
-            self.connection_handler = ConnectionHandler(self, self.connection_service)
-            self.filter_handler = FilterHandler(self)
-        else:
-            self.connection_handler = None
-            self.filter_handler = None
+            self.handler_manager.handler_instances['connection'] = ConnectionHandler(
+                self, self.connection_service
+            )
+            self.handler_manager.handler_instances['filter'] = FilterHandler(self)
 
-        logger.info("Handlers initialized")
+        logger.info("Handlers initialized through HandlerManager")
 
     async def stop(self, *args):
         """Stop the bot and cleanup resources"""
         logger.info("Stopping bot...")
-
-        # Cancel all background tasks
-        for task in getattr(self, 'background_tasks', []):
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-        # Clean up handlers (OUTSIDE the for loop!)
-        if hasattr(self, 'channel_handler'):
-            await self.channel_handler.cleanup()
-
-        if hasattr(self, 'delete_handler'):
-            await self.delete_handler.cleanup()
+        await self.handler_manager.cleanup()
 
         # Stop Pyrogram client
         await super().stop()

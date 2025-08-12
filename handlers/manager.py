@@ -1,12 +1,13 @@
 """
-Centralized handler manager with proper cleanup to prevent memory leaks
+Enhanced Handler Manager with comprehensive resource tracking and cleanup
 """
 import asyncio
-import logging
-from typing import Dict, List, Set
-from weakref import WeakSet
+import gc
+import weakref
+from typing import Dict, List, Set, Optional, Any
+from weakref import WeakSet, WeakValueDictionary
 from pyrogram import Client
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
+from pyrogram.handlers import MessageHandler, CallbackQueryHandler, InlineQueryHandler
 
 from core.utils.logger import get_logger
 
@@ -18,68 +19,210 @@ class HandlerManager:
 
     def __init__(self, bot):
         self.bot = bot
-        self.handlers: List = []
-        self.background_tasks: Set[asyncio.Task] = set()
-        self.auto_delete_tasks: WeakSet = WeakSet()  # Use WeakSet for auto-cleanup
-        self.handler_instances: Dict = {}
+
+        # Handler tracking
+        self.handlers: List = []  # All registered handlers
+        self.handler_instances: Dict[str, Any] = {}  # Named handler instances
+
+        # Task tracking with different strategies
+        self.background_tasks: Set[asyncio.Task] = set()  # Long-running tasks
+        self.auto_delete_tasks: WeakSet = WeakSet()  # Auto-cleanup tasks
+        self.named_tasks: Dict[str, asyncio.Task] = {}  # Named tasks for easy access
+
+        # Memory management
+        self._task_refs: WeakValueDictionary = WeakValueDictionary()  # Weak refs to tasks
         self._shutdown_event = asyncio.Event()
+        self._cleanup_lock = asyncio.Lock()
+
+        # Statistics
+        self.stats = {
+            'tasks_created': 0,
+            'tasks_completed': 0,
+            'tasks_cancelled': 0,
+            'handlers_registered': 0,
+            'handlers_removed': 0
+        }
 
     def add_handler(self, handler):
         """Register a handler with the bot"""
         self.bot.add_handler(handler)
         self.handlers.append(handler)
+        self.stats['handlers_registered'] += 1
+        logger.debug(f"Registered handler: {type(handler).__name__}")
 
-    def create_background_task(self, coro, name=None):
-        """Create and track a background task"""
-        task = asyncio.create_task(coro, name=name)
-        self.background_tasks.add(task)
-        task.add_done_callback(self.background_tasks.discard)
-        return task
+    def remove_handler(self, handler):
+        """Remove a handler from the bot"""
+        try:
+            self.bot.remove_handler(handler)
+            if handler in self.handlers:
+                self.handlers.remove(handler)
+                self.stats['handlers_removed'] += 1
+        except Exception as e:
+            logger.error(f"Error removing handler: {e}")
 
-    def create_auto_delete_task(self, coro):
-        """Create an auto-delete task that doesn't need explicit cleanup"""
+    def create_background_task(self, coro, name: Optional[str] = None) -> asyncio.Task|None:
+        """Create and track a long-running background task"""
+        if self._shutdown_event.is_set():
+            logger.warning(f"Attempted to create task '{name}' during shutdown")
+            coro.close()
+            return None
+
         task = asyncio.create_task(coro)
-        self.auto_delete_tasks.add(task)  # WeakSet auto-removes completed tasks
+
+        # Track the task
+        self.background_tasks.add(task)
+        self.stats['tasks_created'] += 1
+
+        if name:
+            self.named_tasks[name] = task
+            task.set_name(name)
+
+        # Cleanup callback
+        def cleanup_callback(t):
+            self.background_tasks.discard(t)
+            if name and name in self.named_tasks:
+                del self.named_tasks[name]
+            self.stats['tasks_completed'] += 1
+            logger.debug(f"Background task '{name or 'unnamed'}' completed")
+
+        task.add_done_callback(cleanup_callback)
+        logger.debug(f"Created background task: {name or 'unnamed'}")
         return task
 
-    async def cleanup(self):
-        """Clean up all handlers and tasks"""
-        logger.info("Starting handler manager cleanup...")
+    def create_auto_delete_task(self, coro) -> asyncio.Task|None:
+        """Create a task that auto-cleans up (for short-lived tasks)"""
+        if self._shutdown_event.is_set():
+            logger.debug("Shutdown in progress, not creating auto-delete task")
+            coro.close()
+            return None
 
-        # Set shutdown event
-        self._shutdown_event.set()
+        task = asyncio.create_task(coro)
+        self.auto_delete_tasks.add(task)  # WeakSet auto-removes when done
+        self.stats['tasks_created'] += 1
 
-        # Cancel all background tasks
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
+        # Light cleanup callback
+        task.add_done_callback(lambda t: self.stats.__setitem__('tasks_completed',
+                                                                  self.stats['tasks_completed'] + 1))
+        return task
 
-        # Wait for background tasks to complete
-        if self.background_tasks:
-            await asyncio.gather(*self.background_tasks, return_exceptions=True)
+    def get_task(self, name: str) -> Optional[asyncio.Task]:
+        """Get a named task if it exists"""
+        return self.named_tasks.get(name)
 
-        # Cancel remaining auto-delete tasks
-        for task in list(self.auto_delete_tasks):
-            if not task.done():
-                task.cancel()
+    def cancel_task(self, name: str) -> bool:
+        """Cancel a specific named task"""
+        task = self.named_tasks.get(name)
+        if task and not task.done():
+            task.cancel()
+            self.stats['tasks_cancelled'] += 1
+            logger.info(f"Cancelled task: {name}")
+            return True
+        return False
 
-        # Remove all handlers from bot
-        for handler in self.handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        # Clean up handler instances
-        for name, instance in self.handler_instances.items():
+    async def cleanup_handler(self, handler_name: str):
+        """Clean up a specific handler"""
+        if handler_name in self.handler_instances:
+            instance = self.handler_instances[handler_name]
             if hasattr(instance, 'cleanup'):
                 try:
+                    logger.info(f"Cleaning up handler: {handler_name}")
                     await instance.cleanup()
                 except Exception as e:
-                    logger.error(f"Error cleaning up {name}: {e}")
+                    logger.error(f"Error cleaning up {handler_name}: {e}")
+            del self.handler_instances[handler_name]
 
-        self.handlers.clear()
-        self.handler_instances.clear()
-        self.background_tasks.clear()
+    async def cleanup(self):
+        """Comprehensive cleanup of all resources"""
+        async with self._cleanup_lock:
+            logger.info("="*50)
+            logger.info("Starting HandlerManager cleanup...")
+            logger.info(f"Current state: {self.get_stats()}")
 
-        logger.info("Handler manager cleanup complete")
+            # Set shutdown event
+            self._shutdown_event.set()
+
+            # Step 1: Cancel named tasks first (they're usually important)
+            for name, task in list(self.named_tasks.items()):
+                if not task.done():
+                    logger.debug(f"Cancelling named task: {name}")
+                    task.cancel()
+                    self.stats['tasks_cancelled'] += 1
+
+            # Step 2: Cancel background tasks
+            background_tasks = list(self.background_tasks)
+            for task in background_tasks:
+                if not task.done():
+                    task.cancel()
+                    self.stats['tasks_cancelled'] += 1
+
+            # Wait for background tasks with timeout
+            if background_tasks:
+                logger.info(f"Waiting for {len(background_tasks)} background tasks...")
+                done, pending = await asyncio.wait(
+                    background_tasks,
+                    timeout=5.0,
+                    return_when=asyncio.ALL_COMPLETED
+                )
+                if pending:
+                    logger.warning(f"{len(pending)} tasks did not complete in time")
+
+            # Step 3: Cancel auto-delete tasks
+            auto_delete_tasks = list(self.auto_delete_tasks)
+            for task in auto_delete_tasks:
+                if not task.done():
+                    task.cancel()
+                    self.stats['tasks_cancelled'] += 1
+
+            # Brief wait for auto-delete tasks
+            if auto_delete_tasks:
+                await asyncio.gather(*auto_delete_tasks, return_exceptions=True)
+
+            # Step 4: Clean up handler instances
+            logger.info(f"Cleaning up {len(self.handler_instances)} handler instances...")
+            for name in list(self.handler_instances.keys()):
+                await self.cleanup_handler(name)
+
+            # Step 5: Remove all handlers from bot
+            logger.info(f"Removing {len(self.handlers)} handlers from bot...")
+            for handler in self.handlers[:]:  # Use slice to avoid modification during iteration
+                self.remove_handler(handler)
+
+            # Clear all tracking structures
+            self.handlers.clear()
+            self.handler_instances.clear()
+            self.background_tasks.clear()
+            self.named_tasks.clear()
+            # auto_delete_tasks clears itself (WeakSet)
+
+            # Force garbage collection
+            gc.collect()
+
+            logger.info(f"Final stats: {self.get_stats()}")
+            logger.info("HandlerManager cleanup complete")
+            logger.info("="*50)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get manager statistics"""
+        return {
+            'handlers_active': len(self.handlers),
+            'handler_instances': len(self.handler_instances),
+            'background_tasks': len(self.background_tasks),
+            'auto_delete_tasks': len(self.auto_delete_tasks),
+            'named_tasks': len(self.named_tasks),
+            'total_created': self.stats['tasks_created'],
+            'total_completed': self.stats['tasks_completed'],
+            'total_cancelled': self.stats['tasks_cancelled'],
+            'handlers_registered': self.stats['handlers_registered'],
+            'handlers_removed': self.stats['handlers_removed']
+        }
+
+    def is_shutting_down(self) -> bool:
+        """Check if manager is shutting down"""
+        return self._shutdown_event.is_set()
+
+    async def wait_for_shutdown(self, timeout: Optional[float] = None):
+        """Wait for shutdown signal"""
+        try:
+            await asyncio.wait_for(self._shutdown_event.wait(), timeout)
+        except asyncio.TimeoutError:
+            pass
