@@ -25,10 +25,8 @@ class ChannelHandler:
         self.channel_repo = channel_repo or ChannelRepository(bot.db_pool, bot.cache)
         self.media_filter = filters.document | filters.video | filters.audio
         self._handlers = []
+        self._shutdown = asyncio.Event()
         self._update_lock = asyncio.Lock()
-        self.background_tasks = []
-        self.cleanup_interval = 3600  # Clean every hour
-
         # Add rate limiting for bulk messages
         self.message_queue = asyncio.Queue(maxsize=1000)
         self.overflow_queue = []  # Backup queue for overflow
@@ -38,35 +36,119 @@ class ChannelHandler:
         self.user_message_counts = defaultdict(lambda: {'count': 0, 'reset_time': time.time()})
         self.processing = False
 
-        # Create and store background tasks ONLY ONCE
-        self.background_tasks.append(
-            asyncio.create_task(self._process_message_queue())
-        )
-        self.background_tasks.append(
-            asyncio.create_task(self._process_overflow_queue())
-        )
-        self.background_tasks.append(
-            asyncio.create_task(self._periodic_handler_update())
-        )
-        self.background_tasks.append(
-            asyncio.create_task(self._cleanup_user_counts())
-        )
+        self.background_tasks = []
 
-        # Start with channels from config
+        self.init_task = None
+
+        # Use the handler manager if available
+        if hasattr(bot, 'handler_manager'):
+            self.handler_manager = bot.handler_manager
+            # Create managed background tasks
+            self.background_tasks = [
+                self.handler_manager.create_background_task(
+                    self._process_message_queue(),
+                    name="channel_message_queue"
+                ),
+                self.handler_manager.create_background_task(
+                    self._process_overflow_queue(),
+                    name="channel_overflow_queue"
+                ),
+                self.handler_manager.create_background_task(
+                    self._periodic_handler_update(),
+                    name="channel_handler_update"
+                ),
+                self.handler_manager.create_background_task(
+                    self._cleanup_user_counts(),
+                    name="channel_user_cleanup"
+                )
+            ]
+        else:
+            # Fallback to old method
+            self.background_tasks = [
+                asyncio.create_task(self._process_message_queue()),
+                asyncio.create_task(self._process_overflow_queue()),
+                asyncio.create_task(self._periodic_handler_update()),
+                asyncio.create_task(self._cleanup_user_counts())
+            ]
         self._initialize_channels()
+
+    async def cleanup(self):
+        """Clean up handler resources"""
+        logger.info("Cleaning up ChannelHandler...")
+        logger.info(f"Active queues - Main: {self.message_queue.qsize()}, Overflow: {len(self.overflow_queue)}")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # FIX 3: Cancel initialization task if it exists
+        if self.init_task and not self.init_task.done():
+            self.init_task.cancel()
+            try:
+                await self.init_task
+            except asyncio.CancelledError:
+                pass
+
+        # Cancel all background tasks
+        cancelled_count = 0
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
+
+        # Wait for tasks to complete
+        if self.background_tasks:
+            await asyncio.gather(*self.background_tasks, return_exceptions=True)
+
+        logger.info(f"Cancelled {cancelled_count} background tasks")
+
+        # Clear queues
+        queue_items_cleared = 0
+        while not self.message_queue.empty():
+            try:
+                self.message_queue.get_nowait()
+                queue_items_cleared += 1
+            except asyncio.QueueEmpty:
+                break
+
+        overflow_items = len(self.overflow_queue)
+        self.overflow_queue.clear()
+        self.user_message_counts.clear()
+
+        logger.info(f"Cleared {queue_items_cleared} items from main queue, {overflow_items} from overflow")
+
+        # Remove handlers
+        handlers_removed = len(self._handlers)
+        for handler in self._handlers:
+            try:
+                self.bot.remove_handler(handler)
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
+        self._handlers.clear()
+
+        logger.info(f"Removed {handlers_removed} handlers")
+        logger.info("ChannelHandler cleanup complete")
 
     async def _cleanup_user_counts(self):
         """Periodically clean up old user message counts"""
-        while True:
+        cleanup_interval = 3600  # 1 hour
+
+        while not self._shutdown.is_set():
             try:
-                await asyncio.sleep(self.cleanup_interval)
+                # Wait for interval or shutdown
+                await asyncio.wait_for(
+                    self._shutdown.wait(),
+                    timeout=cleanup_interval
+                )
+                break  # Shutdown requested
+            except asyncio.TimeoutError:
+                # Timeout occurred, do cleanup
                 current_time = time.time()
 
                 # Clean up entries older than 1 hour
-                users_to_clean = []
-                for user_id, data in self.user_message_counts.items():
-                    if current_time - data['reset_time'] > 3600:
-                        users_to_clean.append(user_id)
+                users_to_clean = [
+                    user_id for user_id, data in self.user_message_counts.items()
+                    if current_time - data['reset_time'] > 3600
+                ]
 
                 for user_id in users_to_clean:
                     del self.user_message_counts[user_id]
@@ -74,51 +156,119 @@ class ChannelHandler:
                 if users_to_clean:
                     logger.info(f"Cleaned up message counts for {len(users_to_clean)} users")
 
-                # Also limit overflow queue size
+                # Limit overflow queue size
                 if len(self.overflow_queue) > self.max_overflow_size:
                     removed = len(self.overflow_queue) - self.max_overflow_size
                     self.overflow_queue = self.overflow_queue[-self.max_overflow_size:]
                     logger.warning(f"Trimmed {removed} old items from overflow queue")
 
             except asyncio.CancelledError:
-                logger.info("User count cleanup task cancelled")  # Add logging
+                logger.info("User count cleanup task cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in cleanup task: {e}")
 
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up ChannelHandler...")
+        logger.info("User count cleanup task exited")
 
-        # Cancel all background tasks
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-        # Clear queues
-        while not self.message_queue.empty():
+    async def _process_message_queue(self):
+        """Process messages from queue with rate limiting"""
+        while not self._shutdown.is_set():
             try:
-                self.message_queue.get_nowait()
-            except asyncio.QueueEmpty:
+                batch = []
+                deadline = asyncio.get_event_loop().time() + 5
+
+                # Dynamic batch sizing
+                queue_size = self.message_queue.qsize()
+                max_batch_size = 50 if queue_size > 500 else (30 if queue_size > 200 else 20)
+                wait_time = 2 if queue_size > 500 else (3 if queue_size > 200 else 5)
+
+                while len(batch) < max_batch_size and not self._shutdown.is_set():
+                    try:
+                        timeout = max(0.0, deadline - asyncio.get_event_loop().time())
+                        if timeout <= 0:
+                            break
+                        item = await asyncio.wait_for(
+                            self.message_queue.get(),
+                            timeout=timeout
+                        )
+                        batch.append(item)
+                    except asyncio.TimeoutError:
+                        break
+
+                if batch and not self._shutdown.is_set():
+                    await self._process_message_batch(batch)
+                elif not batch:
+                    # No messages, wait a bit
+                    try:
+                        await asyncio.wait_for(self._shutdown.wait(), timeout=wait_time)
+                        break  # Shutdown requested
+                    except asyncio.TimeoutError:
+                        pass  # Continue processing
+
+            except asyncio.CancelledError:
+                logger.info("Message queue processor cancelled")
                 break
+            except Exception as e:
+                logger.error(f"Error processing message queue: {e}")
+                await asyncio.sleep(5)
 
-        self.overflow_queue.clear()
-        self.user_message_counts.clear()
+        logger.info("Message queue processor exited")
 
-        # Remove handlers
-        for handler in self._handlers:
-            self.bot.remove_handler(handler)
-        self._handlers.clear()
+    async def _process_overflow_queue(self):
+        """Process overflow queue when main queue has space"""
+        while not self._shutdown.is_set():
+            try:
+                # Wait for 5 seconds or shutdown
+                await asyncio.wait_for(self._shutdown.wait(), timeout=5)
+                break  # Shutdown requested
+            except asyncio.TimeoutError:
+                # Continue processing
+                if self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 10:
+                    moved = 0
+                    while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 5:
+                        item = self.overflow_queue.pop(0)
+                        try:
+                            self.message_queue.put_nowait(item)
+                            moved += 1
+                        except asyncio.QueueFull:
+                            self.overflow_queue.insert(0, item)
+                            break
 
-        logger.info("ChannelHandler cleanup complete")
+                    if moved > 0:
+                        logger.info(f"Moved {moved} items from overflow to main queue")
+
+            except asyncio.CancelledError:
+                logger.info("Overflow queue processor cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error processing overflow queue: {e}")
+
+        logger.info("Overflow queue processor exited")
+
+    async def _periodic_handler_update(self):
+        """Periodically update handlers to catch channel changes"""
+        while not self._shutdown.is_set():
+            try:
+                # Wait for 60 seconds or shutdown
+                await asyncio.wait_for(self._shutdown.wait(), timeout=60)
+                break  # Shutdown requested
+            except asyncio.TimeoutError:
+                # Update handlers
+                try:
+                    await self.update_handlers()
+                except Exception as e:
+                    logger.error(f"Error updating handlers: {e}")
+            except asyncio.CancelledError:
+                logger.info("Periodic handler update cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in periodic handler update: {e}")
+
+        logger.info("Periodic handler update exited")
 
     async def handle_channel_media(self, client: Client, message: Message):
         """Handle media messages in monitored channels with rate limiting"""
-
+        # Skip special channels
         special_channels = [
             self.bot.config.LOG_CHANNEL,
             self.bot.config.INDEX_REQ_CHANNEL,
@@ -126,10 +276,13 @@ class ChannelHandler:
             self.bot.config.DELETE_CHANNEL
         ]
         special_channels = {ch for ch in special_channels if ch}
+
         if message.chat.id in special_channels:
             return
+
         if message.from_user and message.from_user.is_bot:
             return
+
         try:
             # Add to queue instead of processing directly
             await self.message_queue.put({
@@ -174,87 +327,6 @@ class ChannelHandler:
         except Exception as e:
             logger.error(f"Error adding message to queue: {e}")
 
-    async def _process_overflow_queue(self):
-        """Process overflow queue when main queue has space"""
-        while True:
-            try:
-                await asyncio.sleep(5)  # Check every 5 seconds
-
-                if self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 10:
-                    # Move items from overflow to main queue
-                    moved = 0
-                    while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 5:
-                        item = self.overflow_queue.pop(0)
-                        try:
-                            self.message_queue.put_nowait(item)
-                            moved += 1
-                        except asyncio.QueueFull:
-                            # Put it back and stop
-                            self.overflow_queue.insert(0, item)
-                            break
-
-                    if moved > 0:
-                        logger.info(f"Moved {moved} items from overflow queue to main queue")
-
-            except asyncio.CancelledError:
-                logger.info("Overflow queue processor cancelled")
-                break  # Exit the loop cleanly
-            except Exception as e:
-                logger.error(f"Error processing overflow queue: {e}")
-                await asyncio.sleep(1)  # Short delay before retry
-
-    # handlers/channel.py
-    async def _process_message_queue(self):
-        """Process messages from queue with rate limiting"""
-        while True:
-            try:
-                batch = []
-                deadline = asyncio.get_event_loop().time() + 5  # 5 second window
-                queue_size = self.message_queue.qsize()
-                if queue_size > 500:
-                    max_batch_size = 50  # Process more when queue is full
-                    wait_time = 2
-                elif queue_size > 200:
-                    max_batch_size = 30
-                    wait_time = 3
-                else:
-                    max_batch_size = 20
-                    wait_time = 5
-
-                while len(batch) < max_batch_size:
-                    try:
-                        timeout = max(0.0, deadline - asyncio.get_event_loop().time())
-                        item = await asyncio.wait_for(
-                            self.message_queue.get(),
-                            timeout=timeout
-                        )
-                        batch.append(item)
-                    except asyncio.TimeoutError:
-                        break
-
-                if batch:
-                    await self._process_message_batch(batch)
-                    if queue_size > 100 and self.bot.config.LOG_CHANNEL:
-                        try:
-                            await self.bot.send_message(
-                                self.bot.config.LOG_CHANNEL,
-                                f"📊 **Queue Status**\n"
-                                f"Main Queue: {queue_size}/1000\n"
-                                f"Overflow Queue: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
-                                f"Batch Processed: {len(batch)} messages"
-                            )
-                        except:
-                            pass
-                else:
-                    await asyncio.sleep(wait_time)
-
-            except asyncio.CancelledError:
-                logger.info("Message queue processor cancelled")
-                break  # Exit the loop cleanly
-            except Exception as e:
-                logger.error(f"Error processing message queue: {e}")
-                await asyncio.sleep(5)
-
     async def _process_message_batch(self, batch: List[Dict]):
         """Process a batch of messages"""
         stats = {
@@ -264,6 +336,10 @@ class ChannelHandler:
         }
 
         for item in batch:
+            if self._shutdown.is_set():
+                logger.info("Shutdown requested, stopping batch processing")
+                break
+
             message = item['message']
 
             try:
@@ -303,7 +379,7 @@ class ChannelHandler:
                 pass
 
     async def _process_single_message(self, message: Message) -> str:
-        """Process a single message (extracted from original handle_channel_media)"""
+        """Process a single message"""
         try:
             # Extract media object
             media = None
@@ -311,8 +387,6 @@ class ChannelHandler:
 
             for media_type in ("document", "video", "audio"):
                 media = getattr(message, media_type, None)
-                logger.info(f"Processing media type: {media_type}")
-                #logger.info(f"media : {media}")
                 if media is not None:
                     file_type = media_type
                     break
@@ -352,35 +426,45 @@ class ChannelHandler:
             logger.error(f"Error processing message: {e}")
             return "error"
 
-
-
     def _initialize_channels(self):
         """Initialize channels from config on startup"""
-        asyncio.create_task(self._setup_initial_channels())
+        # FIX 4: Track the initialization task
+        self.init_task = asyncio.create_task(self._setup_initial_channels())
 
     async def _setup_initial_channels(self):
         """Setup initial channels from config"""
-        # Add channels from environment config to database
-        for channel in self.bot.config.CHANNELS:
-            if channel and channel != 0:
-                try:
-                    await self.channel_repo.add_channel(
-                        channel_id=channel if isinstance(channel, int) else 0,
-                        channel_username=channel if isinstance(channel, str) else None,
-                        added_by=None  # System added
-                    )
-                except Exception as e:
-                    logger.error(f"Error adding channel {channel} from config: {e}")
+        try:
+            # Add channels from environment config to database
+            for channel in self.bot.config.CHANNELS:
+                if channel and channel != 0:
+                    try:
+                        await self.channel_repo.add_channel(
+                            channel_id=channel if isinstance(channel, int) else 0,
+                            channel_username=channel if isinstance(channel, str) else None,
+                            added_by=None  # System added
+                        )
+                    except Exception as e:
+                        logger.error(f"Error adding channel {channel} from config: {e}")
 
-        # Register handlers
-        await self.update_handlers()
+            # Register handlers
+            await self.update_handlers()
+
+        except asyncio.CancelledError:
+            logger.info("Initial channel setup cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"Error in initial channel setup: {e}")
 
     async def update_handlers(self):
         """Update handlers based on current active channels"""
+        # FIX 5: Use the lock that we now properly initialized
         async with self._update_lock:
             # Remove existing handlers
             for handler in self._handlers:
-                self.bot.remove_handler(handler)
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
             self._handlers.clear()
 
             # Get active channels
@@ -411,17 +495,6 @@ class ChannelHandler:
 
                 logger.info(f"Updated automatic indexing for {len(channels)} active channels")
 
-    async def _periodic_handler_update(self):
-        """Periodically update handlers to catch channel changes"""
-        while True:
-            try:
-                await asyncio.sleep(60)  # Check every minute
-                await self.update_handlers()
-            except asyncio.CancelledError:
-                logger.info("Periodic handler update cancelled")
-                break  # Exit the loop cleanly
-            except Exception as e:
-                logger.error(f"Error updating channel handlers: {e}")
 
     def _get_file_type(self, media_type: str) -> FileType:
         """Convert media type string to FileType enum"""

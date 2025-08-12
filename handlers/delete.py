@@ -8,6 +8,7 @@ from pyrogram.types import Message
 
 from core.cache.config import CacheKeyGenerator
 from core.utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -17,18 +18,26 @@ class DeleteHandler:
     def __init__(self, bot):
         self.bot = bot
         self.delete_queue = asyncio.Queue(maxsize=1000)
-        self.processing = False
+        self._shutdown = asyncio.Event()
         self.handlers = []  # Store handlers for cleanup
 
         # Register handlers first
         self._register_handlers()
 
-        # Create background task ONLY ONCE and store it
-        self.background_task = asyncio.create_task(self._process_delete_queue())
+        # Create background task with proper tracking
+        if hasattr(bot, 'handler_manager'):
+            self.background_task = bot.handler_manager.create_background_task(
+                self._process_delete_queue(),
+                name="delete_queue_processor"
+            )
+        else:
+            self.background_task = asyncio.create_task(self._process_delete_queue())
 
     def _register_handlers(self):
         """Register delete handlers"""
-        # Store handlers for cleanup
+        handlers_registered = 0
+
+        # Register DELETE_CHANNEL handler if configured
         if self.bot.config.DELETE_CHANNEL:
             handler = MessageHandler(
                 self.handle_delete_channel_message,
@@ -36,7 +45,10 @@ class DeleteHandler:
             )
             self.bot.add_handler(handler)
             self.handlers.append(handler)
+            handlers_registered += 1
+            logger.info(f"Registered DELETE_CHANNEL handler for channel {self.bot.config.DELETE_CHANNEL}")
 
+        # Register admin commands if ADMINS configured
         if self.bot.config.ADMINS:
             handler1 = MessageHandler(
                 self.handle_delete_command,
@@ -51,10 +63,18 @@ class DeleteHandler:
             )
             self.bot.add_handler(handler2)
             self.handlers.append(handler2)
+            handlers_registered += 2
+            logger.info(f"Registered delete commands for {len(self.bot.config.ADMINS)} admins")
+
+        logger.info(f"DeleteHandler registered {handlers_registered} handlers")
 
     async def cleanup(self):
         """Clean up handler resources"""
         logger.info("Cleaning up DeleteHandler...")
+        logger.info(f"Queue size: {self.delete_queue.qsize()}")
+
+        # Signal shutdown
+        self._shutdown.set()
 
         # Cancel background task
         if hasattr(self, 'background_task') and not self.background_task.done():
@@ -62,143 +82,192 @@ class DeleteHandler:
             try:
                 await self.background_task
             except asyncio.CancelledError:
-                pass
+                logger.info("Background task cancelled successfully")
 
         # Clear queue
+        items_cleared = 0
         while not self.delete_queue.empty():
             try:
                 self.delete_queue.get_nowait()
+                items_cleared += 1
             except asyncio.QueueEmpty:
                 break
 
+        logger.info(f"Cleared {items_cleared} items from delete queue")
+
         # Remove handlers
+        handlers_removed = 0
         for handler in self.handlers:
-            self.bot.remove_handler(handler)
+            try:
+                self.bot.remove_handler(handler)
+                handlers_removed += 1
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
         self.handlers.clear()
 
+        logger.info(f"Removed {handlers_removed} handlers")
         logger.info("DeleteHandler cleanup complete")
+
+    async def _process_delete_queue(self):
+        """Process delete queue in background"""
+        logger.info("Delete queue processor started")
+
+        while not self._shutdown.is_set():
+            try:
+                batch = []
+                deadline = asyncio.get_event_loop().time() + 5  # 5 second batch window
+
+                while len(batch) < 50 and not self._shutdown.is_set():
+                    try:
+                        # FIX: Calculate timeout properly, ensure it's positive
+                        remaining = deadline - asyncio.get_event_loop().time()
+                        if remaining <= 0:
+                            break  # Deadline passed, process what we have
+
+                        timeout = min(remaining, 5.0)  # Cap at 5 seconds
+
+                        item = await asyncio.wait_for(
+                            self.delete_queue.get(),
+                            timeout=timeout
+                        )
+                        batch.append(item)
+
+                    except asyncio.TimeoutError:
+                        break  # Timeout reached, process batch
+
+                if batch and not self._shutdown.is_set():
+                    await self._process_delete_batch(batch)
+                elif not batch:
+                    # No items to process, wait a bit before checking again
+                    try:
+                        await asyncio.wait_for(self._shutdown.wait(), timeout=1.0)
+                        break  # Shutdown requested
+                    except asyncio.TimeoutError:
+                        pass  # Continue checking for items
+
+            except asyncio.CancelledError:
+                logger.info("Delete queue processor cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error processing delete queue: {e}", exc_info=True)
+                # Wait before retrying to avoid tight error loop
+                try:
+                    await asyncio.wait_for(self._shutdown.wait(), timeout=5.0)
+                    break  # Shutdown requested
+                except asyncio.TimeoutError:
+                    pass  # Continue after wait
+
+        logger.info("Delete queue processor exited")
 
     async def handle_delete_channel_message(self, client: Client, message: Message):
         """Handle messages forwarded to delete channel"""
-        # Check if message has media
-        logger.info(f"Delete channel message received: {message.id}")
+        logger.debug(f"Delete channel message received: {message.id}")
+
         if not message.media:
-            logger.info("No media found in message")
+            logger.debug("No media found in message")
             return
 
-        # Extract file_id
-        file_id = None
-        file_unique_id = None
-        file_name = "Unknown"
-        if message.document:
-            file_unique_id = message.document.file_unique_id
-            file_id = message.document.file_id
-            file_name = getattr(message.document, 'file_name', 'Unknown Document')
-        elif message.video:
-            file_unique_id = message.video.file_unique_id
-            file_id = message.video.file_id
-            file_name = f"Video_{message.video.file_id[:10]}"
-        elif message.audio:
-            file_unique_id = message.audio.file_unique_id
-            file_id = message.audio.file_id
-            file_name = getattr(message.audio, 'file_name', 'Unknown Audio')
-        elif message.photo:
-            file_unique_id = message.photo.file_unique_id
-            file_id = message.photo.file_id
-            file_name = f"Photo_{message.photo.file_id[:10]}"
-        elif message.animation:
-            file_unique_id = message.animation.file_unique_id
-            file_id = message.animation.file_id
-            file_name = getattr(message.animation, 'file_name', 'Unknown Animation')
-        elif message.voice:
-            file_unique_id = message.voice.file_unique_id
-            file_id = message.voice.file_id
-            file_name = f"Voice_{message.voice.file_id[:10]}"
-        elif message.video_note:
-            file_unique_id = message.video_note.file_unique_id
-            file_id = message.video_note.file_id
-            file_name = f"VideoNote_{message.video_note.file_id[:10]}"
-        elif message.sticker:
-            file_unique_id = message.sticker.file_unique_id
-            file_id = message.sticker.file_id
-            file_name = f"Sticker_{message.sticker.file_id[:10]}"
+        # Extract file information
+        file_info = self._extract_file_info(message)
 
-        if not file_unique_id:
+        if not file_info:
             logger.warning("No supported media type found in message")
             return
 
-        logger.info(f"Adding file to delete queue: {file_name} ({file_id})")
+        logger.info(f"Adding file to delete queue: {file_info['file_name']} ({file_info['file_unique_id']})")
 
         # Add to delete queue
         try:
-            await self.delete_queue.put({
-                'file_unique_id': file_unique_id,
-                'file_name': file_name,
-                'message': message
-            })
-            logger.info(f"File added to delete queue successfully: {file_name}")
+            # Try to add without blocking
+            self.delete_queue.put_nowait(file_info)
+            logger.info(f"File added to delete queue successfully: {file_info['file_name']}")
         except asyncio.QueueFull:
-            logger.warning("Delete queue is full, skipping file")
+            logger.warning(f"Delete queue is full, dropping file: {file_info['file_name']}")
+            # Optionally, send alert to log channel
+            if self.bot.config.LOG_CHANNEL:
+                try:
+                    await self.bot.send_message(
+                        self.bot.config.LOG_CHANNEL,
+                        "⚠️ Delete queue is full! Consider increasing queue size or processing rate."
+                    )
+                except:
+                    pass
+
+    def _extract_file_info(self, message: Message) -> Dict[str, Any] | None:
+        """Extract file information from message"""
+        media_types = [
+            ('document', lambda m: m.document),
+            ('video', lambda m: m.video),
+            ('audio', lambda m: m.audio),
+            ('photo', lambda m: m.photo),
+            ('animation', lambda m: m.animation),
+            ('voice', lambda m: m.voice),
+            ('video_note', lambda m: m.video_note),
+            ('sticker', lambda m: m.sticker)
+        ]
+
+        for media_type, getter in media_types:
+            media = getter(message)
+            if media:
+                file_name = getattr(media, 'file_name', None)
+                if not file_name:
+                    # Generate a descriptive name
+                    file_name = f"{media_type.title()}_{media.file_unique_id[:10]}"
+
+                return {
+                    'file_unique_id': media.file_unique_id,
+                    'file_id': media.file_id,
+                    'file_name': file_name,
+                    'message': message
+                }
+
+        return None
 
     async def handle_delete_command(self, client: Client, message: Message):
         """Handle manual delete command"""
+        if len(message.command) > 1:
+            # Delete by file_unique_id
+            file_unique_id = message.command[1]
+            deleted = await self._delete_file(file_unique_id)
+
+            if deleted:
+                await message.reply_text("✅ File deleted from database!")
+            else:
+                await message.reply_text("❌ File not found in database.")
+            return
+
         if not message.reply_to_message:
             await message.reply_text(
                 "Reply to a media message to delete it from database.\n"
-                "Or use: /delete &lt;file_unique_id&gt;"
+                "Or use: `/delete <file_unique_id>`"
             )
             return
 
-        # Check if replied message has media
-        reply = message.reply_to_message
+        # Extract file info from replied message
+        file_info = self._extract_file_info(message.reply_to_message)
 
+        if not file_info:
+            await message.reply_text("❌ No supported media found in the message.")
+            return
 
-        if reply.media:
-            # Extract file_id from media
-            media = None
-            for media_type in ("document", "video", "audio", "photo", "animation"):
-                media = getattr(reply, media_type, None)
-                if media is not None:
-                    break
+        # Delete from database
+        deleted = await self._delete_file(file_info['file_unique_id'])
 
-            if media:
-                #file_id = media.file_id
-                file_unique_id = media.file_unique_id
-                file_name = getattr(media, 'file_name', 'Unknown')
-
-                # Delete from database
-                deleted = await self._delete_file(file_unique_id)
-                logger.info(f"Deleted media {file_unique_id}: {file_name}")
-                logger.info(f"Deleted {deleted} media {file_unique_id}: {file_name}")
-
-                if deleted:
-                    await message.reply_text(
-                        f"✅ File deleted from database!\n"
-                        f"📁 Name: {file_name}"
-                    )
-                else:
-                    await message.reply_text("❌ File not found in database.")
-            else:
-                await message.reply_text("❌ No supported media found in the message.")
+        if deleted:
+            await message.reply_text(
+                f"✅ File deleted from database!\n"
+                f"📁 Name: {file_info['file_name']}"
+            )
         else:
-            # Check if command has file_id argument
-            if len(message.command) > 1:
-                file_unique_id = message.command[1]
-                deleted = await self._delete_file(file_unique_id)
-
-                if deleted:
-                    await message.reply_text("✅ File deleted from database!")
-                else:
-                    await message.reply_text("❌ File not found in database.")
-            else:
-                await message.reply_text("❌ Reply to a media message or provide file_unique_id.")
+            await message.reply_text("❌ File not found in database.")
 
     async def handle_deleteall_command(self, client: Client, message: Message):
         """Handle delete all files by keyword"""
         if len(message.command) < 2:
             await message.reply_text(
-                "Usage: /deleteall &lt;keyword&gt;\n"
-                "This will delete all files matching the keyword."
+                "**Usage:** `/deleteall <keyword>`\n\n"
+                "This will delete all files matching the keyword.\n"
+                "Example: `/deleteall movie`"
             )
             return
 
@@ -228,51 +297,21 @@ class DeleteHandler:
                 await status_msg.edit_text(
                     f"✅ Deleted {deleted_count} files matching: **{keyword}**"
                 )
+
+                # Log the bulk deletion
+                if self.bot.config.LOG_CHANNEL:
+                    await self.bot.send_message(
+                        self.bot.config.LOG_CHANNEL,
+                        f"#BulkDelete\n"
+                        f"Admin: {message.from_user.mention}\n"
+                        f"Keyword: {keyword}\n"
+                        f"Files deleted: {deleted_count}"
+                    )
             else:
                 await confirm_msg.edit_text("❌ Deletion cancelled.")
 
         except asyncio.TimeoutError:
             await confirm_msg.edit_text("❌ Deletion cancelled (timeout).")
-
-    async def _process_delete_queue(self):
-        """Process delete queue in background"""
-        logger.info("Delete queue processor started")
-        while True:
-            try:
-                # Process in batches
-                batch = []
-
-                # Collect up to 50 items or wait 5 seconds
-                deadline = asyncio.get_event_loop().time() + 5
-
-                while len(batch) < 50:
-                    try:
-                        timeout = max(1, int(deadline - asyncio.get_event_loop().time()))
-                        item = await asyncio.wait_for(
-                            self.delete_queue.get(),
-                            timeout=timeout
-                        )
-                        batch.append(item)
-                        logger.info(f"Item added to batch: {item['file_name']}")
-                    except asyncio.TimeoutError:
-                        break
-
-                if batch:
-                    logger.info(f"Processing delete batch of {len(batch)} items")
-                    await self._process_delete_batch(batch)
-
-
-            except asyncio.CancelledError:
-
-                logger.info("Delete queue processor cancelled")
-
-                break
-
-            except Exception as e:
-
-                logger.error(f"Error processing delete queue: {e}")
-
-                await asyncio.sleep(5)
 
     async def _process_delete_batch(self, batch: List[Dict[str, Any]]):
         """Process a batch of delete requests"""
@@ -283,23 +322,34 @@ class DeleteHandler:
         }
 
         for item in batch:
+            # FIX: Check for shutdown during batch processing
+            if self._shutdown.is_set():
+                logger.info("Shutdown requested, stopping batch processing")
+                break
+
             try:
-                #file_id = item['file_id']
-                logger.info(f"Processing item {item['file_name']}{item['file_unique_id']}")
                 file_unique_id = item['file_unique_id']
+                file_name = item.get('file_name', 'Unknown')
+
+                logger.debug(f"Processing deletion for: {file_name} ({file_unique_id})")
+
                 deleted = await self._delete_file(file_unique_id)
 
                 if deleted:
                     results['deleted'] += 1
-                    logger.info(f"Deleted file: {item['file_name']}")
+                    logger.info(f"Deleted file: {file_name}")
                 else:
                     results['not_found'] += 1
-                    logger.warning(f"File not found in database: {item['file_name']} ({file_unique_id})")
+                    logger.debug(f"File not found: {file_name} ({file_unique_id})")
+
+                # Small delay to avoid overwhelming the database
+                await asyncio.sleep(0.1)
 
             except Exception as e:
-                logger.error(f"Error deleting file: {e}")
+                logger.error(f"Error deleting file {item.get('file_name', 'Unknown')}: {e}")
                 results['errors'] += 1
-        logger.info(f"Batch processing results: {results}")
+
+        logger.info(f"Batch processing complete: {results}")
 
         # Send summary to log channel if significant deletions
         if results['deleted'] > 0 and self.bot.config.LOG_CHANNEL:
@@ -319,37 +369,44 @@ class DeleteHandler:
             except Exception as e:
                 logger.error(f"Failed to send deletion summary: {e}")
 
-    async def _delete_file(self, file_id: str) -> bool:
+    async def _delete_file(self, file_unique_id: str) -> bool:
         """Delete a single file from database"""
         try:
-            # Find file first to get file_ref
-            file = await self.bot.media_repo.find_file(file_id)
+            # Find file first to get all identifiers
+            file = await self.bot.media_repo.find_file(file_unique_id)
             if not file:
+                logger.debug(f"File not found: {file_unique_id}")
                 return False
 
             # Delete from database
             deleted = await self.bot.media_repo.delete(file.file_unique_id)
 
-            # Clear cache entries
+            # Clear cache entries if deletion successful
             if deleted:
-                cache_key = CacheKeyGenerator.media(file.file_id)
-                await self.bot.cache.delete(cache_key)
+                # Clear all related cache entries
+                cache_keys_cleared = 0
+
+                if file.file_id:
+                    await self.bot.cache.delete(CacheKeyGenerator.media(file.file_id))
+                    cache_keys_cleared += 1
 
                 if file.file_ref:
-                    ref_cache_key = CacheKeyGenerator.media(file.file_ref)
-                    await self.bot.cache.delete(ref_cache_key)
+                    await self.bot.cache.delete(CacheKeyGenerator.media(file.file_ref))
+                    cache_keys_cleared += 1
 
                 if file.file_unique_id:
-                    unique_cache_key = CacheKeyGenerator.media(file.file_unique_id)
-                    await self.bot.cache.delete(unique_cache_key)
+                    await self.bot.cache.delete(CacheKeyGenerator.media(file.file_unique_id))
+                    cache_keys_cleared += 1
+
+                # Clear search-related caches
                 await self.bot.cache.delete_pattern("search:*")
                 await self.bot.cache.delete_pattern("search_results_*")
                 await self.bot.cache.delete(CacheKeyGenerator.file_stats())
-                logger.info(f"Cleared all caches for deleted file: {file.file_unique_id}")
 
+                logger.info(f"Deleted file {file_unique_id} and cleared {cache_keys_cleared} cache keys")
 
             return deleted
 
         except Exception as e:
-            logger.error(f"Error deleting file {file_id}: {e}")
+            logger.error(f"Error deleting file {file_unique_id}: {e}", exc_info=True)
             return False

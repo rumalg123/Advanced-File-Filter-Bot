@@ -27,38 +27,70 @@ class BotSettingsHandler:
         self.edit_sessions = {}  # Store active edit sessions
         self.current_page = 0
         self.ttl = CacheTTLConfig()
-        asyncio.create_task(self._cleanup_stale_sessions())
+        self._shutdown = asyncio.Event()
+        if hasattr(bot, 'handler_manager'):
+            self.cleanup_task = bot.handler_manager.create_background_task(
+                self._cleanup_stale_sessions(),
+                name="settings_session_cleanup"
+            )
+        else:
+            self.cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
 
+    async def cleanup(self):
+        """Clean up resources"""
+        logger.info("Cleaning up BotSettingsHandler...")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # Cancel cleanup task
+        if hasattr(self, 'cleanup_task') and not self.cleanup_task.done():
+            self.cleanup_task.cancel()
+            try:
+                await self.cleanup_task
+            except asyncio.CancelledError:
+                pass
+
+        # Clear edit sessions
+        for user_id in list(self.edit_sessions.keys()):
+            session_key = CacheKeyGenerator.edit_session(user_id)
+            await self.bot.cache.delete(session_key)
+
+        self.edit_sessions.clear()
+
+        logger.info("BotSettingsHandler cleanup complete")
 
     async def _cleanup_stale_sessions(self):
         """Periodically clean up stale edit sessions"""
-        while True:
+        while not self._shutdown.is_set():
             try:
-                await asyncio.sleep(300)  # Run every 5 minutes
-
+                # Wait for 5 minutes or shutdown
+                await asyncio.wait_for(self._shutdown.wait(), timeout=300)
+                break  # Shutdown requested
+            except asyncio.TimeoutError:
+                # Do cleanup
                 current_time = asyncio.get_event_loop().time()
                 stale_sessions = []
 
                 for user_id, session in self.edit_sessions.items():
-                    # Check if session is older than 2 minutes
                     if 'created_at' in session:
-                        if current_time - session['created_at'] > 120:
+                        if current_time - session['created_at'] > 120:  # 2 minutes
                             stale_sessions.append(user_id)
 
                 # Clean up stale sessions
                 for user_id in stale_sessions:
                     logger.info(f"Cleaning up stale edit session for user {user_id}")
                     del self.edit_sessions[user_id]
-                    # Also clear cache
                     session_key = CacheKeyGenerator.edit_session(user_id)
                     await self.bot.cache.delete(session_key)
 
-                # Log cleanup stats
                 if stale_sessions:
                     logger.info(f"Cleaned up {len(stale_sessions)} stale edit sessions")
 
             except Exception as e:
                 logger.error(f"Error in session cleanup task: {e}")
+
+        logger.info("Session cleanup task exited")
 
     async def invalidate_related_caches(self, key: str):
         """Invalidate caches related to a specific setting"""

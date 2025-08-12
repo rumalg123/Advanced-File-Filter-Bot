@@ -3,7 +3,7 @@ import io
 import random
 import re
 import uuid
-
+from weakref import WeakSet
 
 import aiohttp
 from pyrogram import Client, filters, enums
@@ -29,8 +29,10 @@ class SearchHandler:
     def __init__(self, bot):
         self.bot = bot
         self.ttl = CacheTTLConfig()
+        self.auto_delete_tasks = WeakSet()  # Use WeakSet for automatic cleanup
+        self._handlers = []  # Track handlers for cleanup
+        self._shutdown = asyncio.Event()  # Add shutdown signaling
         self.register_handlers()
-
 
     def register_handlers(self):
         """Register search handlers"""
@@ -40,21 +42,106 @@ class SearchHandler:
             'broadcast', 'users', 'ban', 'unban', 'addpremium', 'removepremium',
             'add_channel', 'remove_channel', 'list_channels', 'toggle_channel',
             'connect', 'disconnect', 'connections', 'setskip',
-            'delete', 'deleteall', 'link', 'plink', 'batch', 'pbatch', 'filters',
-            'viewfilters', "filters", "viewfilters", "del", "delall", "delallf", "deleteallf",
-            "delf", "deletef", "add", "filter"
+            'delete', 'deleteall', 'link', 'plink', 'batch', 'pbatch',
+            'viewfilters', 'filters', 'del', 'delall', 'delallf', 'deleteallf',
+            'delf', 'deletef', 'add', 'filter', 'bsetting', 'restart', 'shell',
+            'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance'
         ]
-        self.bot.add_handler(
-            MessageHandler(
-                self.handle_text_search,
-                filters.text & filters.incoming & ~filters.command(excluded_commands)
-            )
-        )
 
-        # Inline query handler
-        self.bot.add_handler(
-            InlineQueryHandler(self.handle_inline_query)
+        # Register text search handler
+        text_handler = MessageHandler(
+            self.handle_text_search,
+            filters.text & filters.incoming & ~filters.command(excluded_commands)
         )
+        self.bot.add_handler(text_handler)
+        self._handlers.append(text_handler)
+
+        # Register inline query handler
+        inline_handler = InlineQueryHandler(self.handle_inline_query)
+        self.bot.add_handler(inline_handler)
+        self._handlers.append(inline_handler)
+
+        logger.info(f"SearchHandler registered {len(self._handlers)} handlers")
+
+    def _create_auto_delete_task(self, coro):
+        """Create an auto-delete task that's automatically tracked
+
+        Args:
+            coro: A coroutine object (not a coroutine function)
+        """
+        if self._shutdown.is_set():
+            logger.debug("Shutdown in progress, not creating new auto-delete task")
+            # Close the coroutine to prevent warning
+            coro.close()
+            return None
+
+        if hasattr(self.bot, 'handler_manager'):
+            return self.bot.handler_manager.create_auto_delete_task(coro)
+        else:
+            task = asyncio.create_task(coro)
+            self.auto_delete_tasks.add(task)
+            return task
+
+    def _schedule_auto_delete(self, message: Message, delay: int):
+        """Schedule auto-deletion of a message
+
+        This wrapper method makes the intent clearer and avoids PyCharm warnings
+        """
+        if delay <= 0 or self._shutdown.is_set():
+            return None
+
+        # Create the coroutine and pass it to task creator
+        coro = self._auto_delete_message(message, delay)
+        return self._create_auto_delete_task(coro)
+
+    async def cleanup(self):
+        """Clean up resources"""
+        logger.info("Cleaning up SearchHandler...")
+        logger.info(f"Active auto-delete tasks: {len(self.auto_delete_tasks)}")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # Cancel remaining auto-delete tasks
+        active_tasks = list(self.auto_delete_tasks)
+        cancelled_count = 0
+
+        for task in active_tasks:
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
+
+        # Wait for tasks to complete
+        if active_tasks:
+            await asyncio.gather(*active_tasks, return_exceptions=True)
+
+        logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
+
+        # Remove handlers from bot
+        handlers_removed = 0
+        for handler in self._handlers:
+            try:
+                self.bot.remove_handler(handler)
+                handlers_removed += 1
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
+
+        self._handlers.clear()
+        logger.info(f"Removed {handlers_removed} handlers")
+        logger.info("SearchHandler cleanup complete")
+
+
+    async def _auto_delete_message(self, message: Message, delay: int):
+        """Auto-delete message after delay"""
+        try:
+            await asyncio.sleep(delay)
+            if not self._shutdown.is_set():  # Only delete if not shutting down
+                await message.delete()
+        except asyncio.CancelledError:
+            logger.debug("Auto-delete task cancelled")
+            pass  # Task cancelled, exit cleanly
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
 
     @check_ban()
     @require_subscription(custom_message=(
@@ -64,7 +151,7 @@ class SearchHandler:
     ))
     async def handle_text_search(self, client: Client, message: Message):
         """Handle text search in groups and private chats"""
-
+        # Skip special channels
         special_channels = [
             self.bot.config.LOG_CHANNEL,
             self.bot.config.INDEX_REQ_CHANNEL,
@@ -77,7 +164,7 @@ class SearchHandler:
         if message.chat.id in special_channels:
             return
 
-            # Also skip if message is from a bot
+        # Skip if message is from a bot
         if message.from_user and message.from_user.is_bot:
             return
 
@@ -85,26 +172,29 @@ class SearchHandler:
         if not user_id:
             return
 
-        if hasattr(self.bot, 'bot_settings_handler') and hasattr(self.bot.bot_settings_handler, 'edit_sessions'):
-            if user_id in self.bot.bot_settings_handler.edit_sessions:
-                return
+        # Check if user is in an edit session
+        if hasattr(self.bot, 'bot_settings_handler'):
+            if hasattr(self.bot.bot_settings_handler, 'edit_sessions'):
+                if user_id in self.bot.bot_settings_handler.edit_sessions:
+                    logger.debug(f"User {user_id} is in edit session, skipping search")
+                    return
+
+        # Check for recent settings edit
         cache_key = CacheKeyGenerator.recent_settings_edit(user_id)
         if await self.bot.cache.exists(cache_key):
+            logger.debug(f"User {user_id} recently edited settings, skipping search")
             return
+
         # Get search query
         query = message.text.strip()
         if not query or len(query) < 2:
             return
 
-        # Check if it's a private chat
+        # Route to appropriate handler based on chat type
         if message.chat.type == enums.ChatType.PRIVATE:
             await self._handle_private_search(client, message, query, user_id)
-        elif message.chat.type == enums.ChatType.GROUP:
-            # Group search - implement based on your needs
+        elif message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
             await self._handle_group_search(client, message, query, user_id)
-        elif message.chat.type == enums.ChatType.SUPERGROUP:
-            await self._handle_group_search(client, message, query, user_id)
-
 
     async def handle_inline_query(self, client: Client, query: InlineQuery):
         """Handle inline search queries - send files directly when clicked"""
@@ -117,6 +207,8 @@ class SearchHandler:
                 switch_pm_parameter="start"
             )
             return
+
+        # Check if user is banned
         if user_id not in self.bot.config.ADMINS:
             user = await self.bot.user_repo.get_user(user_id)
             if user and user.status == UserStatus.BANNED:
@@ -127,8 +219,8 @@ class SearchHandler:
                     switch_pm_parameter="banned"
                 )
                 return
-        # Manual subscription check for inline queries (decorators don't work well with inline)
-        # Skip subscription check for admins and auth users
+
+        # Manual subscription check for inline queries
         if not (user_id in self.bot.config.ADMINS or
                 user_id in getattr(self.bot.config, 'AUTH_USERS', [])):
 
@@ -155,8 +247,8 @@ class SearchHandler:
         if '|' in search_query:
             parts = search_query.split('|', maxsplit=1)
             search_query = parts[0].strip()
-            file_type_str = parts[1].strip().lower()
-            # You can add file type parsing here if needed
+            # file_type_str = parts[1].strip().lower()
+            # Add file type parsing if needed
 
         if not search_query or len(search_query) < 2:
             await query.answer(
@@ -197,14 +289,15 @@ class SearchHandler:
                 )
                 return
 
-            # Build inline results - files will be sent directly when clicked
+            # Build inline results
             results = []
             for i, file in enumerate(files):
-                # Create unique ID for each result using offset and index
+                # Create unique ID for each result
                 unique_id = f"{offset}_{i}_{file.file_unique_id}"
 
                 delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-                delete_minutes = delete_time // 60
+                delete_minutes = delete_time // 60 if delete_time > 0 else 0
+
                 caption = CaptionFormatter.format_file_caption(
                     file=file,
                     custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
@@ -214,15 +307,14 @@ class SearchHandler:
                     auto_delete_minutes=delete_minutes if delete_time > 0 else None
                 )
 
-                # Create inline result without buttons - file will be sent when clicked
+                # Create inline result
                 result = InlineQueryResultCachedDocument(
-                    id=unique_id,  # Unique ID for this result
+                    id=unique_id,
                     title=file.file_name,
-                    document_file_id=file.file_id,  # The actual file to send
+                    document_file_id=file.file_id,
                     description=f"📊 {format_file_size(file.file_size)} • {file.file_type.value.title()}",
                     caption=caption,
                     parse_mode=enums.ParseMode.HTML
-                    # No reply_markup - file sends directly when clicked
                 )
                 results.append(result)
 
@@ -255,6 +347,7 @@ class SearchHandler:
         """Handle search in private chat"""
         search_sent = False
         filter_sent = False
+
         try:
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
@@ -272,6 +365,7 @@ class SearchHandler:
                     client, message, files, query, total, page_size, user_id, is_private=True
                 )
 
+            # Check filters if enabled
             if not self.bot.config.DISABLE_FILTER:
                 active_group = await self.bot.connection_service.get_active_connection(user_id)
                 if active_group:
@@ -280,6 +374,7 @@ class SearchHandler:
                         client, message, query, str(active_group), user_id, is_private=True
                     )
 
+            # Send "not found" message only if nothing was sent
             if not search_sent and not filter_sent:
                 no_results_buttons = []
                 if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
@@ -297,7 +392,7 @@ class SearchHandler:
                 )
 
         except Exception as e:
-            logger.error(f"Error in private search: {e}")
+            logger.error(f"Error in private search: {e}", exc_info=True)
             if not search_sent and not filter_sent:
                 await message.reply_text("❌ An error occurred while searching. Please try again.")
 
@@ -309,9 +404,6 @@ class SearchHandler:
             user_id: int
     ):
         """Handle search in group chat - only show results, no 'not found' messages"""
-
-        search_sent = False
-        filter_sent = False
         try:
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
@@ -325,21 +417,21 @@ class SearchHandler:
 
             if has_access and files:
                 # Send search results
-                search_sent = await self._send_search_results(
+                await self._send_search_results(
                     client, message, files, query, total, page_size, user_id, is_private=False
                 )
 
+            # Check filters if enabled
             if not self.bot.config.DISABLE_FILTER:
-                # Check if this group is someone's active connection
                 group_id = str(message.chat.id)
                 # For groups, always check filters
-                filter_sent = await self._check_and_send_filter(
+                await self._check_and_send_filter(
                     client, message, query, group_id, user_id, is_private=False
                 )
 
         except Exception as e:
             logger.error(f"Error in group search: {e}")
-            # Don't send error messages in groups
+            # Don't send error messages in groups to avoid spam
 
     async def _send_search_results(
             self,
@@ -380,7 +472,7 @@ class SearchHandler:
             pagination = PaginationBuilder(
                 total_items=total,
                 page_size=page_size,
-                current_offset=0,  # Initial search starts at offset 0
+                current_offset=0,
                 query=query,
                 user_id=user_id,
                 callback_prefix="search"
@@ -389,21 +481,22 @@ class SearchHandler:
             # Build file buttons
             buttons = []
 
-            # Add "Send All Files" button as the first button
-            if files and is_private:  # Send all only in private
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"📤 Send All Files ({len(files)})",
-                        callback_data=f"sendall#{search_key}"
-                    )
-                ])
-            elif files and not is_private:
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"📤 Send All Files ({len(files)})",
-                        callback_data=f"sendall#{search_key}#{user_id}"
-                    )
-                ])
+            # Add "Send All Files" button
+            if files:
+                if is_private:
+                    buttons.append([
+                        InlineKeyboardButton(
+                            f"📤 Send All Files ({len(files)})",
+                            callback_data=f"sendall#{search_key}"
+                        )
+                    ])
+                else:
+                    buttons.append([
+                        InlineKeyboardButton(
+                            f"📤 Send All Files ({len(files)})",
+                            callback_data=f"sendall#{search_key}#{user_id}"
+                        )
+                    ])
 
             # Add individual file buttons
             for file in files:
@@ -419,14 +512,14 @@ class SearchHandler:
                 )
                 buttons.append([file_button])
 
-            # Add smart pagination buttons if there are multiple pages
+            # Add pagination buttons if needed
             if total > page_size:
                 pagination_buttons = pagination.build_pagination_buttons()
                 buttons.extend(pagination_buttons)
 
             # Build caption
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-            delete_minutes = delete_time // 60
+            delete_minutes = delete_time // 60 if delete_time > 0 else 0
 
             caption = (
                 f"🔍 **Search Results for:** {query}\n\n"
@@ -434,10 +527,10 @@ class SearchHandler:
                 f"📊 Page {pagination.current_page} of {pagination.total_pages}"
             )
 
-            if not is_private or delete_time > 0:
+            if delete_time > 0:
                 caption += f"\n\n⏱ **Note:** Results will be auto-deleted after {delete_minutes} minutes"
 
-            # Send message with or without photo
+                # Send message with or without photo
             if self.bot.config.PICS:
                 sent_msg = await message.reply_photo(
                     photo=random.choice(self.bot.config.PICS),
@@ -450,22 +543,19 @@ class SearchHandler:
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
 
-            # Schedule deletion
+                # FIXED: Use the wrapper method to avoid PyCharm warning
             if delete_time > 0:
-                asyncio.create_task(
-                    self._auto_delete_message(sent_msg, delete_time)
-                )
+                # Schedule deletion of the result message
+                self._schedule_auto_delete(sent_msg, delete_time)
 
                 # Also delete the user's search query message in private
                 if is_private:
-                    asyncio.create_task(
-                        self._auto_delete_message(message, delete_time)
-                    )
+                    self._schedule_auto_delete(message, delete_time)
 
             return True
 
         except Exception as e:
-            logger.error(f"Error sending search results: {e}")
+            logger.error(f"Error sending search results: {e}", exc_info=True)
             return False
 
     async def _check_and_send_filter(
@@ -482,16 +572,6 @@ class SearchHandler:
             return False
 
         try:
-            # Create a temporary message object with the query as text for filter checking
-            temp_message = type('obj', (object,), {
-                'text': query,
-                'from_user': message.from_user,
-                'chat': type('obj', (object,), {'id': int(group_id), 'type': message.chat.type})(),
-                'reply_to_message': None,
-                'reply_text': message.reply_text,
-                'id': message.id
-            })()
-
             # Check if any filter matches
             keywords = await self.bot.filter_service.get_all_filters(group_id)
 
@@ -529,15 +609,3 @@ class SearchHandler:
         except Exception as e:
             logger.error(f"Error checking filter: {e}")
             return False
-
-
-
-    async def _auto_delete_message(self, message: Message, delay: int):
-        """Auto-delete message after delay"""
-        await asyncio.sleep(delay)
-        try:
-            await message.delete()
-        except Exception as e:
-            logger.debug(f"Failed to delete message: {e}")
-
-
