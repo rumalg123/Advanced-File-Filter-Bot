@@ -13,23 +13,44 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
     async def handle_checksub_callback(self, client: Client, query: CallbackQuery):
         """Handle 'Try Again' subscription check callback"""
-        user_id = query.from_user.id
+        current_user_id = query.from_user.id
 
         # Extract original parameter from callback data
-        parts = query.data.split('#', 1)
-        param = parts[1] if len(parts) > 1 else "start"
+        parts = query.data.split('#', 2)
+        if len(parts) == 2:
+            # Old format: checksub#param
+            _, param = parts
+            original_user_id = current_user_id  # Assume same user for backward compatibility
+        elif len(parts) >= 3:
+            # New format: checksub#user_id#param
+            _, original_user_id_str, param = parts[0], parts[1], '#'.join(parts[2:]) if len(parts) > 2 else parts[2]
+            try:
+                original_user_id = int(original_user_id_str)
+            except ValueError:
+                # If parsing fails, treat as old format
+                param = '#'.join(parts[1:])
+                original_user_id = current_user_id
+        else:
+            param = "start"
+            original_user_id = current_user_id
+        if current_user_id != original_user_id:
+            await query.answer(
+                "❌ This subscription check is for another user. Please use your own command.",
+                show_alert=True
+            )
+            return
 
         # Check subscription again
         if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Skip subscription check for admins and auth users
             skip_sub_check = (
-                    user_id in self.bot.config.ADMINS or
-                    user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+                    current_user_id in self.bot.config.ADMINS or
+                    current_user_id in getattr(self.bot.config, 'AUTH_USERS', [])
             )
 
             if not skip_sub_check:
                 is_subscribed = await self.bot.subscription_manager.is_subscribed(
-                    client, user_id
+                    client, current_user_id
                 )
 
                 if not is_subscribed:

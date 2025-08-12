@@ -95,7 +95,13 @@ class SubscriptionRequired:
             custom_message: Optional[str] = None
     ):
         """Send subscription required message with join buttons"""
+        if isinstance(message, CallbackQuery):
+            original_user_id = message.from_user.id if message.from_user else None
+        else:
+            original_user_id = message.from_user.id if message.from_user else None
 
+        if not original_user_id:
+            return
         # Build buttons for required subscriptions
         buttons = []
         # AUTH_CHANNEL button
@@ -146,20 +152,19 @@ class SubscriptionRequired:
                     logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
 
         # Add "Try Again" button with callback data
-        callback_data = "checksub#general"
-
+        callback_data = f"checksub#{original_user_id}#general"
 
         if isinstance(message, Message):
             cmds = getattr(message, "command", []) or []
             # For start command with parameters
             if len(cmds) > 1:
-                callback_data = f"checksub#{cmds[1]}"
+                callback_data = f"checksub#{original_user_id}#{cmds[1]}"
             elif message.text and not message.text.startswith("/"):
-                callback_data = "checksub#search"
+                callback_data = f"checksub#{original_user_id}#search"
         elif isinstance(message, CallbackQuery):
             # For callbacks, extract the original action
             if message.data.startswith('file#'):
-                callback_data = f"checksub#{message.data}"
+                callback_data = f"checksub#{original_user_id}#{message.data}"
 
         buttons.append([
             InlineKeyboardButton("🔄 Try Again", callback_data=callback_data)
