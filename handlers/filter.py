@@ -1,4 +1,5 @@
 # handlers/filter.py
+import asyncio
 import io
 import logging
 from typing import List
@@ -61,16 +62,24 @@ class FilterHandler(BaseCommandHandler):
         # Signal shutdown
         self._shutdown.set()
 
-        # Remove handlers
+        # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            for handler in self._handlers:
-                self.bot.handler_manager.remove_handler(handler)
-        else:
-            for handler in self._handlers:
-                try:
-                    self.bot.remove_handler(handler)
-                except Exception as e:
+            logger.info("HandlerManager will handle handler removal")
+            self._handlers.clear()
+            logger.info("FilterHandler cleanup complete")
+            return
+
+        # Manual cleanup only if no handler_manager
+        for handler in self._handlers:
+            try:
+                self.bot.remove_handler(handler)
+            except ValueError as e:
+                if "x not in list" in str(e):
+                    logger.debug(f"Handler already removed")
+                else:
                     logger.error(f"Error removing handler: {e}")
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
 
         self._handlers.clear()
         logger.info("FilterHandler cleanup complete")

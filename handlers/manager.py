@@ -23,6 +23,7 @@ class HandlerManager:
         # Handler tracking
         self.handlers: List = []  # All registered handlers
         self.handler_instances: Dict[str, Any] = {}  # Named handler instances
+        self.removed_handlers: Set = set()  # Track already removed handlers
 
         # Task tracking with different strategies
         self.background_tasks: Set[asyncio.Task] = set()  # Long-running tasks
@@ -45,20 +46,57 @@ class HandlerManager:
 
     def add_handler(self, handler):
         """Register a handler with the bot"""
-        self.bot.add_handler(handler)
-        self.handlers.append(handler)
-        self.stats['handlers_registered'] += 1
-        logger.debug(f"Registered handler: {type(handler).__name__}")
+        try:
+            self.bot.add_handler(handler)
+            self.handlers.append(handler)
+            self.stats['handlers_registered'] += 1
+            logger.debug(f"Registered handler: {type(handler).__name__}")
+        except Exception as e:
+            logger.error(f"Error adding handler: {e}")
+            raise
 
     def remove_handler(self, handler):
-        """Remove a handler from the bot"""
+        """Remove a handler from the bot - safely handles already removed handlers"""
+        # Check if already removed
+        handler_id = id(handler)
+        if handler_id in self.removed_handlers:
+            logger.debug(f"Handler already removed: {type(handler).__name__}")
+            return
+
         try:
+            # Try to remove from bot
             self.bot.remove_handler(handler)
+
+            # Mark as removed
+            self.removed_handlers.add(handler_id)
+
+            # Remove from our tracking list
             if handler in self.handlers:
                 self.handlers.remove(handler)
-                self.stats['handlers_removed'] += 1
+
+            self.stats['handlers_removed'] += 1
+            logger.debug(f"Successfully removed handler: {type(handler).__name__}")
+
+        except ValueError as e:
+            # Handler not in list - this is okay, it might have been removed already
+            if "x not in list" in str(e):
+                logger.debug(f"Handler not found in dispatcher (already removed?): {type(handler).__name__}")
+                # Still mark as removed to prevent future attempts
+                self.removed_handlers.add(handler_id)
+
+                # Remove from our tracking list if present
+                if handler in self.handlers:
+                    self.handlers.remove(handler)
+
+                self.stats['handlers_removal_failed'] += 1
+            else:
+                # Some other ValueError
+                logger.error(f"Unexpected ValueError removing handler: {e}")
+                raise
+
         except Exception as e:
-            logger.error(f"Error removing handler: {e}")
+            logger.error(f"Error removing handler {type(handler).__name__}: {e}")
+            self.stats['handlers_removal_failed'] += 1
 
     def create_background_task(self, coro, name: Optional[str] = None) -> asyncio.Task|None:
         """Create and track a long-running background task"""
@@ -74,13 +112,18 @@ class HandlerManager:
         self.stats['tasks_created'] += 1
 
         if name:
+            if name in self.named_tasks:
+                old_task = self.named_tasks[name]
+                if not old_task.done():
+                    logger.warning(f"Cancelling existing task with name: {name}")
+                    old_task.cancel()
             self.named_tasks[name] = task
             task.set_name(name)
 
         # Cleanup callback
         def cleanup_callback(t):
             self.background_tasks.discard(t)
-            if name and name in self.named_tasks:
+            if name and name in self.named_tasks and self.named_tasks[name] == t:
                 del self.named_tasks[name]
             self.stats['tasks_completed'] += 1
             logger.debug(f"Background task '{name or 'unnamed'}' completed")
@@ -134,7 +177,7 @@ class HandlerManager:
     async def cleanup(self):
         """Comprehensive cleanup of all resources"""
         async with self._cleanup_lock:
-            logger.info("="*50)
+            logger.info("=" * 50)
             logger.info("Starting HandlerManager cleanup...")
             logger.info(f"Current state: {self.get_stats()}")
 
@@ -184,7 +227,10 @@ class HandlerManager:
 
             # Step 5: Remove all handlers from bot
             logger.info(f"Removing {len(self.handlers)} handlers from bot...")
-            for handler in self.handlers[:]:  # Use slice to avoid modification during iteration
+
+            # Create a copy of the list to avoid modification during iteration
+            handlers_to_remove = self.handlers.copy()
+            for handler in handlers_to_remove:
                 self.remove_handler(handler)
 
             # Clear all tracking structures
@@ -192,6 +238,7 @@ class HandlerManager:
             self.handler_instances.clear()
             self.background_tasks.clear()
             self.named_tasks.clear()
+            self.removed_handlers.clear()  # Clear the removed handlers set
             # auto_delete_tasks clears itself (WeakSet)
 
             # Force garbage collection
@@ -199,7 +246,7 @@ class HandlerManager:
 
             logger.info(f"Final stats: {self.get_stats()}")
             logger.info("HandlerManager cleanup complete")
-            logger.info("="*50)
+            logger.info("=" * 50)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get manager statistics"""
@@ -209,11 +256,13 @@ class HandlerManager:
             'background_tasks': len(self.background_tasks),
             'auto_delete_tasks': len(self.auto_delete_tasks),
             'named_tasks': len(self.named_tasks),
+            'already_removed_handlers': len(self.removed_handlers),
             'total_created': self.stats['tasks_created'],
             'total_completed': self.stats['tasks_completed'],
             'total_cancelled': self.stats['tasks_cancelled'],
             'handlers_registered': self.stats['handlers_registered'],
-            'handlers_removed': self.stats['handlers_removed']
+            'handlers_removed': self.stats['handlers_removed'],
+            'handlers_removal_failed': self.stats['handlers_removal_failed']
         }
 
     def is_shutting_down(self) -> bool:

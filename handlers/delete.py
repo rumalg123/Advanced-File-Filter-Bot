@@ -90,17 +90,7 @@ class DeleteHandler:
         # Signal shutdown
         self._shutdown.set()
 
-        # Handler manager will handle task cancellation if available
-        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
-            # Manual cleanup if no handler_manager
-            if hasattr(self, 'background_task') and self.background_task and not self.background_task.done():
-                self.background_task.cancel()
-                try:
-                    await self.background_task
-                except asyncio.CancelledError:
-                    logger.info("Background task cancelled successfully")
-
-        # Clear queue
+        # Clear queue (always do this)
         items_cleared = 0
         while not self.delete_queue.empty():
             try:
@@ -111,16 +101,33 @@ class DeleteHandler:
 
         logger.info(f"Cleared {items_cleared} items from delete queue")
 
-        # Remove handlers (handler_manager will track these too)
+        # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            for handler in self.handlers:
-                self.bot.handler_manager.remove_handler(handler)
-        else:
-            for handler in self.handlers:
-                try:
-                    self.bot.remove_handler(handler)
-                except Exception as e:
+            logger.info("HandlerManager will handle handler removal and task cancellation")
+            self.handlers.clear()
+            logger.info("DeleteHandler cleanup complete")
+            return
+
+        # Manual cleanup only if no handler_manager
+        # Cancel background task if it exists
+        if hasattr(self, 'background_task') and self.background_task and not self.background_task.done():
+            self.background_task.cancel()
+            try:
+                await self.background_task
+            except asyncio.CancelledError:
+                logger.info("Background task cancelled successfully")
+
+        # Remove handlers
+        for handler in self.handlers:
+            try:
+                self.bot.remove_handler(handler)
+            except ValueError as e:
+                if "x not in list" in str(e):
+                    logger.debug(f"Handler already removed")
+                else:
                     logger.error(f"Error removing handler: {e}")
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
 
         self.handlers.clear()
         logger.info("DeleteHandler cleanup complete")

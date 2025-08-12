@@ -114,34 +114,40 @@ class SearchHandler:
         # Signal shutdown
         self._shutdown.set()
 
-        # If handler_manager is available, it will handle task cleanup
-        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
-            # Manual cleanup if no handler_manager
-            # Cancel remaining auto-delete tasks
-            active_tasks = list(self.auto_delete_tasks)
-            cancelled_count = 0
+        # If handler_manager is available, let it handle everything
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            logger.info("HandlerManager will handle cleanup")
+            self._handlers.clear()
+            logger.info("SearchHandler cleanup complete")
+            return
 
-            for task in active_tasks:
-                if not task.done():
-                    task.cancel()
-                    cancelled_count += 1
+        # Manual cleanup only if no handler_manager
+        # Cancel remaining auto-delete tasks
+        active_tasks = list(self.auto_delete_tasks)
+        cancelled_count = 0
 
-            # Wait for tasks to complete
-            if active_tasks:
-                await asyncio.gather(*active_tasks, return_exceptions=True)
+        for task in active_tasks:
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
 
-            logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
+        # Wait for tasks to complete
+        if active_tasks:
+            await asyncio.gather(*active_tasks, return_exceptions=True)
+
+        logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
 
         # Remove handlers from bot
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            for handler in self._handlers:
-                self.bot.handler_manager.remove_handler(handler)
-        else:
-            for handler in self._handlers:
-                try:
-                    self.bot.remove_handler(handler)
-                except Exception as e:
+        for handler in self._handlers:
+            try:
+                self.bot.remove_handler(handler)
+            except ValueError as e:
+                if "x not in list" in str(e):
+                    logger.debug(f"Handler already removed")
+                else:
                     logger.error(f"Error removing handler: {e}")
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
 
         self._handlers.clear()
         logger.info("SearchHandler cleanup complete")

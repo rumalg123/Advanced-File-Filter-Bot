@@ -54,33 +54,39 @@ class BotSettingsHandler:
         # Signal shutdown
         self._shutdown.set()
 
-        # Handler manager will handle task cancellation if available
-        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
-            # Manual cleanup if no handler_manager
-            if self.cleanup_task and not self.cleanup_task.done():
-                self.cleanup_task.cancel()
-                try:
-                    await self.cleanup_task
-                except asyncio.CancelledError:
-                    pass
-
-        # Clear edit sessions
+        # Clear edit sessions (always do this)
         for user_id in list(self.edit_sessions.keys()):
             session_key = CacheKeyGenerator.edit_session(user_id)
             await self.bot.cache.delete(session_key)
 
         self.edit_sessions.clear()
 
-        # Remove handlers if tracked
+        # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            for handler in self._handlers:
-                self.bot.handler_manager.remove_handler(handler)
-        else:
-            for handler in self._handlers:
-                try:
-                    self.bot.remove_handler(handler)
-                except Exception as e:
+            logger.info("HandlerManager will handle task and handler cleanup")
+            self._handlers.clear()
+            logger.info("BotSettingsHandler cleanup complete")
+            return
+
+        # Manual cleanup only if no handler_manager
+        if self.cleanup_task and not self.cleanup_task.done():
+            self.cleanup_task.cancel()
+            try:
+                await self.cleanup_task
+            except asyncio.CancelledError:
+                pass
+
+        # Remove handlers
+        for handler in self._handlers:
+            try:
+                self.bot.remove_handler(handler)
+            except ValueError as e:
+                if "x not in list" in str(e):
+                    logger.debug(f"Handler already removed")
+                else:
                     logger.error(f"Error removing handler: {e}")
+            except Exception as e:
+                logger.error(f"Error removing handler: {e}")
 
         self._handlers.clear()
         logger.info("BotSettingsHandler cleanup complete")
