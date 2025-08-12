@@ -211,6 +211,7 @@ class MediaSearchBot(Client):
             cache_manager: CacheManager,
             rate_limiter: RateLimiter
     ):
+        self.background_tasks = None
         self.subscription_manager = None
         self.config = config
         self.db_pool = db_pool
@@ -446,6 +447,11 @@ class MediaSearchBot(Client):
             # Create indexes
             await self.media_repo.create_indexes()
             await self.channel_repo.create_index([('enabled', 1)])  # Add index for channels
+            await self.user_repo.create_index([('status', 1)])
+            await self.user_repo.create_index([('premium_expire', 1)])  # For expired premium checks
+            await self.connection_repo.create_index([('user_id', 1)])
+            await self.filter_repo.create_index([('group_id', 1), ('text', 1)])
+            await self.bot_settings_repo.create_index([('key', 1)])
             logger.info("Database indexes created")
 
             self.bot_settings_service = BotSettingsService(
@@ -542,7 +548,7 @@ class MediaSearchBot(Client):
                 auth_channel=self.config.AUTH_CHANNEL,
                 auth_groups=self.config.AUTH_GROUPS  # Now uses database values!
             )
-
+            self.background_tasks = []
             # Start Pyrogram client
             await super().start()
 
@@ -567,8 +573,11 @@ class MediaSearchBot(Client):
             # Start web server
             await self._start_web_server()
 
+
             # Start background tasks
-            asyncio.create_task(self._run_maintenance_tasks())
+            self.background_tasks.append(
+                asyncio.create_task(self._run_maintenance_tasks())
+            )
 
         except Exception as e:
             logger.error(f"Error starting bot: {e}")
@@ -614,10 +623,25 @@ class MediaSearchBot(Client):
 
         logger.info("Handlers initialized")
 
-
     async def stop(self, *args):
         """Stop the bot and cleanup resources"""
         logger.info("Stopping bot...")
+
+        # Cancel all background tasks
+        for task in getattr(self, 'background_tasks', []):
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        # Clean up handlers (OUTSIDE the for loop!)
+        if hasattr(self, 'channel_handler'):
+            await self.channel_handler.cleanup()
+
+        if hasattr(self, 'delete_handler'):
+            await self.delete_handler.cleanup()
 
         # Stop Pyrogram client
         await super().stop()
@@ -782,12 +806,32 @@ class MediaSearchBot(Client):
                 # Run daily maintenance
                 await self.maintenance_service.run_daily_maintenance()
 
+                # Clear old cache entries periodically
+                await self._cleanup_old_cache()
+
                 # Sleep for 24 hours
                 await asyncio.sleep(86400)
 
+            except asyncio.CancelledError:
+                logger.info("Maintenance task cancelled")
+                break
             except Exception as e:
                 logger.error(f"Error in maintenance task: {e}")
                 await asyncio.sleep(3600)  # Retry in 1 hour
+
+    async def _cleanup_old_cache(self):
+        """Clean up old cache entries"""
+        try:
+            # Clear old search results
+            deleted = await self.cache.delete_pattern("search_results_*")
+            logger.info(f"Cleaned up {deleted} old search result caches")
+
+            # Clear old session data
+            deleted = await self.cache.delete_pattern("edit_session:*")
+            logger.info(f"Cleaned up {deleted} old edit sessions")
+
+        except Exception as e:
+            logger.error(f"Error cleaning cache: {e}")
 
 
 async def initialize_bot() -> MediaSearchBot:

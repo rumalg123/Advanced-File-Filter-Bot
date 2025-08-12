@@ -53,11 +53,16 @@ class CacheManager:
                     logger.info(f"Redis initialized with standard asyncio (max connections: {self._max_connections})")
 
     async def close(self) -> None:
-        """Close Redis connection"""
+        """Close Redis connection properly"""
         if self.redis:
-            await self.redis.close()
-            self.redis = None
-            logger.info("Redis connection closed")
+            try:
+                await self.redis.close()
+                await self.redis.connection_pool.disconnect()  # Ensure pool is closed
+            except Exception as e:
+                logger.error(f"Error closing Redis connection: {e}")
+            finally:
+                self.redis = None
+                logger.info("Redis connection closed")
 
     async def get(self, key: str) -> Optional[Any]:
         """Get value from cache"""

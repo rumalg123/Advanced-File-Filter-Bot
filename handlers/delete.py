@@ -18,37 +18,65 @@ class DeleteHandler:
         self.bot = bot
         self.delete_queue = asyncio.Queue(maxsize=1000)
         self.processing = False
+        self.handlers = []  # Store handlers for cleanup
+
+        # Register handlers first
         self._register_handlers()
 
-        # Start background processor
-        asyncio.create_task(self._process_delete_queue())
+        # Create background task ONLY ONCE and store it
+        self.background_task = asyncio.create_task(self._process_delete_queue())
 
     def _register_handlers(self):
         """Register delete handlers"""
-        # Delete channel handler
+        # Store handlers for cleanup
         if self.bot.config.DELETE_CHANNEL:
-            self.bot.add_handler(
-                MessageHandler(
-                    self.handle_delete_channel_message,
-                    filters.chat(self.bot.config.DELETE_CHANNEL)
-                )
+            handler = MessageHandler(
+                self.handle_delete_channel_message,
+                filters.chat(self.bot.config.DELETE_CHANNEL)
             )
+            self.bot.add_handler(handler)
+            self.handlers.append(handler)
 
-        # Manual delete command for admins
         if self.bot.config.ADMINS:
-            self.bot.add_handler(
-                MessageHandler(
-                    self.handle_delete_command,
-                    filters.command("delete") & filters.user(self.bot.config.ADMINS)
-                )
+            handler1 = MessageHandler(
+                self.handle_delete_command,
+                filters.command("delete") & filters.user(self.bot.config.ADMINS)
             )
+            self.bot.add_handler(handler1)
+            self.handlers.append(handler1)
 
-            self.bot.add_handler(
-                MessageHandler(
-                    self.handle_deleteall_command,
-                    filters.command("deleteall") & filters.user(self.bot.config.ADMINS)
-                )
+            handler2 = MessageHandler(
+                self.handle_deleteall_command,
+                filters.command("deleteall") & filters.user(self.bot.config.ADMINS)
             )
+            self.bot.add_handler(handler2)
+            self.handlers.append(handler2)
+
+    async def cleanup(self):
+        """Clean up handler resources"""
+        logger.info("Cleaning up DeleteHandler...")
+
+        # Cancel background task
+        if hasattr(self, 'background_task') and not self.background_task.done():
+            self.background_task.cancel()
+            try:
+                await self.background_task
+            except asyncio.CancelledError:
+                pass
+
+        # Clear queue
+        while not self.delete_queue.empty():
+            try:
+                self.delete_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        # Remove handlers
+        for handler in self.handlers:
+            self.bot.remove_handler(handler)
+        self.handlers.clear()
+
+        logger.info("DeleteHandler cleanup complete")
 
     async def handle_delete_channel_message(self, client: Client, message: Message):
         """Handle messages forwarded to delete channel"""
@@ -233,8 +261,17 @@ class DeleteHandler:
                     logger.info(f"Processing delete batch of {len(batch)} items")
                     await self._process_delete_batch(batch)
 
+
+            except asyncio.CancelledError:
+
+                logger.info("Delete queue processor cancelled")
+
+                break
+
             except Exception as e:
+
                 logger.error(f"Error processing delete queue: {e}")
+
                 await asyncio.sleep(5)
 
     async def _process_delete_batch(self, batch: List[Dict[str, Any]]):

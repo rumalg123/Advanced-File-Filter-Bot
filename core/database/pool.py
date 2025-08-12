@@ -86,12 +86,22 @@ class DatabaseConnectionPool:
         return self._client
 
     async def close(self) -> None:
-        """Close the connection pool"""
+        """Close the connection pool properly"""
         if self._client:
-            self._client.close()
-            self._client = None
-            self._database = None
-            logger.info("Database connection pool closed")
+            try:
+                # Close all connections in the pool
+                self._client.close()
+
+                # Wait a bit for connections to close gracefully
+                await asyncio.sleep(0.5)
+
+                self._client = None
+                self._database = None
+                logger.info("Database connection pool closed")
+            except Exception as e:
+                logger.error(f"Error closing database pool: {e}")
+                self._client = None
+                self._database = None
 
     async def get_collection(self, name: str):
         """Get a collection from the database"""
