@@ -4,7 +4,7 @@ import random
 import re
 import uuid
 from datetime import datetime
-
+from weakref import WeakSet
 import aiohttp
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
@@ -25,6 +25,8 @@ class RequestHandler:
         self.bot = bot
         self._handlers = []  # Add this to track handlers
         self._shutdown = asyncio.Event()  # Add shutdown signaling
+        self.auto_delete_tasks = WeakSet()  # Track auto-delete tasks
+        self.background_tasks = []  # Track any background tasks
         self.register_handlers()
 
     def register_handlers(self):
@@ -44,6 +46,7 @@ class RequestHandler:
             self.bot.handler_manager.add_handler(handler1)
         else:
             self.bot.add_handler(handler1)
+
         self._handlers.append(handler1)
 
         # Handle request action callbacks
@@ -56,14 +59,43 @@ class RequestHandler:
             self.bot.handler_manager.add_handler(handler2)
         else:
             self.bot.add_handler(handler2)
+
         self._handlers.append(handler2)
+
+        logger.info(f"RequestHandler registered {len(self._handlers)} handlers")
 
     async def cleanup(self):
         """Clean up handler resources"""
         logger.info("Cleaning up RequestHandler...")
+        logger.info(f"Active auto-delete tasks: {len(self.auto_delete_tasks)}")
 
         # Signal shutdown
         self._shutdown.set()
+
+        # Cancel auto-delete tasks if handler_manager isn't handling them
+        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
+            # Manual cleanup of auto-delete tasks
+            active_tasks = list(self.auto_delete_tasks)
+            cancelled_count = 0
+
+            for task in active_tasks:
+                if not task.done():
+                    task.cancel()
+                    cancelled_count += 1
+
+            # Wait for tasks to complete
+            if active_tasks:
+                await asyncio.gather(*active_tasks, return_exceptions=True)
+
+            logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
+
+        # Cancel any background tasks
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+
+        if self.background_tasks:
+            await asyncio.gather(*self.background_tasks, return_exceptions=True)
 
         # Remove handlers
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
@@ -77,7 +109,26 @@ class RequestHandler:
                     logger.error(f"Error removing handler: {e}")
 
         self._handlers.clear()
+        self.auto_delete_tasks.clear()
+        self.background_tasks.clear()
+
         logger.info("RequestHandler cleanup complete")
+
+    def _create_auto_delete_task(self, coro):
+        """Create an auto-delete task with proper tracking"""
+        if self._shutdown.is_set():
+            logger.debug("Shutdown in progress, not creating new auto-delete task")
+            coro.close()
+            return None
+
+        # Use handler_manager if available
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            return self.bot.handler_manager.create_auto_delete_task(coro)
+        else:
+            # Fallback to local tracking
+            task = asyncio.create_task(coro)
+            self.auto_delete_tasks.add(task)
+            return task
 
     def _schedule_auto_delete(self, message: Message, delay: int):
         """Schedule auto-deletion using handler_manager if available"""
@@ -85,11 +136,7 @@ class RequestHandler:
             return None
 
         coro = self._auto_delete_message(message, delay)
-
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            return self.bot.handler_manager.create_auto_delete_task(coro)
-        else:
-            return asyncio.create_task(coro)
+        return self._create_auto_delete_task(coro)
 
     async def _auto_delete_message(self, message: Message, delay: int):
         """Auto-delete message after delay"""
@@ -108,6 +155,11 @@ class RequestHandler:
         if not message.text or not message.from_user:
             return
 
+        # Check if shutting down
+        if self._shutdown.is_set():
+            logger.debug("Ignoring request message during shutdown")
+            return
+
         # Extract keyword after #request
         match = re.match(r"^#request\s+(.+)", message.text, re.IGNORECASE)
         if not match:
@@ -117,11 +169,11 @@ class RequestHandler:
         user_id = message.from_user.id
 
         # First try to search
-        search_results = await self._search_for_request(client,message,keyword, user_id)
+        search_results = await self._search_for_request(client, message, keyword, user_id)
 
         if search_results:
             # Found results, show them
-            logger.debug(f"Search results: {search_results}")
+            logger.debug(f"Search results found for request: {keyword}")
         else:
             # No results, forward to admins
             await message.reply_text(
@@ -131,9 +183,13 @@ class RequestHandler:
 
             await self._forward_request_to_admins(client, message, keyword)
 
-    async def _search_for_request(self, client: Client,message: Message,keyword: str, user_id: int) -> bool | None:
+    async def _search_for_request(self, client: Client, message: Message, keyword: str, user_id: int) -> bool | None:
         """Search for files matching the request"""
         try:
+            # Don't search if shutting down
+            if self._shutdown.is_set():
+                return False
+
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
             files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
@@ -156,8 +212,7 @@ class RequestHandler:
             return False
         except Exception as e:
             logger.error(f"Error searching for request: {e}")
-
-        return False
+            return False
 
     async def _send_search_results(
             self,
@@ -172,6 +227,8 @@ class RequestHandler:
     ) -> bool:
         """Send search results - returns True if sent successfully"""
         try:
+            if self._shutdown.is_set():
+                return False
             # Generate a unique key for this search result set
             session_id = uuid.uuid4().hex[:8]
             search_key = CacheKeyGenerator.search_session(user_id, session_id)
@@ -286,16 +343,10 @@ class RequestHandler:
             logger.error(f"Error sending search results: {e}")
             return False
 
-    async def _auto_delete_message(self, message: Message, delay: int):
-        """Auto-delete message after delay"""
-        await asyncio.sleep(delay)
-        try:
-            await message.delete()
-        except Exception as e:
-            logger.debug(f"Failed to delete message: {e}")
-
     async def _forward_request_to_admins(self, client: Client, message: Message, keyword: str):
         """Forward request to admin channel"""
+        if self._shutdown.is_set():
+            return False
         user = message.from_user
 
         # Build request info
@@ -336,6 +387,9 @@ class RequestHandler:
 
     async def handle_request_callback(self, client: Client, query: CallbackQuery):
         """Handle request action callbacks"""
+        if self._shutdown.is_set():
+            await query.answer("Bot is shutting down", show_alert=True)
+            return
         data = query.data.split("#")
         if len(data) < 4:
             return await query.answer("Invalid data", show_alert=True)

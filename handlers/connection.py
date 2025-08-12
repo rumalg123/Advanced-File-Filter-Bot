@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pyrogram import Client, filters, enums
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
@@ -15,6 +16,8 @@ class ConnectionHandler:
     def __init__(self, bot, connection_service: ConnectionService):
         self.bot = bot
         self.connection_service = connection_service
+        self._handlers = []  # Track handlers
+        self._shutdown = asyncio.Event()
         self.register_handlers()
 
     def register_handlers(self):
@@ -25,58 +28,65 @@ class ConnectionHandler:
             return
 
         # Command handlers
-        self.bot.add_handler(
-            MessageHandler(
-                self.connect_command,
-                filters.command("connect") & (filters.private | filters.group)
-            )
-        )
+        command_handlers = [
+            (self.connect_command, filters.command("connect") & (filters.private | filters.group)),
+            (self.disconnect_command, filters.command("disconnect") & (filters.private | filters.group)),
+            (self.connections_command, filters.command("connections") & filters.private)
+        ]
 
-        self.bot.add_handler(
-            MessageHandler(
-                self.disconnect_command,
-                filters.command("disconnect") & (filters.private | filters.group)
-            )
-        )
+        for handler_func, handler_filter in command_handlers:
+            handler = MessageHandler(handler_func, handler_filter)
 
-        self.bot.add_handler(
-            MessageHandler(
-                self.connections_command,
-                filters.command("connections") & filters.private
-            )
-        )
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler)
+            else:
+                self.bot.add_handler(handler)
+
+            self._handlers.append(handler)
 
         # Callback handlers
-        self.bot.add_handler(
-            CallbackQueryHandler(
-                self.connection_callback,
-                filters.regex(r"^groupcb:")
-            )
-        )
+        callback_handlers = [
+            (self.connection_callback, filters.regex(r"^groupcb:")),
+            (self.connection_action_callback, filters.regex(
+                r"^(connect_group|deactivate_group|delete_connection|disconnect_group|disconnect_group_with_filters):")),
+            (self.cleanup_connections_callback, filters.regex(r"^cleanup_connections$")),
+            (self.delete_group_filters_callback, filters.regex(r"^delete_group_filters:"))
+        ]
 
-        self.bot.add_handler(
-            CallbackQueryHandler(
-                self.connection_action_callback,
-                filters.regex(
-                    r"^(connect_group|deactivate_group|delete_connection|disconnect_group|disconnect_group_with_filters):")
-            )
-        )
+        for handler_func, handler_filter in callback_handlers:
+            handler = CallbackQueryHandler(handler_func, handler_filter)
 
-        # Add this to register_handlers method
-        self.bot.add_handler(
-            CallbackQueryHandler(
-                self.cleanup_connections_callback,
-                filters.regex(r"^cleanup_connections$")
-            )
-        )
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler)
+            else:
+                self.bot.add_handler(handler)
 
-        # Add this to register_handlers method
-        self.bot.add_handler(
-            CallbackQueryHandler(
-                self.delete_group_filters_callback,
-                filters.regex(r"^delete_group_filters:")
-            )
-        )
+            self._handlers.append(handler)
+
+        logger.info(f"ConnectionHandler registered {len(self._handlers)} handlers")
+
+    async def cleanup(self):
+        """Clean up handler resources"""
+        logger.info("Cleaning up ConnectionHandler...")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # Remove handlers
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self._handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self._handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
+
+        self._handlers.clear()
+        logger.info("ConnectionHandler cleanup complete")
 
     async def connect_command(self, client: Client, message: Message):
         """Handle /connect command"""

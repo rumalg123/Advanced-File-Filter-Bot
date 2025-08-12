@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 
@@ -18,40 +19,63 @@ class FileStoreHandler:
         self.bot = bot
         # Use injected service or create new one (fallback)
         self.filestore_service = bot.filestore_service
+        self._handlers = []  # Track handlers
+        self._shutdown = asyncio.Event()
         self.register_handlers()
 
     def register_handlers(self):
         """Register filestore handlers"""
+        handlers_to_register = []
+
         # Link generation commands
         if self.bot.config.ADMINS:
             # Admin-only commands
-            self.bot.add_handler(
-                MessageHandler(
-                    self.link_command,
-                    filters.command(['link', 'plink']) & filters.user(self.bot.config.ADMINS)
-                )
-            )
-            self.bot.add_handler(
-                MessageHandler(
-                    self.batch_command,
-                    filters.command(['batch', 'pbatch']) & filters.user(self.bot.config.ADMINS)
-                )
-            )
+            handlers_to_register.extend([
+                (self.link_command, filters.command(['link', 'plink']) & filters.user(self.bot.config.ADMINS)),
+                (self.batch_command, filters.command(['batch', 'pbatch']) & filters.user(self.bot.config.ADMINS))
+            ])
 
         # Public file store (if enabled)
         if hasattr(self.bot.config, 'PUBLIC_FILE_STORE') and self.bot.config.PUBLIC_FILE_STORE:
-            self.bot.add_handler(
-                MessageHandler(
-                    self.link_command,
-                    filters.command(['link', 'plink'])
-                )
-            )
-            self.bot.add_handler(
-                MessageHandler(
-                    self.batch_command,
-                    filters.command(['batch', 'pbatch'])
-                )
-            )
+            handlers_to_register.extend([
+                (self.link_command, filters.command(['link', 'plink'])),
+                (self.batch_command, filters.command(['batch', 'pbatch']))
+            ])
+
+        # Register all handlers
+        for handler_func, handler_filter in handlers_to_register:
+            handler = MessageHandler(handler_func, handler_filter)
+
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler)
+            else:
+                self.bot.add_handler(handler)
+
+            self._handlers.append(handler)
+
+        logger.info(f"FileStoreHandler registered {len(self._handlers)} handlers")
+
+    async def cleanup(self):
+        """Clean up handler resources"""
+        logger.info("Cleaning up FileStoreHandler...")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # Remove handlers
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self._handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self._handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
+
+        self._handlers.clear()
+        logger.info("FileStoreHandler cleanup complete")
 
     async def link_command(self, client: Client, message: Message):
         """Generate shareable link for a file"""

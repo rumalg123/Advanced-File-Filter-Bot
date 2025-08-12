@@ -28,7 +28,12 @@ class BotSettingsHandler:
         self.current_page = 0
         self.ttl = CacheTTLConfig()
         self._shutdown = asyncio.Event()
-        if hasattr(bot, 'handler_manager'):
+        self._handlers = []  # Track handlers
+        self.cleanup_task = None
+
+        # Register handlers
+        self._register_handlers()
+        if hasattr(bot, 'handler_manager') and bot.handler_manager:
             self.cleanup_task = bot.handler_manager.create_background_task(
                 self._cleanup_stale_sessions(),
                 name="settings_session_cleanup"
@@ -36,20 +41,28 @@ class BotSettingsHandler:
         else:
             self.cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
 
+        def _register_handlers(self):
+            """Register all handlers with tracking"""
+            # This method should be called instead of directly registering in __init__
+            # The handlers should be registered through the main command handler
+            pass
+
     async def cleanup(self):
-        """Clean up resources"""
+        """Clean up handler resources"""
         logger.info("Cleaning up BotSettingsHandler...")
 
         # Signal shutdown
         self._shutdown.set()
 
-        # Cancel cleanup task
-        if hasattr(self, 'cleanup_task') and not self.cleanup_task.done():
-            self.cleanup_task.cancel()
-            try:
-                await self.cleanup_task
-            except asyncio.CancelledError:
-                pass
+        # Handler manager will handle task cancellation if available
+        if not (hasattr(self.bot, 'handler_manager') and self.bot.handler_manager):
+            # Manual cleanup if no handler_manager
+            if self.cleanup_task and not self.cleanup_task.done():
+                self.cleanup_task.cancel()
+                try:
+                    await self.cleanup_task
+                except asyncio.CancelledError:
+                    pass
 
         # Clear edit sessions
         for user_id in list(self.edit_sessions.keys()):
@@ -58,6 +71,18 @@ class BotSettingsHandler:
 
         self.edit_sessions.clear()
 
+        # Remove handlers if tracked
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self._handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self._handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
+
+        self._handlers.clear()
         logger.info("BotSettingsHandler cleanup complete")
 
     async def _cleanup_stale_sessions(self):

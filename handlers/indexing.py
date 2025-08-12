@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 
@@ -23,38 +24,83 @@ class IndexingHandler:
         self.bot = bot
         self.indexing_service = indexing_service
         self.index_request_service = index_request_service
+        self._handlers = []  # Track handlers
+        self._shutdown = asyncio.Event()
         self.register_handlers()
 
     def register_handlers(self):
         """Register indexing-related handlers"""
         # Command handlers
-        self.bot.add_handler(
-            MessageHandler(
-                self.handle_index_request,
-                filters.private & filters.incoming & (
-                        filters.forwarded |
-                        filters.regex(
-                            r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
-                )
+        handlers_to_register = []
+
+        # Index request handler
+        handler = MessageHandler(
+            self.handle_index_request,
+            filters.private & filters.incoming & (
+                    filters.forwarded |
+                    filters.regex(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
             )
         )
+        handlers_to_register.append(handler)
 
+        # Admin command
         if self.bot.config.ADMINS:
-            self.bot.add_handler(
-                MessageHandler(
-                    self.set_skip_command,
-                    filters.command("setskip") & filters.user(self.bot.config.ADMINS)
-                )
+            handler = MessageHandler(
+                self.set_skip_command,
+                filters.command("setskip") & filters.user(self.bot.config.ADMINS)
             )
+            handlers_to_register.append(handler)
 
-        # Callback handlers
-        self.bot.add_handler(
-            CallbackQueryHandler(
-                self.handle_index_callback,
-                filters.regex(r"^index")
-            )
+        # Register message handlers
+        for handler in handlers_to_register:
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler)
+            else:
+                self.bot.add_handler(handler)
+
+            self._handlers.append(handler)
+
+        # Callback handler
+        callback_handler = CallbackQueryHandler(
+            self.handle_index_callback,
+            filters.regex(r"^index")
         )
 
+        # Use handler_manager if available
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            self.bot.handler_manager.add_handler(callback_handler)
+        else:
+            self.bot.add_handler(callback_handler)
+
+        self._handlers.append(callback_handler)
+
+        logger.info(f"IndexingHandler registered {len(self._handlers)} handlers")
+
+    async def cleanup(self):
+        """Clean up handler resources"""
+        logger.info("Cleaning up IndexingHandler...")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # Cancel any ongoing indexing
+        if self.indexing_service.is_indexing:
+            self.indexing_service.cancel()
+
+        # Remove handlers
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self._handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self._handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
+
+        self._handlers.clear()
+        logger.info("IndexingHandler cleanup complete")
     async def handle_index_request(self, client: Client, message: Message):
         """Handle index request from forwarded message or link"""
         user_id = message.from_user.id if message.from_user else None

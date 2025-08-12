@@ -21,6 +21,8 @@ class FilterHandler(BaseCommandHandler):
         self.bot = bot
         self.filter_service = bot.filter_service
         self.connection_service = bot.connection_service
+        self._handlers = []  # Track handlers
+        self._shutdown = asyncio.Event()
         self.register_handlers()
 
     def register_handlers(self):
@@ -30,35 +32,48 @@ class FilterHandler(BaseCommandHandler):
             logger.info("Filters are disabled via DISABLE_FILTER config")
             return
 
-
         # Command handlers
-        self.bot.add_handler(
-            MessageHandler(
-                self.add_filter_command,
-                filters.command(["add", "filter"]) & (filters.private | filters.group)
-            )
-        )
+        handlers_to_register = [
+            (self.add_filter_command, filters.command(["add", "filter"]) & (filters.private | filters.group)),
+            (self.view_filters_command,
+             filters.command(["filters", "viewfilters"]) & (filters.private | filters.group)),
+            (self.delete_filter_command, filters.command(["delf", "deletef"]) & (filters.private | filters.group)),
+            (self.delete_all_command, filters.command(["delallf", "deleteallf"]) & (filters.private | filters.group))
+        ]
 
-        self.bot.add_handler(
-            MessageHandler(
-                self.view_filters_command,
-                filters.command(["filters", "viewfilters"]) & (filters.private | filters.group)
-            )
-        )
+        for handler_func, handler_filter in handlers_to_register:
+            handler = MessageHandler(handler_func, handler_filter)
 
-        self.bot.add_handler(
-            MessageHandler(
-                self.delete_filter_command,
-                filters.command(["delf", "deletef"]) & (filters.private | filters.group)
-            )
-        )
+            # Use handler_manager if available
+            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+                self.bot.handler_manager.add_handler(handler)
+            else:
+                self.bot.add_handler(handler)
 
-        self.bot.add_handler(
-            MessageHandler(
-                self.delete_all_command,
-                filters.command(["delallf", "deleteallf"]) & (filters.private | filters.group)
-            )
-        )
+            self._handlers.append(handler)
+
+        logger.info(f"FilterHandler registered {len(self._handlers)} handlers")
+
+    async def cleanup(self):
+        """Clean up handler resources"""
+        logger.info("Cleaning up FilterHandler...")
+
+        # Signal shutdown
+        self._shutdown.set()
+
+        # Remove handlers
+        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
+            for handler in self._handlers:
+                self.bot.handler_manager.remove_handler(handler)
+        else:
+            for handler in self._handlers:
+                try:
+                    self.bot.remove_handler(handler)
+                except Exception as e:
+                    logger.error(f"Error removing handler: {e}")
+
+        self._handlers.clear()
+        logger.info("FilterHandler cleanup complete")
 
     def _split_quotes(self, text: str) -> List[str]:
         """Split text respecting quotes"""
