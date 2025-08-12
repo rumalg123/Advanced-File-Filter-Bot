@@ -1,4 +1,4 @@
-# verify_alignment.py - Script to verify bot and manager alignment
+# verify_alignment.py - Fixed script to verify bot and manager alignment
 
 import asyncio
 import logging
@@ -108,6 +108,9 @@ class AlignmentVerifier:
 
     async def check_handler_registration(self):
         """Check if handlers are using manager for registration"""
+        if not self.bot.handler_manager:
+            return
+
         for name, handler in self.bot.handler_manager.handler_instances.items():
             if hasattr(handler, '_handlers'):
                 handler_count = len(handler._handlers)
@@ -118,6 +121,9 @@ class AlignmentVerifier:
 
     async def check_cleanup_methods(self):
         """Check if all handlers have cleanup methods"""
+        if not self.bot.handler_manager:
+            return
+
         for name, handler in self.bot.handler_manager.handler_instances.items():
             if hasattr(handler, 'cleanup'):
                 self.successes.append(f"✓ {name} has cleanup method")
@@ -126,10 +132,16 @@ class AlignmentVerifier:
 
     async def check_task_tracking(self):
         """Check task creation and completion stats"""
+        if not self.bot.handler_manager:
+            return
+
         stats = self.bot.handler_manager.get_stats()
 
         if stats['total_created'] > 0:
-            completion_rate = stats['total_completed'] / stats['total_created'] * 100
+            completion_rate = 0
+            if stats['total_created'] > 0:
+                completion_rate = stats['total_completed'] / stats['total_created'] * 100
+
             self.successes.append(
                 f"✓ Task tracking working: {stats['total_created']} created, "
                 f"{stats['total_completed']} completed ({completion_rate:.1f}%)"
@@ -139,7 +151,7 @@ class AlignmentVerifier:
         active_tasks = (
                 stats['background_tasks'] +
                 stats['auto_delete_tasks'] +
-                len(stats['named_tasks'])
+                stats['named_tasks']  # This is already an integer!
         )
 
         expected_max_tasks = 50  # Adjust based on your needs
@@ -148,6 +160,9 @@ class AlignmentVerifier:
 
     async def check_shutdown_signals(self):
         """Check if shutdown signals are properly set up"""
+        if not self.bot.handler_manager:
+            return
+
         for name, handler in self.bot.handler_manager.handler_instances.items():
             if hasattr(handler, '_shutdown'):
                 self.successes.append(f"✓ {name} has shutdown signal")
@@ -172,13 +187,16 @@ class AlignmentVerifier:
         return max(0, min(100, score))
 
 
-# Add this command to your admin commands
+# Fixed command to properly handle stats
 async def verify_alignment_command(client, message):
     """Admin command to verify bot-manager alignment"""
     status_msg = await message.reply_text("🔍 Verifying bot-manager alignment...")
 
     try:
-        verifier = AlignmentVerifier(message._client)  # or self.bot
+        # Get the bot instance correctly
+        bot = client  # In a command handler, client IS the bot
+
+        verifier = AlignmentVerifier(bot)
         results = await verifier.verify_all()
 
         # Format results
@@ -214,18 +232,29 @@ async def verify_alignment_command(client, message):
                 text += f"  • {issue}\n"
             text += "\n"
 
-        # Add manager stats
-        if hasattr(message._client, 'handler_manager'):
-            stats = message._client.handler_manager.get_stats()
+        # Add manager stats - FIXED section
+        if hasattr(bot, 'handler_manager') and bot.handler_manager:
+            stats = bot.handler_manager.get_stats()
             text += "**📊 Manager Statistics:**\n"
             text += f"  • Handlers: {stats['handlers_active']}\n"
+            text += f"  • Handler Instances: {stats['handler_instances']}\n"
             text += f"  • Background Tasks: {stats['background_tasks']}\n"
-            text += f"  • Named Tasks: {len(stats['named_tasks'])}\n"
+            text += f"  • Auto-Delete Tasks: {stats['auto_delete_tasks']}\n"
+            text += f"  • Named Tasks: {stats['named_tasks']}\n"  # Already an integer!
             text += f"  • Tasks Created: {stats['total_created']}\n"
             text += f"  • Tasks Completed: {stats['total_completed']}\n"
+            text += f"  • Tasks Cancelled: {stats['total_cancelled']}\n"
+
+            # Get list of named tasks if you want to show them
+            if bot.handler_manager.named_tasks:
+                text += "\n**📝 Named Tasks:**\n"
+                for task_name, task in bot.handler_manager.named_tasks.items():
+                    status = "✅ Running" if not task.done() else "⏹ Completed"
+                    text += f"  • {task_name}: {status}\n"
 
         await status_msg.edit_text(text)
 
     except Exception as e:
+        logger.error(f"Verification failed: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Verification failed: {str(e)}")
 
