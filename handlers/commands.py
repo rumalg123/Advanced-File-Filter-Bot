@@ -2,6 +2,7 @@ import logging
 from pyrogram import filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
+from core.utils.verify_alignment import verify_alignment_command
 from handlers.callbacks_handlers import UserCallbackHandler
 from handlers.callbacks_handlers.filter import FilterCallBackHandler
 # Import all command handlers
@@ -76,6 +77,13 @@ class CommandHandler:
                 filters.command("restart") & filters.user(self.bot.config.ADMINS)
             )
         )
+        # Usage: Add to your admin commands
+        self.bot.add_handler(
+             MessageHandler(
+                 verify_alignment_command,
+                 filters.command("verify") & filters.user(self.bot.config.ADMINS)
+             )
+         )
 
         # Bot settings callbacks - single handler for all bset_ callbacks
         self.bot.add_handler(

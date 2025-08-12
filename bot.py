@@ -263,6 +263,53 @@ class MediaSearchBot(Client):
             sleep_threshold=5,
         )
         self.handler_manager = HandlerManager(self)
+        logger.info("HandlerManager initialized")
+
+    async def _initialize_handlers(self):
+        """Initialize handlers after all services are ready"""
+        from handlers.commands import CommandHandler
+        from handlers.indexing import IndexingHandler
+        from handlers.channel import ChannelHandler
+        from handlers.filestore import FileStoreHandler
+        from handlers.search import SearchHandler
+        from handlers.delete import DeleteHandler
+
+        try:
+            # Store all handler instances in manager for centralized tracking
+            handlers_config = [
+                ('delete', DeleteHandler(self)),
+                ('command', CommandHandler(self)),
+                ('filestore', FileStoreHandler(self)),
+                ('indexing', IndexingHandler(self, self.indexing_service, self.index_request_service)),
+                ('channel', ChannelHandler(self, self.channel_repo)),
+                ('request', RequestHandler(self)),
+                ('search', SearchHandler(self))
+            ]
+
+            # Register all handlers through manager
+            for name, handler in handlers_config:
+                self.handler_manager.handler_instances[name] = handler
+                logger.info(f"Registered handler: {name}")
+
+            # Add filter handlers if enabled
+            if not self.config.DISABLE_FILTER:
+                from handlers.connection import ConnectionHandler
+                from handlers.filter import FilterHandler
+
+                filter_handlers = [
+                    ('connection', ConnectionHandler(self, self.connection_service)),
+                    ('filter', FilterHandler(self))
+                ]
+
+                for name, handler in filter_handlers:
+                    self.handler_manager.handler_instances[name] = handler
+                    logger.info(f"Registered filter handler: {name}")
+
+            logger.info(f"Total handlers initialized: {len(self.handler_manager.handler_instances)}")
+
+        except Exception as e:
+            logger.error(f"Error initializing handlers: {e}")
+            raise
 
     async def _set_bot_commands(self):
         """Set bot commands for the menu"""
@@ -570,7 +617,8 @@ class MediaSearchBot(Client):
             # Initialize handlers after bot is started
             await self._initialize_handlers()
 
-            self.handler_manager.create_background_task(
+            # noinspection PyTypeChecker
+            self.handler_manager.create_background_task( # noqa
                 self._run_maintenance_tasks(),
                 name="maintenance_tasks"
             )
@@ -591,41 +639,18 @@ class MediaSearchBot(Client):
             logger.error(f"Error starting bot: {e}")
             raise
 
-    async def _initialize_handlers(self):
-        """Initialize handlers after all services are ready"""
-        from handlers.commands import CommandHandler
-        from handlers.indexing import IndexingHandler
-        from handlers.channel import ChannelHandler
-        from handlers.filestore import FileStoreHandler
-        from handlers.search import SearchHandler
-        from handlers.delete import DeleteHandler
-        self.handler_manager.handler_instances['delete'] = DeleteHandler(self)
-        self.handler_manager.handler_instances['command'] = CommandHandler(self)
-        self.handler_manager.handler_instances['filestore'] = FileStoreHandler(self)
-        self.handler_manager.handler_instances['indexing'] = IndexingHandler(
-            self,
-            self.indexing_service,
-            self.index_request_service
-        )
-        self.handler_manager.handler_instances['channel'] = ChannelHandler(self, self.channel_repo)
-        self.handler_manager.handler_instances['request'] = RequestHandler(self)
-        self.handler_manager.handler_instances['search'] = SearchHandler(self)
-
-        if not self.config.DISABLE_FILTER:
-            from handlers.connection import ConnectionHandler
-            from handlers.filter import FilterHandler
-
-            self.handler_manager.handler_instances['connection'] = ConnectionHandler(
-                self, self.connection_service
-            )
-            self.handler_manager.handler_instances['filter'] = FilterHandler(self)
-
-        logger.info("Handlers initialized through HandlerManager")
-
     async def stop(self, *args):
         """Stop the bot and cleanup resources"""
-        logger.info("Stopping bot...")
-        await self.handler_manager.cleanup()
+        logger.info("=" * 60)
+        logger.info("Starting bot shutdown sequence...")
+
+        # Get handler manager stats before cleanup
+        if self.handler_manager:
+            stats = self.handler_manager.get_stats()
+            logger.info(f"Handler Manager Stats: {stats}")
+
+            # Cleanup handler manager (this handles all handlers and tasks)
+            await self.handler_manager.cleanup()
 
         # Stop Pyrogram client
         await super().stop()
@@ -637,6 +662,7 @@ class MediaSearchBot(Client):
         await self.cache.close()
 
         logger.info("Bot stopped successfully")
+        logger.info("=" * 60)
 
     async def _send_startup_message(self):
         """Send startup message to log channel"""
@@ -785,16 +811,24 @@ class MediaSearchBot(Client):
 
     async def _run_maintenance_tasks(self):
         """Run periodic maintenance tasks"""
-        while True:
+        while not self.handler_manager.is_shutting_down():
             try:
+                # Check if manager is shutting down
+                if self.handler_manager.is_shutting_down():
+                    logger.info("Maintenance task detected shutdown, exiting")
+                    break
+
                 # Run daily maintenance
                 await self.maintenance_service.run_daily_maintenance()
 
                 # Clear old cache entries periodically
                 await self._cleanup_old_cache()
 
-                # Sleep for 24 hours
-                await asyncio.sleep(86400)
+                # Sleep for 24 hours with periodic shutdown checks
+                for _ in range(240):  # Check every 6 minutes (240 * 6min = 24 hours)
+                    if self.handler_manager.is_shutting_down():
+                        break
+                    await asyncio.sleep(360)  # 6 minutes
 
             except asyncio.CancelledError:
                 logger.info("Maintenance task cancelled")

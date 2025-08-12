@@ -41,36 +41,34 @@ class ChannelHandler:
         self.init_task = None
 
         # Use the handler manager if available
-        if hasattr(bot, 'handler_manager') and bot.handler_manager:
-            # Create managed background tasks
-            self.background_tasks = [
-                bot.handler_manager.create_background_task(
-                    self._process_message_queue(),
-                    name="channel_message_queue"
-                ),
-                bot.handler_manager.create_background_task(
-                    self._process_overflow_queue(),
-                    name="channel_overflow_queue"
-                ),
-                bot.handler_manager.create_background_task(
-                    self._periodic_handler_update(),
-                    name="channel_handler_update"
-                ),
-                bot.handler_manager.create_background_task(
-                    self._cleanup_user_counts(),
-                    name="channel_user_cleanup"
-                )
-            ]
-
-            # Initialize channels after manager is ready
-            bot.handler_manager.create_background_task(
-                self._setup_initial_channels(),
-                name="channel_initial_setup"
-            )
-        else:
-            # This should not happen if properly integrated
+        if not hasattr(bot, 'handler_manager') or not bot.handler_manager:
             logger.error("HandlerManager not available! Channel handler may not work properly.")
             raise RuntimeError("HandlerManager is required for ChannelHandler")
+
+            # Create all background tasks through handler_manager
+        self._create_background_tasks()
+
+        # Initialize channels after manager is ready
+        bot.handler_manager.create_background_task(
+            self._setup_initial_channels(),
+            name="channel_initial_setup"
+        )
+
+    def _create_background_tasks(self):
+        """Create all background tasks through handler_manager"""
+        tasks_config = [
+            (self._process_message_queue(), "channel_message_queue"),
+            (self._process_overflow_queue(), "channel_overflow_queue"),
+            (self._periodic_handler_update(), "channel_handler_update"),
+            (self._cleanup_user_counts(), "channel_user_cleanup")
+        ]
+
+        for coro, name in tasks_config:
+            task = self.bot.handler_manager.create_background_task(coro, name=name)
+            if task:
+                self.background_tasks.append(task)
+            else:
+                logger.warning(f"Failed to create task: {name}")
 
     async def cleanup(self):
         """Clean up handler resources"""
@@ -78,9 +76,6 @@ class ChannelHandler:
 
         # Signal shutdown
         self._shutdown.set()
-
-        # Handler manager will handle task cancellation
-        # We just need to clean up our own resources
 
         # Clear queues
         queue_items_cleared = 0
@@ -97,15 +92,9 @@ class ChannelHandler:
 
         logger.info(f"Cleared {queue_items_cleared} items from main queue, {overflow_items} from overflow")
 
-        # Remove handlers (handler manager will track these too)
+        # Remove handlers through manager
         for handler in self._handlers:
-            if hasattr(self.bot, 'handler_manager'):
-                self.bot.handler_manager.remove_handler(handler)
-            else:
-                try:
-                    self.bot.remove_handler(handler)
-                except Exception as e:
-                    logger.error(f"Error removing handler: {e}")
+            self.bot.handler_manager.remove_handler(handler)
 
         self._handlers.clear()
         logger.info("ChannelHandler cleanup complete")
