@@ -21,6 +21,7 @@ HELP_MSG = """<b>🔍 How to Use Me</b>
 - /about - About the bot
 - /stats - Bot statistics
 - /plans - View premium plans
+- /request_stats - View your request limits and warnings
 
 <b>Search:</b>
 - Just send me a search query

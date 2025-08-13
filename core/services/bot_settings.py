@@ -240,7 +240,19 @@ class BotSettingsService:
             'default': 'https://buymeacoffee.com/matthewmurdock001',
             'description': 'Payment link',
             'category': 'payment'
-        }
+        },
+        'REQUEST_PER_DAY': {
+            'type': 'int',
+            'default': 3,
+            'description': 'Maximum requests per day before warnings',
+            'category': 'limits'
+        },
+        'REQUEST_WARNING_LIMIT': {
+            'type': 'int',
+            'default': 5,
+            'description': 'Maximum warnings before auto-ban',
+            'category': 'limits'
+        },
     }
 
     def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager):

@@ -30,6 +30,11 @@ class User:
     premium_activation_date: Optional[datetime] = None
     daily_retrieval_count: int = 0
     last_retrieval_date: Optional[date] = None
+    daily_request_count: int = 0
+    last_request_date: Optional[date] = None
+    warning_count: int = 0
+    last_warning_date: Optional[datetime] = None
+    total_requests: int = 0  # Lifetime total
     created_at: datetime = None
     updated_at: datetime = None
 
@@ -162,28 +167,34 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if not user:
             return False, "❌ User not found in database.", None
 
-        # Check if user is actually banned
         if user.status != UserStatus.BANNED:
             return False, f"❌ User `{user_id}` is not banned!", user
+
+        # Reset request-related counters when unbanning
         update_data = {
             'status': UserStatus.ACTIVE.value,
             'ban_reason': None,
+            'warning_count': 0,  # Reset warnings
+            'daily_request_count': 0,  # Reset daily count
+            'last_warning_date': None,
             'updated_at': datetime.utcnow()
         }
 
         success = await self.update(user_id, update_data)
 
         if success:
-            # Update cache
             await self.cache.delete(CacheKeyGenerator.user(user_id))
             await self.refresh_banned_users_cache()
 
             user.status = UserStatus.ACTIVE
             user.ban_reason = None
+            user.warning_count = 0
+            user.daily_request_count = 0
+            user.last_warning_date = None
             user.updated_at = datetime.utcnow()
-            logger.info(f"User {user_id} unbanned and cache updated")
+            logger.info(f"User {user_id} unbanned and request counters reset")
 
-        return success, "✅ User unbanned successfully!" if success else "❌ Failed to unban user.", user
+        return success, "✅ User unbanned successfully! Request counters have been reset." if success else "❌ Failed to unban user.", user
 
     async def get_banned_users(self) -> List[int]:
         """Get all banned user IDs with proper cache key"""
@@ -388,3 +399,153 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 await self.bulk_write(operations)
 
         return len(users)
+
+    async def track_request(self, user_id: int) -> Tuple[bool, str, bool]:
+        """
+        Track a user request and apply limits
+        Returns: (is_allowed, message, should_ban)
+        """
+        user = await self.get_user(user_id)
+        if not user:
+            # Create user if doesn't exist
+            await self.create_user(user_id, "Unknown")
+            user = await self.get_user(user_id)
+
+        # Get settings from config
+        from bot import BotConfig
+        config = BotConfig()
+
+        REQUEST_PER_DAY = config.REQUEST_PER_DAY if hasattr(config, 'REQUEST_PER_DAY') else 3
+        REQUEST_WARNING_LIMIT = config.REQUEST_WARNING_LIMIT if hasattr(config, 'REQUEST_WARNING_LIMIT') else 5
+
+        today = date.today()
+
+        # Reset daily count if new day
+        if user.last_request_date != today:
+            user.daily_request_count = 0
+            user.last_request_date = today
+
+        # Check if user has warnings that should be reset (30 days old)
+        if user.warning_count > 0 and user.last_warning_date:
+            days_since_warning = (datetime.utcnow() - user.last_warning_date).days
+            if days_since_warning >= 30:
+                await self.reset_warnings(user_id)
+                user.warning_count = 0
+                user.last_warning_date = None
+
+        # Check warning limit first
+        if user.warning_count >= REQUEST_WARNING_LIMIT:
+            return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True
+
+        # Check daily limit
+        if user.daily_request_count >= REQUEST_PER_DAY:
+            # Issue a warning
+            user.warning_count += 1
+            user.last_warning_date = datetime.utcnow()
+
+            update_data = {
+                'warning_count': user.warning_count,
+                'last_warning_date': user.last_warning_date,
+                'updated_at': datetime.utcnow()
+            }
+            await self.update(user_id, update_data)
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+
+            remaining_warnings = REQUEST_WARNING_LIMIT - user.warning_count
+
+            if user.warning_count >= REQUEST_WARNING_LIMIT:
+                # Auto-ban the user
+                return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True
+            else:
+                return False, f"⚠️ Daily request limit ({REQUEST_PER_DAY}) exceeded! Warning {user.warning_count}/{REQUEST_WARNING_LIMIT}. You have {remaining_warnings} warnings left before ban.", False
+
+        # Allow the request and increment counters
+        user.daily_request_count += 1
+        user.total_requests += 1
+
+        update_data = {
+            'daily_request_count': user.daily_request_count,
+            'last_request_date': today.isoformat(),
+            'total_requests': user.total_requests,
+            'updated_at': datetime.utcnow()
+        }
+
+        await self.update(user_id, update_data)
+        await self.cache.delete(CacheKeyGenerator.user(user_id))
+
+        remaining = REQUEST_PER_DAY - user.daily_request_count
+        return True, f"Request recorded ({user.daily_request_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False
+
+    async def reset_warnings(self, user_id: int) -> bool:
+        """Reset warnings for a user"""
+        update_data = {
+            'warning_count': 0,
+            'last_warning_date': None,
+            'updated_at': datetime.utcnow()
+        }
+
+        success = await self.update(user_id, update_data)
+        if success:
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+        return success
+
+    async def get_request_stats(self, user_id: int) -> Dict[str, Any]:
+        """Get request statistics for a user"""
+        user = await self.get_user(user_id)
+        if not user:
+            return {
+                'exists': False
+            }
+
+        from bot import BotConfig
+        config = BotConfig()
+        REQUEST_PER_DAY = config.REQUEST_PER_DAY if hasattr(config, 'REQUEST_PER_DAY') else 3
+        REQUEST_WARNING_LIMIT = config.REQUEST_WARNING_LIMIT if hasattr(config, 'REQUEST_WARNING_LIMIT') else 5
+
+        today = date.today()
+        daily_count = user.daily_request_count if user.last_request_date == today else 0
+
+        # Calculate warning reset time
+        warning_reset_in = None
+        if user.warning_count > 0 and user.last_warning_date:
+            days_since_warning = (datetime.utcnow() - user.last_warning_date).days
+            warning_reset_in = max(0, 30 - days_since_warning)
+
+        return {
+            'exists': True,
+            'daily_requests': daily_count,
+            'daily_limit': REQUEST_PER_DAY,
+            'daily_remaining': max(0, REQUEST_PER_DAY - daily_count),
+            'warning_count': user.warning_count,
+            'warning_limit': REQUEST_WARNING_LIMIT,
+            'warnings_remaining': max(0, REQUEST_WARNING_LIMIT - user.warning_count),
+            'total_requests': user.total_requests,
+            'last_request_date': user.last_request_date,
+            'last_warning_date': user.last_warning_date,
+            'warning_reset_in_days': warning_reset_in,
+            'is_at_limit': daily_count >= REQUEST_PER_DAY,
+            'is_warned': user.warning_count > 0
+        }
+
+    async def auto_ban_for_request_abuse(self, user_id: int) -> Tuple[bool, Optional[User]]:
+        """Auto-ban user for request abuse"""
+        user = await self.get_user(user_id)
+        if not user:
+            return False, None
+
+        update_data = {
+            'status': UserStatus.BANNED.value,
+            'ban_reason': 'Over request warning limit',
+            'updated_at': datetime.utcnow()
+        }
+
+        success = await self.update(user_id, update_data)
+
+        if success:
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.refresh_banned_users_cache()
+            user.status = UserStatus.BANNED
+            user.ban_reason = 'Over request warning limit'
+            logger.info(f"User {user_id} auto-banned for request abuse")
+
+        return success, user

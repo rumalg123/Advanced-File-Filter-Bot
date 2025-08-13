@@ -161,6 +161,12 @@ class BotConfig:
         self.SUPPORT_GROUP_ID = int(os.environ.get('SUPPORT_GROUP_ID', '0')) if os.environ.get(
             'SUPPORT_GROUP_ID') else None
         self.PAYMENT_LINK = os.environ.get('PAYMENT_LINK', 'https://buymeacoffee.com/matthewmurdock001')
+        self.REQUEST_PER_DAY = int(os.environ.get('REQUEST_PER_DAY', '3'))
+        self.REQUEST_WARNING_LIMIT = int(os.environ.get('REQUEST_WARNING_LIMIT', '5'))
+        if self.REQUEST_PER_DAY >= self.REQUEST_WARNING_LIMIT:
+            logger.warning(
+                "REQUEST_PER_DAY must be less than REQUEST_WARNING_LIMIT. Setting REQUEST_WARNING_LIMIT = REQUEST_PER_DAY + 2")
+            self.REQUEST_WARNING_LIMIT = self.REQUEST_PER_DAY + 2
 
     @staticmethod
     def _str_to_bool(value: str) -> bool:
@@ -324,6 +330,7 @@ class MediaSearchBot(Client):
                 BotCommand("about", "ℹ️ About the bot"),
                 BotCommand("stats", "📊 Bot statistics"),
                 BotCommand("plans", "💎 View premium plans"),
+                BotCommand("request_stats","📝 View your request limits and warnings"),
             ]
 
             # Connection commands (if filters enabled)

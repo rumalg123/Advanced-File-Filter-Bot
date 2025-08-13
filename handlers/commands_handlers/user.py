@@ -198,3 +198,39 @@ class UserCommandHandler(BaseCommandHandler):
         ]]
 
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    @check_ban()
+    @require_subscription()
+    async def request_stats_command(self, client: Client, message: Message):
+        """Show user's request statistics"""
+        user_id = message.from_user.id
+        stats = await self.bot.user_repo.get_request_stats(user_id)
+
+        if not stats['exists']:
+            await message.reply_text(
+                "❌ No request data found. Make your first request using #request in the support group!")
+            return
+
+        # Build stats message
+        text = (
+            "📊 **Your Request Statistics**\n\n"
+            f"📅 **Today's Requests:** {stats['daily_requests']}/{stats['daily_limit']}\n"
+            f"📁 **Remaining Today:** {stats['daily_remaining']}\n"
+            f"⚠️ **Warnings:** {stats['warning_count']}/{stats['warning_limit']}\n"
+            f"📈 **Total Requests:** {stats['total_requests']}\n"
+        )
+
+        if stats['is_at_limit']:
+            text += "\n⚠️ **Status:** Daily limit reached! Further requests will result in warnings."
+        elif stats['is_warned']:
+            text += f"\n⚠️ **Status:** You have {stats['warnings_remaining']} warnings remaining before ban."
+        else:
+            text += "\n✅ **Status:** You can make requests normally."
+
+        if stats['warning_reset_in_days'] is not None:
+            text += f"\n\n⏱ **Warning Reset:** {stats['warning_reset_in_days']} days"
+
+        if stats['last_request_date']:
+            text += f"\n📅 **Last Request:** {stats['last_request_date']}"
+
+        await message.reply_text(text)

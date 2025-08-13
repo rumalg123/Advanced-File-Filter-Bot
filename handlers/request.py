@@ -158,12 +158,13 @@ class RequestHandler:
         except Exception as e:
             logger.debug(f"Failed to delete message: {e}")
 
+    # Update the handle_request_message method in RequestHandler:
+
     async def handle_request_message(self, client: Client, message: Message):
         """Handle #request messages in support group"""
         if not message.text or not message.from_user:
             return
 
-        # Check if shutting down
         if self._shutdown.is_set():
             logger.debug("Ignoring request message during shutdown")
             return
@@ -176,19 +177,73 @@ class RequestHandler:
         keyword = match.group(1).strip()
         user_id = message.from_user.id
 
-        # First try to search
+        # Check request limits
+        is_allowed, limit_message, should_ban = await self.bot.user_repo.track_request(user_id)
+
+        if should_ban:
+            # Auto-ban the user
+            success, banned_user = await self.bot.user_repo.auto_ban_for_request_abuse(user_id)
+
+            if success:
+                # Notify user about ban
+                ban_msg = (
+                    "🚫 **You have been banned from using this bot**\n\n"
+                    f"**Reason:** Over request warning limit\n"
+                    f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    "You exceeded the maximum number of request warnings.\n"
+                    "Please contact the bot administrator to appeal."
+                )
+
+                await message.reply_text(ban_msg)
+
+                # Try to send PM notification
+                try:
+                    await client.send_message(user_id, ban_msg)
+                except:
+                    pass
+
+                # Log to admin channel
+                if self.bot.config.LOG_CHANNEL:
+                    log_text = (
+                        f"#AutoBan #RequestAbuse\n\n"
+                        f"**User:** `{user_id}` ({banned_user.name if banned_user else 'Unknown'})\n"
+                        f"**Reason:** Over request warning limit\n"
+                        f"**Total Requests:** {banned_user.total_requests if banned_user else 'N/A'}\n"
+                        f"**Warnings:** {banned_user.warning_count if banned_user else 'N/A'}\n"
+                        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
+                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
+                return
+
+        if not is_allowed:
+            # Send warning message
+            await message.reply_text(limit_message)
+
+            # Log warning to admin channel
+            if self.bot.config.LOG_CHANNEL:
+                user = message.from_user
+                warning_text = (
+                    f"#RequestWarning\n\n"
+                    f"👤 **User:** {user.mention} [`{user_id}`]\n"
+                    f"📝 **Username:** @{user.username if user.username else 'N/A'}\n"
+                    f"🔍 **Keyword:** `{keyword}`\n"
+                    f"⚠️ **Message:** {limit_message}\n"
+                    f"📅 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                await client.send_message(self.bot.config.LOG_CHANNEL, warning_text)
+            return
+
+        # Normal request processing continues here
         search_results = await self._search_for_request(client, message, keyword, user_id)
 
         if search_results:
-            # Found results, show them
             logger.debug(f"Search results found for request: {keyword}")
         else:
             # No results, forward to admins
             await message.reply_text(
-                "📋 Your request has been noted.\n"
+                f"📋 Your request has been noted. {limit_message}\n"
                 "Admins will process it as soon as possible."
             )
-
             await self._forward_request_to_admins(client, message, keyword)
 
     async def _search_for_request(self, client: Client, message: Message, keyword: str, user_id: int) -> bool | None:

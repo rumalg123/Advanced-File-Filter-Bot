@@ -61,6 +61,13 @@ class CommandHandler:
         self.bot.add_handler(
             MessageHandler(self.user_handler.plans_command, filters.command("plans") & filters.private)
         )
+        # Add this command registration in the user commands section:
+        self.bot.add_handler(
+            MessageHandler(
+                self.user_handler.request_stats_command,
+                filters.command("request_stats") & filters.private
+            )
+        )
 
         # In the register_handlers method, add this BEFORE registering search handlers (around line 42):
 
