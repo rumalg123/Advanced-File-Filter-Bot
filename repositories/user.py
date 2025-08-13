@@ -64,6 +64,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             data['premium_activation_date'] = data['premium_activation_date'].isoformat()
         if data.get('last_retrieval_date'):
             data['last_retrieval_date'] = data['last_retrieval_date'].isoformat()
+        # ADD THIS LINE:
+        if data.get('last_request_date'):
+            data['last_request_date'] = data['last_request_date'].isoformat()
+        # Also add for last_warning_date while you're at it:
+        if data.get('last_warning_date'):
+            data['last_warning_date'] = data['last_warning_date'].isoformat()
         data['created_at'] = data['created_at'].isoformat()
         data['updated_at'] = data['updated_at'].isoformat()
         return data
@@ -81,6 +87,15 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if data.get('last_retrieval_date'):
             if isinstance(data['last_retrieval_date'], str):
                 data['last_retrieval_date'] = date.fromisoformat(data['last_retrieval_date'])
+
+        if data.get('last_request_date'):
+            if isinstance(data['last_request_date'], str):
+                data['last_request_date'] = date.fromisoformat(data['last_request_date'])
+
+        # ADD THIS:
+        if data.get('last_warning_date'):
+            if isinstance(data['last_warning_date'], str):
+                data['last_warning_date'] = datetime.fromisoformat(data['last_warning_date'])
 
         if data.get('created_at'):
             if isinstance(data['created_at'], str):
