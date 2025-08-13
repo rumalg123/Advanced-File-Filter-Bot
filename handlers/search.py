@@ -166,11 +166,6 @@ class SearchHandler:
             logger.debug(f"Failed to delete message: {e}")
 
     @check_ban()
-    @require_subscription(custom_message=(
-            "🔒 **Subscription Required**\n\n"
-            "To search for files, you need to join our channel(s) first.\n\n"
-            "👇 Click the button(s) below to join, then try your search again."
-    ))
     async def handle_text_search(self, client: Client, message: Message):
         """Handle text search in groups and private chats"""
         # Skip special channels
@@ -214,9 +209,35 @@ class SearchHandler:
 
         # Route to appropriate handler based on chat type
         if message.chat.type == enums.ChatType.PRIVATE:
-            await self._handle_private_search(client, message, query, user_id)
+            await self._handle_private_search_with_subscription(client, message, query, user_id)
         elif message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
-            await self._handle_group_search(client, message, query, user_id)
+            await self._handle_group_search_no_subscription(client, message, query, user_id)
+
+    @require_subscription(custom_message=(
+            "🔒 **Subscription Required**\n\n"
+            "To search for files, you need to join our channel(s) first.\n\n"
+            "👇 Click the button(s) below to join, then try your search again."
+    ))
+    async def _handle_private_search_with_subscription(
+            self,
+            client: Client,
+            message: Message,
+            query: str,
+            user_id: int
+    ):
+        """Handle search in private chat WITH subscription check"""
+        await self._handle_private_search(client, message, query, user_id)
+
+    async def _handle_group_search_no_subscription(
+            self,
+            client: Client,
+            message: Message,
+            query: str,
+            user_id: int
+    ):
+        """Handle search in group chat WITHOUT subscription check - let users see available content"""
+        # Just call the group search directly without subscription check
+        await self._handle_group_search(client, message, query, user_id)
 
     async def handle_inline_query(self, client: Client, query: InlineQuery):
         """Handle inline search queries - send files directly when clicked"""
