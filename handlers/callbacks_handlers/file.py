@@ -7,15 +7,15 @@ from pyrogram.types import CallbackQuery
 
 from core.utils.caption import CaptionFormatter
 from handlers.commands_handlers.base import BaseCommandHandler
-from handlers.decorators import require_subscription, check_ban
+from handlers.decorators import check_ban
 
 from core.utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 
 class FileCallbackHandler(BaseCommandHandler):
     """Handler for file-related callbacks"""
-
 
     def encode_file_identifier(self, file_identifier: str, protect: bool = False) -> str:
         """
@@ -25,10 +25,10 @@ class FileCallbackHandler(BaseCommandHandler):
         prefix = 'filep_' if protect else 'file_'
         string = prefix + file_identifier
         return base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
+
     @check_ban()
-    @require_subscription()
     async def handle_file_callback(self, client: Client, query: CallbackQuery):
-        """Handle file request callbacks - always send to PM"""
+        """Handle file request callbacks - redirect to PM from groups"""
         callback_user_id = query.from_user.id
 
         # Extract file identifier and original user_id
@@ -45,14 +45,34 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer("❌ You cannot interact with this message!", show_alert=True)
             return
 
+        # If in group, redirect to PM
         if query.message.chat.type != enums.ChatType.PRIVATE:
             bot_username = self.bot.bot_username
             pm_link = f"https://t.me/{bot_username}?start={self.encode_file_identifier(file_identifier)}"
 
             await query.answer(
+                "📩 Click here to get the file in PM",
                 url=pm_link
             )
             return
+
+        # We're in PM now, check subscription
+        if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
+            # Skip subscription check for admins and auth users
+            skip_sub_check = (
+                    callback_user_id in self.bot.config.ADMINS or
+                    callback_user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            )
+
+            if not skip_sub_check:
+                is_subscribed = await self.bot.subscription_manager.is_subscribed(
+                    client, callback_user_id
+                )
+
+                if not is_subscribed:
+                    # Send subscription required message
+                    await self._send_subscription_message(client, query, file_identifier)
+                    return
 
         # Check if user has started the bot
         try:
@@ -105,7 +125,7 @@ class FileCallbackHandler(BaseCommandHandler):
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
 
-            #await query.answer("✅ File sent to your PM!", show_alert=True)
+            await query.answer("✅ File sent!", show_alert=False)
 
             # Schedule deletion
             asyncio.create_task(
@@ -123,9 +143,8 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer("❌ Error sending file. Try again.", show_alert=True)
 
     @check_ban()
-    @require_subscription()
     async def handle_sendall_callback(self, client: Client, query: CallbackQuery):
-        """Handle send all files callback - always send to PM"""
+        """Handle send all files callback - redirect to PM from groups"""
         callback_user_id = query.from_user.id
 
         # Extract search key and original user_id
@@ -142,22 +161,34 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer("❌ You cannot interact with this message!", show_alert=True)
             return
 
+        # If in group, redirect to PM
         if query.message.chat.type != enums.ChatType.PRIVATE:
             bot_username = self.bot.bot_username
             pm_link = f"https://t.me/{bot_username}?start=sendall_{search_key}"
 
             await query.answer(
+                "📩 Click here to get all files in PM",
                 url=pm_link
             )
             return
 
-            # from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-            # await query.message.edit_reply_markup(
-            #     InlineKeyboardMarkup([[
-            #         InlineKeyboardButton("📱 Get All Files in PM", url=pm_link)
-            #     ]])
-            # )
-            # return
+        # We're in PM now, check subscription
+        if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
+            # Skip subscription check for admins and auth users
+            skip_sub_check = (
+                    callback_user_id in self.bot.config.ADMINS or
+                    callback_user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            )
+
+            if not skip_sub_check:
+                is_subscribed = await self.bot.subscription_manager.is_subscribed(
+                    client, callback_user_id
+                )
+
+                if not is_subscribed:
+                    # Send subscription required message
+                    await self._send_subscription_message_for_sendall(client, query, search_key)
+                    return
 
         user_id = callback_user_id
 
@@ -211,7 +242,7 @@ class FileCallbackHandler(BaseCommandHandler):
                 return
 
         # Start sending files to PM
-        #await query.answer(f"📤 Sending {len(files_data)} files to your PM...", show_alert=True)
+        await query.answer(f"📤 Sending {len(files_data)} files...", show_alert=False)
 
         # Send status message to PM
         try:
@@ -344,3 +375,144 @@ class FileCallbackHandler(BaseCommandHandler):
                     self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
                 )
 
+    async def _send_subscription_message(self, client: Client, query: CallbackQuery, file_identifier: str):
+        """Send subscription required message for file callback"""
+        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        user_id = query.from_user.id
+
+        # Build buttons for required subscriptions
+        buttons = []
+
+        # AUTH_CHANNEL button
+        if self.bot.config.AUTH_CHANNEL:
+            try:
+                chat_link = await self.bot.subscription_manager.get_chat_link(
+                    client, self.bot.config.AUTH_CHANNEL
+                )
+                chat = await client.get_chat(self.bot.config.AUTH_CHANNEL)
+                channel_name = chat.title or "Updates Channel"
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"📢 Join {channel_name}",
+                        url=chat_link
+                    )
+                ])
+            except Exception as e:
+                logger.error(f"Error creating AUTH_CHANNEL button: {e}")
+
+        # AUTH_GROUPS buttons
+        if hasattr(self.bot.config, 'AUTH_GROUPS') and self.bot.config.AUTH_GROUPS:
+            for group_id in self.bot.config.AUTH_GROUPS:
+                try:
+                    chat_link = await self.bot.subscription_manager.get_chat_link(
+                        client, group_id
+                    )
+                    chat = await client.get_chat(group_id)
+                    group_name = chat.title or "Required Group"
+
+                    buttons.append([
+                        InlineKeyboardButton(
+                            f"👥 Join {group_name}",
+                            url=chat_link
+                        )
+                    ])
+                except Exception as e:
+                    logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
+
+        # Add "Try Again" button
+        buttons.append([
+            InlineKeyboardButton(
+                "🔄 Try Again",
+                callback_data=f"checksub#{user_id}#file#{file_identifier}"
+            )
+        ])
+
+        message_text = (
+            "🔒 **Subscription Required**\n\n"
+            "You need to join our channel(s) to get files.\n"
+            "Please join the required channel(s) and try again."
+        )
+
+        await query.answer("🔒 Join our channel(s) first!", show_alert=True)
+
+        try:
+            await query.message.reply_text(
+                message_text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                disable_web_page_preview=True
+            )
+        except:
+            pass
+
+    async def _send_subscription_message_for_sendall(self, client: Client, query: CallbackQuery, search_key: str):
+        """Send subscription required message for sendall callback"""
+        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        user_id = query.from_user.id
+
+        # Build buttons for required subscriptions
+        buttons = []
+
+        # AUTH_CHANNEL button
+        if self.bot.config.AUTH_CHANNEL:
+            try:
+                chat_link = await self.bot.subscription_manager.get_chat_link(
+                    client, self.bot.config.AUTH_CHANNEL
+                )
+                chat = await client.get_chat(self.bot.config.AUTH_CHANNEL)
+                channel_name = chat.title or "Updates Channel"
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"📢 Join {channel_name}",
+                        url=chat_link
+                    )
+                ])
+            except Exception as e:
+                logger.error(f"Error creating AUTH_CHANNEL button: {e}")
+
+        # AUTH_GROUPS buttons
+        if hasattr(self.bot.config, 'AUTH_GROUPS') and self.bot.config.AUTH_GROUPS:
+            for group_id in self.bot.config.AUTH_GROUPS:
+                try:
+                    chat_link = await self.bot.subscription_manager.get_chat_link(
+                        client, group_id
+                    )
+                    chat = await client.get_chat(group_id)
+                    group_name = chat.title or "Required Group"
+
+                    buttons.append([
+                        InlineKeyboardButton(
+                            f"👥 Join {group_name}",
+                            url=chat_link
+                        )
+                    ])
+                except Exception as e:
+                    logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
+
+        # Add "Try Again" button
+        buttons.append([
+            InlineKeyboardButton(
+                "🔄 Try Again",
+                callback_data=f"checksub#{user_id}#sendall#{search_key}"
+            )
+        ])
+
+        message_text = (
+            "🔒 **Subscription Required**\n\n"
+            "You need to join our channel(s) to get files.\n"
+            "Please join the required channel(s) and try again."
+        )
+
+        await query.answer("🔒 Join our channel(s) first!", show_alert=True)
+
+        try:
+            await query.message.reply_text(
+                message_text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                disable_web_page_preview=True
+            )
+        except:
+            pass
