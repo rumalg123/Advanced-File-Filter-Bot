@@ -129,6 +129,9 @@ class BotConfig:
         self.KEEP_ORIGINAL_CAPTION = self._str_to_bool(
             os.environ.get('KEEP_ORIGINAL_CAPTION', 'True')
         )
+        self.USE_ORIGINAL_CAPTION_FOR_BATCH = self._str_to_bool(
+            os.environ.get('USE_ORIGINAL_CAPTION_FOR_BATCH', 'True')
+        )
         self.CUSTOM_FILE_CAPTION = os.environ.get('CUSTOM_FILE_CAPTION', '')
         self.BATCH_FILE_CAPTION = os.environ.get('BATCH_FILE_CAPTION', '')
 
@@ -586,7 +589,8 @@ class MediaSearchBot(Client):
                 self.config.CUSTOM_FILE_CAPTION,
                 self.config.BATCH_FILE_CAPTION,
                 self.config.KEEP_ORIGINAL_CAPTION,
-                self.config.MESSAGE_DELETE_SECONDS
+                self.config.MESSAGE_DELETE_SECONDS,
+                self.config.USE_ORIGINAL_CAPTION_FOR_BATCH
             )
 
             logger.info("Services initialized")

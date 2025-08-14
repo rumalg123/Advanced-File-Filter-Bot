@@ -708,6 +708,9 @@ class BotSettingsHandler:
             'SUPPORT_GROUP_NAME': 'Support Name',
             'SUPPORT_GROUP_ID': 'Support ID',
             'PAYMENT_LINK': 'Payment Link',
+            'USE_ORIGINAL_CAPTION_FOR_BATCH': 'Batch Original Caption',
+            'REQUEST_PER_DAY': "Requests per day",
+            'REQUEST_WARNING_LIMIT': "Request warning limit",
         }
 
         return display_map.get(key, key)

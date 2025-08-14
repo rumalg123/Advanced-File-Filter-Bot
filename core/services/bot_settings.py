@@ -157,6 +157,12 @@ class BotSettingsService:
             'description': 'Keep original file captions',
             'category': 'customization'
         },
+        'USE_ORIGINAL_CAPTION_FOR_BATCH': {
+            'type': 'bool',
+            'default': False,
+            'description': 'Use original caption for batch files instead of batch template',
+            'category': 'customization'
+        },
         'WORKERS': {
             'type': 'int',
             'default': 50,

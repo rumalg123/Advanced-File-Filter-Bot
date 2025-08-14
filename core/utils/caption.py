@@ -19,6 +19,7 @@ class CaptionFormatter:
             custom_caption: Optional[str] = None,
             batch_caption: Optional[str] = None,
             keep_original: bool = False,
+            use_original_for_batch: bool = False,  # Add this parameter
             is_batch: bool = False,
             disable_notification: bool = False,
             auto_delete_minutes: Optional[int] = None
@@ -31,6 +32,7 @@ class CaptionFormatter:
             custom_caption: CUSTOM_FILE_CAPTION from env
             batch_caption: BATCH_FILE_CAPTION from env
             keep_original: KEEP_ORIGINAL_CAPTION from env
+            use_original_for_batch: USE_ORIGINAL_CAPTION_FOR_BATCH from env
             is_batch: Whether this is a batch file (from /batch or /pbatch command)
             disable_notification: Whether to disable notification
             auto_delete_minutes: Auto-delete time in minutes
@@ -41,8 +43,16 @@ class CaptionFormatter:
         caption = None
 
         # For batch files (from /batch or /pbatch command), always use batch caption if available
-        if is_batch and batch_caption:
-            caption = CaptionFormatter._format_template(batch_caption, file)
+        if is_batch:
+            if use_original_for_batch and file.caption:
+                # Use original caption for batch when setting is enabled
+                caption = file.caption
+            elif batch_caption:
+                # Use batch caption template
+                caption = CaptionFormatter._format_template(batch_caption, file)
+            elif keep_original and file.caption:
+                # Fallback to original if no batch caption
+                caption = file.caption
 
         # For regular files (including files sent via "Send All")
         elif not is_batch:

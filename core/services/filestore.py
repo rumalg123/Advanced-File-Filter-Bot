@@ -34,6 +34,7 @@ class FileStoreService:
             batch_file_caption: Optional[str] = None,
             keep_original_caption: bool = False,
             message_delete_seconds: int = 300,
+            use_original_for_batch: bool = False,
     ):
         self.media_repo = media_repo
         self.cache = cache_manager
@@ -46,6 +47,7 @@ class FileStoreService:
         self.message_delete_seconds = message_delete_seconds
         self.max_batch_cache_size = 100
         self.batch_cache_access_time = {}
+        self.use_original_for_batch = use_original_for_batch
 
     def encode_file_identifier(self, file_identifier: str, protect: bool = False) -> str:
         """
@@ -409,6 +411,7 @@ class FileStoreService:
                     custom_caption=self.custom_file_caption,
                     batch_caption=self.batch_file_caption,
                     keep_original=self.keep_original_caption,
+                    use_original_for_batch=self.use_original_for_batch,
                     is_batch=True,
                     auto_delete_minutes=int(self.message_delete_seconds/60)
                 )
@@ -496,6 +499,7 @@ class FileStoreService:
                             custom_caption=self.custom_file_caption,
                             batch_caption=self.batch_file_caption,
                             keep_original=self.keep_original_caption,
+                            use_original_for_batch=self.use_original_for_batch,
                             is_batch=True,
                             auto_delete_minutes=int(self.message_delete_seconds/60)
                         )
