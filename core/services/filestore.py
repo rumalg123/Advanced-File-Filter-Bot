@@ -11,7 +11,6 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
-from bot import BotConfig
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
@@ -31,7 +30,7 @@ class FileStoreService:
             self,
             media_repo: MediaRepository,
             cache_manager: CacheManager,
-            config: BotConfig
+            config: None
 
     ):
         self.media_repo = media_repo
