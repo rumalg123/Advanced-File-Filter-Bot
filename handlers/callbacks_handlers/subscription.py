@@ -15,14 +15,32 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         """Handle 'Try Again' subscription check callback"""
         current_user_id = query.from_user.id
 
-        # Extract original parameter from callback data
+        # Parse callback data
         parts = query.data.split('#', 2)
-        if len(parts) == 2:
+
+        # Check if it's a deeplink subscription check
+        if len(parts) >= 3 and parts[1] == 'dl':
+            # It's a deeplink with cached parameter
+            session_key = parts[2]
+
+            # Retrieve the cached deeplink
+            cached_data = await self.bot.cache.get(session_key)
+            if not cached_data:
+                await query.answer("❌ Session expired. Please try again.", show_alert=True)
+                return
+
+            original_user_id = cached_data.get('user_id', current_user_id)
+            param = cached_data.get('deeplink', 'start')
+
+            # Clear the cache
+            await self.bot.cache.delete(session_key)
+
+        elif len(parts) == 2:
             # Old format: checksub#param
             _, param = parts
-            original_user_id = current_user_id  # Assume same user for backward compatibility
+            original_user_id = current_user_id
         elif len(parts) >= 3:
-            # New format: checksub#user_id#param
+            # New format: checksub#user_id#param (for non-deeplink cases)
             _, original_user_id_str, param = parts[0], parts[1], '#'.join(parts[2:]) if len(parts) > 2 else parts[2]
             try:
                 original_user_id = int(original_user_id_str)
@@ -33,6 +51,8 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         else:
             param = "start"
             original_user_id = current_user_id
+
+        # Check if current user matches original user
         if current_user_id != original_user_id:
             await query.answer(
                 "❌ This subscription check is for another user. Please use your own command.",
@@ -63,12 +83,11 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         # User is now subscribed, handle the original request
         await query.answer("✅ Subscription verified!", show_alert=True)
 
-        # Try to delete the subscription message (might fail if bot doesn't have permission)
+        # Try to delete the subscription message
         try:
             await query.message.delete()
         except Exception as e:
             logger.debug(f"Could not delete subscription message: {e}")
-            # Continue execution even if deletion fails
 
         # Handle the original command
         if param == "start":
@@ -76,7 +95,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             from handlers.commands_handlers.user import UserCommandHandler
             user_handler = UserCommandHandler(self.bot)
 
-            # Create a more complete fake message object
+            # Create a fake message object
             fake_message = type('obj', (object,), {
                 'from_user': query.from_user,
                 'chat': query.message.chat if query.message else None,
@@ -139,7 +158,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             from handlers.deeplink import DeepLinkHandler
             deeplink_handler = DeepLinkHandler(self.bot)
 
-            # Create a more complete fake message object for deeplink
+            # Create a fake message object for deeplink
             fake_message = type('obj', (object,), {
                 'from_user': query.from_user,
                 'chat': query.message.chat if query.message else None,
@@ -176,4 +195,6 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
                 'poll': None,
                 'dice': None
             })()
-            await deeplink_handler.handle_deep_link(client, fake_message, param)
+
+            # Call the internal method directly (without decorator check)
+            await deeplink_handler.handle_deep_link_internal(client, fake_message, param)

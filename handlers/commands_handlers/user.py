@@ -1,5 +1,6 @@
 import logging
 import random
+import uuid
 
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
@@ -126,6 +127,14 @@ class UserCommandHandler(BaseCommandHandler):
 
         user_id = message.from_user.id
 
+        # Store the deeplink parameter in cache with a short key
+        session_key = f"deeplink_{user_id}_{uuid.uuid4().hex[:8]}"
+        await self.bot.cache.set(
+            session_key,
+            {'deeplink': deeplink_param, 'user_id': user_id},
+            expire=300  # 5 minutes expiry
+        )
+
         # Build buttons for required subscriptions
         buttons = []
 
@@ -166,11 +175,11 @@ class UserCommandHandler(BaseCommandHandler):
                 except Exception as e:
                     logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
 
-        # Add "Try Again" button with the deeplink parameter
+        # Add "Try Again" button with the short session key
         buttons.append([
             InlineKeyboardButton(
                 "🔄 Try Again",
-                callback_data=f"checksub#{user_id}#{deeplink_param}"
+                callback_data=f"checksub#dl#{session_key}"  # Use short key instead
             )
         ])
 
