@@ -15,7 +15,7 @@ class CaptionFormatter:
     """Centralized caption formatting utility"""
 
     @staticmethod
-    async def format_file_caption(
+    def format_file_caption(
             file: MediaFile,
             custom_caption: Optional[str] = None,
             batch_caption: Optional[str] = None,
