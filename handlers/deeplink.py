@@ -93,7 +93,8 @@ class DeepLinkHandler(BaseCommandHandler):
                 batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                 keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                 is_batch=False,
-                auto_delete_minutes=delete_minutes
+                auto_delete_minutes=delete_minutes,
+                auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
             )
 
             logger.info(f"Sending file - ID: {file.file_id}, Name: {file.file_name}")
@@ -238,7 +239,8 @@ class DeepLinkHandler(BaseCommandHandler):
                     batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                     keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                     is_batch=False,  # These are NOT batch files, they're from search
-                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None
+                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
+                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
                 await client.send_cached_media(
                     chat_id=user_id,
@@ -360,7 +362,8 @@ class DeepLinkHandler(BaseCommandHandler):
                     batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                     keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                     is_batch=False,
-                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None
+                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
+                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
                 await client.send_cached_media(

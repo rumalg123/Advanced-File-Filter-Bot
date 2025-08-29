@@ -259,6 +259,18 @@ class BotSettingsService:
             'description': 'Maximum warnings before auto-ban',
             'category': 'limits'
         },
+        'AUTO_DELETE_MESSAGE': {
+            'type': 'str',
+            'default': '⏱ This {content_type} will be auto-deleted after {minutes} minutes',
+            'description': 'Custom auto-delete message template (supports HTML)',
+            'category': 'customization'
+        },
+        'START_MESSAGE': {
+            'type': 'str',
+            'default': '<b>👋 Welcome {mention}!</b>\n\nI\'m an advanced media search bot with powerful features.\n\n🔍 <b>Features:</b>\n- Fast indexed search\n- Group filter management\n- File indexing from channels\n- Inline search support\n\nUse /help to learn more about my features.',
+            'description': 'Custom start message template (supports HTML)',
+            'category': 'customization'
+        },
     }
 
     def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager):

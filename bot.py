@@ -56,6 +56,7 @@ from repositories.media import MediaRepository
 from repositories.user import UserRepository
 from core.cache.invalidation import CacheInvalidator
 from core.utils.logger import get_logger
+import core.utils.messages as default_messages
 
 logger = get_logger(__name__)
 
@@ -170,6 +171,8 @@ class BotConfig:
             logger.warning(
                 "REQUEST_PER_DAY must be less than REQUEST_WARNING_LIMIT. Setting REQUEST_WARNING_LIMIT = REQUEST_PER_DAY + 2")
             self.REQUEST_WARNING_LIMIT = self.REQUEST_PER_DAY + 2
+        self.AUTO_DELETE_MESSAGE=os.environ.get('AUTO_DELETE_MESSAGE', default_messages.AUTO_DEL_MSG)
+        self.START_MESSAGE=os.environ.get('START_MESSAGE', default_messages.START_MSG)
 
     @staticmethod
     def _str_to_bool(value: str) -> bool:
@@ -585,12 +588,7 @@ class MediaSearchBot(Client):
             self.filestore_service = FileStoreService(
                 self.media_repo,
                 self.cache,
-                self.config.LOG_CHANNEL,
-                self.config.CUSTOM_FILE_CAPTION,
-                self.config.BATCH_FILE_CAPTION,
-                self.config.KEEP_ORIGINAL_CAPTION,
-                self.config.MESSAGE_DELETE_SECONDS,
-                self.config.USE_ORIGINAL_CAPTION_FOR_BATCH
+                self.config
             )
 
             logger.info("Services initialized")

@@ -11,11 +11,13 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
+from bot import BotConfig
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
 from core.utils.helpers import sanitize_filename
 from repositories.media import MediaRepository, MediaFile, FileType
+
 
 from core.utils.logger import get_logger
 
@@ -29,25 +31,16 @@ class FileStoreService:
             self,
             media_repo: MediaRepository,
             cache_manager: CacheManager,
-            log_channel_id: int,
-            custom_file_caption: Optional[str] = None,
-            batch_file_caption: Optional[str] = None,
-            keep_original_caption: bool = False,
-            message_delete_seconds: int = 300,
-            use_original_for_batch: bool = False,
+            config: BotConfig
+
     ):
         self.media_repo = media_repo
         self.cache = cache_manager
-        self.log_channel_id = log_channel_id
+        self.config = config
         self.batch_cache = {}  # In-memory cache for batch files
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
-        self.custom_file_caption = custom_file_caption
-        self.batch_file_caption = batch_file_caption
-        self.keep_original_caption = keep_original_caption
-        self.message_delete_seconds = message_delete_seconds
         self.max_batch_cache_size = 100
         self.batch_cache_access_time = {}
-        self.use_original_for_batch = use_original_for_batch
 
     def encode_file_identifier(self, file_identifier: str, protect: bool = False) -> str:
         """
@@ -355,11 +348,12 @@ class FileStoreService:
 
             caption = CaptionFormatter.format_file_caption(
                 file=file,
-                custom_caption=self.custom_file_caption,
-                batch_caption=self.batch_file_caption,
-                keep_original=self.keep_original_caption,
+                custom_caption=self.config.CUSTOM_FILE_CAPTION,
+                batch_caption=self.config.BATCH_FILE_CAPTION,
+                keep_original=self.config.KEEP_ORIGINAL_CAPTION,
                 is_batch=False,
-                auto_delete_minutes=int(self.message_delete_seconds/60)
+                auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
+                auto_delete_message=self.config.AUTO_DELETE_MESSAGE
             )
 
             # Use the actual file_id for sending
@@ -408,12 +402,13 @@ class FileStoreService:
                         mime_type=None,
                         caption=file_data.get("caption", "")
                     ),
-                    custom_caption=self.custom_file_caption,
-                    batch_caption=self.batch_file_caption,
-                    keep_original=self.keep_original_caption,
-                    use_original_for_batch=self.use_original_for_batch,
+                    custom_caption=self.config.CUSTOM_FILE_CAPTION,
+                    batch_caption=self.config.BATCH_FILE_CAPTION,
+                    keep_original=self.config.KEEP_ORIGINAL_CAPTION,
+                    use_original_for_batch=self.config.USE_ORIGINAL_CAPTION_FOR_BATCH,
                     is_batch=True,
-                    auto_delete_minutes=int(self.message_delete_seconds/60)
+                    auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
+                    auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                 )
 
                 # Use file_id for sending (more reliable)
@@ -496,12 +491,13 @@ class FileStoreService:
                                 mime_type=mime_type,
                                 caption=caption_text
                             ),
-                            custom_caption=self.custom_file_caption,
-                            batch_caption=self.batch_file_caption,
-                            keep_original=self.keep_original_caption,
-                            use_original_for_batch=self.use_original_for_batch,
+                            custom_caption=self.config.CUSTOM_FILE_CAPTION,
+                            batch_caption=self.config.BATCH_FILE_CAPTION,
+                            keep_original=self.config.KEEP_ORIGINAL_CAPTION,
+                            use_original_for_batch=self.config.USE_ORIGINAL_CAPTION_FOR_BATCH,
                             is_batch=True,
-                            auto_delete_minutes=int(self.message_delete_seconds/60)
+                            auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
+                            auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                         )
 
                         # Copy message

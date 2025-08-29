@@ -1,4 +1,5 @@
 # core/utils/caption.py
+
 from typing import Optional
 from pyrogram import enums
 
@@ -14,15 +15,16 @@ class CaptionFormatter:
     """Centralized caption formatting utility"""
 
     @staticmethod
-    def format_file_caption(
+    async def format_file_caption(
             file: MediaFile,
             custom_caption: Optional[str] = None,
             batch_caption: Optional[str] = None,
             keep_original: bool = False,
-            use_original_for_batch: bool = False,  # Add this parameter
+            use_original_for_batch: bool = False,
             is_batch: bool = False,
             disable_notification: bool = False,
-            auto_delete_minutes: Optional[int] = None
+            auto_delete_minutes: Optional[int] = None,
+            auto_delete_message: Optional[str] = None  # Add this parameter
     ) -> Optional[str]:
         """
         Format caption based on configuration
@@ -36,6 +38,7 @@ class CaptionFormatter:
             is_batch: Whether this is a batch file (from /batch or /pbatch command)
             disable_notification: Whether to disable notification
             auto_delete_minutes: Auto-delete time in minutes
+            auto_delete_message: Custom auto-delete message template
 
         Returns:
             Formatted caption or None
@@ -45,31 +48,45 @@ class CaptionFormatter:
         # For batch files (from /batch or /pbatch command), always use batch caption if available
         if is_batch:
             if use_original_for_batch and file.caption:
-                # Use original caption for batch when setting is enabled
                 caption = file.caption
             elif batch_caption:
-                # Use batch caption template
                 caption = CaptionFormatter._format_template(batch_caption, file)
             elif keep_original and file.caption:
-                # Fallback to original if no batch caption
                 caption = file.caption
 
-        # For regular files (including files sent via "Send All")
+        # For regular files
         elif not is_batch:
             if custom_caption:
-                # If custom caption is set, always use it
                 caption = CaptionFormatter._format_template(custom_caption, file)
             elif keep_original and file.caption:
-                # If only keep_original is set, use original caption
                 caption = file.caption
-            # If neither is set, caption remains None
 
         # Add auto-delete notification if needed
         if caption and auto_delete_minutes and not disable_notification:
-            caption += f"\n\n{AUTO_DEL_MSG.format(content_type='file', minutes=auto_delete_minutes)}"
+            # Use custom message if provided, otherwise use default
+            if auto_delete_message:
+                delete_msg = auto_delete_message.format(
+                    content_type='file',
+                    minutes=auto_delete_minutes
+                )
+            else:
+                delete_msg = AUTO_DEL_MSG.format(
+                    content_type='file',
+                    minutes=auto_delete_minutes
+                )
+            caption += f"\n\n{delete_msg}"
         elif not caption and auto_delete_minutes and not disable_notification:
             # If no caption but auto-delete is enabled, create minimal caption
-            caption = AUTO_DEL_MSG.format(content_type='file', minutes=auto_delete_minutes)
+            if auto_delete_message:
+                caption = auto_delete_message.format(
+                    content_type='file',
+                    minutes=auto_delete_minutes
+                )
+            else:
+                caption = AUTO_DEL_MSG.format(
+                    content_type='file',
+                    minutes=auto_delete_minutes
+                )
 
         return caption
 
@@ -83,10 +100,7 @@ class CaptionFormatter:
             )
         except Exception as e:
             logger.error(f"Error formatting caption template: {e}")
-            # Return template as-is if formatting fails
             return template
-
-
 
     @staticmethod
     def get_parse_mode() -> enums.ParseMode:

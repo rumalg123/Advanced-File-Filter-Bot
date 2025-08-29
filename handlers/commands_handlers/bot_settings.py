@@ -410,18 +410,20 @@ class BotSettingsHandler:
         if user_id in self.edit_sessions:
             logger.warning(f"Cleaning up existing edit session for user {user_id}")
             del self.edit_sessions[user_id]
+
         session_key = CacheKeyGenerator.edit_session(user_id)
         session_data = {
             'key': key,
             'message_id': message.id,
             'chat_id': message.chat.id,
-            'created_at': asyncio.get_event_loop().time()  # Add timestamp
+            'created_at': asyncio.get_event_loop().time()
         }
         await self.bot.cache.set(
             session_key,
             session_data,
             expire=self.ttl.EDIT_SESSION
         )
+
         settings = await self.settings_service.get_all_settings()
         setting = settings.get(key)
 
@@ -439,27 +441,85 @@ class BotSettingsHandler:
             'created_at': asyncio.get_event_loop().time()
         }
 
-        # Format instructions based on type
-        if setting_type == 'list':
+        # Special handling for message templates
+        if key == 'AUTO_DELETE_MESSAGE':
+            text = (
+                f"✏️ **Editing: Auto Delete Message**\n\n"
+                f"Current: `{current_value}`\n\n"
+                f"**Available placeholders:**\n"
+                f"• `{{content_type}}` - Type of content (file, message, etc.)\n"
+                f"• `{{minutes}}` - Minutes until deletion\n\n"
+                f"**HTML formatting supported:**\n"
+                f"• `<b>bold</b>` - **bold text**\n"
+                f"• `<i>italic</i>` - _italic text_\n"
+                f"• `<code>code</code>` - `monospace`\n"
+                f"• `<u>underline</u>` - underlined\n"
+                f"• `<s>strike</s>` - ~~strikethrough~~\n"
+                f"• `<a href=\"url\">link</a>` - hyperlink\n\n"
+                f"**Example:**\n"
+                f"`⏱ <b>Auto-Delete Notice</b>\\n\\nThis {{content_type}} will be <u>automatically deleted</u> after <b>{{minutes}} minutes</b>`\n\n"
+                f"⏱ You have 60 seconds to respond.\n"
+                f"Send /cancel to cancel."
+            )
+        elif key == 'START_MESSAGE':
+            text = (
+                f"✏️ **Editing: Start Message**\n\n"
+                f"Current length: {len(current_value)} characters\n\n"
+                f"**Available placeholders:**\n"
+                f"• `{{mention}}` - User mention\n"
+                f"• `{{user_id}}` - User ID\n"
+                f"• `{{first_name}}` - User's first name\n"
+                f"• `{{bot_name}}` - Bot's name\n"
+                f"• `{{bot_username}}` - Bot's username\n\n"
+                f"**HTML formatting supported:**\n"
+                f"• `<b>bold</b>` - **bold text**\n"
+                f"• `<i>italic</i>` - _italic text_\n"
+                f"• `<code>code</code>` - `monospace`\n"
+                f"• `<u>underline</u>` - underlined\n"
+                f"• `<s>strike</s>` - ~~strikethrough~~\n"
+                f"• `<a href=\"url\">link</a>` - hyperlink\n"
+                f"• `\\n` - New line\n\n"
+                f"**Example:**\n"
+                f"`<b>👋 Welcome {{mention}}!</b>\\n\\n<i>Your personal file search assistant</i>`\n\n"
+                f"⏱ You have 60 seconds to respond.\n"
+                f"Send /cancel to cancel."
+            )
+        elif setting_type == 'list':
             if key == 'FILE_STORE_CHANNEL':
                 instruction = "Send the new value (space-separated for multiple values):"
             else:
                 instruction = "Send the new value (comma-separated for multiple values):"
             example = "Example: value1, value2, value3" if key != 'FILE_STORE_CHANNEL' else "Example: -100123 -100456"
+
+            text = (
+                f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
+                f"Current: `{current_value}`\n\n"
+                f"{instruction}\n{example}\n\n"
+                f"⏱ You have 60 seconds to respond.\n"
+                f"Send /cancel to cancel."
+            )
         elif setting_type == 'int':
             instruction = "Send the new integer value:"
             example = "Example: 100"
+
+            text = (
+                f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
+                f"Current: `{current_value}`\n\n"
+                f"{instruction}\n{example}\n\n"
+                f"⏱ You have 60 seconds to respond.\n"
+                f"Send /cancel to cancel."
+            )
         else:  # str
             instruction = "Send the new text value:"
             example = "Example: your text here"
 
-        text = (
-            f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
-            f"Current: `{current_value}`\n\n"
-            f"{instruction}\n{example}\n\n"
-            f"⏱ You have 60 seconds to respond.\n"
-            f"Send /cancel to cancel."
-        )
+            text = (
+                f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
+                f"Current: `{current_value}`\n\n"
+                f"{instruction}\n{example}\n\n"
+                f"⏱ You have 60 seconds to respond.\n"
+                f"Send /cancel to cancel."
+            )
 
         await message.edit_text(text)
 
@@ -711,6 +771,8 @@ class BotSettingsHandler:
             'USE_ORIGINAL_CAPTION_FOR_BATCH': 'Batch Original Caption',
             'REQUEST_PER_DAY': "Requests per day",
             'REQUEST_WARNING_LIMIT': "Request warning limit",
+            'AUTO_DELETE_MESSAGE': 'Auto Delete Msg',
+            'START_MESSAGE': 'Start Message',
         }
 
         return display_map.get(key, key)

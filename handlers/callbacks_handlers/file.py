@@ -115,7 +115,8 @@ class FileCallbackHandler(BaseCommandHandler):
                 batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                 keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                 is_batch=False,
-                auto_delete_minutes=delete_minutes
+                auto_delete_minutes=delete_minutes,
+                auto_delete_message = self.bot.config.AUTO_DELETE_MESSAGE
             )
 
             sent_msg = await client.send_cached_media(
@@ -288,7 +289,8 @@ class FileCallbackHandler(BaseCommandHandler):
                     batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                     keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                     is_batch=False,  # These are individual files from search, not batch
-                    auto_delete_minutes=delete_minutes if delete_time > 0 else None
+                    auto_delete_minutes=delete_minutes if delete_time > 0 else None,
+                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
                 sent_msg = await client.send_cached_media(
@@ -332,7 +334,8 @@ class FileCallbackHandler(BaseCommandHandler):
                         batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                         keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                         is_batch=False,
-                        auto_delete_minutes=delete_minutes if delete_time > 0 else None
+                        auto_delete_minutes=delete_minutes if delete_time > 0 else None,
+                        auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                     )
 
                     sent_msg = await client.send_cached_media(

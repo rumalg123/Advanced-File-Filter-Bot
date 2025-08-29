@@ -103,9 +103,23 @@ class UserCommandHandler(BaseCommandHandler):
         buttons.append([
             InlineKeyboardButton("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
         ])
+        custom_start_message = None
+        if self.bot.config.START_MESSAGE:
+            custom_start_message = self.bot.config.START_MESSAGE
 
-        mention = message.from_user.mention
-        welcome_text = config_messages.START_MSG.format(mention=mention)
+        if custom_start_message:
+            # Format with available placeholders
+            welcome_text = custom_start_message.format(
+                mention=message.from_user.mention,
+                user_id=user_id,
+                first_name=message.from_user.first_name or "User",
+                bot_name=self.bot.bot_name,
+                bot_username=self.bot.bot_username
+            )
+        else:
+            # Use default message
+            mention = message.from_user.mention
+            welcome_text = config_messages.START_MSG.format(mention=mention)
 
         if self.bot.config.PICS:
             await message.reply_photo(
