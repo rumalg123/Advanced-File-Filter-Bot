@@ -17,7 +17,7 @@ class UserCommandHandler(BaseCommandHandler):
 
     @check_ban()
     async def start_command(self, client: Client, message: Message):
-        """Handle /start command - NO subscription check here to allow new users"""
+        """Handle /start command with subscription check for deeplinks"""
         user_id = message.from_user.id if message.from_user else None
         if not user_id:
             return
@@ -43,13 +43,33 @@ class UserCommandHandler(BaseCommandHandler):
 
         # Handle deep link
         if len(message.command) > 1:
-            # Import here to avoid circular imports
+            # Check subscription for deeplinks (except for admins and auth users)
+            skip_sub_check = (
+                    user_id in self.bot.config.ADMINS or
+                    user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            )
+
+            # Check if auth channel/groups are configured and user needs to subscribe
+            if not skip_sub_check and (self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', [])):
+                is_subscribed = await self.bot.subscription_manager.is_subscribed(
+                    client, user_id
+                )
+
+                if not is_subscribed:
+                    # Send subscription message with the deeplink parameter
+                    await self._send_subscription_message_for_deeplink(
+                        client, message, message.command[1]
+                    )
+                    return
+
+            # User is subscribed or doesn't need subscription, handle deeplink
             from handlers.deeplink import DeepLinkHandler
             deeplink_handler = DeepLinkHandler(self.bot)
-            await deeplink_handler.handle_deep_link(client, message, message.command[1])
+            # Remove the decorator from handle_deep_link since we're checking here
+            await deeplink_handler.handle_deep_link_internal(client, message, message.command[1])
             return
 
-        # Send welcome message
+        # Send welcome message (rest of the original code remains the same)
         buttons = [
             [
                 InlineKeyboardButton(
@@ -66,6 +86,7 @@ class UserCommandHandler(BaseCommandHandler):
                 InlineKeyboardButton("💎 Premium", callback_data="plans")
             ]
         ]
+
         if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
             buttons.append([
                 InlineKeyboardButton(
@@ -73,13 +94,15 @@ class UserCommandHandler(BaseCommandHandler):
                     url=self.bot.config.SUPPORT_GROUP_URL
                 )
             ])
+
         buttons.append([
-                InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
-        ]
-        )
-        buttons.append([
-            InlineKeyboardButton("🍺 Buy me a Beer",url=self.bot.config.PAYMENT_LINK)
+            InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
         ])
+
+        buttons.append([
+            InlineKeyboardButton("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
+        ])
+
         mention = message.from_user.mention
         welcome_text = config_messages.START_MSG.format(mention=mention)
 
@@ -94,6 +117,74 @@ class UserCommandHandler(BaseCommandHandler):
                 welcome_text,
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
+
+    async def _send_subscription_message_for_deeplink(
+            self, client: Client, message: Message, deeplink_param: str
+    ):
+        """Send subscription message for deeplink access"""
+        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        user_id = message.from_user.id
+
+        # Build buttons for required subscriptions
+        buttons = []
+
+        # AUTH_CHANNEL button
+        if self.bot.config.AUTH_CHANNEL:
+            try:
+                chat_link = await self.bot.subscription_manager.get_chat_link(
+                    client, self.bot.config.AUTH_CHANNEL
+                )
+                chat = await client.get_chat(self.bot.config.AUTH_CHANNEL)
+                channel_name = chat.title or "Updates Channel"
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"📢 Join {channel_name}",
+                        url=chat_link
+                    )
+                ])
+            except Exception as e:
+                logger.error(f"Error creating AUTH_CHANNEL button: {e}")
+
+        # AUTH_GROUPS buttons
+        if hasattr(self.bot.config, 'AUTH_GROUPS') and self.bot.config.AUTH_GROUPS:
+            for group_id in self.bot.config.AUTH_GROUPS:
+                try:
+                    chat_link = await self.bot.subscription_manager.get_chat_link(
+                        client, group_id
+                    )
+                    chat = await client.get_chat(group_id)
+                    group_name = chat.title or "Required Group"
+
+                    buttons.append([
+                        InlineKeyboardButton(
+                            f"👥 Join {group_name}",
+                            url=chat_link
+                        )
+                    ])
+                except Exception as e:
+                    logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
+
+        # Add "Try Again" button with the deeplink parameter
+        buttons.append([
+            InlineKeyboardButton(
+                "🔄 Try Again",
+                callback_data=f"checksub#{user_id}#{deeplink_param}"
+            )
+        ])
+
+        message_text = (
+            "🔒 **Subscription Required**\n\n"
+            "You need to join our channel(s) to access this content.\n"
+            "Please join the required channel(s) and try again."
+        )
+
+        await message.reply_text(
+            message_text,
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
+        )
 
     @check_ban()
     @require_subscription()

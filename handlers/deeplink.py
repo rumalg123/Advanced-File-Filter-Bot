@@ -16,9 +16,8 @@ logger = get_logger(__name__)
 class DeepLinkHandler(BaseCommandHandler):
     """Handler for deep link parameters in /start command"""
 
-    @require_subscription()
-    async def handle_deep_link(self, client: Client, message: Message, data: str):
-        """Handle deep link parameters with subscription check"""
+    async def handle_deep_link_internal(self, client: Client, message: Message, data: str):
+        """Internal method for handling deep links (subscription already checked)"""
         user_id = message.from_user.id
 
         # Handle different deep link types
@@ -46,6 +45,11 @@ class DeepLinkHandler(BaseCommandHandler):
             # Default to single file request (handles encoded links)
             await self._send_filestore_file(client, message, data)
 
+    # Keep the original decorated method for when it's called as a handler
+    @require_subscription()
+    async def handle_deep_link(self, client: Client, message: Message, data: str):
+        """Handle deep link parameters with subscription check"""
+        await self.handle_deep_link_internal(client, message, data)
     async def _send_filestore_file(self, client: Client, message: Message, encoded: str):
         """Send a file from filestore link - subscription already checked by decorator"""
         user_id = message.from_user.id
