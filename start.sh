@@ -28,6 +28,10 @@ else
     echo "⚠️ uvloop not found - installing..."
     pip install uvloop
 fi
-
+if python3 -O update.py; then
+  echo "Update step completed."
+else
+  echo "Update step failed (continuing anyway)..." >&2
+fi
 # Run the bot
-exec python3 -O bot.py  # -O flag for optimizations
+exec python3 -O bot.py # -O flag for optimizations
