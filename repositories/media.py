@@ -50,12 +50,14 @@ class MediaFile:
 
 
 class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
-    """Repository for media file operations"""
+    """Repository for media file operations with multi-database support"""
 
-    def __init__(self, db_pool, cache_manager):
+    def __init__(self, db_pool, cache_manager, multi_db_manager=None):
         super().__init__(db_pool, cache_manager, "media_files")
         self.ttl = CacheTTLConfig()
         self.cache_invalidator = CacheInvalidator(cache_manager)
+        self.multi_db_manager = multi_db_manager
+        self.is_multi_db = multi_db_manager is not None
 
     def _entity_to_dict(self, media: MediaFile) -> Dict[str, Any]:
         """Convert MediaFile entity to dictionary"""
@@ -87,19 +89,33 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
 
     async def find_file(self, identifier: str) -> Optional[MediaFile]:
-        # Try cache first with the identifier
+        """Find file by identifier, supporting multi-database mode"""
+        # Try cache first
         cache_key = CacheKeyGenerator.media(identifier)
         cached = await self.cache.get(cache_key)
         if cached:
             return self._dict_to_entity(cached)
-        collection = await self.collection
-        data = await self.db_pool.execute_with_retry(
-            collection.find_one, {"file_unique_id": identifier}
-        )
-        if data:
-            file = self._dict_to_entity(data)
-            await self.cache.set(cache_key, file, expire=self.ttl.MEDIA_FILE)
-            return file
+
+        if self.is_multi_db:
+            # Search across all databases
+            data, db_index = await self.multi_db_manager.find_file_in_all_databases(
+                self.collection_name, 
+                {"file_unique_id": identifier}
+            )
+            if data:
+                file = self._dict_to_entity(data)
+                await self.cache.set(cache_key, file, expire=self.ttl.MEDIA_FILE)
+                return file
+        else:
+            # Single database mode
+            collection = await self.collection
+            data = await self.db_pool.execute_with_retry(
+                collection.find_one, {"file_unique_id": identifier}
+            )
+            if data:
+                file = self._dict_to_entity(data)
+                await self.cache.set(cache_key, file, expire=self.ttl.MEDIA_FILE)
+                return file
 
         return None
     async def delete(self, id: Any) -> bool:
@@ -123,22 +139,47 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
     async def save_media(self, media: MediaFile) -> Tuple[bool, int, Optional[MediaFile]]:
         """
-        Save media file with comprehensive duplicate handling
+        Save media file with comprehensive duplicate handling across all databases
         Returns: (success, status_code, existing_file)
         status_code: 1=saved, 0=duplicate, 2=error
         existing_file: The existing file if it's a duplicate
         """
         try:
-            # Check for duplicate by file_unique_id
+            # Check for duplicate by file_unique_id across all databases
             existing = await self.find_file(media.file_unique_id)
             if existing:
+                logger.debug(f"Duplicate file found: {media.file_name}")
                 return False, 0, existing
-            success = await self.create(media)
-            if success:
-                logger.info(f"Saved file: {media.file_name}")
-                return True, 1, None
+
+            if self.is_multi_db:
+                # Use the write database for new files
+                write_db_pool = await self.multi_db_manager.get_write_database()
+                collection = await write_db_pool.get_collection(self.collection_name)
+                
+                # Save to write database
+                document = self._entity_to_dict(media)
+                result = await write_db_pool.execute_with_retry(
+                    collection.insert_one, document
+                )
+                if result.inserted_id:
+                    logger.info(f"Saved file to database: {media.file_name}")
+                    # Cache the new file
+                    cache_key = self._get_cache_key(media.file_unique_id)
+                    await self.cache.set(cache_key, media, expire=self.ttl.MEDIA_FILE)
+                    # Invalidate search caches
+                    await self.cache_invalidator.invalidate_all_search_results()
+                    return True, 1, None
+                else:
+                    return False, 2, None
             else:
-                return False, 2, None
+                # Single database mode - use existing create method
+                success = await self.create(media)
+                if success:
+                    logger.info(f"Saved file: {media.file_name}")
+                    return True, 1, None
+                else:
+                    return False, 2, None
+                    
         except DuplicateKeyError as e:
             logger.warning(f"Duplicate key error for file: {media.file_name}")
             existing = await self.find_file(media.file_unique_id)
@@ -157,7 +198,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             use_caption: bool = True
     ) -> Tuple[List[MediaFile], int, int]:
         """
-        Search for files
+        Search for files across all databases
         Returns: (files, next_offset, total_count)
         """
         # Generate cache key
@@ -180,16 +221,30 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         # Build search filter
         search_filter = self._build_search_filter(normalized_query, file_type, use_caption)
 
-        # Get total count
-        total = await self.count(search_filter)
-
-        # Get files
-        files = await self.find_many(
-            search_filter,
-            limit=limit,
-            skip=offset,
-            sort=[('indexed_at', -1)]
-        )
+        if self.is_multi_db:
+            # Multi-database search
+            total = await self.multi_db_manager.count_across_all_databases(
+                self.collection_name, search_filter
+            )
+            
+            # Get files from all databases
+            files_data = await self.multi_db_manager.search_across_all_databases(
+                self.collection_name,
+                search_filter,
+                limit=limit,
+                skip=offset,
+                sort=[('indexed_at', -1)]
+            )
+            files = [self._dict_to_entity(f) for f in files_data]
+        else:
+            # Single database search
+            total = await self.count(search_filter)
+            files = await self.find_many(
+                search_filter,
+                limit=limit,
+                skip=offset,
+                sort=[('indexed_at', -1)]
+            )
 
         # Calculate next offset
         next_offset = offset + limit if offset + limit < total else 0

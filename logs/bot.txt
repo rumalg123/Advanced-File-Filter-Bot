@@ -1,0 +1,12 @@
+2025-08-30 21:26:20 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 21:26:20 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 21:26:20 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 21:26:20 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 21:26:42 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 21:26:42 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 21:26:42 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 21:26:42 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 21:27:13 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 21:27:13 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 21:27:13 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 21:27:13 - root - INFO - [logger.py:73] - Backup count: 5

@@ -26,7 +26,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Optional, AsyncGenerator, Union
+from typing import Optional, AsyncGenerator, Union, List
 
 import pytz
 from aiohttp import web
@@ -37,6 +37,7 @@ from pyrogram.types import Message
 
 from core.cache.redis_cache import CacheManager
 from core.database.pool import DatabaseConnectionPool
+from core.database.multi_pool import MultiDatabaseManager
 from core.database.indexes import IndexOptimizer
 from core.session.manager import UnifiedSessionManager
 from core.services.bot_settings import BotSettingsService
@@ -82,6 +83,16 @@ class BotConfig:
         self.DATABASE_URI = os.environ.get('DATABASE_URI', '')
         self.DATABASE_NAME = os.environ.get('DATABASE_NAME', 'PIRO')
         self.COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'FILES')
+        
+        # Multi-database settings
+        self.DATABASE_URIS = self._parse_database_uris()
+        self.DATABASE_NAMES = self._parse_database_names()
+        
+        # Database storage settings
+        self.DATABASE_SIZE_LIMIT_GB = float(os.environ.get('DATABASE_SIZE_LIMIT_GB', '0.5'))  # 0.5GB default
+        self.DATABASE_AUTO_SWITCH = self._str_to_bool(
+            os.environ.get('DATABASE_AUTO_SWITCH', 'True')
+        )
 
         # Redis settings
         self.REDIS_URI = os.environ.get('REDIS_URI', '')
@@ -195,6 +206,54 @@ class BotConfig:
                 items.append(item)
         return items
 
+    def _parse_database_uris(self) -> List[str]:
+        """Parse multiple database URIs from environment variables"""
+        uris = []
+        
+        # Always include primary DATABASE_URI first
+        if self.DATABASE_URI:
+            uris.append(self.DATABASE_URI)
+        
+        # Add additional URIs from DATABASE_URIS if provided
+        additional_uris = os.environ.get('DATABASE_URIS', '')
+        if additional_uris:
+            for uri in additional_uris.split(','):
+                uri = uri.strip()
+                if uri and uri not in uris:  # Avoid duplicates
+                    uris.append(uri)
+        
+        return uris
+
+    def _parse_database_names(self) -> List[str]:
+        """Parse multiple database names from environment variables"""
+        names = []
+        
+        # Always include primary DATABASE_NAME first
+        names.append(self.DATABASE_NAME)
+        
+        # Add additional names from DATABASE_NAMES if provided
+        additional_names = os.environ.get('DATABASE_NAMES', '')
+        if additional_names:
+            for name in additional_names.split(','):
+                name = name.strip()
+                if name:
+                    names.append(name)
+        else:
+            # If no additional names specified, use same name for all databases
+            for i in range(1, len(self.DATABASE_URIS)):
+                names.append(self.DATABASE_NAME)
+        
+        # Ensure we have equal number of names and URIs
+        while len(names) < len(self.DATABASE_URIS):
+            names.append(self.DATABASE_NAME)
+        
+        return names[:len(self.DATABASE_URIS)]  # Trim to match URI count
+
+    @property
+    def is_multi_database_enabled(self) -> bool:
+        """Check if multi-database mode is enabled"""
+        return len(self.DATABASE_URIS) > 1
+
     def validate(self) -> bool:
         """Validate required configuration"""
         required = [
@@ -234,6 +293,9 @@ class MediaSearchBot(Client):
         self.cache = cache_manager
         self.rate_limiter = rate_limiter
         self.cache_invalidator = CacheInvalidator(cache_manager)
+        
+        # Multi-database manager (will be initialized if multi-DB is enabled)
+        self.multi_db_manager: Optional[MultiDatabaseManager] = None
 
         # Initialize repositories
         self.user_repo: Optional[UserRepository] = None
@@ -287,6 +349,7 @@ class MediaSearchBot(Client):
         from handlers.filestore import FileStoreHandler
         from handlers.search import SearchHandler
         from handlers.delete import DeleteHandler
+        from handlers.commands_handlers.database import DatabaseCommandHandler
 
         try:
             # Store all handler instances in manager for centralized tracking
@@ -297,7 +360,8 @@ class MediaSearchBot(Client):
                 ('indexing', IndexingHandler(self, self.indexing_service, self.index_request_service)),
                 ('channel', ChannelHandler(self, self.channel_repo)),
                 ('request', RequestHandler(self)),
-                ('search', SearchHandler(self))
+                ('search', SearchHandler(self)),
+                ('database', DatabaseCommandHandler(self))
             ]
 
             # Register all handlers through manager
@@ -485,12 +549,32 @@ class MediaSearchBot(Client):
     async def start(self):
         """Start the bot with all dependencies"""
         try:
-            # Initialize database connection pool
-            await self.db_pool.initialize(
-                self.config.DATABASE_URI,
-                self.config.DATABASE_NAME
-            )
-            logger.info("Database connection pool initialized")
+            # Initialize database connections
+            if self.config.is_multi_database_enabled:
+                logger.info(f"Multi-database mode enabled with {len(self.config.DATABASE_URIS)} databases")
+                
+                # Initialize multi-database manager
+                self.multi_db_manager = MultiDatabaseManager()
+                await self.multi_db_manager.initialize(
+                    self.config.DATABASE_URIS,
+                    self.config.DATABASE_NAMES,
+                    size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
+                    auto_switch=self.config.DATABASE_AUTO_SWITCH
+                )
+                logger.info("Multi-database manager initialized")
+                
+                # Still initialize single db_pool for backward compatibility
+                await self.db_pool.initialize(
+                    self.config.DATABASE_URI,
+                    self.config.DATABASE_NAME
+                )
+            else:
+                # Single database mode
+                await self.db_pool.initialize(
+                    self.config.DATABASE_URI,
+                    self.config.DATABASE_NAME
+                )
+                logger.info("Single database connection pool initialized")
 
             # Initialize Redis cache
             await self.cache.initialize()
@@ -503,7 +587,11 @@ class MediaSearchBot(Client):
                 premium_duration_days=self.config.PREMIUM_DURATION_DAYS,
                 daily_limit=self.config.NON_PREMIUM_DAILY_LIMIT
             )
-            self.media_repo = MediaRepository(self.db_pool, self.cache)
+            self.media_repo = MediaRepository(
+                self.db_pool, 
+                self.cache, 
+                multi_db_manager=self.multi_db_manager
+            )
             self.channel_repo = ChannelRepository(self.db_pool, self.cache)
             self.connection_repo = ConnectionRepository(self.db_pool, self.cache)
             self.filter_repo = FilterRepository(self.db_pool, self.cache, collection_name=self.config.COLLECTION_NAME)
