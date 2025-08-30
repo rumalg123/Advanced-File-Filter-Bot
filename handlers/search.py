@@ -54,11 +54,11 @@ class SearchHandler:
             filters.text & filters.incoming & ~filters.command(excluded_commands)
         )
 
-        # Use handler_manager if available
+        # Use handler_manager if available - register with lower priority (higher group number)
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            self.bot.handler_manager.add_handler(text_handler)
+            self.bot.handler_manager.add_handler(text_handler, group=10)  # Lower priority than command handlers
         else:
-            self.bot.add_handler(text_handler)
+            self.bot.add_handler(text_handler, group=10)  # Lower priority than command handlers
         self._handlers.append(text_handler)
 
         # Register inline query handler
@@ -188,6 +188,22 @@ class SearchHandler:
         user_id = message.from_user.id if message.from_user else None
         if not user_id:
             return
+
+        # CRITICAL: Enhanced admin edit session blocking
+        if user_id in (self.bot.config.ADMINS or []):
+            edit_session_key = CacheKeyGenerator.edit_session(user_id)
+            recent_edit_key = CacheKeyGenerator.recent_settings_edit(user_id)
+            
+            # Check all possible session indicators
+            has_cache_session = await self.bot.cache.exists(edit_session_key)
+            has_recent_edit = await self.bot.cache.exists(recent_edit_key)
+            has_memory_session = (hasattr(self.bot, 'bot_settings_handler') and 
+                                hasattr(self.bot.bot_settings_handler, 'edit_sessions') and
+                                user_id in self.bot.bot_settings_handler.edit_sessions)
+            
+            if has_cache_session or has_recent_edit or has_memory_session:
+                logger.info(f"[SEARCH_BLOCKED] Admin {user_id} has active edit session - blocking search for: '{message.text}'")
+                return
 
         # Check if user is in an edit session (multiple checks for reliability)
         if hasattr(self.bot, 'bot_settings_handler'):

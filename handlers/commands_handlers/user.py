@@ -2,6 +2,8 @@ import logging
 import random
 import uuid
 
+
+
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 import core.utils.messages as config_messages
@@ -247,7 +249,12 @@ class UserCommandHandler(BaseCommandHandler):
     async def stats_command(self, client: Client, message: Message):
         """Handle stats command"""
         # Get comprehensive stats
-        stats = await self.bot.maintenance_service.get_system_stats()
+        try:
+            stats = await self.bot.maintenance_service.get_system_stats()
+        except Exception as e:
+            logger.error(f"Error getting system stats: {e}")
+            await message.reply_text("❌ Error retrieving statistics. Please try again later.")
+            return
 
         # Format stats message
         text = (
@@ -259,7 +266,12 @@ class UserCommandHandler(BaseCommandHandler):
             f"└ Active Today: {stats['users']['active_today']:,}\n\n"
             f"<b>📁 Files:</b>\n"
             f"├ Total: {stats['files']['total_files']:,}\n"
-            f"└ Size: {format_file_size(stats['files']['total_size'])}\n"
+            f"└ Size: {format_file_size(stats['files']['total_size'])}\n\n"
+            f"<b>💾 Database Storage:</b>\n"
+            f"├ Total: {format_file_size(stats.get('storage', {}).get('total_size', 0))}\n"
+            f"├ Data: {format_file_size(stats.get('storage', {}).get('database_size', 0))}\n"
+            f"├ Indexes: {format_file_size(stats.get('storage', {}).get('index_size', 0))}\n"
+            f"└ Objects: {stats.get('storage', {}).get('objects_count', 0):,}\n"
         )
 
         # Add file type breakdown
@@ -267,6 +279,23 @@ class UserCommandHandler(BaseCommandHandler):
             text += "\n<b>📊 By Type:</b>\n"
             for file_type, data in stats['files']['by_type'].items():
                 text += f"├ {file_type.title()}: {data['count']:,} ({format_file_size(data['size'])})\n"
+
+        # Add collection breakdown (top 3 by size)
+        if stats.get('storage', {}).get('collections'):
+            collections = stats['storage']['collections']
+            # Sort by storage size and show top 3
+            sorted_collections = sorted(
+                collections.items(), 
+                key=lambda x: x[1]['storage_size'], 
+                reverse=True
+            )[:3]
+            
+            if sorted_collections:
+                text += "\n<b>🗂 Top Collections:</b>\n"
+                for i, (coll_name, coll_data) in enumerate(sorted_collections):
+                    display_name = coll_name.replace('_', ' ').title()
+                    symbol = "└" if i == len(sorted_collections) - 1 else "├"
+                    text += f"{symbol} {display_name}: {format_file_size(coll_data['storage_size'])}\n"
 
         await message.reply_text(text)
 

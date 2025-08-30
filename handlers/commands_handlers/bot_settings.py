@@ -2,6 +2,7 @@ import asyncio
 
 from pyrogram import Client
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram import StopPropagation
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.logger import get_logger
@@ -563,6 +564,15 @@ class BotSettingsHandler:
             pass
             
         logger.info(f"Cancelled edit session for user {user_id}")
+        raise StopPropagation  # Prevent any other handlers from processing /cancel
+
+    async def _auto_delete_message(self, message, delay_seconds):
+        """Auto-delete a message after specified delay"""
+        try:
+            await asyncio.sleep(delay_seconds)
+            await message.delete()
+        except Exception as e:
+            logger.warning(f"Could not auto-delete message: {e}")
 
     # In handle_edit_input method, after the success check (around line 234-243):
 
@@ -589,7 +599,7 @@ class BotSettingsHandler:
         await self.bot.cache.set(
             CacheKeyGenerator.recent_settings_edit(user_id),
             True,
-            expire=5  # 5 seconds should be enough
+            expire=10  # 10 seconds to cover full operation
         )
 
         session = self.edit_sessions[user_id]
@@ -612,7 +622,7 @@ class BotSettingsHandler:
             # Clean up session
             del self.edit_sessions[user_id]
             await self.bot.cache.delete(session_key)  # Clear cache session
-            return
+            raise StopPropagation  # Prevent any other handlers from processing this message
 
         # Update the setting
         key = session['key']
@@ -638,7 +648,7 @@ class BotSettingsHandler:
                 await self.bot.cache.set(
                     CacheKeyGenerator.recent_settings_edit(user_id),
                     True,
-                    expire=self.ttl.RECENT_EDIT_FLAG
+                    expire=10  # 10 seconds to prevent search trigger
                 )
                 # Delete the message containing the value for security
                 await message.delete()
@@ -661,24 +671,25 @@ class BotSettingsHandler:
                 # Clean up session immediately to prevent search triggers
                 del self.edit_sessions[user_id]
                 await self.bot.cache.delete(session_key)
-
-                # Auto-delete success message after 10 seconds
-                await asyncio.sleep(10)
-                try:
-                    await success_msg.delete()
-                except:
-                    pass
+                
+                # Schedule auto-delete of success message
+                asyncio.create_task(self._auto_delete_message(success_msg, 10))
+                
+                # Prevent any other handlers from processing this message
+                raise StopPropagation
             else:
                 # Clean up session on failure too
                 del self.edit_sessions[user_id]
                 await self.bot.cache.delete(session_key)
                 await message.reply_text("❌ Failed to update setting.")
+                raise StopPropagation  # Prevent search trigger even on failure
         except Exception as e:
             # Clean up session on error
-            del self.edit_sessions[user_id]
+            if user_id in self.edit_sessions:
+                del self.edit_sessions[user_id]
             await self.bot.cache.delete(session_key)
             await message.reply_text(f"❌ Error: {str(e)}")
-            return
+            raise StopPropagation  # Prevent search trigger on error
 
         # Show the setting details again
         try:
