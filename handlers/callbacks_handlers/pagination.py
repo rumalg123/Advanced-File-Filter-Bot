@@ -59,17 +59,19 @@ class PaginationCallbackHandler(BaseCommandHandler):
         # Generate a unique key for this search result set
         search_key = f"search_results_{user_id}_{uuid.uuid4().hex[:8]}"
 
-        # Store file IDs in cache for "Send All" functionality
-        files_data = []
-        for f in files:
-            files_data.append({
+        # Store file IDs in cache for "Send All" functionality - optimized
+        # Use list comprehension for better memory efficiency
+        files_data = [
+            {
                 'file_unique_id': f.file_unique_id,
                 'file_id': f.file_id,
                 'file_ref': f.file_ref,
                 'file_name': f.file_name,
                 'file_size': f.file_size,
                 'file_type': f.file_type.value
-            })
+            }
+            for f in files
+        ]
 
         ttl = CacheTTLConfig()
         await self.bot.cache.set(

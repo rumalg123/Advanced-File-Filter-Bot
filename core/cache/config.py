@@ -71,8 +71,6 @@ class CacheKeyGenerator:
             result = f"search:{args[0]}:{args[1]}:{args[2]}:{args[3]}:{args[4]}"
         elif key_type == 'rate_limit':
             result = f"rate_limit:{args[0]}:{args[1]}"
-        elif key_type == 'edit_session':
-            result = f"edit_session:{args[0]}"
         else:
             # Fallback to original generation
             return cache_key
@@ -163,10 +161,6 @@ class CacheKeyGenerator:
 
     # Session keys
     @staticmethod
-    def edit_session(user_id: int) -> str:
-        return CacheKeyGenerator._get_cached_key('edit_session', user_id)
-
-    @staticmethod
     def search_session(user_id: int, session_id: str) -> str:
         return f"search_results_{user_id}_{session_id}"
 
@@ -187,7 +181,6 @@ class CachePatterns:
             CacheKeyGenerator.user(user_id),
             CacheKeyGenerator.user_connections(str(user_id)),
             f"rate_limit:{user_id}:*",
-            f"edit_session:{user_id}",
             f"search_results_{user_id}_*",
             f"recent_settings_edit:{user_id}"
         ]
@@ -219,6 +212,3 @@ class CachePatterns:
     def group_settings(group_id: str) -> str:
         return f"group_settings:{group_id}"
 
-    @staticmethod
-    def index_session(user_id: int) -> str:
-        return f"index_session:{user_id}"

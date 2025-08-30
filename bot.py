@@ -876,9 +876,7 @@ class MediaSearchBot(Client):
             deleted = await self.cache.delete_pattern("search_results_*")
             logger.info(f"Cleaned up {deleted} old search result caches")
 
-            # Clear old session data
-            deleted = await self.cache.delete_pattern("edit_session:*")
-            logger.info(f"Cleaned up {deleted} old edit sessions")
+            # Session cleanup is now handled by unified session manager
 
         except Exception as e:
             logger.error(f"Error cleaning cache: {e}")

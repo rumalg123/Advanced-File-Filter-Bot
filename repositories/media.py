@@ -295,7 +295,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             }}
         ]
 
-        results = await self.aggregate(pipeline)
+        results = await self.aggregate(pipeline, limit=None)  # Stats need unlimited results
         if results:
             facets = results[0]
             stats = {
@@ -318,26 +318,6 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             'by_type': {}
         }
 
-    # async def cleanup_old_files(self, days: int = 365) -> int:
-    #     """Cleanup files older than specified days"""
-    #     cutoff_date = datetime.utcnow() - timedelta(days=days)
-    #
-    #     filter_query = {
-    #         'indexed_at': {'$lt': cutoff_date.isoformat()}
-    #     }
-    #
-    #     # Get files to delete
-    #     files = await self.find_many(filter_query)
-    #
-    #     if files:
-    #         operations = [DeleteOne({'_id': f.file_id}) for f in files]
-    #         await self.bulk_write(operations)
-    #
-    #         # Clear cache
-    #         for file in files:
-    #             await self.cache_invalidator.invalidate_file_cache(file)
-    #
-    #     return len(files)
 
     async def create_indexes(self) -> None:
         """Create necessary indexes for optimal performance"""

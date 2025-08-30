@@ -36,7 +36,7 @@ class MaintenanceService:
         # Reset daily counters for users
         try:
             # This would be done via a scheduled task in production
-            # await self.user_repo.reset_daily_counters()
+            await self.user_repo.reset_daily_counters()
             results['counters_reset'] = True
         except Exception as e:
             logger.error(f"Error resetting counters: {e}")
@@ -119,26 +119,6 @@ class MaintenanceService:
                 'avg_obj_size': 0,
                 'objects_count': 0
             }
-
-    # async def cleanup_old_data(self, days: int = 365) -> Dict[str, int]:
-    #     """Cleanup old data"""
-    #     results = {}
-    #
-    #     # Cleanup old files
-    #     try:
-    #         deleted_files = await self.media_repo.cleanup_old_files(days)
-    #         results['deleted_files'] = deleted_files
-    #     except Exception as e:
-    #         logger.error(f"Error cleaning up old files: {e}")
-    #         results['deleted_files'] = 0
-    #
-    #     return results
-
-
-
-
-
-
 
 @lru_cache(maxsize=1)
 def get_maintenance_service(

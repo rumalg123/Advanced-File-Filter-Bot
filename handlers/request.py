@@ -1,11 +1,9 @@
 import asyncio
-import io
 import random
 import re
 import uuid
 from datetime import datetime
 from weakref import WeakSet
-import aiohttp
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -297,17 +295,19 @@ class RequestHandler:
             session_id = uuid.uuid4().hex[:8]
             search_key = CacheKeyGenerator.search_session(user_id, session_id)
 
-            # Store file IDs in cache for "Send All" functionality
-            files_data = []
-            for f in files:
-                files_data.append({
+            # Store file IDs in cache for "Send All" functionality - optimized
+            # Use list comprehension for better memory efficiency
+            files_data = [
+                {
                     'file_unique_id': f.file_unique_id,
                     'file_id': f.file_id,
                     'file_ref': f.file_ref,
                     'file_name': f.file_name,
                     'file_size': f.file_size,
                     'file_type': f.file_type.value
-                })
+                }
+                for f in files
+            ]
 
             await self.bot.cache.set(
                 search_key,

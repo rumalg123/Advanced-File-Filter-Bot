@@ -267,12 +267,12 @@ class AggregationMixin:
             return self._collection
         raise NotImplementedError("Collection property must be implemented")
 
-    async def aggregate(self, pipeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Execute aggregation pipeline"""
+    async def aggregate(self, pipeline: List[Dict[str, Any]], limit: Optional[int] = 1000) -> List[Dict[str, Any]]:
+        """Execute aggregation pipeline with memory protection"""
         try:
             collection = await self.collection
             cursor = collection.aggregate(pipeline)
-            return await cursor.to_list(length=None)
+            return await cursor.to_list(length=limit)
         except Exception as e:
             logger.error(f"Error in aggregation: {e}")
             return []

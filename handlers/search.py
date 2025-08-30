@@ -1,11 +1,9 @@
 import asyncio
-import io
 import random
 import re
 import uuid
 from weakref import WeakSet
 
-import aiohttp
 from pyrogram import Client, filters, enums
 from pyrogram.handlers import MessageHandler, InlineQueryHandler
 from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument, InlineKeyboardButton, \
@@ -504,18 +502,20 @@ class SearchHandler:
             # Generate a unique session for search results
             session_id = uuid.uuid4().hex[:8]
             
-            # Store file IDs in cache for "Send All" functionality
+            # Store file IDs in cache for "Send All" functionality - optimized
             search_key = CacheKeyGenerator.search_session(user_id, session_id)
-            files_data = []
-            for f in files:
-                files_data.append({
+            # Use list comprehension for better memory efficiency
+            files_data = [
+                {
                     'file_unique_id': f.file_unique_id,
                     'file_id': f.file_id,
                     'file_ref': f.file_ref,
                     'file_name': f.file_name,
                     'file_size': f.file_size,
                     'file_type': f.file_type.value
-                })
+                }
+                for f in files
+            ]
 
             # Store search results with debug logging
             search_data = {'files': files_data, 'query': query, 'user_id': user_id}

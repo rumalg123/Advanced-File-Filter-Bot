@@ -166,7 +166,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if success:
             await self.cache.delete(CacheKeyGenerator.user(user_id))
-            #await self.cache.delete(CacheKeyGenerator.banned_users())
+            await self.cache.delete(CacheKeyGenerator.banned_users())
             # Update cache with banned users list
             await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
@@ -372,7 +372,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             }}
         ]
 
-        results = await self.aggregate(pipeline)
+        results = await self.aggregate(pipeline, limit=None)  # Stats need unlimited results
         if results:
             facets = results[0]
             stats = {

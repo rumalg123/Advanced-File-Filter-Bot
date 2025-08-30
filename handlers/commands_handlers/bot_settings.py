@@ -5,7 +5,6 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram import StopPropagation
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
-from core.session.manager import SessionType
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -475,8 +474,7 @@ class BotSettingsHandler:
 
         await message.edit_text(text)
 
-        # Start timeout task
-        asyncio.create_task(self._edit_timeout(user_id, 60))
+        # Timeout is now handled automatically by unified session manager
 
     async def handle_cancel(self, client: Client, message: Message):
         """Handle standalone /cancel command using unified session manager"""
@@ -638,11 +636,6 @@ class BotSettingsHandler:
             await message.reply_text(f"❌ Error updating setting: {error_msg}")
             raise StopPropagation  # Prevent search trigger on error
 
-    async def _edit_timeout(self, user_id: int, timeout: int):
-        """Handle edit session timeout - now handled by unified session manager"""
-        # Timeout is now automatically handled by the unified session manager
-        # This method is kept for compatibility but does nothing
-        pass
 
     async def update_boolean_setting(self, query: CallbackQuery, key: str, value: bool):
 
