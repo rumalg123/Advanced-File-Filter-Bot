@@ -1,6 +1,7 @@
 
 from functools import lru_cache
 from typing import Dict, Any
+from datetime import datetime, date
 
 from core.cache.redis_cache import CacheManager
 from repositories.media import MediaRepository
@@ -20,6 +21,7 @@ class MaintenanceService:
         self.user_repo = user_repo
         self.media_repo = media_repo
         self.cache = cache_manager
+        self.last_reset_date = None  # Track when we last reset counters
 
     async def run_daily_maintenance(self) -> Dict[str, Any]:
         """Run daily maintenance tasks"""
@@ -33,14 +35,25 @@ class MaintenanceService:
             logger.error(f"Error cleaning up expired premium: {e}")
             results['expired_premium'] = 0
 
-        # Reset daily counters for users
+        # Reset daily counters for users (only once per day)
         try:
-            # This would be done via a scheduled task in production
-            await self.user_repo.reset_daily_counters()
-            results['counters_reset'] = True
+            current_date = date.today()
+            
+            # Only reset if we haven't done it today
+            if self.last_reset_date != current_date:
+                reset_count = await self.user_repo.reset_daily_counters()
+                self.last_reset_date = current_date
+                logger.info(f"Daily counters reset for {reset_count} users (new day: {current_date})")
+                results['counters_reset'] = True
+                results['reset_count'] = reset_count
+            else:
+                logger.debug(f"Daily counters already reset today ({current_date})")
+                results['counters_reset'] = False
+                results['reset_count'] = 0
         except Exception as e:
             logger.error(f"Error resetting counters: {e}")
             results['counters_reset'] = False
+            results['reset_count'] = 0
 
         # Clear expired cache entries
         # Redis handles this automatically with TTL
