@@ -276,28 +276,13 @@ class FilterHandler(BaseCommandHandler):
 
     async def _check_admin_rights(self, client: Client, group_id: int, user_id: int) -> bool:
         """Check if user has admin rights in the group"""
-        if user_id in self.bot.config.ADMINS:
-            return True
-
-        try:
-            member = await client.get_chat_member(group_id, user_id)
-            return member.status in [
-                enums.ChatMemberStatus.ADMINISTRATOR,
-                enums.ChatMemberStatus.OWNER
-            ]
-        except:
-            return False
+        from core.utils.validators import has_admin_rights
+        return await has_admin_rights(client, group_id, user_id, self.bot.config.ADMINS)
 
     async def _is_owner_or_bot_admin(self, client: Client, group_id: int, user_id: int) -> bool:
         """Check if user is group owner or bot admin"""
-        if user_id in self.bot.config.ADMINS:
-            return True
-
-        try:
-            member = await client.get_chat_member(group_id, user_id)
-            return member.status == enums.ChatMemberStatus.OWNER
-        except:
-            return False
+        from core.utils.validators import is_owner_or_bot_admin
+        return await is_owner_or_bot_admin(client, group_id, user_id, self.bot.config.ADMINS)
 
     async def _extract_filter_data(self, message: Message, extracted: List[str], keyword: str):
         """Extract filter data from message"""

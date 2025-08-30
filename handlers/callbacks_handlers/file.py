@@ -6,6 +6,7 @@ from pyrogram.errors import FloodWait, UserIsBlocked
 from pyrogram.types import CallbackQuery
 
 from core.utils.caption import CaptionFormatter
+from core.utils.validators import is_original_requester, is_private_chat, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import check_ban
 
@@ -41,12 +42,12 @@ class FileCallbackHandler(BaseCommandHandler):
             original_user_id = int(original_user_id)
 
         # Check if the callback user is the original requester
-        if original_user_id and callback_user_id != original_user_id:
+        if original_user_id and not is_original_requester(callback_user_id, original_user_id):
             await query.answer("❌ You cannot interact with this message!", show_alert=True)
             return
 
         # If in group, redirect to PM
-        if query.message.chat.type != enums.ChatType.PRIVATE:
+        if not is_private_chat(query):
             bot_username = self.bot.bot_username
             pm_link = f"https://t.me/{bot_username}?start={self.encode_file_identifier(file_identifier)}"
 
@@ -59,9 +60,10 @@ class FileCallbackHandler(BaseCommandHandler):
         # We're in PM now, check subscription
         if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Skip subscription check for admins and auth users
-            skip_sub_check = (
-                    callback_user_id in self.bot.config.ADMINS or
-                    callback_user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            skip_sub_check = skip_subscription_check(
+                callback_user_id, 
+                self.bot.config.ADMINS, 
+                getattr(self.bot.config, 'AUTH_USERS', [])
             )
 
             if not skip_sub_check:
@@ -163,7 +165,7 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         # If in group, redirect to PM
-        if query.message.chat.type != enums.ChatType.PRIVATE:
+        if not is_private_chat(query):
             bot_username = self.bot.bot_username
             pm_link = f"https://t.me/{bot_username}?start=sendall_{search_key}"
 
@@ -176,9 +178,10 @@ class FileCallbackHandler(BaseCommandHandler):
         # We're in PM now, check subscription
         if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Skip subscription check for admins and auth users
-            skip_sub_check = (
-                    callback_user_id in self.bot.config.ADMINS or
-                    callback_user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            skip_sub_check = skip_subscription_check(
+                callback_user_id, 
+                self.bot.config.ADMINS, 
+                getattr(self.bot.config, 'AUTH_USERS', [])
             )
 
             if not skip_sub_check:
