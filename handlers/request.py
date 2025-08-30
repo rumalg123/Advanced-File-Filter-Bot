@@ -10,6 +10,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.utils.file_emoji import get_file_emoji
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
 
@@ -352,8 +353,9 @@ class RequestHandler:
                 else:
                     callback_data = f"file#{file_identifier}#{user_id}"
 
+                file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                 file_button = InlineKeyboardButton(
-                    f"📁 {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
+                    f"{file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
                     callback_data=callback_data
                 )
                 buttons.append([file_button])

@@ -12,6 +12,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.session.manager import SessionType
 from core.utils.caption import CaptionFormatter
+from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from handlers.decorators import require_subscription, check_ban
 
@@ -361,9 +362,10 @@ class SearchHandler:
                 )
 
                 # Create inline result
+                file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                 result = InlineQueryResultCachedDocument(
                     id=unique_id,
-                    title=file.file_name,
+                    title=f"{file_emoji} {file.file_name}",
                     document_file_id=file.file_id,
                     description=f"📊 {format_file_size(file.file_size)} • {file.file_type.value.title()}",
                     caption=caption,
@@ -565,8 +567,9 @@ class SearchHandler:
                 else:
                     callback_data = f"file#{file_identifier}#{user_id}"
 
+                file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                 file_button = InlineKeyboardButton(
-                    f"📁 {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
+                    f"{file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
                     callback_data=callback_data
                 )
                 buttons.append([file_button])
