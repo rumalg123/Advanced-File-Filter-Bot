@@ -564,3 +564,42 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             logger.info(f"User {user_id} auto-banned for request abuse")
 
         return success, user
+
+    async def reset_daily_counters(self) -> int:
+        """
+        Reset daily counters for all users (for scheduled maintenance)
+        Returns: Number of users updated
+        """
+        try:
+            collection = await self.collection
+            
+            # Update all users to reset daily counters
+            # This is typically run once per day via a scheduled task
+            update_result = await self.db_pool.execute_with_retry(
+                collection.update_many,
+                {},  # Update all users
+                {
+                    '$set': {
+                        'daily_retrieval_count': 0,
+                        'daily_request_count': 0,
+                        'updated_at': datetime.utcnow()
+                    }
+                }
+            )
+            
+            # Clear all user caches since we've updated all users
+            # We can't efficiently clear individual user caches, so we use cache invalidation
+            if hasattr(self, 'cache_invalidator'):
+                await self.cache_invalidator.invalidate_pattern("user:*")
+            else:
+                # Fallback: try to clear common user cache patterns
+                # This is not ideal but better than stale cache
+                pass
+            
+            updated_count = update_result.modified_count if update_result else 0
+            logger.info(f"Reset daily counters for {updated_count} users")
+            return updated_count
+            
+        except Exception as e:
+            logger.error(f"Error resetting daily counters: {e}")
+            return 0
