@@ -38,6 +38,7 @@ from pyrogram.types import Message
 from core.cache.redis_cache import CacheManager
 from core.database.pool import DatabaseConnectionPool
 from core.database.indexes import IndexOptimizer
+from core.session.manager import UnifiedSessionManager
 from core.services.bot_settings import BotSettingsService
 from core.services.broadcast import BroadcastService
 from core.services.connection import ConnectionService
@@ -637,6 +638,11 @@ class MediaSearchBot(Client):
             await self._set_bot_commands()
             # Initialize handlers after bot is started
             await self._initialize_handlers()
+            
+            # Start session manager cleanup task
+            if hasattr(self, 'session_manager'):
+                await self.session_manager.start_cleanup_task()
+                logger.info("Session manager cleanup task started")
 
             # noinspection PyTypeChecker
             self.handler_manager.create_background_task( # noqa
@@ -664,6 +670,11 @@ class MediaSearchBot(Client):
         """Stop the bot and cleanup resources"""
         logger.info("=" * 60)
         logger.info("Starting bot shutdown sequence...")
+
+        # Stop session manager cleanup task
+        if hasattr(self, 'session_manager'):
+            await self.session_manager.stop_cleanup_task()
+            logger.info("Session manager stopped")
 
         # Get handler manager stats before cleanup
         if self.handler_manager:
@@ -885,10 +896,12 @@ async def initialize_bot() -> MediaSearchBot:
     # Initialize components
     db_pool = DatabaseConnectionPool()
     cache_manager = CacheManager(config.REDIS_URI)
+    session_manager = UnifiedSessionManager(cache_manager)
     rate_limiter = RateLimiter(cache_manager)
 
     # Create bot instance
     bot = MediaSearchBot(config, db_pool, cache_manager, rate_limiter)
+    bot.session_manager = session_manager
 
     return bot
 

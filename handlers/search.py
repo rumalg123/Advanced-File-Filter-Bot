@@ -12,6 +12,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
     InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.session.manager import SessionType
 from core.utils.caption import CaptionFormatter
 from core.utils.helpers import format_file_size
 from handlers.decorators import require_subscription, check_ban
@@ -32,6 +33,10 @@ class SearchHandler:
         self.auto_delete_tasks = WeakSet()  # Use WeakSet for automatic cleanup
         self._handlers = []  # Track handlers for cleanup
         self._shutdown = asyncio.Event()  # Add shutdown signaling
+        
+        # Use unified session manager
+        self.session_manager = getattr(bot, 'session_manager', None)
+        
         self.register_handlers()
 
     def register_handlers(self):
@@ -189,33 +194,17 @@ class SearchHandler:
         if not user_id:
             return
 
-        # CRITICAL: Enhanced admin edit session blocking
-        if user_id in (self.bot.config.ADMINS or []):
-            edit_session_key = CacheKeyGenerator.edit_session(user_id)
-            recent_edit_key = CacheKeyGenerator.recent_settings_edit(user_id)
-            
-            # Check all possible session indicators
-            has_cache_session = await self.bot.cache.exists(edit_session_key)
-            has_recent_edit = await self.bot.cache.exists(recent_edit_key)
-            has_memory_session = (hasattr(self.bot, 'bot_settings_handler') and 
-                                hasattr(self.bot.bot_settings_handler, 'edit_sessions') and
-                                user_id in self.bot.bot_settings_handler.edit_sessions)
-            
-            if has_cache_session or has_recent_edit or has_memory_session:
-                logger.info(f"[SEARCH_BLOCKED] Admin {user_id} has active edit session - blocking search for: '{message.text}'")
+        # Check for active edit sessions using unified session manager
+        if self.session_manager:
+            # Check for active edit session
+            if await self.session_manager.has_active_session(user_id, SessionType.EDIT):
+                logger.info(f"[SEARCH_BLOCKED] User {user_id} has active edit session - blocking search for: '{message.text}'")
                 return
-
-        # Check if user is in an edit session (multiple checks for reliability)
-        if hasattr(self.bot, 'bot_settings_handler'):
-            if hasattr(self.bot.bot_settings_handler, 'edit_sessions'):
-                if user_id in self.bot.bot_settings_handler.edit_sessions:
-                    logger.debug(f"User {user_id} is in edit session, skipping search")
-                    return
-
-        # Check cache for active edit session
-        edit_session_key = CacheKeyGenerator.edit_session(user_id)
-        if await self.bot.cache.exists(edit_session_key):
-            logger.debug(f"User {user_id} has active cache edit session, skipping search")
+        
+        # Legacy check for recent edit flag
+        recent_edit_key = CacheKeyGenerator.recent_settings_edit(user_id)
+        if await self.bot.cache.exists(recent_edit_key):
+            logger.info(f"[SEARCH_BLOCKED] User {user_id} has recent edit activity - blocking search")
             return
 
         # Check for recent settings edit flag
@@ -512,11 +501,16 @@ class SearchHandler:
     ) -> bool:
         """Send search results - returns True if sent successfully"""
         try:
-            # Generate a unique key for this search result set
+            # Generate a unique session for search results
             session_id = uuid.uuid4().hex[:8]
+            
+            # Store search results in unified session manager if available
+            if self.session_manager:
+                search_data = {'file_ids': [file.file_id for file in files], 'query': query}
+                await self.session_manager.create_search_session(user_id, session_id, search_data)
+            
+            # Also store file IDs in cache for backward compatibility
             search_key = CacheKeyGenerator.search_session(user_id, session_id)
-
-            # Store file IDs in cache for "Send All" functionality
             files_data = []
             for f in files:
                 files_data.append({

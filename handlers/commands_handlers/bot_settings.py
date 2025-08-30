@@ -5,6 +5,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram import StopPropagation
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.session.manager import SessionType
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,22 +26,16 @@ class BotSettingsHandler:
     def __init__(self, bot):
         self.bot = bot
         self.settings_service = bot.bot_settings_service
-        self.edit_sessions = {}  # Store active edit sessions
         self.current_page = 0
         self.ttl = CacheTTLConfig()
         self._shutdown = asyncio.Event()
         self._handlers = []  # Track handlers
-        self.cleanup_task = None
-
+        
+        # Use unified session manager
+        self.session_manager = getattr(bot, 'session_manager', None)
+        
         # Register handlers
         self._register_handlers()
-        if hasattr(bot, 'handler_manager') and bot.handler_manager:
-            self.cleanup_task = bot.handler_manager.create_background_task(
-                self._cleanup_stale_sessions(),
-                name="settings_session_cleanup"
-            )
-        else:
-            self.cleanup_task = asyncio.create_task(self._cleanup_stale_sessions())
 
     def _register_handlers(self):
         """Register all handlers with tracking"""
@@ -55,12 +50,7 @@ class BotSettingsHandler:
         # Signal shutdown
         self._shutdown.set()
 
-        # Clear edit sessions (always do this)
-        for user_id in list(self.edit_sessions.keys()):
-            session_key = CacheKeyGenerator.edit_session(user_id)
-            await self.bot.cache.delete(session_key)
-
-        self.edit_sessions.clear()
+        # Session cleanup handled by unified session manager
 
         # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
@@ -92,37 +82,10 @@ class BotSettingsHandler:
         self._handlers.clear()
         logger.info("BotSettingsHandler cleanup complete")
 
-    async def _cleanup_stale_sessions(self):
-        """Periodically clean up stale edit sessions"""
-        while not self._shutdown.is_set():
-            try:
-                # Wait for 5 minutes or shutdown
-                await asyncio.wait_for(self._shutdown.wait(), timeout=300)
-                break  # Shutdown requested
-            except asyncio.TimeoutError:
-                # Do cleanup
-                current_time = asyncio.get_event_loop().time()
-                stale_sessions = []
-
-                for user_id, session in self.edit_sessions.items():
-                    if 'created_at' in session:
-                        if current_time - session['created_at'] > 120:  # 2 minutes
-                            stale_sessions.append(user_id)
-
-                # Clean up stale sessions
-                for user_id in stale_sessions:
-                    logger.info(f"Cleaning up stale edit session for user {user_id}")
-                    del self.edit_sessions[user_id]
-                    session_key = CacheKeyGenerator.edit_session(user_id)
-                    await self.bot.cache.delete(session_key)
-
-                if stale_sessions:
-                    logger.info(f"Cleaned up {len(stale_sessions)} stale edit sessions")
-
-            except Exception as e:
-                logger.error(f"Error in session cleanup task: {e}")
-
-        logger.info("Session cleanup task exited")
+    async def cleanup(self):
+        """Cleanup handler resources"""
+        self._shutdown.set()
+        logger.info("Bot settings handler cleanup completed")
 
     async def invalidate_related_caches(self, key: str):
         """Invalidate caches related to a specific setting"""
@@ -290,10 +253,8 @@ class BotSettingsHandler:
         if data == "bset_close":
             await query.message.delete()
             # Clear any active edit session
-            if user_id in self.edit_sessions:
-                del self.edit_sessions[user_id]
-                session_key = CacheKeyGenerator.edit_session(user_id)
-                await self.bot.cache.delete(session_key)
+            if self.session_manager:
+                await self.session_manager.cancel_edit_session(user_id)
             return
 
         elif data == "bset_noop":
@@ -407,23 +368,19 @@ class BotSettingsHandler:
         await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
-        """Start an edit session for a setting"""
-        if user_id in self.edit_sessions:
-            logger.warning(f"Cleaning up existing edit session for user {user_id}")
-            del self.edit_sessions[user_id]
+        """Start an edit session for a setting using unified session manager"""
+        if not self.session_manager:
+            await message.reply("❌ Session management not available")
+            return
 
-        session_key = CacheKeyGenerator.edit_session(user_id)
         session_data = {
             'key': key,
             'message_id': message.id,
-            'chat_id': message.chat.id,
-            'created_at': asyncio.get_event_loop().time()
+            'chat_id': message.chat.id
         }
-        await self.bot.cache.set(
-            session_key,
-            session_data,
-            expire=self.ttl.EDIT_SESSION
-        )
+        
+        # Create session using unified session manager
+        await self.session_manager.create_edit_session(user_id, session_data)
 
         settings = await self.settings_service.get_all_settings()
         setting = settings.get(key)
@@ -434,13 +391,7 @@ class BotSettingsHandler:
         setting_type = setting['type']
         current_value = setting['value']
 
-        # Store edit session
-        self.edit_sessions[user_id] = {
-            'key': key,
-            'message_id': message.id,
-            'chat_id': message.chat.id,
-            'created_at': asyncio.get_event_loop().time()
-        }
+        # Session is now managed by unified session manager
 
         # Special handling for message templates
         if key == 'AUTO_DELETE_MESSAGE':
@@ -528,34 +479,30 @@ class BotSettingsHandler:
         asyncio.create_task(self._edit_timeout(user_id, 60))
 
     async def handle_cancel(self, client: Client, message: Message):
-        """Handle standalone /cancel command"""
+        """Handle standalone /cancel command using unified session manager"""
         user_id = message.from_user.id
-        session_key = CacheKeyGenerator.edit_session(user_id)
         
-        # Check if user has any active session (cache or memory)
-        cache_session = await self.bot.cache.get(session_key)
-        has_memory_session = user_id in self.edit_sessions
+        if not self.session_manager:
+            await message.reply_text("❌ Session management not available.")
+            return
         
-        if not cache_session and not has_memory_session:
+        # Check if user has any active edit session
+        session = await self.session_manager.get_edit_session(user_id)
+        
+        if not session:
             await message.reply_text("❌ No active edit session to cancel.")
             return
             
         # Try to delete the editing message
         try:
-            if has_memory_session and 'message_id' in self.edit_sessions[user_id]:
-                editing_msg_id = self.edit_sessions[user_id]['message_id']
-                await client.delete_messages(message.chat.id, editing_msg_id)
-            elif cache_session and 'message_id' in cache_session:
-                editing_msg_id = cache_session['message_id']
+            if 'message_id' in session.data:
+                editing_msg_id = session.data['message_id']
                 await client.delete_messages(message.chat.id, editing_msg_id)
         except Exception as e:
             logger.warning(f"Could not delete editing message: {e}")
             
-        # Clean up both sessions
-        if has_memory_session:
-            del self.edit_sessions[user_id]
-        if cache_session:
-            await self.bot.cache.delete(session_key)
+        # Cancel the session
+        await self.session_manager.cancel_edit_session(user_id)
             
         # Delete the cancel message itself
         try:
@@ -577,19 +524,16 @@ class BotSettingsHandler:
     # In handle_edit_input method, after the success check (around line 234-243):
 
     async def handle_edit_input(self, client: Client, message: Message):
-        """Handle user input during edit session"""
+        """Handle user input during edit session using unified session manager"""
         user_id = message.from_user.id
-        session_key = CacheKeyGenerator.edit_session(user_id)
         
-        # Double check - user must have both cache session AND in-memory session
-        cache_session = await self.bot.cache.get(session_key)
-        if not cache_session:
-            logger.debug(f"No cache session found for user {user_id} - not processing message: {message.text}")
+        if not self.session_manager:
             return
-
-        # Check if user has active edit session in memory
-        if user_id not in self.edit_sessions:
-            logger.debug(f"No in-memory session found for user {user_id} - not processing message: {message.text}")
+        
+        # Check if user has active edit session
+        session = await self.session_manager.get_edit_session(user_id)
+        if not session:
+            logger.debug(f"No active session found for user {user_id} - not processing message: {message.text}")
             return
 
         # This handler should ONLY process messages when user is actively in edit session
@@ -602,14 +546,13 @@ class BotSettingsHandler:
             expire=10  # 10 seconds to cover full operation
         )
 
-        session = self.edit_sessions[user_id]
-
         # Handle cancel
         if message.text.lower() == '/cancel':
             # Delete the editing message first
             try:
-                editing_msg_id = session['message_id']
-                await client.delete_messages(message.chat.id, editing_msg_id)
+                if 'message_id' in session.data:
+                    editing_msg_id = session.data['message_id']
+                    await client.delete_messages(message.chat.id, editing_msg_id)
             except Exception as e:
                 logger.warning(f"Could not delete editing message: {e}")
                 
@@ -620,12 +563,11 @@ class BotSettingsHandler:
                 pass
                 
             # Clean up session
-            del self.edit_sessions[user_id]
-            await self.bot.cache.delete(session_key)  # Clear cache session
+            await self.session_manager.cancel_edit_session(user_id)
             raise StopPropagation  # Prevent any other handlers from processing this message
 
         # Update the setting
-        key = session['key']
+        key = session.data['key']
         new_value = message.text
 
         try:
@@ -638,8 +580,7 @@ class BotSettingsHandler:
                     f"2. Complete bot restart\n\n"
                     f"This protection prevents accidental bot lockouts."
                 )
-                del self.edit_sessions[user_id]
-                await self.bot.cache.delete(session_key)
+                await self.session_manager.cancel_edit_session(user_id)
                 raise StopPropagation  # Prevent other handlers from processing this message
             success = await self.settings_service.update_setting(key, new_value)
 
@@ -655,8 +596,9 @@ class BotSettingsHandler:
                 
                 # Also delete the editing message
                 try:
-                    editing_msg_id = session['message_id']
-                    await client.delete_messages(message.chat.id, editing_msg_id)
+                    if 'message_id' in session.data:
+                        editing_msg_id = session.data['message_id']
+                        await client.delete_messages(message.chat.id, editing_msg_id)
                 except Exception as e:
                     logger.warning(f"Could not delete editing message: {e}")
 
@@ -669,8 +611,7 @@ class BotSettingsHandler:
                 )
 
                 # Clean up session immediately to prevent search triggers
-                del self.edit_sessions[user_id]
-                await self.bot.cache.delete(session_key)
+                await self.session_manager.cancel_edit_session(user_id)
                 
                 # Schedule auto-delete of success message
                 asyncio.create_task(self._auto_delete_message(success_msg, 10))
@@ -679,8 +620,7 @@ class BotSettingsHandler:
                 raise StopPropagation
             else:
                 # Clean up session on failure too
-                del self.edit_sessions[user_id]
-                await self.bot.cache.delete(session_key)
+                await self.session_manager.cancel_edit_session(user_id)
                 await message.reply_text("❌ Failed to update setting.")
                 raise StopPropagation  # Prevent search trigger even on failure
         except StopPropagation:
@@ -688,9 +628,8 @@ class BotSettingsHandler:
             raise
         except Exception as e:
             # Clean up session on error
-            if user_id in self.edit_sessions:
-                del self.edit_sessions[user_id]
-            await self.bot.cache.delete(session_key)
+            if self.session_manager:
+                await self.session_manager.cancel_edit_session(user_id)
             
             # Better error message handling
             error_msg = str(e).strip() if str(e).strip() else "Unknown error occurred"
@@ -700,14 +639,10 @@ class BotSettingsHandler:
             raise StopPropagation  # Prevent search trigger on error
 
     async def _edit_timeout(self, user_id: int, timeout: int):
-        """Handle edit session timeout"""
-        await asyncio.sleep(timeout)
-
-        if user_id in self.edit_sessions:
-            del self.edit_sessions[user_id]
-            session_key = CacheKeyGenerator.edit_session(user_id)
-            await self.bot.cache.delete(session_key)
-            logger.info(f"Edit session timed out for user {user_id}")
+        """Handle edit session timeout - now handled by unified session manager"""
+        # Timeout is now automatically handled by the unified session manager
+        # This method is kept for compatibility but does nothing
+        pass
 
     async def update_boolean_setting(self, query: CallbackQuery, key: str, value: bool):
 
