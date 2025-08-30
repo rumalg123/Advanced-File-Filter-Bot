@@ -56,7 +56,7 @@ class SearchHandler:
 
         # Use handler_manager if available - register with lower priority (higher group number)
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            self.bot.handler_manager.add_handler(text_handler, group=10)  # Lower priority than command handlers
+            self.bot.handler_manager.add_handler(text_handler)  # Handler manager doesn't support group parameter
         else:
             self.bot.add_handler(text_handler, group=10)  # Lower priority than command handlers
         self._handlers.append(text_handler)
