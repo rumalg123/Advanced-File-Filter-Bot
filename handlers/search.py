@@ -45,7 +45,7 @@ class SearchHandler:
             'delete', 'deleteall', 'link', 'plink', 'batch', 'pbatch',
             'viewfilters', 'filters', 'del', 'delall', 'delallf', 'deleteallf',
             'delf', 'deletef', 'add', 'filter', 'bsetting', 'restart', 'shell',
-            'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance'
+            'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance', 'cancel'
         ]
 
         # Register text search handler

@@ -109,7 +109,7 @@ class CommandHandler:
                     filters.text & filters.private & filters.user(self.bot.config.ADMINS[0]) & 
                     (filters.regex(r"^[^/]") | filters.command("cancel"))
                 ),
-                group=-1  # Higher priority than search
+                group=-5  # Higher priority than search
             )
 
         # Add standalone cancel handler for better reliability 
@@ -119,7 +119,7 @@ class CommandHandler:
                     self.bot_settings_handler.handle_cancel,
                     filters.command("cancel") & filters.private & filters.user(self.bot.config.ADMINS[0])
                 ),
-                group=-2  # Highest priority
+                group=-10  # Very high priority
             )
 
         # Callback handlers

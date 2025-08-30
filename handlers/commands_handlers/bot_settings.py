@@ -532,20 +532,36 @@ class BotSettingsHandler:
         session_key = CacheKeyGenerator.edit_session(user_id)
         
         # Check if user has any active session (cache or memory)
-        has_cache_session = await self.bot.cache.exists(session_key)
+        cache_session = await self.bot.cache.get(session_key)
         has_memory_session = user_id in self.edit_sessions
         
-        if not has_cache_session and not has_memory_session:
+        if not cache_session and not has_memory_session:
             await message.reply_text("❌ No active edit session to cancel.")
             return
+            
+        # Try to delete the editing message
+        try:
+            if has_memory_session and 'message_id' in self.edit_sessions[user_id]:
+                editing_msg_id = self.edit_sessions[user_id]['message_id']
+                await client.delete_messages(message.chat.id, editing_msg_id)
+            elif cache_session and 'message_id' in cache_session:
+                editing_msg_id = cache_session['message_id']
+                await client.delete_messages(message.chat.id, editing_msg_id)
+        except Exception as e:
+            logger.warning(f"Could not delete editing message: {e}")
             
         # Clean up both sessions
         if has_memory_session:
             del self.edit_sessions[user_id]
-        if has_cache_session:
+        if cache_session:
             await self.bot.cache.delete(session_key)
             
-        await message.reply_text("✅ Edit session cancelled.")
+        # Delete the cancel message itself
+        try:
+            await message.delete()
+        except:
+            pass
+            
         logger.info(f"Cancelled edit session for user {user_id}")
 
     # In handle_edit_input method, after the success check (around line 234-243):
@@ -558,29 +574,44 @@ class BotSettingsHandler:
         # Double check - user must have both cache session AND in-memory session
         cache_session = await self.bot.cache.get(session_key)
         if not cache_session:
-            logger.debug(f"No cache session found for user {user_id}")
+            logger.debug(f"No cache session found for user {user_id} - not processing message: {message.text}")
             return
 
         # Check if user has active edit session in memory
         if user_id not in self.edit_sessions:
-            logger.debug(f"No in-memory session found for user {user_id}")
+            logger.debug(f"No in-memory session found for user {user_id} - not processing message: {message.text}")
             return
 
-        logger.debug(f"Processing edit input for user {user_id}: {message.text}")
+        # This handler should ONLY process messages when user is actively in edit session
+        logger.info(f"[EDIT_SESSION] Processing input for user {user_id}: {message.text}")
+        
+        # Set a temporary flag to prevent search processing of this message
+        await self.bot.cache.set(
+            CacheKeyGenerator.recent_settings_edit(user_id),
+            True,
+            expire=5  # 5 seconds should be enough
+        )
 
         session = self.edit_sessions[user_id]
 
         # Handle cancel
         if message.text.lower() == '/cancel':
-            del self.edit_sessions[user_id]
-            await self.bot.cache.delete(session_key)  # Clear cache session
-            await message.reply_text("❌ Edit cancelled.")
+            # Delete the editing message first
             try:
-                # Show settings menu again
-                msg = await client.get_messages(session['chat_id'], session['message_id'])
-                await self.show_setting_details(msg, session['key'])
+                editing_msg_id = session['message_id']
+                await client.delete_messages(message.chat.id, editing_msg_id)
+            except Exception as e:
+                logger.warning(f"Could not delete editing message: {e}")
+                
+            # Delete the cancel message itself
+            try:
+                await message.delete()
             except:
                 pass
+                
+            # Clean up session
+            del self.edit_sessions[user_id]
+            await self.bot.cache.delete(session_key)  # Clear cache session
             return
 
         # Update the setting
@@ -611,6 +642,13 @@ class BotSettingsHandler:
                 )
                 # Delete the message containing the value for security
                 await message.delete()
+                
+                # Also delete the editing message
+                try:
+                    editing_msg_id = session['message_id']
+                    await client.delete_messages(message.chat.id, editing_msg_id)
+                except Exception as e:
+                    logger.warning(f"Could not delete editing message: {e}")
 
                 # Send success message with restart reminder
                 success_msg = await client.send_message(
@@ -620,11 +658,7 @@ class BotSettingsHandler:
                     f"Use `/restart` command now to apply changes."
                 )
 
-                # IMPORTANT: Add a small delay before cleaning up session
-                # This prevents the message from being processed as a search
-                await asyncio.sleep(0.5)
-
-                # Clean up session
+                # Clean up session immediately to prevent search triggers
                 del self.edit_sessions[user_id]
                 await self.bot.cache.delete(session_key)
 
