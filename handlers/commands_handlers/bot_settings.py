@@ -640,7 +640,7 @@ class BotSettingsHandler:
                 )
                 del self.edit_sessions[user_id]
                 await self.bot.cache.delete(session_key)
-                return
+                raise StopPropagation  # Prevent other handlers from processing this message
             success = await self.settings_service.update_setting(key, new_value)
 
             if success:
@@ -688,15 +688,13 @@ class BotSettingsHandler:
             if user_id in self.edit_sessions:
                 del self.edit_sessions[user_id]
             await self.bot.cache.delete(session_key)
-            await message.reply_text(f"❌ Error: {str(e)}")
+            
+            # Better error message handling
+            error_msg = str(e).strip() if str(e).strip() else "Unknown error occurred"
+            logger.error(f"Error in bot settings edit for user {user_id}: {error_msg}", exc_info=True)
+            
+            await message.reply_text(f"❌ Error updating setting: {error_msg}")
             raise StopPropagation  # Prevent search trigger on error
-
-        # Show the setting details again
-        try:
-            msg = await client.get_messages(session['chat_id'], session['message_id'])
-            await self.show_setting_details(msg, key)
-        except:
-            pass
 
     async def _edit_timeout(self, user_id: int, timeout: int):
         """Handle edit session timeout"""
