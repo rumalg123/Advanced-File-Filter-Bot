@@ -18,6 +18,7 @@ aiohttp-cors
 
 # Redis cache
 redis
+msgpack
 
 # Utilities
 python-dotenv

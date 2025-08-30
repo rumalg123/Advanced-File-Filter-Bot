@@ -1,25 +1,14 @@
 import asyncio
-import json
 import sys
-from enum import Enum
 from typing import Optional, Any, Union, List
 import redis.asyncio as aioredis
-from datetime import timedelta, datetime
-import pickle
+from datetime import timedelta
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.serialization import serialize, deserialize, get_serialization_stats
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON encoder that handles datetime objects"""
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        elif isinstance(obj, Enum):
-            return obj.value
-        return super().default(obj)
 
 class CacheManager:
     """Redis cache manager with automatic serialization/deserialization"""
@@ -69,21 +58,15 @@ class CacheManager:
                 logger.info("Redis connection closed")
 
     async def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+        """Get value from cache with optimized deserialization"""
         if not self.redis:
             return None
 
         try:
             value = await self.redis.get(key)
             if value:
-                # Try to deserialize as JSON first, then pickle
-                try:
-                    return json.loads(value.decode('utf-8'))
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    try:
-                        return pickle.loads(value)
-                    except:
-                        return value.decode('utf-8')
+                return deserialize(value)
+            return None
         except Exception as e:
             logger.error(f"Cache get error for key {key}: {e}")
             return None
@@ -94,17 +77,13 @@ class CacheManager:
             value: Any,
             expire: Optional[Union[int, timedelta]] = None
     ) -> bool:
-        """Set value in cache with optional expiration"""
+        """Set value in cache with optimized serialization"""
         if not self.redis:
             return False
 
         try:
-            # Serialize value
-            if isinstance(value, (dict, list)):
-                # Use custom encoder for datetime serialization
-                serialized = json.dumps(value, cls=DateTimeEncoder).encode('utf-8')
-            else:
-                serialized = pickle.dumps(value)
+            # Use optimized serialization
+            serialized = serialize(value)
 
             # Convert timedelta to seconds
             if isinstance(expire, timedelta):
@@ -144,7 +123,7 @@ class CacheManager:
             return False
 
     async def mget(self, keys: List[str]) -> List[Optional[Any]]:
-        """Get multiple values from cache"""
+        """Get multiple values from cache with optimized deserialization"""
         if not self.redis:
             return [None] * len(keys)
 
@@ -153,13 +132,7 @@ class CacheManager:
             results = []
             for value in values:
                 if value:
-                    try:
-                        results.append(json.loads(value.decode('utf-8')))
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        try:
-                            results.append(pickle.loads(value))
-                        except:
-                            results.append(value.decode('utf-8'))
+                    results.append(deserialize(value))
                 else:
                     results.append(None)
             return results
@@ -233,3 +206,40 @@ class CacheManager:
         except Exception as e:
             logger.error(f"Error deleting pattern {pattern}: {e}")
             return 0
+
+    async def get_cache_stats(self) -> dict:
+        """Get comprehensive cache statistics"""
+        stats = {
+            'redis_info': {},
+            'serialization_stats': get_serialization_stats(),
+            'connection_info': {
+                'is_connected': self.redis is not None,
+                'max_connections': self._max_connections
+            }
+        }
+        
+        if self.redis:
+            try:
+                # Get Redis info
+                redis_info = await self.redis.info()
+                stats['redis_info'] = {
+                    'used_memory': redis_info.get('used_memory', 0),
+                    'used_memory_human': redis_info.get('used_memory_human', '0B'),
+                    'keyspace_hits': redis_info.get('keyspace_hits', 0),
+                    'keyspace_misses': redis_info.get('keyspace_misses', 0),
+                    'connected_clients': redis_info.get('connected_clients', 0),
+                    'total_commands_processed': redis_info.get('total_commands_processed', 0),
+                    'instantaneous_ops_per_sec': redis_info.get('instantaneous_ops_per_sec', 0)
+                }
+                
+                # Calculate hit rate
+                hits = stats['redis_info']['keyspace_hits']
+                misses = stats['redis_info']['keyspace_misses']
+                total = hits + misses
+                stats['redis_info']['hit_rate'] = (hits / total * 100) if total > 0 else 0
+                
+            except Exception as e:
+                logger.error(f"Error getting Redis stats: {e}")
+                stats['redis_info']['error'] = str(e)
+        
+        return stats
