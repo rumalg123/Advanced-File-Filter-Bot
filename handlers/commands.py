@@ -106,9 +106,20 @@ class CommandHandler:
             self.bot.add_handler(
                 MessageHandler(
                     self.bot_settings_handler.handle_edit_input,
-                    filters.text & filters.private & filters.user(self.bot.config.ADMINS[0]) & filters.regex(r"^[^/]")
+                    filters.text & filters.private & filters.user(self.bot.config.ADMINS[0]) & 
+                    (filters.regex(r"^[^/]") | filters.command("cancel"))
                 ),
                 group=-1  # Higher priority than search
+            )
+
+        # Add standalone cancel handler for better reliability 
+        if self.bot.config.ADMINS:
+            self.bot.add_handler(
+                MessageHandler(
+                    self.bot_settings_handler.handle_cancel,
+                    filters.command("cancel") & filters.private & filters.user(self.bot.config.ADMINS[0])
+                ),
+                group=-2  # Highest priority
             )
 
         # Callback handlers

@@ -30,7 +30,10 @@ class CacheInvalidator:
         keys = CachePatterns.media_related(file_id, file_ref, file_unique_id)
         for key in keys:
             await self.cache.delete(key)
+        
+        # Invalidate all search-related caches since they may contain this media
         await self.cache.delete_pattern("search:*")
+        await self.cache.delete_pattern("search_results_*")
 
     async def invalidate_group_cache(self, group_id: str):
         """Invalidate group-related cache"""

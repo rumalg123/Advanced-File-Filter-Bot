@@ -57,7 +57,11 @@ class CacheManager:
         if self.redis:
             try:
                 await self.redis.close()
-                await self.redis.connection_pool.disconnect()  # Ensure pool is closed
+                # Safely disconnect connection pool
+                try:
+                    await self.redis.connection_pool.disconnect()
+                except Exception as pool_error:
+                    logger.warning(f"Error disconnecting connection pool: {pool_error}")
             except Exception as e:
                 logger.error(f"Error closing Redis connection: {e}")
             finally:
@@ -185,6 +189,17 @@ class CacheManager:
             logger.error(f"Cache expire error for key {key}: {e}")
             return False
 
+    async def ttl(self, key: str) -> int:
+        """Get time to live for a key in seconds"""
+        if not self.redis:
+            return -1
+        
+        try:
+            return await self.redis.ttl(key)
+        except Exception as e:
+            logger.error(f"Cache TTL error for key {key}: {e}")
+            return -1
+
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching pattern"""
         if not self.redis:
@@ -192,9 +207,28 @@ class CacheManager:
 
         try:
             deleted = 0
+            failed = 0
+            keys_to_delete = []
+            
+            # Collect all keys first
             async for key in self.redis.scan_iter(match=pattern):
-                await self.redis.delete(key)
-                deleted += 1
+                keys_to_delete.append(key)
+            
+            # Delete in batches for better performance
+            batch_size = 100
+            for i in range(0, len(keys_to_delete), batch_size):
+                batch = keys_to_delete[i:i + batch_size]
+                try:
+                    if batch:
+                        result = await self.redis.delete(*batch)
+                        deleted += result
+                except Exception as batch_error:
+                    failed += len(batch)
+                    logger.warning(f"Failed to delete batch of {len(batch)} keys: {batch_error}")
+            
+            if failed > 0:
+                logger.warning(f"Pattern {pattern}: {deleted} deleted, {failed} failed")
+            
             return deleted
         except Exception as e:
             logger.error(f"Error deleting pattern {pattern}: {e}")

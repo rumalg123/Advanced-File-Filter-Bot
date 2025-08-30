@@ -189,14 +189,20 @@ class SearchHandler:
         if not user_id:
             return
 
-        # Check if user is in an edit session
+        # Check if user is in an edit session (multiple checks for reliability)
         if hasattr(self.bot, 'bot_settings_handler'):
             if hasattr(self.bot.bot_settings_handler, 'edit_sessions'):
                 if user_id in self.bot.bot_settings_handler.edit_sessions:
                     logger.debug(f"User {user_id} is in edit session, skipping search")
                     return
 
-        # Check for recent settings edit
+        # Check cache for active edit session
+        edit_session_key = CacheKeyGenerator.edit_session(user_id)
+        if await self.bot.cache.exists(edit_session_key):
+            logger.debug(f"User {user_id} has active cache edit session, skipping search")
+            return
+
+        # Check for recent settings edit flag
         cache_key = CacheKeyGenerator.recent_settings_edit(user_id)
         if await self.bot.cache.exists(cache_key):
             logger.debug(f"User {user_id} recently edited settings, skipping search")

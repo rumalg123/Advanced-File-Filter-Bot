@@ -3,7 +3,6 @@ import base64
 
 from pyrogram import Client
 from pyrogram.types import Message
-from sqlalchemy.orm.sync import clear
 
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
@@ -15,6 +14,20 @@ logger = get_logger(__name__)
 
 class DeepLinkHandler(BaseCommandHandler):
     """Handler for deep link parameters in /start command"""
+
+    async def safe_reply(self, message, text, **kwargs):
+        """Safely reply to a message, handling both regular and fake message objects"""
+        try:
+            if hasattr(message, 'reply') and callable(message.reply):
+                return await message.reply(text, **kwargs)
+            elif hasattr(message, 'reply_text') and callable(message.reply_text):
+                return await message.reply_text(text, **kwargs)
+            else:
+                logger.warning(f"Cannot reply to message: {text}")
+                return None
+        except Exception as e:
+            logger.error(f"Error replying to message: {e}")
+            return None
 
     async def handle_deep_link_internal(self, client: Client, message: Message, data: str):
         """Internal method for handling deep links (subscription already checked)"""
@@ -60,7 +73,7 @@ class DeepLinkHandler(BaseCommandHandler):
         file_identifier, protect = self.bot.filestore_service.decode_file_identifier(encoded)
 
         if not file_identifier:
-            await message.reply("❌ Invalid link format.")
+            await self.safe_reply(message, "❌ Invalid link format.")
             return
 
         logger.info(f"Decoded file_identifier: {file_identifier}, protect: {protect}")
@@ -143,7 +156,7 @@ class DeepLinkHandler(BaseCommandHandler):
         except Exception as e:
             logger.debug("Triggered in _send_dstore_files")
             logger.error(f"Failed to decode identifier: {encoded} Error: {e}")
-            await message.reply("❌ Invalid link format.")
+            await self.safe_reply(message, "❌ Invalid link format.")
             return
 
         # Check access

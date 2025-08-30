@@ -11,6 +11,7 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
+
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
@@ -56,7 +57,27 @@ class FileStoreService:
         Returns: (file_identifier, is_protected)
         """
         try:
-            decoded = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)).decode("ascii")
+            # Validate input
+            if not encoded or not isinstance(encoded, str):
+                logger.warning(f"Invalid encoded string: {encoded}")
+                return None, False
+                
+            # Clean the encoded string
+            encoded = encoded.strip()
+            if not encoded:
+                logger.warning("Empty encoded string after stripping")
+                return None, False
+            
+            # Validate base64 character length
+            if len(encoded) % 4 == 1:
+                logger.error(f"Invalid base64 length: {len(encoded)} - cannot be 1 more than multiple of 4")
+                return None, False
+            
+            # Add proper padding
+            padding = "=" * (-len(encoded) % 4)
+            encoded_padded = encoded + padding
+            
+            decoded = base64.urlsafe_b64decode(encoded_padded).decode("ascii")
 
             if decoded.startswith('filep_'):
                 return decoded[6:], True
@@ -70,7 +91,7 @@ class FileStoreService:
                 return decoded, False
 
         except Exception as e:
-            logger.error(f"Error decoding file identifier: {e}")
+            logger.error(f"Error decoding file identifier '{encoded}': {e}")
             return None, False
 
     # Backward compatibility methods

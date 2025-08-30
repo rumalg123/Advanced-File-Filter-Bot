@@ -526,19 +526,47 @@ class BotSettingsHandler:
         # Start timeout task
         asyncio.create_task(self._edit_timeout(user_id, 60))
 
+    async def handle_cancel(self, client: Client, message: Message):
+        """Handle standalone /cancel command"""
+        user_id = message.from_user.id
+        session_key = CacheKeyGenerator.edit_session(user_id)
+        
+        # Check if user has any active session (cache or memory)
+        has_cache_session = await self.bot.cache.exists(session_key)
+        has_memory_session = user_id in self.edit_sessions
+        
+        if not has_cache_session and not has_memory_session:
+            await message.reply_text("❌ No active edit session to cancel.")
+            return
+            
+        # Clean up both sessions
+        if has_memory_session:
+            del self.edit_sessions[user_id]
+        if has_cache_session:
+            await self.bot.cache.delete(session_key)
+            
+        await message.reply_text("✅ Edit session cancelled.")
+        logger.info(f"Cancelled edit session for user {user_id}")
+
     # In handle_edit_input method, after the success check (around line 234-243):
 
     async def handle_edit_input(self, client: Client, message: Message):
         """Handle user input during edit session"""
         user_id = message.from_user.id
         session_key = CacheKeyGenerator.edit_session(user_id)
-        session = await self.bot.cache.get(session_key)
-        if not session:
+        
+        # Double check - user must have both cache session AND in-memory session
+        cache_session = await self.bot.cache.get(session_key)
+        if not cache_session:
+            logger.debug(f"No cache session found for user {user_id}")
             return
 
-        # Check if user has active edit session
+        # Check if user has active edit session in memory
         if user_id not in self.edit_sessions:
+            logger.debug(f"No in-memory session found for user {user_id}")
             return
+
+        logger.debug(f"Processing edit input for user {user_id}: {message.text}")
 
         session = self.edit_sessions[user_id]
 

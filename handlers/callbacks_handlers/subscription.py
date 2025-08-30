@@ -159,11 +159,16 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             deeplink_handler = DeepLinkHandler(self.bot)
 
             # Create a fake message object for deeplink
+            async def dummy_reply(*args, **kwargs):
+                """Dummy reply method that does nothing"""
+                pass
+                
             fake_message = type('obj', (object,), {
                 'from_user': query.from_user,
                 'chat': query.message.chat if query.message else None,
                 'command': ['/start', param],
-                'reply_text': query.message.reply_text,
+                'reply_text': query.message.reply_text if query.message else dummy_reply,
+                'reply': query.message.reply if query.message else dummy_reply,
                 'text': f'/start {param}',
                 'message_id': query.message.id if query.message else None,
                 'date': query.message.date if query.message else None,

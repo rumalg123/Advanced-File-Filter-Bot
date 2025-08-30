@@ -65,19 +65,18 @@ class RateLimiter:
             )
             return False, config.cooldown_time
 
-        # Increment counter
-        await self.cache.increment(key)
-
-        # Set expiration if this is the first request
-        if current_count == 0:
-            await self.cache.expire(key, config.time_window)
+        # Increment counter and ensure expiration is always set
+        new_count = await self.cache.increment(key)
+        
+        # Always set expiration to prevent keys without TTL
+        await self.cache.expire(key, config.time_window)
 
         return True, None
 
     async def reset_rate_limit(self, user_id: int, action: str) -> None:
         """Reset rate limit for a user and action"""
-        key = f"rate_limit:{user_id}:{action}"
-        cooldown_key = f"{key}:cooldown"
+        key = CacheKeyGenerator.rate_limit(user_id, action)
+        cooldown_key = CacheKeyGenerator.rate_limit_cooldown(user_id, action)
         await self.cache.delete(key)
         await self.cache.delete(cooldown_key)
 

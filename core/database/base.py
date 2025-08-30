@@ -104,7 +104,8 @@ class BaseRepository(ABC, Generic[T]):
             if data:
                 # Cache the result
                 if use_cache:
-                    await self.cache.set(cache_key, data, expire=300)  # 5 minutes
+                    ttl = self._get_ttl_for_collection()
+                    await self.cache.set(cache_key, data, expire=ttl)
                 return self._dict_to_entity(data)
             return None
         except Exception as e:
