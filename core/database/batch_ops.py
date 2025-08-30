@@ -158,7 +158,7 @@ class BatchOperationManager:
         self,
         collection_name: str,
         search_filters: List[Dict[str, Any]],
-        projection: Optional[Dict[str, int]] = None,
+        projection: Optional[Dict[str, Any]] = None,
         limit_per_filter: int = 100
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Batch multiple search queries efficiently"""
@@ -166,11 +166,11 @@ class BatchOperationManager:
             return {}
             
         collection = await self.db_pool.get_collection(collection_name)
-        results = {}
+        results: Dict[str, List[Dict[str, Any]]] = {}
         
         # Use aggregation pipeline for efficient multiple searches
         try:
-            pipeline = []
+            pipeline: List[Dict[str, Any]] = []
             
             # Create union of all search conditions using $or if filters are similar
             if len(search_filters) <= 10:  # For small number of filters, use $or
@@ -230,7 +230,7 @@ class BatchOperationManager:
         self, 
         collection, 
         filter_dict: Dict[str, Any], 
-        projection: Optional[Dict[str, int]], 
+        projection: Optional[Dict[str, Any]], 
         limit: int, 
         task_id: int
     ) -> List[Dict[str, Any]]:

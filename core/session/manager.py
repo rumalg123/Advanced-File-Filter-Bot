@@ -323,7 +323,7 @@ class UnifiedSessionManager:
     
     async def get_session_stats(self) -> Dict[str, Any]:
         """Get session statistics"""
-        stats = {
+        stats: Dict[str, Any] = {
             'active_sessions': {},
             'total_active': 0
         }

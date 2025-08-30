@@ -1,8 +1,8 @@
 import asyncio
 
 from pyrogram import Client
-from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram import StopPropagation
+from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.logger import get_logger
@@ -684,7 +684,6 @@ class BotSettingsHandler:
         import subprocess
         import platform
         import shutil
-        from pathlib import Path
 
         restart_msg = await message.reply_text("🔄 **Restarting bot...**")
 

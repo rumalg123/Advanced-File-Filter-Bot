@@ -139,8 +139,13 @@ class CacheMonitor:
             key_str = key.decode()
 
             try:
-                # Get value size
-                value_size = await self.cache.redis.memory_usage(key)
+                # Get value size (some Redis versions might not support memory_usage)
+                try:
+                    value_size = await self.cache.redis.memory_usage(key)
+                except (AttributeError, Exception):
+                    # Fallback: estimate size by getting the actual value
+                    value = await self.cache.redis.get(key)
+                    value_size = len(str(value)) if value else 0
 
                 # Get TTL
                 ttl = await self.cache.redis.ttl(key)

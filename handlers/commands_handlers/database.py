@@ -4,9 +4,9 @@ Database management commands for multi-database system
 
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-
-from handlers.commands_handlers.base import BaseCommandHandler
-from core.utils.validators import is_admin
+from pyrogram.handlers import MessageHandler
+from pyrogram.enums import ParseMode
+from handlers.commands_handlers.base import BaseCommandHandler, admin_only
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -15,23 +15,37 @@ logger = get_logger(__name__)
 class DatabaseCommandHandler(BaseCommandHandler):
     """Handler for database management commands"""
 
+    def __init__(self, bot):
+        super().__init__(bot)
+        self.register_handlers()
+
     def register_handlers(self):
         """Register database management command handlers"""
+        # Register /dbstats command
         self.bot.add_handler(
-            filters.command("dbstats") & filters.private & is_admin(),
-            self.handle_database_stats
+            MessageHandler(
+                self.handle_database_stats, 
+                filters.command("dbstats") & filters.private & filters.incoming
+            )
         )
         
+        # Register /dbswitch command  
         self.bot.add_handler(
-            filters.command("dbswitch") & filters.private & is_admin(),
-            self.handle_database_switch
+            MessageHandler(
+                self.handle_database_switch, 
+                filters.command("dbswitch") & filters.private & filters.incoming
+            )
         )
         
+        # Register /dbinfo command
         self.bot.add_handler(
-            filters.command("dbinfo") & filters.private & is_admin(),
-            self.handle_database_info
+            MessageHandler(
+                self.handle_database_info, 
+                filters.command("dbinfo") & filters.private & filters.incoming
+            )
         )
 
+    @admin_only
     async def handle_database_stats(self, client: Client, message: Message):
         """Handle /dbstats command - show database statistics"""
         try:
@@ -80,13 +94,14 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode="markdown"
+                parse_mode=ParseMode.MARKDOWN
             )
 
         except Exception as e:
             logger.error(f"Error in database stats command: {e}")
             await message.reply_text(f"❌ Error retrieving database stats: {str(e)}")
 
+    @admin_only
     async def handle_database_switch(self, client: Client, message: Message):
         """Handle /dbswitch command - switch write database"""
         try:
@@ -136,6 +151,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             logger.error(f"Error in database switch command: {e}")
             await message.reply_text(f"❌ Error switching database: {str(e)}")
 
+    @admin_only
     async def handle_database_info(self, client: Client, message: Message):
         """Handle /dbinfo command - show detailed database information"""
         try:
@@ -197,7 +213,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode="markdown"
+                parse_mode=ParseMode.MARKDOWN
             )
 
         except Exception as e:
@@ -267,4 +283,24 @@ class DatabaseCommandHandler(BaseCommandHandler):
         await callback_query.answer()
         # This would typically show more detailed technical info
         # For now, redirect to info command
+        await self.handle_database_info(self.bot, callback_query.message)
+
+    async def _show_database_stats(self, callback_query):
+        """Show database statistics"""
+        await callback_query.answer()
+        # Redirect to stats command
+        await self.handle_database_stats(self.bot, callback_query.message)
+
+    async def _refresh_database_info(self, callback_query):
+        """Refresh database information"""
+        await callback_query.answer("🔄 Refreshing database info...")
+        
+        if not self.bot.multi_db_manager:
+            await callback_query.message.edit_text("❌ Multi-database mode is not enabled.")
+            return
+
+        # Force update stats
+        self.bot.multi_db_manager._stats_cache_time = 0
+        
+        # Show updated info
         await self.handle_database_info(self.bot, callback_query.message)

@@ -284,6 +284,11 @@ class FileCallbackHandler(BaseCommandHandler):
         failed_count = 0
         sent_messages = []  # Track sent messages for auto-deletion
 
+        # Initialize these variables outside the loop to avoid uninitialized variable warnings
+        delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
+        delete_minutes = delete_time // 60
+        file = None
+
         for idx, file_data in enumerate(files_data):
             try:
                 file_unique_id = file_data['file_unique_id']
@@ -294,10 +299,6 @@ class FileCallbackHandler(BaseCommandHandler):
                 if not file:
                     failed_count += 1
                     continue
-
-                # Send file
-                delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-                delete_minutes = delete_time // 60
 
                 caption = CaptionFormatter.format_file_caption(
                     file=file,
@@ -342,27 +343,30 @@ class FileCallbackHandler(BaseCommandHandler):
             except FloodWait as e:
                 logger.warning(f"FloodWait: sleeping for {e.value} seconds")
                 await asyncio.sleep(e.value)
-                # Retry the current file
-                try:
-                    caption = CaptionFormatter.format_file_caption(
-                        file=file,
-                        custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
-                        batch_caption=self.bot.config.BATCH_FILE_CAPTION,
-                        keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
-                        is_batch=False,
-                        auto_delete_minutes=delete_minutes if delete_time > 0 else None,
-                        auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
-                    )
+                # Retry the current file (only if file was successfully fetched)
+                if file:
+                    try:
+                        caption = CaptionFormatter.format_file_caption(
+                            file=file,
+                            custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
+                            batch_caption=self.bot.config.BATCH_FILE_CAPTION,
+                            keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
+                            is_batch=False,
+                            auto_delete_minutes=delete_minutes if delete_time > 0 else None,
+                            auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
+                        )
 
-                    sent_msg = await client.send_cached_media(
-                        chat_id=user_id,
-                        file_id=file.file_id,
-                        caption=caption,
-                        parse_mode=CaptionFormatter.get_parse_mode()
-                    )
-                    sent_messages.append(sent_msg)
-                    success_count += 1
-                except:
+                        sent_msg = await client.send_cached_media(
+                            chat_id=user_id,
+                            file_id=file.file_id,
+                            caption=caption,
+                            parse_mode=CaptionFormatter.get_parse_mode()
+                        )
+                        sent_messages.append(sent_msg)
+                        success_count += 1
+                    except:
+                        failed_count += 1
+                else:
                     failed_count += 1
 
             except Exception as e:

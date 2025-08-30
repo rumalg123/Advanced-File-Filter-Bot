@@ -243,6 +243,9 @@ class IndexingService:
                 if existing_file and existing_file.file_unique_id == media_file.file_unique_id:
                     logger.debug(f"Duplicate file (same content): {media_file.file_name}")
                     return "duplicate"
+                else:
+                    logger.debug(f"Duplicate file (different content): {media_file.file_name}")
+                    return "duplicate"
             else:
                 logger.error(f"Failed to index file: {media_file.file_name}")
                 return "error"

@@ -410,10 +410,14 @@ class FileStoreService:
         success_count = 0
 
         for file_data in batch_data:
+            # Initialize variables outside try block to avoid uninitialized variable warnings
+            file_id_to_send = file_data.get("file_id", file_data.get("file_identifier"))
+            caption = ""  # Default value
+            
             try:
                 caption = CaptionFormatter.format_file_caption(
                     file=MediaFile(  # Create temporary MediaFile object
-                        file_unique_id=file_data.get['file_unique_id'],
+                        file_unique_id=file_data.get('file_unique_id'),
                         file_id=file_data.get("file_id"),
                         file_ref=file_data.get("file_ref"),
                         file_name=file_data.get("title", ""),
@@ -430,9 +434,6 @@ class FileStoreService:
                     auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
                     auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                 )
-
-                # Use file_id for sending (more reliable)
-                file_id_to_send = file_data.get("file_id", file_data.get("file_identifier"))
 
                 await client.send_cached_media(
                     chat_id=user_id,
@@ -491,6 +492,9 @@ class FileStoreService:
                 total_count += 1
 
                 if message.media:
+                    # Initialize caption with default value to avoid uninitialized variable warnings
+                    caption = message.caption.html if message.caption else ""
+                    
                     try:
                         # Get media object
                         media = getattr(message, message.media.value)

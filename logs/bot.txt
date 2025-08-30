@@ -1,0 +1,28 @@
+2025-08-30 22:16:20 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:16:20 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:16:20 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:16:20 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 22:16:37 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:16:37 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:16:37 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:16:37 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 22:26:28 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:26:28 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:26:28 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:26:28 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 22:30:30 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:30:30 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:30:30 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:30:30 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 22:33:09 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:33:09 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:33:09 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:33:09 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 22:38:42 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:38:42 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:38:42 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:38:42 - root - INFO - [logger.py:73] - Backup count: 5
+2025-08-30 22:43:19 - root - INFO - [logger.py:70] - Centralized logging system initialized
+2025-08-30 22:43:19 - root - INFO - [logger.py:71] - Log file: logs\bot.txt
+2025-08-30 22:43:19 - root - INFO - [logger.py:72] - Max file size: 5.0MB
+2025-08-30 22:43:19 - root - INFO - [logger.py:73] - Backup count: 5
