@@ -206,12 +206,25 @@ class FileCallbackHandler(BaseCommandHandler):
         except Exception:
             pass
 
-        # Get cached search results
+        # Get cached search results with debug logging
         cached_data = await self.bot.cache.get(search_key)
-
+        
         if not cached_data:
+            logger.warning(f"Search results expired or not found for key: {search_key}")
+            
+            # Check if the key exists at all
+            key_exists = await self.bot.cache.exists(search_key)
+            logger.debug(f"Cache key exists check for {search_key}: {key_exists}")
+            
+            # Check TTL of the key if it exists
+            if key_exists:
+                ttl = await self.bot.cache.ttl(search_key)
+                logger.debug(f"Cache key TTL for {search_key}: {ttl}")
+            
             await query.answer("❌ Search results expired. Please search again.", show_alert=True)
             return
+        
+        logger.debug(f"Retrieved cached search results for key: {search_key}, files count: {len(cached_data.get('files', []))}")
 
         files_data = cached_data.get('files', [])
         search_query = cached_data.get('query', '')

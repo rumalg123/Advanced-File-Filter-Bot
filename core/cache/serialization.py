@@ -165,39 +165,39 @@ class OptimizedSerializer:
     
     def deserialize(self, data: bytes) -> Any:
         """
-        Deserialize data based on method prefix
+        Deserialize data based on method prefix with robust fallback handling
         """
         if not data or len(data) < 1:
             return None
         
         try:
+            # Handle legacy data first (no method prefix)
+            # If first byte is not one of our method prefixes, it's legacy data
+            first_byte = data[:1]
+            if first_byte not in [b'j', b'p', b'm', b'c']:
+                return self._deserialize_legacy_data(data)
+            
             # Extract method from prefix
             method_prefix = data[:1]
             serialized_data = data[1:]
             
-            # Handle compression
+            # Handle compression - check for compressed methods
             is_compressed = False
-            if method_prefix == b'c':
-                # Old compressed format, assume JSON
-                is_compressed = True
-                method_char = b'j'
-                serialized_data = data[1:]  # Skip 'c' prefix
-            elif len(data) >= 2 and method_prefix == b'c':
-                # New compressed format with method
+            method_char = method_prefix
+            
+            if method_prefix == b'c' and len(data) >= 2:
+                # Compressed format - next byte is the actual method
                 method_char = data[1:2]
                 serialized_data = data[2:]
                 is_compressed = True
-            else:
-                method_char = method_prefix
-                is_compressed = method_char in [b'c']  # Handle legacy
             
             # Decompress if needed
             if is_compressed:
                 try:
                     serialized_data = zlib.decompress(serialized_data)
-                except zlib.error:
-                    # Not actually compressed, treat as regular data
-                    pass
+                except zlib.error as e:
+                    logger.warning(f"Failed to decompress data: {e}, trying legacy fallback")
+                    return self._deserialize_legacy_data(data)
             
             # Deserialize based on method
             if method_char == b'j':  # JSON
@@ -207,27 +207,29 @@ class OptimizedSerializer:
             elif method_char == b'p':  # Pickle
                 return self._deserialize_pickle(serialized_data)
             else:
-                # Unknown method or legacy data, try multiple approaches
-                try:
-                    # Try JSON first (most common)
-                    return json.loads(data.decode('utf-8'))
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    try:
-                        # Try pickle
-                        return pickle.loads(data)
-                    except:
-                        # Try as string
-                        return data.decode('utf-8')
+                # Unknown method, try legacy fallback
+                return self._deserialize_legacy_data(data)
         
         except Exception as e:
-            logger.error(f"Deserialization failed: {e}")
-            # Final fallback attempts
+            logger.debug(f"Deserialization failed, trying legacy fallback: {e}")
+            return self._deserialize_legacy_data(data)
+    
+    def _deserialize_legacy_data(self, data: bytes) -> Any:
+        """Fallback deserialization for legacy data without method prefixes"""
+        try:
+            # Try JSON first (most common legacy format)
+            return json.loads(data.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
             try:
-                return json.loads(data.decode('utf-8'))
+                # Try pickle (binary format)
+                return pickle.loads(data)
             except:
                 try:
-                    return pickle.loads(data)
-                except:
+                    # Try as plain string
+                    return data.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Last resort - return None for corrupted data
+                    logger.warning(f"Could not deserialize data of length {len(data)}")
                     return None
     
     def estimate_memory_usage(self, data: Any) -> Dict[str, int]:

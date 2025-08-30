@@ -11,7 +11,7 @@ from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
-from core.cache.config import CacheKeyGenerator
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
 
@@ -23,6 +23,7 @@ class RequestHandler:
 
     def __init__(self, bot):
         self.bot = bot
+        self.ttl = CacheTTLConfig()
         self._handlers = []  # Add this to track handlers
         self._shutdown = asyncio.Event()  # Add shutdown signaling
         self.auto_delete_tasks = WeakSet()  # Track auto-delete tasks
@@ -311,7 +312,7 @@ class RequestHandler:
             await self.bot.cache.set(
                 search_key,
                 {'files': files_data, 'query': query, 'user_id': user_id},
-                expire=self.bot.cache.ttl_config.SEARCH_SESSION  # 1 hour expiry
+                expire=self.ttl.SEARCH_SESSION  # 1 hour expiry
             )
 
             # Create pagination builder

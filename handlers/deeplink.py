@@ -197,11 +197,12 @@ class DeepLinkHandler(BaseCommandHandler):
         """Send all files from search key"""
         user_id = message.from_user.id
 
-        # Get cached search results
+        # Get cached search results with debug logging
         cached_data = await self.bot.cache.get(search_key)
-        logger.info(f"{search_key} found: {cached_data}")
+        logger.debug(f"Deep link sendall - search key: {search_key}, data found: {cached_data is not None}")
 
         if not cached_data:
+            logger.warning(f"Deep link sendall - search results expired or not found for key: {search_key}")
             await message.reply_text("❌ Search results expired. Please search again.")
             return
 

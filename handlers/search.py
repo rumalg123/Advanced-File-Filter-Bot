@@ -504,12 +504,7 @@ class SearchHandler:
             # Generate a unique session for search results
             session_id = uuid.uuid4().hex[:8]
             
-            # Store search results in unified session manager if available
-            if self.session_manager:
-                search_data = {'file_ids': [file.file_id for file in files], 'query': query}
-                await self.session_manager.create_search_session(user_id, session_id, search_data)
-            
-            # Also store file IDs in cache for backward compatibility
+            # Store file IDs in cache for "Send All" functionality
             search_key = CacheKeyGenerator.search_session(user_id, session_id)
             files_data = []
             for f in files:
@@ -522,11 +517,15 @@ class SearchHandler:
                     'file_type': f.file_type.value
                 })
 
+            # Store search results with debug logging
+            search_data = {'files': files_data, 'query': query, 'user_id': user_id}
             await self.bot.cache.set(
                 search_key,
-                {'files': files_data, 'query': query, 'user_id': user_id},
-                expire=self.bot.cache.ttl_config.SEARCH_SESSION  # 1 hour expiry
+                search_data,
+                expire=self.ttl.SEARCH_SESSION  # 1 hour expiry
             )
+            
+            logger.debug(f"Stored search results for key: {search_key}, TTL: {self.ttl.SEARCH_SESSION}s, files count: {len(files_data)}")
 
             # Create pagination builder
             pagination = PaginationBuilder(

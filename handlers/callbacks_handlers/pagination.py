@@ -6,6 +6,7 @@ from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
 
 from handlers.commands_handlers.base import BaseCommandHandler
 from core.utils.pagination import PaginationBuilder, PaginationHelper
+from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -70,10 +71,11 @@ class PaginationCallbackHandler(BaseCommandHandler):
                 'file_type': f.file_type.value
             })
 
+        ttl = CacheTTLConfig()
         await self.bot.cache.set(
             search_key,
             {'files': files_data, 'query': search_query},
-            expire=self.bot.cache.ttl_config.SEARCH_SESSION  # 1 hour expiry
+            expire=ttl.SEARCH_SESSION  # 1 hour expiry
         )
 
         # Build response with new pagination builder
