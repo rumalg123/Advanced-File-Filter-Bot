@@ -92,8 +92,14 @@ class IndexOptimizer:
                 results[f"media_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on media_files")
             except Exception as e:
-                logger.error(f"Failed to create index {index['name']}: {e}")
-                results[f"media_{index['name']}"] = False
+                error_msg = str(e)
+                if "Index already exists" in error_msg or "IndexOptionsConflict" in error_msg:
+                    # Index exists with different name - this is OK
+                    logger.debug(f"Index {index['name']} already exists with different name - skipping")
+                    results[f"media_{index['name']}"] = True  # Mark as successful since index exists
+                else:
+                    logger.error(f"Failed to create index {index['name']}: {e}")
+                    results[f"media_{index['name']}"] = False
                 
         return results
     
@@ -138,8 +144,13 @@ class IndexOptimizer:
                 results[f"users_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on users")
             except Exception as e:
-                logger.error(f"Failed to create index {index['name']}: {e}")
-                results[f"users_{index['name']}"] = False
+                error_msg = str(e)
+                if "Index already exists" in error_msg or "IndexOptionsConflict" in error_msg:
+                    logger.debug(f"Index {index['name']} already exists with different name - skipping")
+                    results[f"users_{index['name']}"] = True
+                else:
+                    logger.error(f"Failed to create index {index['name']}: {e}")
+                    results[f"users_{index['name']}"] = False
                 
         return results
     
@@ -170,8 +181,13 @@ class IndexOptimizer:
                 results[f"connections_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on connections")
             except Exception as e:
-                logger.error(f"Failed to create index {index['name']}: {e}")
-                results[f"connections_{index['name']}"] = False
+                error_msg = str(e)
+                if "Index already exists" in error_msg or "IndexOptionsConflict" in error_msg:
+                    logger.debug(f"Index {index['name']} already exists with different name - skipping")
+                    results[f"connections_{index['name']}"] = True
+                else:
+                    logger.error(f"Failed to create index {index['name']}: {e}")
+                    results[f"connections_{index['name']}"] = False
                 
         return results
     
@@ -202,8 +218,13 @@ class IndexOptimizer:
                 results[f"filters_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on filters")
             except Exception as e:
-                logger.error(f"Failed to create index {index['name']}: {e}")
-                results[f"filters_{index['name']}"] = False
+                error_msg = str(e)
+                if "Index already exists" in error_msg or "IndexOptionsConflict" in error_msg:
+                    logger.debug(f"Index {index['name']} already exists with different name - skipping")
+                    results[f"filters_{index['name']}"] = True
+                else:
+                    logger.error(f"Failed to create index {index['name']}: {e}")
+                    results[f"filters_{index['name']}"] = False
                 
         return results
     
