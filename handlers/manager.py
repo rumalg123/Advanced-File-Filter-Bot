@@ -41,7 +41,8 @@ class HandlerManager:
             'tasks_completed': 0,
             'tasks_cancelled': 0,
             'handlers_registered': 0,
-            'handlers_removed': 0
+            'handlers_removed': 0,
+            'handlers_removal_failed': 0
         }
 
     def add_handler(self, handler):

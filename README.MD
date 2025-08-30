@@ -12,12 +12,14 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 
 ### 🚀 Core Features
 - **⚡ Lightning-Fast Search**: Indexed search across millions of files with MongoDB text search
-- **📁 Multiple File Types**: Support for videos, audio, documents, and animations
+- **📁 Multiple File Types**: Support for videos, audio, documents, and animations with file-type specific emojis
+- **🗃️ Multi-Database Support**: Automatic scaling with multiple MongoDB databases and size limits
 - **🔄 Auto-Indexing**: Automatically index files from configured channels
 - **💎 Premium System**: Tiered access with configurable daily limits for free users
 - **🛡️ Rate Limiting**: Prevent spam and ensure quality of service
 - **💾 Redis Caching**: Improved performance with distributed caching
 - **🚀 uvloop Support**: Enhanced performance on Linux with uvloop event loop
+- **🎯 Smart File Emojis**: File-type specific emojis (🎬 for videos, 📦 for archives, 💬 for subtitles, etc.)
 
 ### 🎯 Advanced Features
 - **🔗 Connection Management**: Connect groups to manage filters privately
@@ -36,11 +38,13 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - **🚫 User Management**: Ban/unban users with reasons, add/remove premium
 - **📢 Channel Management**: Add/remove/toggle channels for auto-indexing
 - **⚙️ Bot Settings**: Manage all bot settings via /bsetting command
+- **🗃️ Database Management**: Multi-database statistics, switching, and monitoring
 - **🔄 Auto-Updates**: Pull updates from upstream repository
 - **💾 Cache Management**: Monitor and optimize cache usage
 - **⚡ Performance Monitoring**: Real-time performance metrics
 - **🖥️ Shell Access**: Execute shell commands (primary admin only)
 - **🗑️ File Management**: Delete files from database by ID or keyword
+- **🔍 File Verification**: Verify file access and integrity
 
 ## 📋 Requirements
 
@@ -165,6 +169,7 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | `API_HASH` | Telegram API Hash | `abcdef123456...` |
 | `DATABASE_URI` | MongoDB connection string | `mongodb://localhost:27017` |
 | `DATABASE_NAME` | Database name | `PIRO` |
+| `DATABASE_URIS` | Multiple database URIs (comma separated) | `mongodb://...,mongodb://...` |
 | `REDIS_URI` | Redis connection string | `redis://localhost:6379` |
 | `ADMINS` | Admin user IDs (comma separated) | `123456789,987654321` |
 | `LOG_CHANNEL` | Channel for bot logs | `-1001234567890` |
@@ -181,6 +186,8 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | `MAX_BTN_SIZE` | Maximum buttons per page | `10` |
 | `PUBLIC_FILE_STORE` | Allow public file store access | `False` |
 | `KEEP_ORIGINAL_CAPTION` | Keep original file captions | `True` |
+| `DATABASE_AUTO_SWITCH` | Auto-switch databases when full | `True` |
+| `DATABASE_SIZE_LIMIT_GB` | Size limit per database (GB) | `0.5` |
 
 ### Optional Features
 
@@ -211,6 +218,19 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 - **Inline Search**: Use `@yourbotusername query` in any chat
 - **Filter by Type**: Add file type after pipe: `query | video`
 - **Send All**: Click "Send All Files" button to receive all search results
+- **Smart File Emojis**: Files display with type-specific emojis for easy identification
+
+#### File Type Emojis
+| File Types | Emoji | Examples |
+|------------|--------|----------|
+| Videos | 🎬 | .mp4, .mkv, .avi, .mov, .webm |
+| Audio | 🎵 | .mp3, .flac, .wav, .aac, .ogg |
+| Archives | 📦 | .zip, .rar, .7z, .tar, .gz |
+| Subtitles | 💬 | .srt, .vtt, .ass, .ssa, .sub |
+| Images | 🖼️ | .jpg, .png, .gif, .webp, .bmp |
+| Documents | 📄 | .pdf, .doc, .docx, .txt |
+| Code Files | 💻 | .py, .js, .html, .css, .cpp |
+| And many more! | 🎲🔒💿📐 | 3D models, certificates, ISOs, CAD files
 
 ### 🔗 Connection Commands (Groups & Private)
 
@@ -279,6 +299,13 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | `/cache_analyze` | Analyze cache usage patterns |
 | `/cache_cleanup confirm` | Clean up duplicate cache entries |
 
+#### Database Management
+| Command | Description |
+|---------|-------------|
+| `/dbstats` | View database statistics and usage |
+| `/dbinfo` | View detailed database information |
+| `/dbswitch <number>` | Switch to different write database |
+
 #### System Commands
 | Command | Description |
 |---------|-------------|
@@ -290,6 +317,8 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | Command | Description |
 |---------|-------------|
 | `/bsetting` | Open bot settings menu |
+| `/verify` | Verify file access and integrity |
+| `/cancel` | Cancel current operation |
 | `/shell <command>` | Execute shell command |
 
 ### 📤 File Store Commands
@@ -330,6 +359,7 @@ The bot automatically creates optimized indexes:
 - Compound index on `file_type` and `indexed_at`
 - Unique index on `file_hash` for duplicate detection
 - Index on `file_ref` for fast lookups
+- Indexes are created on ALL databases in multi-database setup
 
 #### MongoDB Optimization
 ```javascript
@@ -365,9 +395,11 @@ save 300 10
    - All instances share MongoDB and Redis
 
 2. **Database Scaling**
-   - Use MongoDB replica sets
+   - Use multiple databases with `DATABASE_URIS` for automatic scaling
+   - Use MongoDB replica sets for high availability
    - Enable sharding for very large datasets
    - Use read preference for search queries
+   - Monitor database usage with `/dbstats` and `/dbinfo` commands
 
 3. **Caching Strategy**
    - Increase cache TTL for stable data
@@ -500,11 +532,13 @@ Use the cache management commands to:
 
 ### Regular Maintenance
 - Clean up old files: `/deleteall` with date filters
-- Monitor database size
+- Monitor database size with `/dbstats` and `/dbinfo`
+- Switch databases when needed: `/dbswitch <number>`
 - Update dependencies regularly
 - Check logs for errors
 - Clear expired cache entries (automatic with Redis TTL)
 - Review and optimize bot settings via `/bsetting`
+- Verify file integrity with `/verify`
 
 ### Backup Strategy
 ```bash
@@ -518,6 +552,29 @@ mongodump --uri="your-connection-string" --out=backup/
 mongorestore --uri="your-connection-string" backup/
 ```
 
+## 🆕 Recent Updates & New Features
+
+### ✨ Latest Additions
+- **🗃️ Multi-Database Support**: Scale automatically with multiple MongoDB databases
+- **🎯 Smart File Emojis**: File-type specific emojis for better visual identification
+- **📊 Database Management**: Complete admin tools for database monitoring and switching
+- **🔧 Enhanced Commands**: All bot commands automatically registered on startup
+- **🛠️ Bug Fixes**: Fixed daily counter reset on bot restart and various type errors
+- **⚡ Performance**: Improved file emoji detection for sanitized filenames
+
+### 🔧 Command Improvements
+All commands now automatically appear in Telegram's command menu:
+- Added database management commands (`/dbstats`, `/dbinfo`, `/dbswitch`)
+- Added missing filter command aliases (`/filter`, `/viewfilters`, `/delf`, `/delallf`)
+- Added admin commands (`/verify`, `/cancel`)
+- Commands are properly scoped (all users, groups, admins, primary admin)
+
+### 🐛 Critical Bug Fixes
+- **Daily Counter Reset**: Fixed issue where bot restart would reset all users' daily download counts
+- **File Emoji Detection**: Fixed emoji detection for sanitized filenames (files without dots)
+- **Type Annotations**: Fixed various type errors and warnings
+- **Session Management**: Fixed type annotation issues in session statistics
+
 ## 🎯 Feature Details
 
 ### Auto-Delete System
@@ -526,11 +583,31 @@ mongorestore --uri="your-connection-string" backup/
 - Applies to search results and file sends
 - Helps keep chats clean
 
+### Multi-Database System
+- **Automatic Scaling**: Add multiple MongoDB databases as your collection grows
+- **Size Limits**: Set per-database size limits (e.g., 0.5GB per database)
+- **Auto-Switching**: Automatically switch to new database when current one reaches limit
+- **Unified Search**: Search across all databases simultaneously
+- **Backward Compatibility**: Existing single-database setups continue to work
+- **Database Management**: Monitor, switch, and manage databases via admin commands
+
+#### Setting Up Multi-Database
+```bash
+# Single database (existing setup)
+DATABASE_URI=mongodb://localhost:27017
+
+# Multi-database (new feature)
+DATABASE_URIS=mongodb://localhost:27017,mongodb://localhost:27018,mongodb://localhost:27019
+DATABASE_SIZE_LIMIT_GB=0.5
+DATABASE_AUTO_SWITCH=True
+```
+
 ### Duplicate Detection
 - Advanced hash-based duplicate detection
 - Prevents storing same file multiple times
 - Automatically updates file references
 - Saves storage space
+- Works across all databases in multi-database setup
 
 ### Request System (#request)
 - Users can request content in support group
