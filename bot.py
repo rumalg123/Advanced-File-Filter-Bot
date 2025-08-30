@@ -37,6 +37,7 @@ from pyrogram.types import Message
 
 from core.cache.redis_cache import CacheManager
 from core.database.pool import DatabaseConnectionPool
+from core.database.indexes import IndexOptimizer
 from core.services.bot_settings import BotSettingsService
 from core.services.broadcast import BroadcastService
 from core.services.connection import ConnectionService
@@ -507,10 +508,21 @@ class MediaSearchBot(Client):
             self.filter_repo = FilterRepository(self.db_pool, self.cache, collection_name=self.config.COLLECTION_NAME)
             self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
 
-            # Create indexes
+            # Create basic indexes (existing)
             await self.media_repo.create_indexes()
             await self.channel_repo.create_index([('enabled', 1)])  # Add index for channels
             await self.user_repo.create_index([('status', 1)])
+            
+            # Create optimized compound indexes
+            index_optimizer = IndexOptimizer(self.db_pool)
+            try:
+                index_results = await index_optimizer.create_all_indexes()
+                successful_indexes = sum(1 for success in index_results.values() if success)
+                total_indexes = len(index_results)
+                logger.info(f"Database indexes optimized: {successful_indexes}/{total_indexes} created successfully")
+            except Exception as e:
+                logger.warning(f"Failed to create some optimized indexes: {e}")
+                # Continue startup even if index creation fails
             await self.user_repo.create_index([('premium_expire', 1)])  # For expired premium checks
             await self.connection_repo.create_index([('user_id', 1)])
             await self.filter_repo.create_index([('group_id', 1), ('text', 1)])

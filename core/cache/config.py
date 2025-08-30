@@ -49,11 +49,44 @@ class CacheTTLConfig:
 
 class CacheKeyGenerator:
     """Centralized cache key generation to ensure consistency"""
+    
+    # Cache for frequently used keys to reduce string operations
+    _key_cache = {}
+    _max_cache_size = 1000
+    
+    @classmethod
+    def _get_cached_key(cls, key_type: str, *args) -> str:
+        """Get cached key or generate and cache it"""
+        cache_key = f"{key_type}:{':'.join(map(str, args))}"
+        
+        if cache_key in cls._key_cache:
+            return cls._key_cache[cache_key]
+        
+        # Generate the actual key
+        if key_type == 'user':
+            result = f"user:{args[0]}"
+        elif key_type == 'media':
+            result = f"media:{args[0]}"
+        elif key_type == 'search':
+            result = f"search:{args[0]}:{args[1]}:{args[2]}:{args[3]}:{args[4]}"
+        elif key_type == 'rate_limit':
+            result = f"rate_limit:{args[0]}:{args[1]}"
+        elif key_type == 'edit_session':
+            result = f"edit_session:{args[0]}"
+        else:
+            # Fallback to original generation
+            return cache_key
+        
+        # Cache the result if we have space
+        if len(cls._key_cache) < cls._max_cache_size:
+            cls._key_cache[cache_key] = result
+        
+        return result
 
     # User keys
     @staticmethod
     def user(user_id: int) -> str:
-        return f"user:{user_id}"
+        return CacheKeyGenerator._get_cached_key('user', user_id)
 
     @staticmethod
     def banned_users() -> str:
@@ -66,14 +99,14 @@ class CacheKeyGenerator:
     # Media keys
     @staticmethod
     def media(identifier: str) -> str:
-        return f"media:{identifier}"
+        return CacheKeyGenerator._get_cached_key('media', identifier)
 
     @staticmethod
     def search_results(query: str, file_type: Optional[str], offset: int,
                        limit: int, use_caption: bool = True) -> str:
         # Normalize query for consistent caching
         normalized_query = query.lower().strip()
-        return f"search:{normalized_query}:{file_type}:{offset}:{limit}:{use_caption}"
+        return CacheKeyGenerator._get_cached_key('search', normalized_query, file_type, offset, limit, use_caption)
 
     @staticmethod
     def file_stats() -> str:
@@ -122,7 +155,7 @@ class CacheKeyGenerator:
     # Rate limit keys
     @staticmethod
     def rate_limit(user_id: int, action: str) -> str:
-        return f"rate_limit:{user_id}:{action}"
+        return CacheKeyGenerator._get_cached_key('rate_limit', user_id, action)
 
     @staticmethod
     def rate_limit_cooldown(user_id: int, action: str) -> str:
@@ -131,7 +164,7 @@ class CacheKeyGenerator:
     # Session keys
     @staticmethod
     def edit_session(user_id: int) -> str:
-        return f"edit_session:{user_id}"
+        return CacheKeyGenerator._get_cached_key('edit_session', user_id)
 
     @staticmethod
     def search_session(user_id: int, session_id: str) -> str:
