@@ -683,6 +683,9 @@ class BotSettingsHandler:
                 await self.bot.cache.delete(session_key)
                 await message.reply_text("❌ Failed to update setting.")
                 raise StopPropagation  # Prevent search trigger even on failure
+        except StopPropagation:
+            # Re-raise StopPropagation without treating it as an error
+            raise
         except Exception as e:
             # Clean up session on error
             if user_id in self.edit_sessions:
