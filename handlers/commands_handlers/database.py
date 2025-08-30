@@ -4,7 +4,7 @@ Database management commands for multi-database system
 
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.handlers import MessageHandler
+from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.enums import ParseMode
 from handlers.commands_handlers.base import BaseCommandHandler, admin_only
 from core.utils.logger import get_logger
@@ -42,6 +42,14 @@ class DatabaseCommandHandler(BaseCommandHandler):
             MessageHandler(
                 self.handle_database_info, 
                 filters.command("dbinfo") & filters.private & filters.incoming
+            )
+        )
+        
+        # Register callback handlers for database management buttons
+        self.bot.add_handler(
+            CallbackQueryHandler(
+                self.handle_database_callback,
+                filters.regex(r"^db_(refresh_stats|detailed_info|stats|refresh_info)$")
             )
         )
 

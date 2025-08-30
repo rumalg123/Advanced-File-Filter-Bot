@@ -19,7 +19,18 @@ def get_file_emoji(file_type: FileType, file_name: str, mime_type: Optional[str]
     Returns:
         str: Appropriate emoji for the file type
     """
+    # Handle both formats: "movie.mp4" and "movie mp4" (sanitized)
     file_extension = os.path.splitext(file_name.lower())[1].lower()
+    
+    # If no extension found with splitext (due to sanitization), extract from end of filename
+    if not file_extension:
+        # Check if filename ends with common extensions (without dot)
+        words = file_name.lower().split()
+        if words:
+            last_word = words[-1]
+            # Check if last word looks like a file extension (3-4 characters)
+            if len(last_word) in [2, 3, 4, 5] and last_word.isalnum():
+                file_extension = '.' + last_word
     
     # PRIORITY 1: Check by file extension first (most reliable)
     # This handles cases where Telegram misclassifies files as "document"

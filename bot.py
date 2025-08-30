@@ -419,9 +419,13 @@ class MediaSearchBot(Client):
             if not self.config.DISABLE_FILTER:
                 filter_commands = [
                     BotCommand("add", "➕ Add a filter"),
+                    BotCommand("filter", "➕ Add a filter (alias)"),
                     BotCommand("filters", "📋 View all filters"),
+                    BotCommand("viewfilters", "📋 View all filters (alias)"),
                     BotCommand("del", "🗑 Delete a filter"),
+                    BotCommand("delf", "🗑 Delete a filter (alias)"),
                     BotCommand("delall", "🗑 Delete all filters"),
+                    BotCommand("delallf", "🗑 Delete all filters (alias)"),
                 ]
 
             # File store commands (if public file store or for admins)
@@ -473,9 +477,18 @@ class MediaSearchBot(Client):
                 BotCommand("cache_cleanup", "🧹 Clean cache"),
             ]
 
+            # Database management commands (multi-database system)
+            database_commands = [
+                BotCommand("dbstats", "🗃️ Database statistics"),
+                BotCommand("dbinfo", "ℹ️ Database information"),
+                BotCommand("dbswitch", "🔄 Switch write database"),
+            ]
+
             # Primary admin only commands
             primary_admin_commands = [
                 BotCommand("bsetting", "⚙️ Bot settings menu"),
+                BotCommand("verify", "✅ Verify file access"),
+                BotCommand("cancel", "❌ Cancel current operation"),
                 BotCommand("shell", "💻 Execute shell command"),
             ]
 
@@ -516,6 +529,7 @@ class MediaSearchBot(Client):
                     admin_commands.extend(file_management_commands)
                     admin_commands.extend(system_commands)
                     admin_commands.extend(cache_commands)
+                    admin_commands.extend(database_commands)
                     admin_commands.extend(filestore_admin_commands)
 
                     # Add filter commands for admins even in private
