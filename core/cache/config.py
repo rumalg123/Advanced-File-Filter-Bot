@@ -51,6 +51,7 @@ class CacheTTLConfig:
     FILE_OPERATION_DELAY: int = 1  # File operation delay
     MAINTENANCE_CHECK_INTERVAL: int = 360  # 6 minutes
     MAINTENANCE_RETRY_DELAY: int = 3600  # 1 hour on error
+    MAINTENANCE_RESET_DAILY_COUNTERS: int = 90000 #25 hours
 
     @classmethod
     def get_ttl(cls, key_type: str) -> int:

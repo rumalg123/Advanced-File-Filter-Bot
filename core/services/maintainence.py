@@ -3,6 +3,7 @@ from datetime import date
 from functools import lru_cache
 from typing import Dict, Any
 
+from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
 from repositories.media import MediaRepository
@@ -21,7 +22,6 @@ class MaintenanceService:
         self.user_repo = user_repo
         self.media_repo = media_repo
         self.cache = cache_manager
-        self.last_reset_date = None  # Track when we last reset counters
 
     async def run_daily_maintenance(self) -> Dict[str, Any]:
         """Run daily maintenance tasks"""
@@ -38,11 +38,22 @@ class MaintenanceService:
         # Reset daily counters for users (only once per day)
         try:
             current_date = date.today()
+            cache_key = "last_counter_reset_date"
+            
+            # Get the last reset date from cache
+            last_reset_str = await self.cache.get(cache_key)
+            last_reset_date = None
+            if last_reset_str:
+                try:
+                    last_reset_date = date.fromisoformat(last_reset_str)
+                except ValueError:
+                    logger.warning(f"Invalid date format in cache: {last_reset_str}")
             
             # Only reset if we haven't done it today
-            if self.last_reset_date != current_date:
+            if last_reset_date != current_date:
                 reset_count = await self.user_repo.reset_daily_counters()
-                self.last_reset_date = current_date
+                # Store current date in cache (expires after 25 hours to be safe)
+                await self.cache.set(cache_key, current_date.isoformat(), CacheTTLConfig.MAINTENANCE_RESET_DAILY_COUNTERS)  # 25 hours
                 logger.info(f"Daily counters reset for {reset_count} users (new day: {current_date})")
                 results['counters_reset'] = True
                 results['reset_count'] = reset_count
