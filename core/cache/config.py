@@ -181,6 +181,11 @@ class CacheKeyGenerator:
     def recent_settings_edit(user_id: int) -> str:
         return f"recent_settings_edit:{user_id}"
 
+    # Counter reset data
+    @staticmethod
+    def last_counter_reset_date() -> str:
+        return "last_counter_reset_date"
+
 
 # Cache patterns to identify related keys for bulk operations
 class CachePatterns:

@@ -3,7 +3,7 @@ from datetime import date
 from functools import lru_cache
 from typing import Dict, Any
 
-from core.cache.config import CacheTTLConfig
+from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
 from repositories.media import MediaRepository
@@ -38,7 +38,7 @@ class MaintenanceService:
         # Reset daily counters for users (only once per day)
         try:
             current_date = date.today()
-            cache_key = "last_counter_reset_date"
+            cache_key = CacheKeyGenerator.last_counter_reset_date()
             
             # Get the last reset date from cache
             last_reset_str = await self.cache.get(cache_key)
