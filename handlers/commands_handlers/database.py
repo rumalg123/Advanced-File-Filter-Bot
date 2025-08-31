@@ -260,8 +260,10 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
         await callback_query.answer("🔄 Refreshing stats...")
         
-        # Force update stats
-        self.bot.multi_db_manager._stats_cache_time = 0
+        # Force update stats using circuit breaker protected method
+        stats = await self.bot.multi_db_manager.get_database_stats()
+        # Force fresh stats by calling with force=True
+        await self.bot.multi_db_manager._update_database_stats_with_circuit_breaker(force=True)
         stats = await self.bot.multi_db_manager.get_database_stats()
         
         # Format updated statistics
@@ -309,8 +311,8 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await callback_query.message.edit_text("❌ Multi-database mode is not enabled.")
             return
 
-        # Force update stats
-        self.bot.multi_db_manager._stats_cache_time = 0
+        # Force update stats using circuit breaker protected method
+        await self.bot.multi_db_manager._update_database_stats_with_circuit_breaker(force=True)
         
         # Show updated info
         await self.handle_database_info(self.bot, callback_query.message)

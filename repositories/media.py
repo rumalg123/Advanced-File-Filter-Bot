@@ -148,8 +148,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 return False, 0, existing
 
             if self.is_multi_db:
-                # Use the write database for new files
-                write_db_pool = await self.multi_db_manager.get_write_database()
+                # Use smart database selection for optimal write performance
+                write_db_pool = await self.multi_db_manager.get_optimal_write_database()
                 collection = await write_db_pool.get_collection(self.collection_name)
                 
                 # Save to write database
