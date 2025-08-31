@@ -70,10 +70,11 @@ class MultiDatabaseManager:
             self._stats_cache_time: float = 0
             self._switch_lock = asyncio.Lock()  # Prevent race conditions in database switching
             
-            # Circuit breaker configuration
-            self.max_failures: int = 5  # Max failures before opening circuit
-            self.timeout_duration: timedelta = timedelta(minutes=5)  # Circuit open duration
-            self.half_open_max_calls: int = 3  # Max calls allowed in HALF_OPEN state
+            # Circuit breaker configuration from environment variables
+            import os
+            self.max_failures: int = int(os.environ.get('DATABASE_MAX_FAILURES', '5'))
+            self.timeout_duration: timedelta = timedelta(seconds=int(os.environ.get('DATABASE_RECOVERY_TIMEOUT', '300')))
+            self.half_open_max_calls: int = int(os.environ.get('DATABASE_HALF_OPEN_CALLS', '3'))
 
     async def initialize(
         self, 
