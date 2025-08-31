@@ -13,7 +13,8 @@ from core.cache.monitor import CacheMonitor
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.performance import performance_monitor
-from handlers.commands_handlers.base import BaseCommandHandler, admin_only
+from core.utils.validators import admin_only
+from handlers.commands_handlers.base import BaseCommandHandler
 
 logger = get_logger(__name__)
 
