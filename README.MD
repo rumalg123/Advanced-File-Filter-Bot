@@ -394,9 +394,14 @@ save 300 10
    - Use a load balancer for webhooks
    - All instances share MongoDB and Redis
 
-2. **Database Scaling**
-   - Use multiple databases with `DATABASE_URIS` for automatic scaling
-   - Use MongoDB replica sets for high availability
+2. **Multi-Database Scaling** 🚀
+   - **Smart Database Selection**: Intelligent load balancing based on usage, health, and performance
+   - **Circuit Breaker Protection**: Automatic fault tolerance with 5-failure threshold
+   - **Real-time Optimization**: 30-second stats cache vs 5-minute for critical operations
+   - **Thread-safe Switching**: Race condition protection with async locks
+   - **Emergency Handling**: Graceful degradation when all databases reach capacity
+   - **Cross-database Search**: Proper pagination and sorting across all databases
+   - **Auto-recovery**: Databases automatically recover when they come back online
    - Enable sharding for very large datasets
    - Use read preference for search queries
    - Monitor database usage with `/dbstats` and `/dbinfo` commands
