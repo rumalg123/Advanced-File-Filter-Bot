@@ -1,10 +1,10 @@
-import logging
 from pyrogram import Client, enums
 from pyrogram.types import Message
 
-from handlers.commands_handlers.base import BaseCommandHandler, admin_only
-
 from core.utils.logger import get_logger
+from core.utils.validators import admin_only
+from handlers.commands_handlers.base import BaseCommandHandler
+
 logger = get_logger(__name__)
 
 

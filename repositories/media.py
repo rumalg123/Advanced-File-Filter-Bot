@@ -1,20 +1,16 @@
-import hashlib
-import re
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Dict, Any, Optional, List, Tuple
 
-from bson import ObjectId
-from bson.errors import InvalidId
 from pymongo import DeleteOne
 from pymongo.errors import DuplicateKeyError
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
 from core.utils.helpers import normalize_query
 from core.utils.logger import get_logger
-from core.cache.invalidation import CacheInvalidator
 
 logger = get_logger(__name__)
 
@@ -44,9 +40,9 @@ class MediaFile:
 
     def __post_init__(self):
         if self.indexed_at is None:
-            self.indexed_at = datetime.utcnow()
+            self.indexed_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 class MediaRepository(BaseRepository[MediaFile], AggregationMixin):

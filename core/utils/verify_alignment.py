@@ -1,8 +1,7 @@
 # verify_alignment.py - Fixed script to verify bot and manager alignment
 
-import asyncio
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 

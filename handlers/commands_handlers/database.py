@@ -6,7 +6,9 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.enums import ParseMode
-from handlers.commands_handlers.base import BaseCommandHandler, admin_only
+
+from core.utils.validators import admin_only
+from handlers.commands_handlers.base import BaseCommandHandler
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)

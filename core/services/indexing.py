@@ -8,7 +8,7 @@ from pyrogram.errors import ChannelInvalid, UsernameInvalid, UsernameNotModified
 from pyrogram.file_id import FileId
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from core.cache.config import CacheKeyGenerator,CacheTTLConfig
+from core.cache.config import CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger

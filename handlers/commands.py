@@ -1,21 +1,20 @@
-import logging
 from pyrogram import filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
+from core.utils.logger import get_logger
 from core.utils.verify_alignment import verify_alignment_command
 from handlers.callbacks_handlers import UserCallbackHandler
+from handlers.callbacks_handlers.file import FileCallbackHandler
 from handlers.callbacks_handlers.filter import FilterCallBackHandler
-# Import all command handlers
-from handlers.commands_handlers.user import UserCommandHandler
-from handlers.commands_handlers.admin import AdminCommandHandler
-from handlers.commands_handlers.channel import ChannelCommandHandler
-from handlers.commands_handlers.bot_settings import BotSettingsHandler
+from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
 # Import callback handlers
 from handlers.callbacks_handlers.subscription import SubscriptionCallbackHandler
-from handlers.callbacks_handlers.file import FileCallbackHandler
-from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
+from handlers.commands_handlers.admin import AdminCommandHandler
+from handlers.commands_handlers.bot_settings import BotSettingsHandler
+from handlers.commands_handlers.channel import ChannelCommandHandler
+# Import all command handlers
+from handlers.commands_handlers.user import UserCommandHandler
 
-from core.utils.logger import get_logger
 logger = get_logger(__name__)
 
 

@@ -1,6 +1,5 @@
-import logging
 from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, UTC
 from dataclasses import dataclass, asdict
 from enum import Enum
 
@@ -40,9 +39,9 @@ class User:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 class UserRepository(BaseRepository[User], AggregationMixin):
@@ -159,7 +158,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         update_data = {
             'status': UserStatus.BANNED.value,
             'ban_reason': reason,
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(UTC)
         }
 
         success = await self.update(user_id, update_data)
@@ -171,7 +170,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
             user.ban_reason = reason
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(UTC)
             logger.info(f"User {user_id} banned and cache updated")
 
         return success, "✅ User banned successfully!" if success else "❌ Failed to ban user.", user
@@ -192,7 +191,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             'warning_count': 0,  # Reset warnings
             'daily_request_count': 0,  # Reset daily count
             'last_warning_date': None,
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(UTC)
         }
 
         success = await self.update(user_id, update_data)
@@ -206,7 +205,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.warning_count = 0
             user.daily_request_count = 0
             user.last_warning_date = None
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now(UTC)
             logger.info(f"User {user_id} unbanned and request counters reset")
 
         return success, "✅ User unbanned successfully! Request counters have been reset." if success else "❌ Failed to unban user.", user
@@ -248,8 +247,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, f"❌ User is already {status_text}!", user
         update_data: Dict[str, Any] = {
             'is_premium': is_premium,
-            'premium_activation_date': datetime.utcnow() if is_premium else None,
-            'updated_at': datetime.utcnow()
+            'premium_activation_date': datetime.now(UTC) if is_premium else None,
+            'updated_at': datetime.now(UTC)
         }
 
         if not is_premium:
@@ -259,8 +258,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if success:
             # Update user object
             user.is_premium = is_premium
-            user.premium_activation_date = datetime.utcnow() if is_premium else None
-            user.updated_at = datetime.utcnow()
+            user.premium_activation_date = datetime.now(UTC) if is_premium else None
+            user.updated_at = datetime.now(UTC)
             if not is_premium:
                 user.daily_retrieval_count = 0
             await self.cache.delete(CacheKeyGenerator.user(user_id))
@@ -278,12 +277,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         expiry_date = user.premium_activation_date + timedelta(days=self.premium_duration_days)
 
-        if datetime.utcnow() > expiry_date:
+        if datetime.now(UTC) > expiry_date:
             # Premium expired
             await self.update_premium_status(user.id, False)
             return False, "Premium subscription expired"
 
-        days_remaining = (expiry_date - datetime.utcnow()).days
+        days_remaining = (expiry_date - datetime.now(UTC)).days
         return True, f"Premium active ({days_remaining} days remaining)"
 
     async def increment_retrieval_count(self, user_id: int) -> int:
@@ -303,7 +302,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         update_data = {
             'daily_retrieval_count': user.daily_retrieval_count,
             'last_retrieval_date': today,
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(UTC)
         }
 
         await self.update(user_id, update_data)
@@ -387,7 +386,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def cleanup_expired_premium(self) -> int:
         """Cleanup expired premium subscriptions"""
-        cutoff_date = datetime.utcnow() - timedelta(days=self.premium_duration_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=self.premium_duration_days)
 
         filter_query = {
             'is_premium': True,
@@ -405,7 +404,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                         {'$set': {
                             'is_premium': False,
                             'premium_activation_date': None,
-                            'updated_at': datetime.utcnow()
+                            'updated_at': datetime.now(UTC)
                         }}
                     )
                 )
@@ -442,7 +441,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Check if user has warnings that should be reset (30 days old)
         if user.warning_count > 0 and user.last_warning_date:
-            days_since_warning = (datetime.utcnow() - user.last_warning_date).days
+            days_since_warning = (datetime.now(UTC) - user.last_warning_date).days
             if days_since_warning >= 30:
                 await self.reset_warnings(user_id)
                 user.warning_count = 0
@@ -456,12 +455,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if user.daily_request_count >= REQUEST_PER_DAY:
             # Issue a warning
             user.warning_count += 1
-            user.last_warning_date = datetime.utcnow()
+            user.last_warning_date = datetime.now(UTC)
 
             update_data = {
                 'warning_count': user.warning_count,
                 'last_warning_date': user.last_warning_date,
-                'updated_at': datetime.utcnow()
+                'updated_at': datetime.now(UTC)
             }
             await self.update(user_id, update_data)
             await self.cache.delete(CacheKeyGenerator.user(user_id))
@@ -482,7 +481,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             'daily_request_count': user.daily_request_count,
             'last_request_date': today.isoformat(),
             'total_requests': user.total_requests,
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(UTC)
         }
 
         await self.update(user_id, update_data)
@@ -496,7 +495,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         update_data = {
             'warning_count': 0,
             'last_warning_date': None,
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(UTC)
         }
 
         success = await self.update(user_id, update_data)
@@ -523,7 +522,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # Calculate warning reset time
         warning_reset_in = None
         if user.warning_count > 0 and user.last_warning_date:
-            days_since_warning = (datetime.utcnow() - user.last_warning_date).days
+            days_since_warning = (datetime.now(UTC) - user.last_warning_date).days
             warning_reset_in = max(0, 30 - days_since_warning)
 
         return {
@@ -551,7 +550,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         update_data = {
             'status': UserStatus.BANNED.value,
             'ban_reason': 'Over request warning limit',
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(UTC)
         }
 
         success = await self.update(user_id, update_data)
@@ -582,7 +581,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     '$set': {
                         'daily_retrieval_count': 0,
                         'daily_request_count': 0,
-                        'updated_at': datetime.utcnow()
+                        'updated_at': datetime.now(UTC)
                     }
                 }
             )

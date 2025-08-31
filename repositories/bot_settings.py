@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 from dataclasses import dataclass, asdict
 from pymongo import UpdateOne
 
@@ -22,7 +22,7 @@ class BotSetting:
 
     def __post_init__(self):
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 class BotSettingsRepository(BaseRepository[BotSetting]):

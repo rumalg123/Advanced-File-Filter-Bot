@@ -17,6 +17,8 @@ class FilterCallBackHandler(BaseCommandHandler):
         alert_index = int(alert_index)
 
         # Get the filter to find alerts
+        if not query.message:
+            return await query.answer("No message context", show_alert=True)
         group_id = query.message.chat.id
         reply_text, btn, alerts, fileid = await self.bot.filter_service.get_filter(
             str(group_id), keyword

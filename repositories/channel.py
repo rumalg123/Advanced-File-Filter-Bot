@@ -1,12 +1,12 @@
-import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime
-from dataclasses import dataclass, asdict
+from datetime import datetime, UTC
+from typing import Dict, Any, Optional, List
 
 from core.cache.config import CacheKeyGenerator
-from core.database.base import BaseRepository
 from core.cache.invalidation import CacheInvalidator
+from core.database.base import BaseRepository
 from core.utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -25,9 +25,9 @@ class Channel:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 class ChannelRepository(BaseRepository[Channel]):
@@ -84,7 +84,7 @@ class ChannelRepository(BaseRepository[Channel]):
                     'enabled': True,
                     'channel_username': channel_username or existing.channel_username,
                     'channel_title': channel_title or existing.channel_title,
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(UTC)
                 }
             )
 
@@ -150,7 +150,7 @@ class ChannelRepository(BaseRepository[Channel]):
             channel_id,
             {
                 'enabled': enabled,
-                'updated_at': datetime.utcnow()
+                'updated_at': datetime.now(UTC)
             }
         )
 
@@ -169,8 +169,8 @@ class ChannelRepository(BaseRepository[Channel]):
             channel_id,
             {
                 'indexed_count': channel.indexed_count + 1,
-                'last_indexed_at': datetime.utcnow(),
-                'updated_at': datetime.utcnow()
+                'last_indexed_at': datetime.now(UTC),
+                'updated_at': datetime.now(UTC)
             }
         )
 

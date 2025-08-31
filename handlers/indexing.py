@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import re
 
 from pyrogram import Client, filters, enums
@@ -7,8 +6,8 @@ from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.indexing import IndexingService, IndexRequestService
-
 from core.utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 

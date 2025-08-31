@@ -1,6 +1,6 @@
 # repositories/filter.py
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, Optional, List, Tuple
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -24,9 +24,9 @@ class Filter:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 class FilterRepository(BaseRepository[Filter]):

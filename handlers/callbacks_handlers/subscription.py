@@ -1,10 +1,9 @@
-import logging
 from pyrogram import Client
 from pyrogram.types import CallbackQuery
 
+from core.utils.logger import get_logger
 from handlers.commands_handlers.base import BaseCommandHandler
 
-from core.utils.logger import get_logger
 logger = get_logger(__name__)
 
 

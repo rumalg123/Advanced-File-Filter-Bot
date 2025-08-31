@@ -3,14 +3,10 @@ Multi-database pool manager for handling multiple MongoDB connections
 """
 
 import asyncio
-import logging
-import sys
-from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass
+from typing import List, Dict, Optional, Tuple, Any
 
-import backoff
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, DuplicateKeyError
+from motor.motor_asyncio import AsyncIOMotorCollection
 
 from core.database.pool import DatabaseConnectionPool
 from core.utils.logger import get_logger

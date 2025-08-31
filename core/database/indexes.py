@@ -3,8 +3,8 @@ Database index optimization for MediaSearchBot
 Provides compound indexes for frequent query patterns
 """
 
-import asyncio
-from typing import List, Tuple, Any, Dict
+from typing import Dict
+
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)

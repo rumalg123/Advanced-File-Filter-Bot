@@ -3,11 +3,8 @@ Enhanced Handler Manager with comprehensive resource tracking and cleanup
 """
 import asyncio
 import gc
-import weakref
 from typing import Dict, List, Set, Optional, Any
 from weakref import WeakSet, WeakValueDictionary
-from pyrogram import Client
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler, InlineQueryHandler
 
 from core.utils.logger import get_logger
 

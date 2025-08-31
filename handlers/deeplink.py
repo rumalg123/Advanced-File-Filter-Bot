@@ -18,9 +18,9 @@ class DeepLinkHandler(BaseCommandHandler):
     async def safe_reply(self, message, text, **kwargs):
         """Safely reply to a message, handling both regular and fake message objects"""
         try:
-            if hasattr(message, 'reply') and callable(message.reply):
+            if hasattr(message, 'reply'):
                 return await message.reply(text, **kwargs)
-            elif hasattr(message, 'reply_text') and callable(message.reply_text):
+            elif hasattr(message, 'reply_text'):
                 return await message.reply_text(text, **kwargs)
             else:
                 logger.warning(f"Cannot reply to message: {text}")

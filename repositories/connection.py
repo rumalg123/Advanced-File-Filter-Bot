@@ -1,13 +1,12 @@
-import logging
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, UTC
+from typing import Dict, Any, Optional, List
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
-from core.database.base import BaseRepository, AggregationMixin
 from core.cache.invalidation import CacheInvalidator
-
+from core.database.base import BaseRepository, AggregationMixin
 from core.utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -22,9 +21,9 @@ class Connection:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 @dataclass
@@ -38,9 +37,9 @@ class UserConnection:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
 
 class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
@@ -89,7 +88,7 @@ class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
             # Add new group
             user_conn.group_details.append({"group_id": group_id})
             user_conn.active_group = group_id
-            user_conn.updated_at = datetime.utcnow()
+            user_conn.updated_at = datetime.now(UTC)
 
             # Update
             return await self.update(
@@ -166,7 +165,7 @@ class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
             user_id,
             {
                 "active_group": group_id,
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now(UTC)
             }
         )
 
@@ -184,7 +183,7 @@ class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
             user_id,
             {
                 "active_group": None,
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now(UTC)
             }
         )
 
@@ -228,7 +227,7 @@ class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
             {
                 "group_details": user_conn.group_details,
                 "active_group": user_conn.active_group,
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now(UTC)
             }
         )
 
@@ -263,7 +262,7 @@ class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
             user_id,
             {
                 "active_group": None,
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now(UTC)
             }
         )
 

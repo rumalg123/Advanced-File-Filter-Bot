@@ -605,15 +605,13 @@ class SearchHandler:
                     caption,
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
-
-                # FIXED: Use the wrapper method to avoid PyCharm warning
             if delete_time > 0:
                 # Schedule deletion of the result message
-                self._schedule_auto_delete(sent_msg, delete_time)
+                _ = self._schedule_auto_delete(sent_msg, delete_time)
 
                 # Also delete the user's search query message in private
                 if is_private:
-                    self._schedule_auto_delete(message, delete_time)
+                    _ = self._schedule_auto_delete(message, delete_time)
 
             return True
 
@@ -639,7 +637,7 @@ class SearchHandler:
             keywords = await self.bot.filter_service.get_all_filters(group_id)
 
             for keyword in reversed(sorted(keywords, key=len)):
-                pattern = r"( |^|[^\w])" + re.escape(keyword) + r"( |$|[^\w])"
+                pattern = r"( |^|[^\w])" + re.escape(str(keyword)) + r"( |$|[^\w])"
                 if re.search(pattern, query, flags=re.IGNORECASE):
                     # Get filter details
                     reply_text, btn, alert, fileid = await self.bot.filter_service.get_filter(

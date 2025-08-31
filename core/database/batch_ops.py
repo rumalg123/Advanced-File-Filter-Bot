@@ -4,8 +4,10 @@ Provides efficient bulk operations with proper error handling and batching
 """
 
 import asyncio
-from typing import List, Dict, Any, Callable, Optional
-from pymongo import InsertOne, UpdateOne, DeleteOne, ReplaceOne
+from typing import List, Dict, Any, Optional
+
+from pymongo import InsertOne, UpdateOne
+
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)

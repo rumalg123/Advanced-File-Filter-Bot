@@ -6,10 +6,11 @@ Consolidates duplicate session tracking implementations
 import asyncio
 import time
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Optional, Dict, Any, List
-from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+
+from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,7 +46,7 @@ class SessionData:
     
     def is_expired(self) -> bool:
         """Check if session is expired"""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(UTC) > self.expires_at
     
     def is_active(self) -> bool:
         """Check if session is active and not expired"""
@@ -53,7 +54,7 @@ class SessionData:
     
     def update_activity(self):
         """Update last activity timestamp"""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = datetime.now(UTC)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for caching"""
@@ -137,7 +138,7 @@ class UnifiedSessionManager:
         
         # Calculate expiration time
         ttl = ttl_override or self.DEFAULT_TTL.get(session_type, 300)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=ttl)
         
         # Create session data
@@ -217,7 +218,7 @@ class UnifiedSessionManager:
             
             # Save back to cache
             cache_key = self._generate_cache_key(session_type, user_id, session.session_id)
-            ttl = int((session.expires_at - datetime.utcnow()).total_seconds())
+            ttl = int((session.expires_at - datetime.now(UTC)).total_seconds())
             if ttl > 0:
                 await self.cache.set(cache_key, session.to_dict(), expire=ttl)
                 return True
@@ -249,7 +250,7 @@ class UnifiedSessionManager:
             
             # Save back to cache
             cache_key = self._generate_cache_key(session_type, user_id, session.session_id)
-            new_ttl = int((session.expires_at - datetime.utcnow()).total_seconds())
+            new_ttl = int((session.expires_at - datetime.now(UTC)).total_seconds())
             if new_ttl > 0:
                 await self.cache.set(cache_key, session.to_dict(), expire=new_ttl)
                 # Also update user cache key

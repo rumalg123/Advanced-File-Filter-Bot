@@ -3,7 +3,6 @@ import base64
 import hashlib
 import json
 import os
-import re
 import time
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -11,15 +10,12 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
-
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
 from core.utils.helpers import sanitize_filename
-from repositories.media import MediaRepository, MediaFile, FileType
-
-
 from core.utils.logger import get_logger
+from repositories.media import MediaRepository, MediaFile, FileType
 
 logger = get_logger(__name__)
 
@@ -31,7 +27,7 @@ class FileStoreService:
             self,
             media_repo: MediaRepository,
             cache_manager: CacheManager,
-            config: None
+            config: Any
 
     ):
         self.media_repo = media_repo

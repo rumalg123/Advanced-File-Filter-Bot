@@ -59,7 +59,7 @@ class BotSettingsHandler:
             return
 
         # Manual cleanup only if no handler_manager
-        if self.cleanup_task and not self.cleanup_task.done():
+        if hasattr(self, 'cleanup_task') and self.cleanup_task and not self.cleanup_task.done():
             self.cleanup_task.cancel()
             try:
                 await self.cleanup_task
@@ -80,11 +80,6 @@ class BotSettingsHandler:
 
         self._handlers.clear()
         logger.info("BotSettingsHandler cleanup complete")
-
-    async def cleanup(self):
-        """Cleanup handler resources"""
-        self._shutdown.set()
-        logger.info("Bot settings handler cleanup completed")
 
     async def invalidate_related_caches(self, key: str):
         """Invalidate caches related to a specific setting"""
