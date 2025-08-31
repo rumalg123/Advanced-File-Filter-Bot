@@ -146,7 +146,7 @@ class DistributedRateLimiter:
             await self.cache.set(
                 bucket_key,
                 {'tokens': tokens, 'last_refill': now},
-                expire=3600 # 1 hour
+                expire=CacheTTLConfig.RATE_LIMIT_COOLDOWN
             )
             return True
 

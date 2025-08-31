@@ -9,6 +9,7 @@ from pyrogram.file_id import FileId
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 
+from core.cache.config import CacheTTLConfig
 from core.utils.helpers import sanitize_filename, format_file_size
 from core.utils.logger import get_logger
 from repositories.channel import ChannelRepository
@@ -196,7 +197,7 @@ class ChannelHandler:
                 break
             except Exception as e:
                 logger.error(f"Error processing message queue: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(CacheTTLConfig.CHANNEL_INDEX_DELAY)
 
         logger.info("Message queue processor exited")
 

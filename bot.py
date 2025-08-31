@@ -22,10 +22,9 @@ if sys.platform != 'win32':
 else:
     UVLOOP_AVAILABLE = False
 
-import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, AsyncGenerator, Union, List
 
 import pytz
@@ -758,12 +757,6 @@ class MediaSearchBot(Client):
             # Start web server
             await self._start_web_server()
 
-
-            # Start background tasks
-            self.background_tasks.append(
-                asyncio.create_task(self._run_maintenance_tasks())
-            )
-
         except Exception as e:
             logger.error(f"Error starting bot: {e}")
             raise
@@ -827,8 +820,10 @@ class MediaSearchBot(Client):
         if not self.config.LOG_CHANNEL:
             return
 
+        # Use UTC for consistency, then display in IST for humans
+        now_utc = datetime.now(UTC)
         tz = pytz.timezone('Asia/Kolkata')
-        now = datetime.now(tz)
+        now = now_utc.astimezone(tz)
 
         startup_text = (
             "<b>🤖 Bot Restarted!</b>\n\n"
@@ -962,14 +957,14 @@ class MediaSearchBot(Client):
                 for _ in range(240):  # Check every 6 minutes (240 * 6min = 24 hours)
                     if self.handler_manager.is_shutting_down():
                         break
-                    await asyncio.sleep(360)  # 6 minutes
+                    await asyncio.sleep(CacheTTLConfig.MAINTENANCE_CHECK_INTERVAL)
 
             except asyncio.CancelledError:
                 logger.info("Maintenance task cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in maintenance task: {e}")
-                await asyncio.sleep(3600)  # Retry in 1 hour
+                await asyncio.sleep(CacheTTLConfig.MAINTENANCE_RETRY_DELAY)
 
     async def _cleanup_old_cache(self):
         """Clean up old cache entries"""
@@ -1032,7 +1027,8 @@ def run():
         # Increase file descriptor limit
         try:
             resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
-        except:
+        except (ValueError, OSError) as e:
+            logger.debug(f"Could not set resource limit: {e}")
             pass
     try:
         loop = asyncio.get_running_loop()

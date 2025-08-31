@@ -1,5 +1,4 @@
 import random
-import random
 import uuid
 
 from pyrogram import Client
@@ -7,6 +6,7 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 import core.utils.messages as config_messages
 from core.utils.helpers import format_file_size
+from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
 from core.utils.validators import private_only
 from handlers.commands_handlers.base import BaseCommandHandler
@@ -148,7 +148,7 @@ class UserCommandHandler(BaseCommandHandler):
         await self.bot.cache.set(
             session_key,
             {'deeplink': deeplink_param, 'user_id': user_id},
-            expire=300  # 5 minutes expiry
+            expire=CacheTTLConfig.USER_DATA
         )
 
         # Build buttons for required subscriptions

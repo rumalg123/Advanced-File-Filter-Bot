@@ -40,6 +40,17 @@ class CacheTTLConfig:
 
     # Temporary flags
     RECENT_EDIT_FLAG: int = 2  # 2 seconds
+    OPERATION_LOCK: int = 10  # 10 seconds for operation locks
+    
+    # Rate limiting
+    RATE_LIMIT_COOLDOWN: int = 3600  # 1 hour for rate limit cooldowns
+    
+    # Timing delays (in seconds)
+    CHANNEL_INDEX_DELAY: int = 5  # Channel indexing delay
+    INDEXING_FLOOD_DELAY: int = 2  # Anti-flood delay during indexing
+    FILE_OPERATION_DELAY: int = 1  # File operation delay
+    MAINTENANCE_CHECK_INTERVAL: int = 360  # 6 minutes
+    MAINTENANCE_RETRY_DELAY: int = 3600  # 1 hour on error
 
     @classmethod
     def get_ttl(cls, key_type: str) -> int:

@@ -229,7 +229,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         banned_ids = [user.id for user in users]
 
         cache_key = CacheKeyGenerator.banned_users()
-        await self.cache.set(cache_key, banned_ids, expire=300)  # 5 minutes TTL
+        await self.cache.set(cache_key, banned_ids, expire=self.ttl.USER_CONNECTIONS)
 
         logger.debug(f"Refreshed banned users cache: {len(banned_ids)} users")
         return banned_ids

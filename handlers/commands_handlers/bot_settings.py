@@ -536,7 +536,7 @@ class BotSettingsHandler:
         await self.bot.cache.set(
             CacheKeyGenerator.recent_settings_edit(user_id),
             True,
-            expire=10  # 10 seconds to cover full operation
+            expire=CacheTTLConfig.OPERATION_LOCK
         )
 
         # Handle cancel
@@ -582,7 +582,7 @@ class BotSettingsHandler:
                 await self.bot.cache.set(
                     CacheKeyGenerator.recent_settings_edit(user_id),
                     True,
-                    expire=10  # 10 seconds to prevent search trigger
+                    expire=CacheTTLConfig.OPERATION_LOCK
                 )
                 # Delete the message containing the value for security
                 await message.delete()
