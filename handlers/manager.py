@@ -218,18 +218,17 @@ class HandlerManager:
             if auto_delete_tasks:
                 await asyncio.gather(*auto_delete_tasks, return_exceptions=True)
 
-            # Step 4: Clean up handler instances
+            # Step 4: Clean up handler instances (they will remove their own handlers)
             logger.info(f"Cleaning up {len(self.handler_instances)} handler instances...")
             for name in list(self.handler_instances.keys()):
                 await self.cleanup_handler(name)
 
-            # Step 5: Remove all handlers from bot
-            logger.info(f"Removing {len(self.handlers)} handlers from bot...")
-
-            # Create a copy of the list to avoid modification during iteration
-            handlers_to_remove = self.handlers.copy()
-            for handler in handlers_to_remove:
-                self.remove_handler(handler)
+            # Step 5: Remove remaining handlers from bot (only those not already removed)
+            remaining_handlers = [h for h in self.handlers if id(h) not in self.removed_handlers]
+            if remaining_handlers:
+                logger.info(f"Removing {len(remaining_handlers)} remaining handlers from bot...")
+                for handler in remaining_handlers:
+                    self.remove_handler(handler)
 
             # Clear all tracking structures
             self.handlers.clear()
