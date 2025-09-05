@@ -86,7 +86,8 @@ class HandlerManager:
                 if handler in self.handlers:
                     self.handlers.remove(handler)
 
-                self.stats['handlers_removal_failed'] += 1
+                # Don't count this as a failure - it's expected during cleanup
+                # self.stats['handlers_removal_failed'] += 1
             else:
                 # Some other ValueError
                 logger.error(f"Unexpected ValueError removing handler: {e}")

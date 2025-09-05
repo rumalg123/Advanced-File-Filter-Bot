@@ -54,6 +54,10 @@ class BotSettingsHandler:
         # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             logger.info("HandlerManager will handle task and handler cleanup")
+            # Mark our handlers as removed in the manager
+            for handler in self._handlers:
+                handler_id = id(handler)
+                self.bot.handler_manager.removed_handlers.add(handler_id)
             self._handlers.clear()
             logger.info("BotSettingsHandler cleanup complete")
             return

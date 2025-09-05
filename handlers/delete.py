@@ -103,6 +103,10 @@ class DeleteHandler:
         # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             logger.info("HandlerManager will handle handler removal and task cancellation")
+            # Mark our handlers as removed in the manager
+            for handler in self.handlers:
+                handler_id = id(handler)
+                self.bot.handler_manager.removed_handlers.add(handler_id)
             self.handlers.clear()
             logger.info("DeleteHandler cleanup complete")
             return
