@@ -6,7 +6,7 @@ from logging import (
 from os import path
 from subprocess import run as srun
 
-UPSTREAM_REPO = os.environ.get('UPSTREAM_REPO', "https://github.com/rumalg123/Advanced-File-Filter-Bot")
+UPSTREAM_REPO = os.environ.get('UPSTREAM_REPO', "https://github.com/pachax001/My-DramaList-Bot")
 
 UPSTREAM_BRANCH = os.environ.get('UPSTREAM_BRANCH', "main")
 
@@ -17,8 +17,8 @@ if UPSTREAM_REPO:
     update = srun(
         [
             f"git init -q \
-                     && git config --global user.email rumalg123@gmail.com \
-                     && git config --global user.name Rumal \
+                     && git config --global user.email pachax001@gmail.com \
+                     && git config --global user.name Pachax \
                      && git add . \
                      && git commit -sm update -q \
                      && git remote add origin {UPSTREAM_REPO} \
