@@ -247,6 +247,12 @@ class CommandHandler:
             )
             self.bot.add_handler(
                 MessageHandler(
+                    self.admin_handler.reset_broadcast_limit_command,
+                    filters.command("reset_broadcast_limit") & filters.user(self.bot.config.ADMINS)
+                )
+            )
+            self.bot.add_handler(
+                MessageHandler(
                     self.admin_handler.users_command,
                     filters.command("users") & filters.user(self.bot.config.ADMINS)
                 )

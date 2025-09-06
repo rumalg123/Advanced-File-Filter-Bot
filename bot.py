@@ -481,6 +481,7 @@ class MediaSearchBot(Client):
                 BotCommand("users", "👥 Get users count"),
                 BotCommand("broadcast", "📢 Broadcast message"),
                 BotCommand("stop_broadcast", "🛑 Stop ongoing broadcast"),
+                BotCommand("reset_broadcast_limit", "🔄 Reset broadcast rate limit"),
                 BotCommand("ban", "🚫 Ban a user"),
                 BotCommand("unban", "✅ Unban a user"),
                 BotCommand("addpremium", "⭐ Add premium status"),

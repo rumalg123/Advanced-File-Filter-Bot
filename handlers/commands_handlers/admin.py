@@ -165,6 +165,8 @@ class AdminCommandHandler(BaseCommandHandler):
 
         if callback_query.data == "cancel_broadcast":
             await callback_query.message.edit_text("❌ Broadcast cancelled.")
+            # Reset rate limit when broadcast is cancelled
+            await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             self.bot._pending_broadcast = None
             await callback_query.answer()
             return
@@ -252,6 +254,8 @@ class AdminCommandHandler(BaseCommandHandler):
                     "The broadcast was manually stopped by an admin.",
                     parse_mode=ParseMode.HTML
                 )
+                # Reset rate limit when broadcast is cancelled
+                await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             except Exception as e:
                 logger.error(f"Broadcast error: {e}")
                 await callback_query.message.edit_text(
@@ -259,6 +263,8 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"Error: {str(e)}",
                     parse_mode=ParseMode.HTML
                 )
+                # Reset rate limit when broadcast fails
+                await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             finally:
                 await self._set_broadcast_state(False)
                 self.broadcast_task = None
@@ -288,6 +294,22 @@ class AdminCommandHandler(BaseCommandHandler):
                 "The broadcast was likely interrupted by a restart. State has been reset.",
                 parse_mode=ParseMode.HTML
             )
+
+    @admin_only
+    async def reset_broadcast_limit_command(self, client: Client, message: Message):
+        """Reset broadcast rate limit for admin (for testing/debugging)"""
+        try:
+            user_id = message.from_user.id
+            await self.bot.rate_limiter.reset_rate_limit(user_id, 'broadcast')
+            await message.reply_text(
+                "✅ <b>Broadcast Rate Limit Reset</b>\n\n"
+                "You can now use the broadcast command again.",
+                parse_mode=ParseMode.HTML
+            )
+            logger.info(f"Admin {user_id} reset their broadcast rate limit")
+        except Exception as e:
+            await message.reply_text(f"❌ Error resetting rate limit: {str(e)}")
+            logger.error(f"Error resetting broadcast rate limit: {e}")
 
     @admin_only
     async def users_command(self, client: Client, message: Message):
