@@ -735,13 +735,13 @@ class BotSettingsHandler:
         upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
 
         if upstream_repo and upstream_branch:
-            await restart_msg.edit_text("🔄 **Pulling updates from upstream...**")
+            await restart_msg.edit_text("🔄 **Force pulling updates from upstream...**")
 
             try:
-                # Pull from upstream
-                subprocess.run(["git", "stash"], capture_output=True)
-                pull_result = subprocess.run(["git", "pull", upstream_repo, upstream_branch], 
-                                           capture_output=True, text=True, check=True)
+                # Force pull from upstream (overwrites local changes)
+                subprocess.run(["git", "fetch", "--all"], capture_output=True, text=True, check=True)
+                subprocess.run(["git", "reset", "--hard", f"origin/{upstream_branch}"], capture_output=True, text=True, check=True)
+                subprocess.run(["git", "clean", "-fd"], capture_output=True, text=True, check=True)
                 shutil.rmtree("logs", ignore_errors=True)
                 
                 # Get updated git info
@@ -763,8 +763,8 @@ class BotSettingsHandler:
                     
                 await restart_msg.edit_text(update_msg)
             except Exception as e:
-                logger.error(f"Failed to pull updates: {e}")
-                await restart_msg.edit_text("⚠️ **Failed to pull updates. Restarting anyway...**")
+                logger.error(f"Failed to force pull updates: {e}")
+                await restart_msg.edit_text("⚠️ **Failed to force pull updates. Restarting anyway...**")
 
         # Platform-specific restart
         if platform.system() == "Windows":
