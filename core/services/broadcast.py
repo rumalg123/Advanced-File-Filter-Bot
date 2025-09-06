@@ -37,17 +37,28 @@ class BroadcastService:
             target_users=None
     ) -> Dict[str, int]:
         """Broadcast message to all users with improvements"""
+        # Get total user count upfront for accurate progress calculation
+        if target_users:
+            total_users = len(target_users)
+        else:
+            total_users = await self.user_repo.count({'status': {'$ne': UserStatus.BANNED.value}})
+        
         stats = {
-            'total': 0,
+            'total': total_users,
             'success': 0,
             'blocked': 0,
             'deleted': 0,
             'failed': 0
         }
 
+        # Initial progress callback to show 0%
+        if progress_callback:
+            await progress_callback(stats)
+
         # Get all users in batches
         offset = 0
         last_progress_update = 0
+        processed_users = 0
 
         while True:
             if target_users:
@@ -67,7 +78,7 @@ class BroadcastService:
             # Process batch
             for user in users:
                 user_id = user.id if hasattr(user, 'id') else user
-                stats['total'] += 1
+                processed_users += 1
 
                 try:
                     if hasattr(message, 'copy'):

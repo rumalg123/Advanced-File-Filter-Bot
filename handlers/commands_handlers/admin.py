@@ -37,6 +37,8 @@ class AdminCommandHandler(BaseCommandHandler):
             state = await self.bot.cache.get(self.broadcast_state_key)
             is_active = state == "active" if state else False
             logger.debug(f"Broadcast state check: {state} -> {is_active}")
+            # Sync memory state with Redis state
+            self.broadcasting_in_progress = is_active
             return is_active
         except Exception as e:
             logger.error(f"Error getting broadcast state: {e}")
@@ -221,6 +223,9 @@ class AdminCommandHandler(BaseCommandHandler):
                     )
                 )
                 
+                # Store global reference for cross-handler access
+                self.bot._active_broadcast_task = self.broadcast_task
+                
                 final_stats = await self.broadcast_task
 
                 # Final message
@@ -269,6 +274,9 @@ class AdminCommandHandler(BaseCommandHandler):
                 await self._set_broadcast_state(False)
                 self.broadcast_task = None
                 self.bot._pending_broadcast = None
+                # Clear global reference
+                if hasattr(self.bot, '_active_broadcast_task'):
+                    self.bot._active_broadcast_task = None
 
             await callback_query.answer()
 
@@ -277,15 +285,35 @@ class AdminCommandHandler(BaseCommandHandler):
         """Stop ongoing broadcast"""
         # Check persistent broadcast state
         is_broadcasting = await self._get_broadcast_state()
-        if not is_broadcasting:
+        memory_state = self.broadcasting_in_progress
+        task_exists = self.broadcast_task is not None
+        
+        logger.info(f"Stop broadcast check - Redis: {is_broadcasting}, Memory: {memory_state}, Task: {task_exists}")
+        
+        if not is_broadcasting and not memory_state:
             await message.reply_text("❌ No broadcast is currently in progress.")
             return
 
         # Clear persistent state regardless of task status
         await self._set_broadcast_state(False)
         
+        # Try to find and cancel the broadcast task across all handlers
+        task_cancelled = False
         if self.broadcast_task:
             self.broadcast_task.cancel()
+            task_cancelled = True
+            logger.info("Cancelled broadcast task from current handler instance")
+        
+        # Also check if there's a global broadcast task reference we can cancel
+        if hasattr(self.bot, '_active_broadcast_task') and self.bot._active_broadcast_task:
+            try:
+                self.bot._active_broadcast_task.cancel()
+                task_cancelled = True
+                logger.info("Cancelled broadcast task from global reference")
+            except Exception as e:
+                logger.error(f"Error cancelling global broadcast task: {e}")
+        
+        if task_cancelled:
             await message.reply_text("🛑 <b>Broadcast stopped!</b>\n\nThe ongoing broadcast has been cancelled.", parse_mode=ParseMode.HTML)
         else:
             # Handle case where bot was restarted but broadcast state persisted
