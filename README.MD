@@ -170,6 +170,7 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | `DATABASE_URI` | MongoDB connection string | `mongodb://localhost:27017` |
 | `DATABASE_NAME` | Database name | `PIRO` |
 | `DATABASE_URIS` | Multiple database URIs (comma separated) | `mongodb://...,mongodb://...` |
+| `DATABASE_NAMES` | Multiple database names (comma separated) | `PIRO_DB1,PIRO_DB2` |
 | `REDIS_URI` | Redis connection string | `redis://localhost:6379` |
 | `ADMINS` | Admin user IDs (comma separated) | `123456789,987654321` |
 | `LOG_CHANNEL` | Channel for bot logs | `-1001234567890` |
@@ -188,6 +189,10 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | `KEEP_ORIGINAL_CAPTION` | Keep original file captions | `True` |
 | `DATABASE_AUTO_SWITCH` | Auto-switch databases when full | `True` |
 | `DATABASE_SIZE_LIMIT_GB` | Size limit per database (GB) | `0.5` |
+| `AUTO_DELETE_MESSAGE` | Custom auto-delete message template | `⏱ This {content_type} will be auto-deleted after {minutes} minutes` |
+| `START_MESSAGE` | Custom start message template | `Welcome to the bot!` |
+| `UPSTREAM_REPO` | Git repository for auto-updates | `https://github.com/user/repo.git` |
+| `UPSTREAM_BRANCH` | Git branch for updates | `main` |
 
 ### Optional Features
 
@@ -219,6 +224,8 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 - **Filter by Type**: Add file type after pipe: `query | video`
 - **Send All**: Click "Send All Files" button to receive all search results
 - **Smart File Emojis**: Files display with type-specific emojis for easy identification
+- **Cross-Database Search**: Search across multiple databases simultaneously with proper result ordering
+- **Auto-Delete Results**: Search results automatically delete after configured time to keep chats clean
 
 #### File Type Emojis
 | File Types | Emoji | Examples |
@@ -244,14 +251,20 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 
 | Command | Description |
 |---------|-------------|
-| `/add <keyword> <reply>` | Add a filter |
+| `/add <keyword> <reply>` | Add a filter with keyword and response |
 | `/filter <keyword> <reply>` | Alternative to add filter |
-| `/filters` | View all filters |
+| `/filters` | View all filters in current chat |
 | `/viewfilters` | Alternative to view filters |
-| `/delf <keyword>` | Delete a filter |
+| `/delf <keyword>` | Delete a specific filter |
 | `/deletef <keyword>` | Alternative to delete filter |
-| `/delallf` | Delete all filters |
-| `/deleteallf` | Alternative to delete all |
+| `/delallf` | Delete all filters in current chat |
+| `/deleteallf` | Alternative to delete all filters |
+
+**Filter Features:**
+- **Rich Text Support**: Use HTML formatting in filter responses
+- **Button Support**: Add inline keyboard buttons to filter responses
+- **File Attachments**: Attach files to filter responses
+- **Alert Messages**: Show popup alerts when filters trigger
 
 ### 📮 Request Feature
 - In support group, use `#request <content_name>` to request content
@@ -302,16 +315,30 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 #### Database Management
 | Command | Description |
 |---------|-------------|
-| `/dbstats` | View database statistics and usage |
-| `/dbinfo` | View detailed database information |
-| `/dbswitch <number>` | Switch to different write database |
+| `/dbstats` | View database statistics, usage, and capacity warnings |
+| `/dbinfo` | View detailed database information and health status |
+| `/dbswitch <number>` | Manually switch to different write database (e.g., `/dbswitch 2`) |
+
+**Database Features:**
+- **Smart Database Selection**: AI-powered load balancing based on usage and health
+- **Circuit Breaker Protection**: Automatic fault tolerance with 5-failure threshold
+- **Real-time Optimization**: 30-second cache for critical switching decisions
+- **Emergency Handling**: Graceful degradation when all databases reach capacity
+- **Auto-recovery**: Failed databases automatically recover when healthy
 
 #### System Commands
 | Command | Description |
 |---------|-------------|
-| `/performance` | View performance metrics |
-| `/log` | Get bot log file |
-| `/restart` | Restart the bot |
+| `/performance` | View performance metrics and system status |
+| `/log` | Get bot log file for debugging |
+| `/restart` | Restart bot with git updates and version info |
+
+**Enhanced Restart Features:**
+- **Git Integration**: Shows current commit hash, date, and message during restart
+- **Force Pull Updates**: Automatically pulls latest updates from upstream repository
+- **Update Detection**: Displays what changed between restarts
+- **Version Tracking**: Success message shows current version details
+- **Local Changes Warning**: Alerts when uncommitted changes are detected
 
 #### Primary Admin Only
 | Command | Description |
@@ -332,15 +359,111 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 
 *Public if `PUBLIC_FILE_STORE=True`
 
+## 🗃️ Multi-Database System Guide
+
+The bot features an enterprise-grade multi-database system for automatic scaling, fault tolerance, and intelligent load balancing.
+
+### 📋 Multi-Database Overview
+
+The multi-database system provides:
+- **🎯 Smart Database Selection**: AI-powered load balancing based on usage, health, and performance
+- **🛡️ Circuit Breaker Protection**: Automatic fault tolerance with 5-failure threshold and auto-recovery
+- **⚡ Real-time Optimization**: 30-second cache vs 5-minute for critical switching decisions
+- **🔒 Thread-safe Operations**: Race condition protection with async locks
+- **🚨 Emergency Handling**: Graceful degradation when all databases reach capacity
+- **🔍 Cross-database Search**: Proper pagination and sorting across all databases
+- **♻️ Auto-recovery**: Failed databases automatically recover when they come back online
+
+### ⚙️ Multi-Database Configuration
+
+#### Environment Variables for Multi-Database
+```bash
+# Single database (existing setup) - Still supported
+DATABASE_URI=mongodb+srv://user:pass@cluster1.mongodb.net
+DATABASE_NAME=PIRO
+
+# Multi-database system (enterprise features)
+DATABASE_URIS=mongodb+srv://user:pass@cluster1.mongodb.net,mongodb+srv://user:pass@cluster2.mongodb.net,mongodb+srv://user:pass@cluster3.mongodb.net
+DATABASE_NAMES=PIRO_DB1,PIRO_DB2,PIRO_DB3
+
+# Smart switching configuration
+DATABASE_SIZE_LIMIT_GB=0.5          # Size limit before switching (GB)
+DATABASE_AUTO_SWITCH=True           # Enable intelligent auto-switching
+
+# Circuit breaker configuration (optional - uses defaults if not set)
+DATABASE_MAX_FAILURES=5             # Max failures before circuit opens (default: 5)
+DATABASE_RECOVERY_TIMEOUT=300       # Seconds before testing recovery (default: 300)
+```
+
+#### MongoDB Atlas Free Tier Setup (Cost: $0)
+Use multiple MongoDB Atlas free clusters (512MB each) for unlimited storage:
+```bash
+# Example: 3 free clusters = ~1.5GB total storage
+DATABASE_URIS=mongodb+srv://user1:pass1@cluster1.mongodb.net,mongodb+srv://user2:pass2@cluster2.mongodb.net,mongodb+srv://user3:pass3@cluster3.mongodb.net
+DATABASE_NAMES=MediaBot_Main,MediaBot_Backup,MediaBot_Archive
+DATABASE_SIZE_LIMIT_GB=0.45  # Stay under 512MB limit with buffer
+DATABASE_AUTO_SWITCH=True
+```
+
+### 🧠 Smart Database Selection Algorithm
+
+The system evaluates databases using weighted factors:
+- **Storage Usage (40%)**: Lower usage = higher score
+- **Circuit Health (30%)**: Healthy databases preferred  
+- **Connection Stability (15%)**: Based on success/failure ratio
+- **Current DB Bonus (15%)**: Avoid unnecessary switching
+
+### 🛡️ Circuit Breaker System
+
+**How It Works:**
+- **CLOSED** → Normal operation (healthy)
+- **OPEN** → Reject requests (5-minute timeout after 5 failures)
+- **HALF_OPEN** → Test recovery (limited requests)
+
+### 🚨 Emergency Handling
+
+When all databases reach capacity, the system:
+1. Uses the least full database as emergency fallback
+2. Logs critical alerts for admin action
+3. Continues operation while alerting admins to add more databases
+
 ## 🔧 Advanced Configuration
 
 ### Bot Settings Management
 The bot includes a comprehensive settings management system accessible via `/bsetting` (primary admin only):
 
 - **Dynamic Configuration**: Change bot settings without restarting
-- **Category Organization**: Settings grouped by category
+- **Category Organization**: Settings grouped by category  
 - **Live Updates**: Most settings apply immediately (some require restart)
-- **Backup/Export**: Export and import settings configurations
+- **Protected Settings**: Critical settings require manual environment variable changes
+- **Session Management**: Automatic timeout and cleanup for editing sessions
+- **Input Validation**: Real-time validation and formatting support
+
+### Enhanced Auto-Delete System
+
+The bot features an advanced auto-delete system with comprehensive customization:
+
+**Key Features:**
+- **Customizable Messages**: Use HTML templates with placeholders like `{content_type}` and `{minutes}`
+- **Smart Scheduling**: Proper task management with automatic cleanup
+- **Cross-Handler Support**: Works across search, file store, requests, and filter responses
+- **Session Tracking**: Uses WeakSet for efficient memory management
+- **Error Handling**: Graceful failure handling with debug logging
+
+**Template Customization:**
+```bash
+# Custom auto-delete message with HTML formatting
+AUTO_DELETE_MESSAGE='⏱ <b>Auto-Delete Notice</b>\n\nThis {content_type} will be <u>automatically deleted</u> after <b>{minutes} minutes</b>'
+
+# Available placeholders:
+# {content_type} - Type of content (file, message, etc.)
+# {minutes} - Number of minutes until deletion
+```
+
+**Configuration Options:**
+- `MESSAGE_DELETE_SECONDS` - Time in seconds before deletion
+- `AUTO_DELETE_MESSAGE` - Custom message template with HTML support
+- Automatic task cleanup prevents memory leaks
 
 ### Performance Optimization
 
@@ -559,13 +682,14 @@ mongorestore --uri="your-connection-string" backup/
 
 ## 🆕 Recent Updates & New Features
 
-### ✨ Latest Additions
-- **🗃️ Multi-Database Support**: Scale automatically with multiple MongoDB databases
-- **🎯 Smart File Emojis**: File-type specific emojis for better visual identification
-- **📊 Database Management**: Complete admin tools for database monitoring and switching
-- **🔧 Enhanced Commands**: All bot commands automatically registered on startup
-- **🛠️ Bug Fixes**: Fixed daily counter reset on bot restart and various type errors
-- **⚡ Performance**: Improved file emoji detection for sanitized filenames
+### ✨ Latest Major Additions
+- **🔄 Enhanced Restart Command**: Git integration with automatic updates, version tracking, and force pull
+- **🗃️ Enterprise Multi-Database**: Smart selection, circuit breaker protection, and auto-recovery
+- **⏱ Advanced Auto-Delete**: Customizable HTML templates, smart scheduling, and cross-handler support
+- **🎯 Smart File Emojis**: File-type specific emojis for better visual identification  
+- **📊 Database Management**: Complete admin tools for monitoring, switching, and health checking
+- **⚙️ Dynamic Settings**: Comprehensive `/bsetting` system with live configuration changes
+- **🛡️ Circuit Breaker Pattern**: Fault tolerance for database operations with automatic recovery
 
 ### 🔧 Command Improvements
 All commands now automatically appear in Telegram's command menu:
@@ -574,19 +698,32 @@ All commands now automatically appear in Telegram's command menu:
 - Added admin commands (`/verify`, `/cancel`)
 - Commands are properly scoped (all users, groups, admins, primary admin)
 
-### 🐛 Critical Bug Fixes
+### 🐛 Critical Bug Fixes & Improvements
 - **Daily Counter Reset**: Fixed issue where bot restart would reset all users' daily download counts
+- **Auto-Delete Consistency**: Fixed inline mode auto-delete messages that never actually deleted files
 - **File Emoji Detection**: Fixed emoji detection for sanitized filenames (files without dots)
-- **Type Annotations**: Fixed various type errors and warnings
-- **Session Management**: Fixed type annotation issues in session statistics
+- **Type Annotations**: Fixed various type errors and warnings throughout the codebase
+- **Session Management**: Enhanced session handling with proper cleanup and timeout management
+- **Handler Management**: Centralized task and handler lifecycle management
+- **Memory Optimization**: WeakSet tracking for auto-delete tasks prevents memory leaks
+
+### ⚡ Performance & Stability Enhancements
+- **Circuit Breaker Pattern**: Database fault tolerance with automatic recovery
+- **Thread-Safe Operations**: Race condition protection for critical operations  
+- **Smart Cache Management**: Different TTL values for critical vs regular operations
+- **Background Task Management**: Proper lifecycle handling for all background tasks
+- **Enhanced Error Handling**: Graceful degradation and comprehensive logging
 
 ## 🎯 Feature Details
 
 ### Auto-Delete System
-- Messages automatically delete after configured time
-- Configurable via `MESSAGE_DELETE_SECONDS`
-- Applies to search results and file sends
-- Helps keep chats clean
+- **Smart Scheduling**: Messages automatically delete after configured time with proper task management  
+- **Customizable Templates**: HTML-formatted messages with placeholders for content type and duration
+- **Cross-Handler Support**: Works across search results, file sends, requests, and filter responses
+- **Memory Efficient**: WeakSet tracking prevents memory leaks from completed tasks
+- **Consistent Behavior**: Fixed inline mode issues where messages showed delete notifications but never deleted
+- **Error Resilient**: Graceful handling of deletion failures with debug logging
+- **Configuration**: Set via `MESSAGE_DELETE_SECONDS` and customize via `AUTO_DELETE_MESSAGE`
 
 ### Multi-Database System
 - **Automatic Scaling**: Add multiple MongoDB databases as your collection grows
