@@ -1,5 +1,7 @@
 import asyncio
 import os
+import re
+import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -8,12 +10,13 @@ from typing import Dict, List
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
+from pyrogram.enums import ParseMode
 
 from core.cache.monitor import CacheMonitor
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.performance import performance_monitor
-from core.utils.validators import admin_only
+from core.utils.validators import admin_only, owner_only
 from handlers.commands_handlers.base import BaseCommandHandler
 
 logger = get_logger(__name__)
@@ -559,139 +562,191 @@ class AdminCommandHandler(BaseCommandHandler):
         except Exception as e:
             await status_msg.edit_text(f"❌ Error: {str(e)}")
 
+    @owner_only
     async def shell_command(self, client: Client, message: Message):
-        """Execute shell commands - ONLY for primary admin"""
-        # Check if user is the first admin
-        user_id = message.from_user.id if message.from_user else None
-        if not user_id or user_id != self.bot.config.ADMINS[0]:
-            await message.reply_text("⚠️ This command is restricted to the primary admin only.")
-            return
-
-        # Get command from message
-        if len(message.command) < 2:
-            await message.reply_text(
-                "**Usage:** `/shell <command>`\n\n"
-                "**Examples:**\n"
-                "• `/shell ls -la`\n"
-                "• `/shell df -h`\n"
-                "• `/shell ps aux | grep python`\n\n"
-                "⚠️ **Warning:** Use with extreme caution!"
-            )
-            return
-
-        # Get the command (everything after /shell)
-        shell_command = message.text.split(None, 1)[1]
-
-        # Log the command execution
-        logger.warning(f"Shell command executed by {user_id}: {shell_command}")
-
-        # Send processing message
-        processing_msg = await message.reply_text("⏳ Executing command...")
-
+        """Execute shell commands via bot (Owner only)."""
         try:
-            # Execute the command with timeout
-            process = await asyncio.create_subprocess_shell(
-                shell_command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                # Limit resources
-                preexec_fn=lambda: __import__('resource').setrlimit(
-                    __import__('resource').RLIMIT_CPU, (30, 30)
-                ) if hasattr(__import__('resource'), 'setrlimit') else None
-            )
-
-            # Wait for command to complete with timeout
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=30.0  # 30 second timeout
+            # Extract command from message
+            command_parts = message.text.split(' ', 1)
+            if len(command_parts) < 2:
+                await message.reply_text(
+                    "🐚 <b>Shell Command Usage:</b>\n\n"
+                    "<b>Syntax:</b> <code>/shell &lt;command&gt;</code>\n\n"
+                    "<b>Examples:</b>\n"
+                    "• <code>/shell pip install requests</code>\n"
+                    "• <code>/shell ls -la</code>\n"
+                    "• <code>/shell git status</code>\n"
+                    "• <code>/shell python --version</code>\n"
+                    "• <code>/shell df -h</code>\n\n"
+                    "⚠️ <b>Security Warning:</b>\n"
+                    "This command has full system access. Use with extreme caution!\n\n"
+                    "<b>Safe Commands:</b>\n"
+                    "• Package management: <code>pip install/uninstall</code>\n"
+                    "• File operations: <code>ls</code>, <code>cat</code>, <code>head</code>, <code>tail</code>\n"
+                    "• System info: <code>ps</code>, <code>df</code>, <code>free</code>, <code>uname</code>\n"
+                    "• Git operations: <code>git status</code>, <code>git log</code>\n\n"
+                    "<b>Dangerous Commands:</b>\n"
+                    "❌ Avoid: <code>rm -rf</code>, <code>chmod 777</code>, <code>sudo su</code>, etc.",
+                    parse_mode=ParseMode.HTML
                 )
-            except asyncio.TimeoutError:
-                process.kill()
-                await processing_msg.edit_text("❌ Command timed out after 30 seconds.")
                 return
-
-            # Decode output
-            stdout_text = stdout.decode('utf-8', errors='replace') if stdout else ""
-            stderr_text = stderr.decode('utf-8', errors='replace') if stderr else ""
-
-            # Combine output
-            output = ""
-            if stdout_text:
-                output += f"**STDOUT:**\n```\n{stdout_text}\n```\n"
-            if stderr_text:
-                output += f"**STDERR:**\n```\n{stderr_text}\n```\n"
-
-            if not output:
-                output = "✅ Command executed successfully (no output)"
-
-            # Add return code
-            output += f"\n**Return Code:** {process.returncode}"
-
-            # Check output size (Telegram message limit is 4096 characters)
-            if len(output) > 4000:
-                # Save to temporary file
-                with tempfile.NamedTemporaryFile(
-                        mode='w',
-                        suffix='.txt',
-                        delete=False,
-                        encoding='utf-8'
-                ) as temp_file:
-                    temp_file.write(f"Command: {shell_command}\n")
-                    temp_file.write("=" * 50 + "\n\n")
-
-                    if stdout_text:
-                        temp_file.write("STDOUT:\n")
-                        temp_file.write("-" * 30 + "\n")
-                        temp_file.write(stdout_text)
-                        temp_file.write("\n\n")
-
-                    if stderr_text:
-                        temp_file.write("STDERR:\n")
-                        temp_file.write("-" * 30 + "\n")
-                        temp_file.write(stderr_text)
-                        temp_file.write("\n\n")
-
-                    temp_file.write(f"Return Code: {process.returncode}\n")
-                    temp_filename = temp_file.name
-
-                try:
-                    # Send as document
-                    await message.reply_document(
-                        document=temp_filename,
-                        caption=f"📄 **Shell Output**\n\nCommand: `{shell_command[:100]}{'...' if len(shell_command) > 100 else ''}`\nReturn Code: {process.returncode}",
-                        file_name=f"shell_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-                    )
-
-                    # Delete processing message
-                    await processing_msg.delete()
-
-                finally:
-                    # Clean up temp file
-                    try:
-                        os.unlink(temp_filename)
-                    except Exception as e:
-                        logger.error(f"Failed to delete temp file: {e}")
-            else:
-                # Send as regular message
-                await processing_msg.edit_text(output)
-
-            # Log to admin channel if configured
-            if self.bot.config.LOG_CHANNEL:
-                log_text = (
-                    f"#ShellCommand\n\n"
-                    f"**Admin:** {message.from_user.mention}\n"
-                    f"**Command:** `{shell_command[:200]}{'...' if len(shell_command) > 200 else ''}`\n"
-                    f"**Return Code:** {process.returncode}\n"
-                    f"**Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            
+            command = command_parts[1].strip()
+            
+            # Security warning for dangerous commands
+            dangerous_patterns = [
+                r'\brm\s+-rf\b', r'\brm\s+.*\*', r'\bchmod\s+777\b', 
+                r'\bsudo\s+su\b', r'\bmkfs\b', r'\bformat\b',
+                r'\bdd\s+if=', r'\bfdisk\b', r'\bcrontab\s+-r\b',
+                r'>\s*/dev/', r'\bkill\s+-9.*1\b'
+            ]
+            
+            is_dangerous = any(re.search(pattern, command, re.IGNORECASE) for pattern in dangerous_patterns)
+            
+            if is_dangerous:
+                await message.reply_text(
+                    f"⚠️ <b>Potentially Dangerous Command Detected</b>\n\n"
+                    f"<b>Command:</b> <code>{command}</code>\n\n"
+                    f"This command appears to be potentially destructive. "
+                    f"Please review carefully before execution.\n\n"
+                    f"Reply with <code>EXECUTE ANYWAY</code> to proceed or cancel this operation.",
+                    parse_mode=ParseMode.HTML
                 )
-
+                return
+            
+            # Send initial status message
+            status_msg = await message.reply_text(
+                f"🐚 <b>Executing Shell Command</b>\n\n"
+                f"<b>Command:</b> <code>{command}</code>\n"
+                f"<b>Status:</b> Running...\n\n"
+                f"⏳ Please wait for output...",
+                parse_mode=ParseMode.HTML
+            )
+            
+            logger.info(f"Shell command initiated by owner: {command}")
+            start_time = datetime.now()
+            
+            # Execute command with timeout
+            try:
+                # Use subprocess for better control and security
+                process = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=os.getcwd(),
+                    env=os.environ.copy()
+                )
+                
+                # Wait for completion with timeout (max 5 minutes)
                 try:
-                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
-                except Exception as e:
-                    logger.error(f"Failed to log shell command: {e}")
+                    stdout, stderr = process.communicate(timeout=300)
+                    return_code = process.returncode
+                    execution_time = (datetime.now() - start_time).total_seconds()
+                    
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    return_code = -1
+                    execution_time = 300
+                    stderr += "\n⚠️ Command timed out after 5 minutes"
+                
+            except Exception as e:
+                await status_msg.edit_text(
+                    f"🐚 <b>Shell Command Failed</b>\n\n"
+                    f"<b>Command:</b> <code>{command}</code>\n"
+                    f"<b>Error:</b> {str(e)}\n\n"
+                    f"❌ Execution failed before completion",
+                    parse_mode=ParseMode.HTML
+                )
+                logger.error(f"Shell command execution failed: {e}")
+                return
+            
+            # Prepare output message
+            execution_status = "✅ Success" if return_code == 0 else f"❌ Failed (Exit Code: {return_code})"
+            
+            # Combine stdout and stderr
+            output_parts = []
+            if stdout.strip():
+                output_parts.append(f"<b>📤 STDOUT:</b>\n<pre>\n{stdout.strip()}\n</pre>")
+            if stderr.strip():
+                output_parts.append(f"<b>📥 STDERR:</b>\n<pre>\n{stderr.strip()}\n</pre>")
+            
+            if not output_parts:
+                output_text = "<i>(No output generated)</i>"
+            else:
+                output_text = "\n\n".join(output_parts)
+            
+            # Create result message
+            result_message = f"""🐚 <b>Shell Command Executed</b>
 
+<b>Command:</b> <code>{command}</code>
+<b>Status:</b> {execution_status}
+<b>Execution Time:</b> {execution_time:.2f}s
+<b>Return Code:</b> {return_code}
+
+{output_text}"""
+            
+            # Handle long outputs
+            if len(result_message) > 4096:  # Telegram message limit
+                # Send basic info first
+                basic_info = f"""🐚 <b>Shell Command Executed</b>
+
+<b>Command:</b> <code>{command}</code>
+<b>Status:</b> {execution_status}
+<b>Execution Time:</b> {execution_time:.2f}s
+<b>Return Code:</b> {return_code}
+
+⚠️ <b>Output too long - sending as file...</b>"""
+                
+                await status_msg.edit_text(basic_info, parse_mode=ParseMode.HTML)
+                
+                # Create output file
+                output_filename = f"shell_output_{int(start_time.timestamp())}.txt"
+                full_output = f"Shell Command: {command}\n"
+                full_output += f"Executed at: {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+                full_output += f"Return Code: {return_code}\n"
+                full_output += f"Execution Time: {execution_time:.2f}s\n"
+                full_output += "=" * 50 + "\n\n"
+                
+                if stdout.strip():
+                    full_output += "STDOUT:\n" + stdout + "\n\n"
+                if stderr.strip():
+                    full_output += "STDERR:\n" + stderr + "\n"
+                
+                # Write to temp file and send
+                with open(output_filename, 'w', encoding='utf-8') as f:
+                    f.write(full_output)
+                
+                await message.reply_document(
+                    output_filename,
+                    caption=f"📄 Shell command output\n<b>Command:</b> <code>{command}</code>",
+                    parse_mode=ParseMode.HTML
+                )
+                
+                # Clean up temp file
+                os.remove(output_filename)
+            else:
+                # Send normal message
+                await status_msg.edit_text(result_message, parse_mode=ParseMode.HTML)
+            
+            logger.info(f"Shell command completed: {command} (exit code: {return_code}, time: {execution_time:.2f}s)")
+            
         except Exception as e:
-            error_msg = f"❌ **Error executing command:**\n\n`{str(e)}`"
-            await processing_msg.edit_text(error_msg)
-            logger.error(f"Shell command error: {e}", exc_info=True)
+            logger.error(f"Error in shell command: {e}")
+            try:
+                await status_msg.edit_text(
+                    f"🐚 <b>Shell Command Error</b>\n\n"
+                    f"<b>Command:</b> <code>{command if 'command' in locals() else 'Unknown'}</code>\n"
+                    f"<b>Error:</b> {str(e)}\n\n"
+                    f"❌ Unexpected error occurred",
+                    parse_mode=ParseMode.HTML
+                )
+            except:
+                await message.reply_text(
+                    f"🐚 <b>Shell Command Error</b>\n\n"
+                    f"<b>Error:</b> {str(e)}\n\n"
+                    f"❌ Failed to execute shell command",
+                    parse_mode=ParseMode.HTML
+                )

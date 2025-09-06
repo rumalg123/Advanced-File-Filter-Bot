@@ -85,6 +85,24 @@ class ValidationDecorators:
         return wrapper
 
     @staticmethod
+    def owner_only(func):
+        """Decorator to restrict commands to primary admin/owner only"""
+        @wraps(func)
+        async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
+            user_id = ValidationUtils.extract_user_id(message)
+            # Get the first admin as primary owner
+            owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+            if not user_id or user_id != owner_id:
+                error_msg = "⚠️ This command is restricted to the bot owner only."
+                if isinstance(message, Message):
+                    await message.reply_text(error_msg)
+                elif isinstance(message, CallbackQuery):
+                    await message.answer(error_msg, show_alert=True)
+                return
+            return await func(self, client, message, *args, **kwargs)
+        return wrapper
+
+    @staticmethod
     def private_only(func):
         """Decorator to restrict commands to private chats only"""
         @wraps(func)
@@ -407,6 +425,7 @@ is_bot_user = ValidationUtils.is_bot_user
 is_special_channel = ValidationUtils.is_special_channel
 
 admin_only = ValidationDecorators.admin_only
+owner_only = ValidationDecorators.owner_only
 private_only = ValidationDecorators.private_only
 auth_user_only = ValidationDecorators.auth_user_only
 no_bots = ValidationDecorators.no_bots

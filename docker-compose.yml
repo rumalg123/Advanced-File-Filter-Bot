@@ -1,48 +1,113 @@
 services:
-  redis:
-    image: redis:latest
-    container_name: bot-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-      - /etc/localtime:/etc/localtime:ro  # Add this line
-      - ./redis-config/redis.conf:/usr/local/etc/redis/redis.conf
-    command: redis-server /usr/local/etc/redis/redis.conf
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - bot-network
-
-  worker:
+  file-filter-bot:
     build: .
-    container_name: media-bot
+    container_name: file-filter-bot
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # System Configuration
+      - PYTHONPATH=/usr/src/app
+      - REDIS_URI=redis://redis:6379/0
+      - TZ=${TZ:-UTC}
+      
+      # Auto-Update Configuration
+      - UPDATE_REPO=${UPDATE_REPO:-https://github.com/rumalg123/Advanced-File-Filter-Bot}
+      - UPDATE_BRANCH=${UPDATE_BRANCH:-main}
+      - AUTO_UPDATE=${AUTO_UPDATE:-false}
+      - UPDATE_ON_START=${UPDATE_ON_START:-false}
+      - BACKUP_ON_UPDATE=${BACKUP_ON_UPDATE:-true}
+      
+      # Performance Configuration
+      - MAX_CONNECTIONS=${MAX_CONNECTIONS:-20}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+      
+      # Security Configuration
+      - PUBLIC_FILE_STORE=${PUBLIC_FILE_STORE:-false}
+    volumes:
+      # Persistent data volumes
+      - bot-backups:/usr/src/app/backups
+      - bot-logs:/usr/src/app/logs
+      - bot-data:/usr/src/app/data
+      
+      # Time synchronization
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      
+      # Git directory for updates (if using auto-update)
+      - bot-git:/usr/src/app/.git
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      - REDIS_URI=redis://redis:6379
-    env_file:
-      - .env
-    volumes:
-      - ./logs:/app/logs
-      - /etc/localtime:/etc/localtime:ro  # Add this line
     networks:
       - bot-network
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "com.filefilterbot.service=bot"
+      - "com.filefilterbot.auto-update=${AUTO_UPDATE:-false}"
 
+  redis:
+    image: redis:7-alpine
+    container_name: file-filter-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    environment:
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-data:/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    sysctls:
+      - net.core.somaxconn=65535
+    labels:
+      - "com.filefilterbot.service=redis"
 
+volumes:
+  # Redis data volume
+  redis-data:
+    driver: local
+    labels:
+      - "com.filefilterbot.volume=redis-data"
+      
+  # Bot persistent data volumes
+  bot-backups:
+    driver: local
+    labels:
+      - "com.filefilterbot.volume=backups"
+      
+  bot-logs:
+    driver: local
+    labels:
+      - "com.filefilterbot.volume=logs"
+      
+  bot-data:
+    driver: local
+    labels:
+      - "com.filefilterbot.volume=data"
+      
+  bot-git:
+    driver: local
+    labels:
+      - "com.filefilterbot.volume=git"
 
 networks:
   bot-network:
     driver: bridge
-
-volumes:
-  redis_data:
-    driver: local
+    labels:
+      - "com.filefilterbot.network=main"
