@@ -791,24 +791,86 @@ class MediaSearchBot(Client):
         logger.info("Bot stopped successfully")
         logger.info("=" * 60)
 
+    def _get_git_info(self):
+        """Get current git information"""
+        import subprocess
+        try:
+            # Get current commit hash
+            hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
+                                       capture_output=True, text=True, check=True)
+            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
+            
+            # Get commit date and message
+            commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
+                                       capture_output=True, text=True, check=True)
+            commit_date, commit_message = commit_info.stdout.strip().split('|', 1)
+            
+            # Check for uncommitted changes
+            status_result = subprocess.run(['git', 'status', '--porcelain'], 
+                                         capture_output=True, text=True, check=True)
+            has_changes = bool(status_result.stdout.strip())
+            
+            return {
+                'hash': commit_hash,
+                'date': commit_date,
+                'message': commit_message,
+                'has_changes': has_changes,
+                'full_hash': hash_result.stdout.strip()
+            }
+        except Exception as e:
+            logger.error(f"Failed to get git info: {e}")
+            return None
+
     async def _send_startup_message(self):
         """Send startup message to log channel"""
+        import json
         try:
             restart_msg_file = Path("restart_msg.txt")
             if restart_msg_file.exists():
-                # Read the saved message info
+                # Read the saved restart data
                 with open(restart_msg_file, "r") as f:
                     content = f.read().strip()
-                    chat_id, msg_id = content.split(",")
-                    chat_id = int(chat_id)
-                    msg_id = int(msg_id)
+                    
+                    # Try to parse as JSON (new format)
+                    try:
+                        restart_data = json.loads(content)
+                        chat_id = restart_data['chat_id']
+                        msg_id = restart_data['message_id']
+                        git_before = restart_data.get('git_before')
+                    except (json.JSONDecodeError, KeyError):
+                        # Fallback to old format
+                        chat_id, msg_id = content.split(",")
+                        chat_id = int(chat_id)
+                        msg_id = int(msg_id)
+                        git_before = None
+
+                # Get current git info
+                git_current = self._get_git_info()
+                
+                # Build success message with git info
+                if git_current:
+                    success_msg = (
+                        f"✅ **Bot restarted successfully!**\n\n"
+                        f"📝 **Current Version:**\n"
+                        f"🔗 `{git_current['hash']}` - {git_current['date']}\n"
+                        f"💬 {git_current['message']}"
+                    )
+                    
+                    if git_current['has_changes']:
+                        success_msg += f"\n⚠️ **Local changes detected**"
+                        
+                    # Show update info if we have before/after data
+                    if git_before and git_before.get('full_hash') != git_current['full_hash']:
+                        success_msg += f"\n\n🆕 **Updated from:** `{git_before['hash']}`"
+                else:
+                    success_msg = "✅ **Bot restarted successfully!**"
 
                 # Try to edit the restart message
                 try:
                     await self.edit_message_text(
                         chat_id=chat_id,
                         message_id=msg_id,
-                        text="✅ **Bot restarted successfully!**"
+                        text=success_msg
                     )
                 except Exception as e:
                     logger.error(f"Failed to edit restart message: {e}")

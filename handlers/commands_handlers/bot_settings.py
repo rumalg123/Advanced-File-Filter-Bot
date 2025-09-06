@@ -676,6 +676,36 @@ class BotSettingsHandler:
         except Exception as e:
             await query.answer(f"❌ Error: {str(e)}", show_alert=True)
 
+    def _get_git_info(self):
+        """Get current git information"""
+        import subprocess
+        try:
+            # Get current commit hash
+            hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
+                                       capture_output=True, text=True, check=True)
+            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
+            
+            # Get commit date and message
+            commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
+                                       capture_output=True, text=True, check=True)
+            commit_date, commit_message = commit_info.stdout.strip().split('|', 1)
+            
+            # Check for uncommitted changes
+            status_result = subprocess.run(['git', 'status', '--porcelain'], 
+                                         capture_output=True, text=True, check=True)
+            has_changes = bool(status_result.stdout.strip())
+            
+            return {
+                'hash': commit_hash,
+                'date': commit_date,
+                'message': commit_message,
+                'has_changes': has_changes,
+                'full_hash': hash_result.stdout.strip()
+            }
+        except Exception as e:
+            logger.error(f"Failed to get git info: {e}")
+            return None
+
     async def restart_command(self, client: Client, message: Message):
         """Handle /restart command"""
         import os
@@ -684,11 +714,21 @@ class BotSettingsHandler:
         import platform
         import shutil
 
+        # Get current git info before restart
+        git_info_before = self._get_git_info()
+        
         restart_msg = await message.reply_text("🔄 **Restarting bot...**")
 
-        # Save restart message info
+        # Save restart message info and git info
+        restart_data = {
+            'chat_id': restart_msg.chat.id,
+            'message_id': restart_msg.id,
+            'git_before': git_info_before
+        }
+        
         with open("restart_msg.txt", "w") as f:
-            f.write(f"{restart_msg.chat.id},{restart_msg.id}")
+            import json
+            f.write(json.dumps(restart_data))
 
         # Get upstream settings
         upstream_repo = await self.settings_service.get_setting('UPSTREAM_REPO')
@@ -699,10 +739,29 @@ class BotSettingsHandler:
 
             try:
                 # Pull from upstream
-                subprocess.run(["git", "stash"])
-                subprocess.run(["git", "pull", upstream_repo, upstream_branch], check=True)
+                subprocess.run(["git", "stash"], capture_output=True)
+                pull_result = subprocess.run(["git", "pull", upstream_repo, upstream_branch], 
+                                           capture_output=True, text=True, check=True)
                 shutil.rmtree("logs", ignore_errors=True)
-                await restart_msg.edit_text("✅ **Updates pulled! Restarting...**")
+                
+                # Get updated git info
+                git_info_after = self._get_git_info()
+                
+                if git_info_before and git_info_after:
+                    if git_info_before['full_hash'] != git_info_after['full_hash']:
+                        update_msg = (
+                            f"✅ **Updates pulled!**\n\n"
+                            f"📝 **Latest Commit:**\n"
+                            f"🔗 `{git_info_after['hash']}` - {git_info_after['date']}\n"
+                            f"💬 {git_info_after['message']}\n\n"
+                            f"🔄 **Restarting...**"
+                        )
+                    else:
+                        update_msg = "ℹ️ **No new updates available. Restarting...**"
+                else:
+                    update_msg = "✅ **Updates pulled! Restarting...**"
+                    
+                await restart_msg.edit_text(update_msg)
             except Exception as e:
                 logger.error(f"Failed to pull updates: {e}")
                 await restart_msg.edit_text("⚠️ **Failed to pull updates. Restarting anyway...**")
