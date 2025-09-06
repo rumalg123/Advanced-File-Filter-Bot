@@ -29,6 +29,28 @@ class AdminCommandHandler(BaseCommandHandler):
         super().__init__(*args, **kwargs)
         self.broadcasting_in_progress = False
         self.broadcast_task = None
+        self.broadcast_state_key = "broadcast:state"
+        
+    async def _get_broadcast_state(self):
+        """Get broadcast state from Redis"""
+        try:
+            state = await self.bot.cache.get(self.broadcast_state_key)
+            return state == "active" if state else False
+        except Exception as e:
+            logger.error(f"Error getting broadcast state: {e}")
+            return False
+    
+    async def _set_broadcast_state(self, active: bool):
+        """Set broadcast state in Redis"""
+        try:
+            if active:
+                await self.bot.cache.set(self.broadcast_state_key, "active", ttl=3600)  # 1 hour TTL
+            else:
+                await self.bot.cache.delete(self.broadcast_state_key)
+            self.broadcasting_in_progress = active
+        except Exception as e:
+            logger.error(f"Error setting broadcast state: {e}")
+            self.broadcasting_in_progress = active
 
     def _parse_quoted_command(self, text: str) -> List[str]:
         """Parse command with quoted arguments"""
@@ -63,7 +85,9 @@ class AdminCommandHandler(BaseCommandHandler):
             )
             return
 
-        if self.broadcasting_in_progress:
+        # Check persistent broadcast state
+        is_broadcasting = await self._get_broadcast_state()
+        if is_broadcasting:
             await message.reply_text("⚠️ A broadcast is already in progress. Use /stop_broadcast to stop it.")
             return
 
@@ -142,11 +166,14 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         if callback_query.data == "confirm_broadcast":
-            if self.broadcasting_in_progress:
+            # Check persistent broadcast state
+            is_broadcasting = await self._get_broadcast_state()
+            if is_broadcasting:
                 await callback_query.answer("⚠️ A broadcast is already in progress.")
                 return
 
-            self.broadcasting_in_progress = True
+            # Set broadcast state as active
+            await self._set_broadcast_state(True)
             broadcast_msg = pending['message']
 
             await callback_query.message.edit_text("📡 Starting broadcast...")
@@ -223,7 +250,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     parse_mode=ParseMode.HTML
                 )
             finally:
-                self.broadcasting_in_progress = False
+                await self._set_broadcast_state(False)
                 self.broadcast_task = None
                 self.bot._pending_broadcast = None
 
@@ -232,15 +259,25 @@ class AdminCommandHandler(BaseCommandHandler):
     @admin_only
     async def stop_broadcast_command(self, client: Client, message: Message):
         """Stop ongoing broadcast"""
-        if not self.broadcasting_in_progress:
+        # Check persistent broadcast state
+        is_broadcasting = await self._get_broadcast_state()
+        if not is_broadcasting:
             await message.reply_text("❌ No broadcast is currently in progress.")
             return
 
+        # Clear persistent state regardless of task status
+        await self._set_broadcast_state(False)
+        
         if self.broadcast_task:
             self.broadcast_task.cancel()
             await message.reply_text("🛑 <b>Broadcast stopped!</b>\n\nThe ongoing broadcast has been cancelled.", parse_mode=ParseMode.HTML)
         else:
-            await message.reply_text("❌ Unable to stop broadcast - no active task found.")
+            # Handle case where bot was restarted but broadcast state persisted
+            await message.reply_text(
+                "🛑 <b>Broadcast state cleared!</b>\n\n"
+                "The broadcast was likely interrupted by a restart. State has been reset.",
+                parse_mode=ParseMode.HTML
+            )
 
     @admin_only
     async def users_command(self, client: Client, message: Message):

@@ -340,6 +340,42 @@ class MediaSearchBot(Client):
         self.handler_manager = HandlerManager(self)
         logger.info("HandlerManager initialized")
 
+    async def _initialize_broadcast_recovery(self):
+        """Initialize broadcast state recovery after restart"""
+        try:
+            # Get the admin command handler to check broadcast state
+            command_handler = self.handler_manager.handler_instances.get('command')
+            if command_handler and hasattr(command_handler, 'admin_handler'):
+                admin_handler = command_handler.admin_handler
+                broadcast_state_key = "broadcast:state"
+                
+                # Check if there's a persistent broadcast state
+                state = await self.cache.get(broadcast_state_key)
+                if state == "active":
+                    logger.warning(
+                        "Found active broadcast state from previous session. "
+                        "The broadcast may have been interrupted by restart. "
+                        "Use /stop_broadcast to clear the state."
+                    )
+                    # Send notification to primary admin if configured
+                    if self.config.ADMINS:
+                        primary_admin = self.config.ADMINS[0]
+                        try:
+                            await self.send_message(
+                                primary_admin,
+                                "⚠️ <b>Broadcast State Recovery</b>\n\n"
+                                "A broadcast was found to be active from the previous session. "
+                                "It may have been interrupted by a restart.\n\n"
+                                "Use /stop_broadcast to clear the broadcast state if needed.",
+                                parse_mode='HTML'
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify admin about broadcast state: {e}")
+                            
+                logger.info("Broadcast state recovery initialized")
+        except Exception as e:
+            logger.error(f"Error during broadcast state recovery: {e}")
+
     async def _initialize_handlers(self):
         """Initialize handlers after all services are ready"""
         from handlers.commands import CommandHandler
@@ -383,6 +419,9 @@ class MediaSearchBot(Client):
                     logger.info(f"Registered filter handler: {name}")
 
             logger.info(f"Total handlers initialized: {len(self.handler_manager.handler_instances)}")
+            
+            # Initialize broadcast state recovery after handlers are ready
+            await self._initialize_broadcast_recovery()
 
         except Exception as e:
             logger.error(f"Error initializing handlers: {e}")
