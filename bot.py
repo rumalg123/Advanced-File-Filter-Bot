@@ -480,6 +480,7 @@ class MediaSearchBot(Client):
             admin_basic_commands = [
                 BotCommand("users", "👥 Get users count"),
                 BotCommand("broadcast", "📢 Broadcast message"),
+                BotCommand("stop_broadcast", "🛑 Stop ongoing broadcast"),
                 BotCommand("ban", "🚫 Ban a user"),
                 BotCommand("unban", "✅ Unban a user"),
                 BotCommand("addpremium", "⭐ Add premium status"),
