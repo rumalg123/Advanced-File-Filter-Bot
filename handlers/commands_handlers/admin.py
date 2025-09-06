@@ -184,25 +184,26 @@ class AdminCommandHandler(BaseCommandHandler):
 
             # Progress callback
             async def update_progress(stats: Dict[str, int]):
-                if stats['total'] > 0:
-                    processed = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
-                    progress_percent = (processed / stats['total']) * 100
-                    
-                    text = (
-                        f"📡 <b>Broadcast Progress</b>\n\n"
-                        f"👥 Total Users: {stats['total']:,}\n"
-                        f"✅ Success: {stats['success']:,}\n"
-                        f"🚫 Blocked: {stats['blocked']:,}\n"
-                        f"❌ Deleted: {stats['deleted']:,}\n"
-                        f"⚠️ Failed: {stats['failed']:,}\n\n"
-                        f"📊 Processed: {processed:,}/{stats['total']:,}\n"
-                        f"⏳ Progress: {progress_percent:.1f}%"
-                    )
+                try:
+                    if stats['total'] > 0:
+                        processed = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
+                        progress_percent = (processed / stats['total']) * 100
+                        
+                        text = (
+                            f"📡 <b>Broadcast Progress</b>\n\n"
+                            f"👥 Total Users: {stats['total']:,}\n"
+                            f"✅ Success: {stats['success']:,}\n"
+                            f"🚫 Blocked: {stats['blocked']:,}\n"
+                            f"❌ Deleted: {stats['deleted']:,}\n"
+                            f"⚠️ Failed: {stats['failed']:,}\n\n"
+                            f"📊 Processed: {processed:,}/{stats['total']:,}\n"
+                            f"⏳ Progress: {progress_percent:.1f}%"
+                        )
 
-                    try:
-                        await callback_query.message.edit_text(text, parse_mode=ParseMode.HTML)
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value)
+                        try:
+                            await callback_query.message.edit_text(text, parse_mode=ParseMode.HTML)
+                        except FloodWait as e:
+                            await asyncio.sleep(e.value)
                 except Exception as e:
                     logger.error(f"Progress update error: {e}")
 
