@@ -48,7 +48,7 @@ class AdminCommandHandler(BaseCommandHandler):
         """Set broadcast state in Redis"""
         try:
             if active:
-                await self.bot.cache.set(self.broadcast_state_key, "active", ttl=3600)  # 1 hour TTL
+                await self.bot.cache.set(self.broadcast_state_key, "active", expire=3600)  # 1 hour TTL
                 logger.info("Broadcast state set to ACTIVE")
             else:
                 await self.bot.cache.delete(self.broadcast_state_key)
@@ -183,7 +183,8 @@ class AdminCommandHandler(BaseCommandHandler):
             # Set broadcast state as active
             await self._set_broadcast_state(True)
             broadcast_msg = pending['message']
-
+            
+            logger.info(f"Starting broadcast for admin {callback_query.from_user.id}")
             await callback_query.message.edit_text("📡 Starting broadcast...")
 
             # Progress callback
@@ -288,9 +289,12 @@ class AdminCommandHandler(BaseCommandHandler):
         memory_state = self.broadcasting_in_progress
         task_exists = self.broadcast_task is not None
         
-        logger.info(f"Stop broadcast check - Redis: {is_broadcasting}, Memory: {memory_state}, Task: {task_exists}")
+        # Also check global task reference
+        global_task_exists = hasattr(self.bot, '_active_broadcast_task') and self.bot._active_broadcast_task is not None
         
-        if not is_broadcasting and not memory_state:
+        logger.info(f"Stop broadcast check - Redis: {is_broadcasting}, Memory: {memory_state}, Task: {task_exists}, Global: {global_task_exists}")
+        
+        if not is_broadcasting and not memory_state and not task_exists and not global_task_exists:
             await message.reply_text("❌ No broadcast is currently in progress.")
             return
 
@@ -308,10 +312,13 @@ class AdminCommandHandler(BaseCommandHandler):
         if hasattr(self.bot, '_active_broadcast_task') and self.bot._active_broadcast_task:
             try:
                 self.bot._active_broadcast_task.cancel()
+                self.bot._active_broadcast_task = None  # Clear immediately after cancelling
                 task_cancelled = True
                 logger.info("Cancelled broadcast task from global reference")
             except Exception as e:
                 logger.error(f"Error cancelling global broadcast task: {e}")
+                # Clear reference even if cancellation failed
+                self.bot._active_broadcast_task = None
         
         if task_cancelled:
             await message.reply_text("🛑 <b>Broadcast stopped!</b>\n\nThe ongoing broadcast has been cancelled.", parse_mode=ParseMode.HTML)
