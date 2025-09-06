@@ -741,7 +741,19 @@ class BotSettingsHandler:
                 # Force pull from upstream (overwrites local changes)
                 subprocess.run(["git", "fetch", "--all"], capture_output=True, text=True, check=True)
                 subprocess.run(["git", "reset", "--hard", f"origin/{upstream_branch}"], capture_output=True, text=True, check=True)
-                subprocess.run(["git", "clean", "-fd"], capture_output=True, text=True, check=True)
+                
+                # Try git clean with error handling for Docker environments
+                try:
+                    subprocess.run(["git", "clean", "-fd"], capture_output=True, text=True, check=True)
+                except subprocess.CalledProcessError as clean_error:
+                    logger.warning(f"Git clean failed (likely permission issue in Docker): {clean_error}")
+                    # Try alternative cleanup for Docker environments
+                    try:
+                        # Clean only files that git can access
+                        subprocess.run(["git", "clean", "-f"], capture_output=True, text=True, check=False)
+                    except Exception:
+                        logger.info("Git clean alternative also failed, continuing anyway")
+                
                 shutil.rmtree("logs", ignore_errors=True)
                 
                 # Get updated git info

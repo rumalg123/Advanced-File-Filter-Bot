@@ -33,9 +33,6 @@ services:
       # Time synchronization
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
-      
-      # Git directory for updates (if using auto-update)
-      - bot-git:/usr/src/app/.git
     depends_on:
       redis:
         condition: service_healthy
@@ -100,11 +97,6 @@ volumes:
     driver: local
     labels:
       - "com.filefilterbot.volume=data"
-      
-  bot-git:
-    driver: local
-    labels:
-      - "com.filefilterbot.volume=git"
 
 networks:
   bot-network:

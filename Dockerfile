@@ -39,12 +39,6 @@ RUN pip install --no-cache-dir --upgrade pip wheel && \
 # Copy application files
 COPY . .
 
-# Configure git for container environment and auto-updates
-RUN git config --global --add safe.directory /usr/src/app && \
-    git config --global user.email "bot@filefilterbot.com" && \
-    git config --global user.name "Advanced File Filter Bot" && \
-    git config --global init.defaultBranch main
-
 # Make scripts executable
 RUN chmod +x start.sh && \
     chmod +x update.py
@@ -55,6 +49,12 @@ RUN groupadd -r botuser && useradd -r -g botuser -d /usr/src/app -s /sbin/nologi
 
 # Switch to non-root user
 USER botuser
+
+# Configure git for container environment as botuser
+RUN git config --global --add safe.directory /usr/src/app && \
+    git config --global user.email "bot@filefilterbot.com" && \
+    git config --global user.name "Advanced File Filter Bot" && \
+    git config --global init.defaultBranch main
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
