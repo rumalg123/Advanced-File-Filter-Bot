@@ -353,17 +353,14 @@ class SearchHandler:
                 # Create unique ID for each result
                 unique_id = f"{offset}_{i}_{file.file_unique_id}"
 
-                delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-                delete_minutes = delete_time // 60 if delete_time > 0 else 0
-
                 caption = CaptionFormatter.format_file_caption(
                     file=file,
                     custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
                     batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                     keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                     is_batch=False,
-                    auto_delete_minutes=delete_minutes if delete_time > 0 else None,
-                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
+                    auto_delete_minutes=None,  # No auto-delete for inline results
+                    auto_delete_message=None
                 )
 
                 # Create inline result

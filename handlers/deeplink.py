@@ -256,12 +256,16 @@ class DeepLinkHandler(BaseCommandHandler):
                     auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
-                await client.send_cached_media(
+                sent_msg = await client.send_cached_media(
                     chat_id=user_id,
                     file_id=file.file_id,
                     caption=caption,
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
+
+                # Schedule auto-deletion if enabled
+                if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+                    asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
                 # Update retrieval count for non-premium
@@ -380,12 +384,16 @@ class DeepLinkHandler(BaseCommandHandler):
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
-                await client.send_cached_media(
+                sent_msg = await client.send_cached_media(
                     chat_id=user_id,
                     file_id=file.file_id,
                     caption=caption,
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
+
+                # Schedule auto-deletion if enabled
+                if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+                    asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
                 # Update retrieval count for non-premium

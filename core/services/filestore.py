@@ -38,6 +38,14 @@ class FileStoreService:
         self.max_batch_cache_size = 100
         self.batch_cache_access_time = {}
 
+    async def _auto_delete_message(self, message: Message, delay: int):
+        """Auto-delete message after delay"""
+        try:
+            await asyncio.sleep(delay)
+            await message.delete()
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
+
     def encode_file_identifier(self, file_identifier: str, protect: bool = False) -> str:
         """
         Encode file identifier (file_ref) to shareable string
@@ -368,18 +376,22 @@ class FileStoreService:
                 batch_caption=self.config.BATCH_FILE_CAPTION,
                 keep_original=self.config.KEEP_ORIGINAL_CAPTION,
                 is_batch=False,
-                auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
+                auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60) if self.config.MESSAGE_DELETE_SECONDS > 0 else None,
                 auto_delete_message=self.config.AUTO_DELETE_MESSAGE
             )
 
             # Use the actual file_id for sending
-            await client.send_cached_media(
+            sent_msg = await client.send_cached_media(
                 chat_id=user_id,
                 file_id=file.file_id,
                 caption=caption,
                 protect_content=protect,
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
+
+            # Schedule auto-deletion if enabled
+            if self.config.MESSAGE_DELETE_SECONDS > 0:
+                asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
 
             return True
 
@@ -427,17 +439,21 @@ class FileStoreService:
                     keep_original=self.config.KEEP_ORIGINAL_CAPTION,
                     use_original_for_batch=self.config.USE_ORIGINAL_CAPTION_FOR_BATCH,
                     is_batch=True,
-                    auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
+                    auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60) if self.config.MESSAGE_DELETE_SECONDS > 0 else None,
                     auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                 )
 
-                await client.send_cached_media(
+                sent_msg = await client.send_cached_media(
                     chat_id=user_id,
                     file_id=file_id_to_send,
                     caption=caption,
                     protect_content=file_data.get("protect", False),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
+
+                # Schedule auto-deletion if enabled
+                if self.config.MESSAGE_DELETE_SECONDS > 0:
+                    asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
 
                 success_count += 1
                 await asyncio.sleep(1)  # Avoid flooding
@@ -516,7 +532,7 @@ class FileStoreService:
                             keep_original=self.config.KEEP_ORIGINAL_CAPTION,
                             use_original_for_batch=self.config.USE_ORIGINAL_CAPTION_FOR_BATCH,
                             is_batch=True,
-                            auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60),
+                            auto_delete_minutes=int(self.config.MESSAGE_DELETE_SECONDS/60) if self.config.MESSAGE_DELETE_SECONDS > 0 else None,
                             auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                         )
 
@@ -527,6 +543,11 @@ class FileStoreService:
                             protect_content=protect,
                             parse_mode=CaptionFormatter.get_parse_mode()
                         )
+
+                        # Schedule auto-deletion if enabled
+                        if self.config.MESSAGE_DELETE_SECONDS > 0:
+                            asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+
                         sent_messages.append(sent_msg)
                         success_count += 1
 
