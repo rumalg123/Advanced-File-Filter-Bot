@@ -32,6 +32,8 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - **📝 Content Requests**: Users can request content via #request in support group
 - **🔍 Duplicate Detection**: Advanced duplicate detection using file unique id
 - **⚙️ Bot Settings**: Comprehensive settings management via commands
+- **🔄 Auto-Update System**: Secure automatic updates with backup and rollback capabilities
+- **🐚 Secure Shell Access**: Execute system commands with safety checks (owner-only)
 
 ### 👨‍💼 Admin Features
 - **📈 Detailed Statistics**: User stats, file stats, cache stats, and system metrics
@@ -128,34 +130,140 @@ sudo systemctl start redis
 
 ### 6. Run the Bot
 ```bash
-# On Linux (with uvloop optimization)
+# On Linux (with uvloop optimization and auto-update support)
 bash start.sh
 
 # Or directly with Python
 python bot.py
 ```
 
+## 🔄 Auto-Update System
+
+The bot includes a comprehensive auto-update system with enterprise-grade security features:
+
+### 🛡️ Security Features
+- **Repository Validation**: Only HTTPS URLs from trusted platforms (GitHub, GitLab, Bitbucket)
+- **Branch Validation**: Prevents injection attacks through branch names
+- **Python Syntax Validation**: Validates code before applying updates
+- **Backup System**: Automatic backups before updates with rollback capability
+- **Docker Environment Detection**: Smart handling for containerized deployments
+
+### 📝 Manual Update Commands
+```bash
+# Basic update from your repository
+python update.py --repo https://github.com/rumalg123/Advanced-File-Filter-Bot.git
+
+# Update from specific branch
+python update.py --repo https://github.com/rumalg123/Advanced-File-Filter-Bot.git --branch main
+
+# Update without backup (not recommended)
+python update.py --skip-backup
+
+# Rollback to previous version
+python update.py --rollback backups/backup_20231201_120000
+
+# View help and examples
+python update.py --help
+```
+
+### ⚙️ Startup Script Options
+```bash
+# Normal start
+bash start.sh
+
+# Start with update check
+bash start.sh --update
+
+# Setup environment only (create venv, install deps)
+bash start.sh --setup
+
+# Run health checks only
+bash start.sh --check
+
+# View all options
+bash start.sh --help
+```
+
+### 🔧 Auto-Update Configuration
+Add these environment variables to your `.env` file:
+
+```bash
+# Auto-Update Settings
+UPDATE_REPO=https://github.com/rumalg123/Advanced-File-Filter-Bot
+UPDATE_BRANCH=main
+AUTO_UPDATE=false          # Auto-update on every start
+UPDATE_ON_START=false      # Update once on start
+BACKUP_ON_UPDATE=true      # Create backups (recommended)
+CONTINUE_ON_UPDATE_FAIL=false  # Continue with old version if update fails (Docker only)
+```
+
+### 📚 Update Process
+1. **Validation**: Repository URL and branch name validation
+2. **Backup**: Create timestamped backup of current installation
+3. **Clone**: Secure shallow clone of the specified repository and branch
+4. **Validation**: Python syntax validation of critical files
+5. **Apply**: Safe file replacement with proper permissions
+6. **Cleanup**: Automatic cleanup of temporary files
+
 ## 🐳 Docker Deployment
 
-### Using Docker Compose
+The Docker setup now includes auto-update support, persistent volumes, and enhanced security.
+
+### Using Docker Compose (Recommended)
 ```bash
-# Build and run
+# Build and run with auto-update support
 docker-compose up -d
 
+# Build and run with auto-update enabled
+AUTO_UPDATE=true docker-compose up -d
+
 # View logs
-docker-compose logs -f
+docker-compose logs -f file-filter-bot
+
+# Restart after updates
+docker-compose restart file-filter-bot
 
 # Stop
 docker-compose down
 ```
 
-### Using Dockerfile
+### Docker Features
+- **Persistent Volumes**: Automatic backup, log, and data persistence
+- **Auto-Update Support**: Built-in git and update script integration
+- **Security Hardening**: Non-root user, minimal attack surface
+- **Health Checks**: Automatic container health monitoring
+- **Redis Integration**: Optimized Redis configuration included
+
+### Docker Environment Variables
+```bash
+# Auto-Update Configuration
+UPDATE_REPO=https://github.com/rumalg123/Advanced-File-Filter-Bot
+UPDATE_BRANCH=main
+AUTO_UPDATE=false          # Enable auto-updates in container
+UPDATE_ON_START=false      # Update on container start
+BACKUP_ON_UPDATE=true      # Create backups during updates
+
+# Performance Configuration
+MAX_CONNECTIONS=20         # Maximum concurrent connections
+CACHE_TTL=3600            # Cache time-to-live in seconds
+TZ=UTC                    # Timezone setting
+```
+
+### Using Dockerfile (Manual)
 ```bash
 # Build image
-docker build -t media-search-bot .
+docker build -t advanced-file-filter-bot .
 
-# Run container
-docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
+# Run container with auto-update support
+docker run -d \
+  --name file-filter-bot \
+  --env-file .env \
+  -e UPDATE_REPO=https://github.com/rumalg123/Advanced-File-Filter-Bot \
+  -e AUTO_UPDATE=false \
+  -v bot-backups:/usr/src/app/backups \
+  -v bot-logs:/usr/src/app/logs \
+  -p 8000:8000 \
+  advanced-file-filter-bot
 ```
 
 ## ⚙️ Configuration Guide
@@ -346,7 +454,48 @@ docker run -d --name media-bot --env-file .env -p 8000:8000 media-search-bot
 | `/bsetting` | Open bot settings menu |
 | `/verify` | Verify file access and integrity |
 | `/cancel` | Cancel current operation |
-| `/shell <command>` | Execute shell command |
+| `/shell <command>` | Execute shell command with security checks |
+
+### 🐚 Secure Shell Command System
+
+The bot includes a secure shell command system for the primary admin (first admin in the list):
+
+#### Features
+- **Owner-Only Access**: Only the first admin can execute shell commands
+- **Dangerous Command Detection**: Automatically warns about potentially destructive commands
+- **Execution Timeout**: Commands timeout after 5 minutes for safety
+- **Output Handling**: Small outputs shown inline, large outputs sent as files
+- **Comprehensive Logging**: All commands logged with execution details
+- **Security Patterns**: Blocks dangerous patterns like `rm -rf`, `chmod 777`, etc.
+
+#### Usage Examples
+```bash
+# Safe system information commands
+/shell ls -la
+/shell df -h
+/shell ps aux
+/shell python --version
+/shell git status
+
+# Package management
+/shell pip install requests
+/shell pip list
+
+# System monitoring
+/shell free -h
+/shell uptime
+/shell uname -a
+```
+
+#### Dangerous Commands (Automatically Detected)
+The system will warn you about potentially dangerous commands:
+- `rm -rf` - Recursive file deletion
+- `chmod 777` - Permission changes
+- `sudo su` - Privilege escalation
+- `mkfs`, `format` - Filesystem operations
+- `dd if=` - Direct disk operations
+- `fdisk` - Disk partitioning
+- `kill -9 1` - System process termination
 
 ### 📤 File Store Commands
 
@@ -627,15 +776,37 @@ git push heroku main
    - Enable SSL/TLS connections
    - Regular backups
 
-3. **Rate Limiting**
+3. **Auto-Update Security** 🆕
+   - Only use HTTPS repository URLs from trusted platforms
+   - Verify repository ownership before setting UPDATE_REPO
+   - Enable backups (BACKUP_ON_UPDATE=true) for rollback capability
+   - Test updates in staging environment first
+   - Monitor update logs for suspicious activity
+
+4. **Shell Command Security** 🆕
+   - Shell access is restricted to the primary admin (first in ADMINS list)
+   - Dangerous commands are automatically detected and blocked
+   - All commands are logged with execution details
+   - Use with extreme caution in production environments
+   - Consider disabling in high-security environments
+
+5. **Docker Security**
+   - Container runs as non-root user
+   - Minimal attack surface with slim base image
+   - Persistent volumes for data safety
+   - Network isolation with bridge networking
+   - Health checks for container monitoring
+
+6. **Rate Limiting**
    - Configure appropriate limits
    - Monitor for abuse patterns
    - Implement IP-based limiting if needed
 
-4. **Access Control**
+7. **Access Control**
    - Limit admin commands
    - Validate all user inputs
    - Use force subscription wisely
+   - Regular access audit and cleanup
 
 ## 📊 Monitoring & Maintenance
 
@@ -683,19 +854,24 @@ mongorestore --uri="your-connection-string" backup/
 ## 🆕 Recent Updates & New Features
 
 ### ✨ Latest Major Additions
-- **🔄 Enhanced Restart Command**: Git integration with automatic updates, version tracking, and force pull
+- **🔄 Enterprise Auto-Update System**: Comprehensive auto-update with security validation, backup system, and rollback capabilities
+- **🐚 Secure Shell Command**: Owner-only shell access with dangerous command detection and security checks
+- **🐳 Enhanced Docker Support**: Auto-update support, persistent volumes, security hardening, and optimized Redis configuration
+- **🛡️ Advanced Security**: Repository URL validation, branch validation, Python syntax checking, and non-root Docker containers
+- **📦 Improved Startup System**: Comprehensive startup script with health checks, environment detection, and auto-update integration
 - **🗃️ Enterprise Multi-Database**: Smart selection, circuit breaker protection, and auto-recovery
 - **⏱ Advanced Auto-Delete**: Customizable HTML templates, smart scheduling, and cross-handler support
 - **🎯 Smart File Emojis**: File-type specific emojis for better visual identification  
 - **📊 Database Management**: Complete admin tools for monitoring, switching, and health checking
 - **⚙️ Dynamic Settings**: Comprehensive `/bsetting` system with live configuration changes
-- **🛡️ Circuit Breaker Pattern**: Fault tolerance for database operations with automatic recovery
 
 ### 🔧 Command Improvements
 All commands now automatically appear in Telegram's command menu:
+- Added secure shell command (`/shell`) with owner-only access and security checks
 - Added database management commands (`/dbstats`, `/dbinfo`, `/dbswitch`)
 - Added missing filter command aliases (`/filter`, `/viewfilters`, `/delf`, `/delallf`)
 - Added admin commands (`/verify`, `/cancel`)
+- Enhanced command validation and input sanitization
 - Commands are properly scoped (all users, groups, admins, primary admin)
 
 ### 🐛 Critical Bug Fixes & Improvements
