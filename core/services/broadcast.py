@@ -2,6 +2,7 @@ import asyncio
 from functools import lru_cache
 from typing import Dict
 
+from pyrogram.enums import ParseMode
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
@@ -70,9 +71,11 @@ class BroadcastService:
 
                 try:
                     if hasattr(message, 'copy'):
-                        await message.copy(user_id)
+                        # Copy message with HTML parse mode
+                        await message.copy(user_id, parse_mode=ParseMode.HTML)
                     else:
-                        await client.send_message(user_id, message)
+                        # Send text message with HTML parse mode
+                        await client.send_message(user_id, message, parse_mode=ParseMode.HTML)
 
                     stats['success'] += 1
 

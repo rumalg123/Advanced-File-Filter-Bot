@@ -9,7 +9,7 @@ from typing import Dict, List
 
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
 from core.cache.monitor import CacheMonitor
@@ -24,6 +24,11 @@ logger = get_logger(__name__)
 
 class AdminCommandHandler(BaseCommandHandler):
     """Handler for admin-only commands"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.broadcasting_in_progress = False
+        self.broadcast_task = None
 
     def _parse_quoted_command(self, text: str) -> List[str]:
         """Parse command with quoted arguments"""
@@ -42,19 +47,24 @@ class AdminCommandHandler(BaseCommandHandler):
         except Exception as e:
             logger.warning(f"Failed to notify user {user_id}: {e}")
             return False
-    # The broadcast command is already well-implemented, but let's add some improvements:
-
     @admin_only
     async def broadcast_command(self, client: Client, message: Message):
-        """Handle broadcast command with improvements"""
+        """Enhanced broadcast command with HTML formatting and preview"""
         if not message.reply_to_message:
             await message.reply_text(
                 "⚠️ Reply to a message to broadcast it.\n\n"
-                "**Tips:**\n"
-                "• You can broadcast text, photos, videos, documents\n"
-                "• Use formatting: **bold**, __italic__, `code`\n"
-                "• Add buttons using @BotFather's inline keyboard"
+                "**Features:**\n"
+                "• HTML formatting support\n"
+                "• Preview before sending\n"
+                "• Can broadcast text, photos, videos, documents\n"
+                "• Use HTML tags: <b>bold</b>, <i>italic</i>, <code>code</code>\n"
+                "• Confirmation buttons for safety",
+                parse_mode=ParseMode.HTML
             )
+            return
+
+        if self.broadcasting_in_progress:
+            await message.reply_text("⚠️ A broadcast is already in progress. Use /stop_broadcast to stop it.")
             return
 
         # Rate limit check
@@ -69,82 +79,168 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         broadcast_msg = message.reply_to_message
-
-        # Confirmation for large broadcasts
         user_count = await self.bot.user_repo.count({'status': {'$ne': 'banned'}})
 
-        if user_count > 100:
-            confirm_msg = await message.reply_text(
-                f"⚠️ **Broadcast Confirmation**\n\n"
-                f"This will send the message to **{user_count:,}** users.\n\n"
-                f"Reply with 'YES' within 30 seconds to confirm."
-            )
+        # Create preview message
+        preview_text = f"📡 <b>Broadcast Preview</b>\n\n"
+        preview_text += f"👥 <b>Total Recipients:</b> {user_count:,} users\n\n"
+        preview_text += f"📄 <b>Message Preview:</b>\n"
+        
+        if broadcast_msg.text:
+            # Show text preview (limit to 200 chars)
+            text_preview = broadcast_msg.text[:200] + ("..." if len(broadcast_msg.text) > 200 else "")
+            preview_text += f"<i>{text_preview}</i>"
+        elif broadcast_msg.caption:
+            # Show caption preview for media
+            caption_preview = broadcast_msg.caption[:200] + ("..." if len(broadcast_msg.caption) > 200 else "")
+            preview_text += f"<i>{caption_preview}</i>"
+        elif broadcast_msg.document:
+            preview_text += f"📄 <i>Document: {broadcast_msg.document.file_name}</i>"
+        elif broadcast_msg.photo:
+            preview_text += f"🖼 <i>Photo</i>"
+        elif broadcast_msg.video:
+            preview_text += f"🎥 <i>Video</i>"
+        elif broadcast_msg.audio:
+            preview_text += f"🎵 <i>Audio</i>"
+        else:
+            preview_text += f"📱 <i>Media message</i>"
 
-            try:
-                response = await client.wait_for_message(
-                    chat_id=message.chat.id,
-                    filters=filters.user(message.from_user.id) & filters.text,  # Fixed parameters
-                    timeout=30
-                )
+        preview_text += f"\n\n⚠️ <b>Warning:</b> This will send the message with HTML formatting to all users."
 
-                if not response or not response.text or response.text.upper() != "YES":
-                    await confirm_msg.edit_text("❌ Broadcast cancelled.")
-                    return
+        # Confirmation buttons
+        buttons = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Confirm Broadcast", callback_data="confirm_broadcast"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel_broadcast")
+            ]
+        ])
 
-            except asyncio.TimeoutError:
-                await confirm_msg.edit_text("❌ Broadcast cancelled (timeout).")
+        # Store broadcast message for callback
+        self.bot._pending_broadcast = {
+            'message': broadcast_msg,
+            'admin_id': message.from_user.id,
+            'admin_message_id': message.id
+        }
+
+        await message.reply_text(preview_text, reply_markup=buttons, parse_mode=ParseMode.HTML)
+
+    async def handle_broadcast_confirmation(self, client: Client, callback_query):
+        """Handle broadcast confirmation callback"""
+        if not hasattr(self.bot, '_pending_broadcast') or not self.bot._pending_broadcast:
+            await callback_query.answer("❌ No pending broadcast found.")
+            return
+
+        pending = self.bot._pending_broadcast
+        if callback_query.from_user.id != pending['admin_id']:
+            await callback_query.answer("❌ Only the admin who initiated this broadcast can confirm it.")
+            return
+
+        if callback_query.data == "cancel_broadcast":
+            await callback_query.message.edit_text("❌ Broadcast cancelled.")
+            self.bot._pending_broadcast = None
+            await callback_query.answer()
+            return
+
+        if callback_query.data == "confirm_broadcast":
+            if self.broadcasting_in_progress:
+                await callback_query.answer("⚠️ A broadcast is already in progress.")
                 return
 
-        status_msg = await message.reply_text("📡 Starting broadcast...")
+            self.broadcasting_in_progress = True
+            broadcast_msg = pending['message']
 
-        # Progress callback
-        async def update_progress(stats: Dict[str, int]):
-            text = (
-                f"📡 <b>Broadcast Progress</b>\n\n"
-                f"Total: {stats['total']}\n"
-                f"✅ Success: {stats['success']}\n"
-                f"🚫 Blocked: {stats['blocked']}\n"
-                f"❌ Deleted: {stats['deleted']}\n"
-                f"⚠️ Failed: {stats['failed']}\n\n"
-                f"⏳ Progress: {((stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']) / stats['total'] * 100):.1f}%"
-            )
+            await callback_query.message.edit_text("📡 Starting broadcast...")
 
+            # Progress callback
+            async def update_progress(stats: Dict[str, int]):
+                if stats['total'] > 0:
+                    progress_percent = ((stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']) / stats['total'] * 100)
+                    text = (
+                        f"📡 <b>Broadcast Progress</b>\n\n"
+                        f"Total: {stats['total']:,}\n"
+                        f"✅ Success: {stats['success']:,}\n"
+                        f"🚫 Blocked: {stats['blocked']:,}\n"
+                        f"❌ Deleted: {stats['deleted']:,}\n"
+                        f"⚠️ Failed: {stats['failed']:,}\n\n"
+                        f"⏳ Progress: {progress_percent:.1f}%"
+                    )
+
+                    try:
+                        await callback_query.message.edit_text(text, parse_mode=ParseMode.HTML)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
+
+            # Start broadcast task
+            start_time = datetime.now()
+            
             try:
-                await status_msg.edit_text(text)
-            except FloodWait as e:
-                await asyncio.sleep(e.value)
+                self.broadcast_task = asyncio.create_task(
+                    self.bot.broadcast_service.broadcast_to_users(
+                        client,
+                        broadcast_msg,
+                        progress_callback=update_progress
+                    )
+                )
+                
+                final_stats = await self.broadcast_task
 
-        # Start broadcast
-        start_time = datetime.now()
-        final_stats = await self.bot.broadcast_service.broadcast_to_users(
-            client,  # Add client parameter
-            broadcast_msg,
-            progress_callback=update_progress
-        )
+                # Final message
+                duration = datetime.now() - start_time
+                final_text = (
+                    f"✅ <b>Broadcast Completed!</b>\n\n"
+                    f"⏱ Duration: {duration}\n"
+                    f"📊 Total Users: {final_stats['total']:,}\n"
+                    f"✅ Success: {final_stats['success']:,} ({final_stats['success'] / final_stats['total'] * 100:.1f}%)\n"
+                    f"🚫 Blocked: {final_stats['blocked']:,}\n"
+                    f"❌ Deleted: {final_stats['deleted']:,}\n"
+                    f"⚠️ Failed: {final_stats['failed']:,}"
+                )
 
-        # Final message
-        duration = datetime.now() - start_time
-        final_text = (
-            f"✅ <b>Broadcast Completed!</b>\n\n"
-            f"⏱ Duration: {duration}\n"
-            f"📊 Total Users: {final_stats['total']:,}\n"
-            f"✅ Success: {final_stats['success']:,} ({final_stats['success'] / final_stats['total'] * 100:.1f}%)\n"
-            f"🚫 Blocked: {final_stats['blocked']:,}\n"
-            f"❌ Deleted: {final_stats['deleted']:,}\n"
-            f"⚠️ Failed: {final_stats['failed']:,}"
-        )
+                await callback_query.message.edit_text(final_text, parse_mode=ParseMode.HTML)
 
-        await status_msg.edit_text(final_text)
+                # Log broadcast
+                if self.bot.config.LOG_CHANNEL:
+                    await client.send_message(
+                        self.bot.config.LOG_CHANNEL,
+                        f"#Broadcast\n"
+                        f"Admin: {callback_query.from_user.mention}\n"
+                        f"Total: {final_stats['total']:,}\n"
+                        f"Success: {final_stats['success']:,}",
+                        parse_mode=ParseMode.HTML
+                    )
 
-        # Log broadcast
-        if self.bot.config.LOG_CHANNEL:
-            await client.send_message(
-                self.bot.config.LOG_CHANNEL,
-                f"#Broadcast\n"
-                f"Admin: {message.from_user.mention}\n"
-                f"Total: {final_stats['total']:,}\n"
-                f"Success: {final_stats['success']:,}"
-            )
+            except asyncio.CancelledError:
+                await callback_query.message.edit_text(
+                    "🛑 <b>Broadcast Stopped</b>\n\n"
+                    "The broadcast was manually stopped by an admin.",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.error(f"Broadcast error: {e}")
+                await callback_query.message.edit_text(
+                    f"❌ <b>Broadcast Failed</b>\n\n"
+                    f"Error: {str(e)}",
+                    parse_mode=ParseMode.HTML
+                )
+            finally:
+                self.broadcasting_in_progress = False
+                self.broadcast_task = None
+                self.bot._pending_broadcast = None
+
+            await callback_query.answer()
+
+    @admin_only
+    async def stop_broadcast_command(self, client: Client, message: Message):
+        """Stop ongoing broadcast"""
+        if not self.broadcasting_in_progress:
+            await message.reply_text("❌ No broadcast is currently in progress.")
+            return
+
+        if self.broadcast_task:
+            self.broadcast_task.cancel()
+            await message.reply_text("🛑 <b>Broadcast stopped!</b>\n\nThe ongoing broadcast has been cancelled.", parse_mode=ParseMode.HTML)
+        else:
+            await message.reply_text("❌ Unable to stop broadcast - no active task found.")
 
     @admin_only
     async def users_command(self, client: Client, message: Message):

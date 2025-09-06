@@ -209,6 +209,15 @@ class CommandHandler:
                 filters.regex(r"^start_menu$")
             )
         )
+        
+        # Broadcast confirmation callbacks
+        if self.bot.config.ADMINS:
+            self.bot.add_handler(
+                CallbackQueryHandler(
+                    self.admin_handler.handle_broadcast_confirmation,
+                    filters.regex(r"^(confirm_broadcast|cancel_broadcast)$") & filters.user(self.bot.config.ADMINS)
+                )
+            )
         # Admin commands - check if ADMINS is configured
         if self.bot.config.ADMINS:
             # User management
@@ -228,6 +237,12 @@ class CommandHandler:
                 MessageHandler(
                     self.admin_handler.broadcast_command,
                     filters.command("broadcast") & filters.user(self.bot.config.ADMINS)
+                )
+            )
+            self.bot.add_handler(
+                MessageHandler(
+                    self.admin_handler.stop_broadcast_command,
+                    filters.command("stop_broadcast") & filters.user(self.bot.config.ADMINS)
                 )
             )
             self.bot.add_handler(

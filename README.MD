@@ -25,7 +25,7 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - **🔗 Connection Management**: Connect groups to manage filters privately
 - **🎭 Custom Filters**: Create custom keyword-based auto-replies with buttons and alerts
 - **📤 File Store**: Generate shareable and protected links for files
-- **📊 Broadcasting**: Send messages to all users efficiently with progress tracking
+- **📊 Enhanced Broadcasting**: Send messages to all users with HTML formatting, preview, and confirmation system
 - **🔐 Force Subscription**: Require users to join channels/groups
 - **🗑️ Auto-Delete**: Automatically delete messages after specified time
 - **📱 Inline Search**: Search files directly from any chat
@@ -385,11 +385,37 @@ docker run -d \
 | Command | Description |
 |---------|-------------|
 | `/users` | Get total users count |
-| `/broadcast` | Broadcast message to all users |
+| `/broadcast` | Enhanced broadcast with HTML formatting and preview |
+| `/stop_broadcast` | Stop ongoing broadcast |
 | `/ban <user_id> [reason]` | Ban a user with optional reason |
 | `/unban <user_id>` | Unban a user |
 | `/addpremium <user_id>` | Add premium status |
 | `/removepremium <user_id>` | Remove premium status |
+
+#### 📡 Enhanced Broadcasting System
+The bot features an advanced broadcasting system with safety features:
+
+**Features:**
+- **HTML Formatting**: Full HTML support with `<b>bold</b>`, `<i>italic</i>`, `<code>code</code>` tags
+- **Message Preview**: Shows preview of message and recipient count before sending
+- **Confirmation System**: Confirm/Cancel buttons prevent accidental broadcasts
+- **Progress Tracking**: Real-time progress updates with statistics
+- **Stop Functionality**: Emergency stop capability during broadcast
+- **Support for Media**: Text, photos, videos, documents, and other media types
+
+**Usage:**
+1. Reply to any message with `/broadcast`
+2. Preview your message and recipient count
+3. Click "✅ Confirm Broadcast" or "❌ Cancel"  
+4. Monitor progress in real-time
+5. Use `/stop_broadcast` to emergency stop if needed
+
+**Safety Features:**
+- Rate limiting prevents spam
+- Preview prevents accidental sends
+- Progress tracking allows monitoring
+- Emergency stop capability
+- Admin-only access with proper validation
 
 #### Channel Management
 | Command | Description |
@@ -854,6 +880,7 @@ mongorestore --uri="your-connection-string" backup/
 ## 🆕 Recent Updates & New Features
 
 ### ✨ Latest Major Additions
+- **📡 Enhanced Broadcasting System**: HTML formatting, message preview, confirmation buttons, progress tracking, and emergency stop functionality
 - **🔄 Enterprise Auto-Update System**: Comprehensive auto-update with security validation, backup system, and rollback capabilities
 - **🐚 Secure Shell Command**: Owner-only shell access with dangerous command detection and security checks
 - **🐳 Enhanced Docker Support**: Auto-update support, persistent volumes, security hardening, and optimized Redis configuration
