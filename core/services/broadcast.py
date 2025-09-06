@@ -71,11 +71,19 @@ class BroadcastService:
 
                 try:
                     if hasattr(message, 'copy'):
-                        # Copy message with HTML parse mode
-                        await message.copy(user_id, parse_mode=ParseMode.HTML)
+                        # Check if it's a text message or media with caption
+                        if message.text:
+                            # For text messages, send with HTML parse mode
+                            await client.send_message(user_id, message.text, parse_mode=ParseMode.HTML)
+                        elif message.caption:
+                            # For media with caption, copy and set parse mode for caption
+                            await message.copy(user_id, parse_mode=ParseMode.HTML)
+                        else:
+                            # For media without caption, just copy
+                            await message.copy(user_id)
                     else:
-                        # Send text message with HTML parse mode
-                        await client.send_message(user_id, message, parse_mode=ParseMode.HTML)
+                        # Fallback: send as text message with HTML parse mode
+                        await client.send_message(user_id, str(message), parse_mode=ParseMode.HTML)
 
                     stats['success'] += 1
 
@@ -91,11 +99,11 @@ class BroadcastService:
                     else:
                         stats['failed'] += 1
 
-            # Progress callback and other logic...
-            if progress_callback and (stats['success'] + stats['blocked'] + stats['deleted'] + stats[
-                'failed'] - last_progress_update) >= 50:
+            # Progress callback - update more frequently
+            processed_count = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
+            if progress_callback and (processed_count - last_progress_update) >= 10:  # Update every 10 users
                 await progress_callback(stats)
-                last_progress_update = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
+                last_progress_update = processed_count
 
             # Adaptive delay
             if stats['total'] > 0:

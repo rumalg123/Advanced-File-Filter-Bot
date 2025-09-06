@@ -35,22 +35,26 @@ class AdminCommandHandler(BaseCommandHandler):
         """Get broadcast state from Redis"""
         try:
             state = await self.bot.cache.get(self.broadcast_state_key)
-            return state == "active" if state else False
+            is_active = state == "active" if state else False
+            logger.debug(f"Broadcast state check: {state} -> {is_active}")
+            return is_active
         except Exception as e:
             logger.error(f"Error getting broadcast state: {e}")
-            return False
+            return self.broadcasting_in_progress  # Fallback to memory state
     
     async def _set_broadcast_state(self, active: bool):
         """Set broadcast state in Redis"""
         try:
             if active:
                 await self.bot.cache.set(self.broadcast_state_key, "active", ttl=3600)  # 1 hour TTL
+                logger.info("Broadcast state set to ACTIVE")
             else:
                 await self.bot.cache.delete(self.broadcast_state_key)
+                logger.info("Broadcast state cleared")
             self.broadcasting_in_progress = active
         except Exception as e:
             logger.error(f"Error setting broadcast state: {e}")
-            self.broadcasting_in_progress = active
+            self.broadcasting_in_progress = active  # Always update memory state
 
     def _parse_quoted_command(self, text: str) -> List[str]:
         """Parse command with quoted arguments"""
@@ -181,14 +185,17 @@ class AdminCommandHandler(BaseCommandHandler):
             # Progress callback
             async def update_progress(stats: Dict[str, int]):
                 if stats['total'] > 0:
-                    progress_percent = ((stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']) / stats['total'] * 100)
+                    processed = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
+                    progress_percent = (processed / stats['total']) * 100
+                    
                     text = (
                         f"📡 <b>Broadcast Progress</b>\n\n"
-                        f"Total: {stats['total']:,}\n"
+                        f"👥 Total Users: {stats['total']:,}\n"
                         f"✅ Success: {stats['success']:,}\n"
                         f"🚫 Blocked: {stats['blocked']:,}\n"
                         f"❌ Deleted: {stats['deleted']:,}\n"
                         f"⚠️ Failed: {stats['failed']:,}\n\n"
+                        f"📊 Processed: {processed:,}/{stats['total']:,}\n"
                         f"⏳ Progress: {progress_percent:.1f}%"
                     )
 
@@ -196,6 +203,8 @@ class AdminCommandHandler(BaseCommandHandler):
                         await callback_query.message.edit_text(text, parse_mode=ParseMode.HTML)
                     except FloodWait as e:
                         await asyncio.sleep(e.value)
+                except Exception as e:
+                    logger.error(f"Progress update error: {e}")
 
             # Start broadcast task
             start_time = datetime.now()
