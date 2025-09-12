@@ -14,6 +14,14 @@ from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Import batch optimizations
+try:
+    from .optimizations.batch_operations import BatchOptimizations
+    BATCH_OPTIMIZATIONS_AVAILABLE = True
+except ImportError:
+    BATCH_OPTIMIZATIONS_AVAILABLE = False
+    logger.warning("Batch optimizations not available for media repository")
+
 
 class FileType(Enum):
     VIDEO = "video"
@@ -54,6 +62,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         self.cache_invalidator = CacheInvalidator(cache_manager)
         self.multi_db_manager = multi_db_manager
         self.is_multi_db = multi_db_manager is not None
+        
+        # Initialize batch optimizations
+        if BATCH_OPTIMIZATIONS_AVAILABLE:
+            self.batch_ops = BatchOptimizations(db_pool, cache_manager)
+        else:
+            self.batch_ops = None
 
     def _entity_to_dict(self, media: MediaFile) -> Dict[str, Any]:
         """Convert MediaFile entity to dictionary"""
@@ -184,6 +198,31 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             logger.error(f"Error saving media: {e}")
             return False, 2, None
 
+    async def batch_check_duplicates(
+        self, 
+        media_files: List[MediaFile]
+    ) -> Dict[str, Optional[MediaFile]]:
+        """
+        Batch duplicate check to eliminate N+1 queries during bulk operations
+        Uses optimized aggregation pipeline for bulk duplicate detection
+        """
+        if not media_files:
+            return {}
+        
+        # Use batch optimization if available, fallback to individual checks
+        if self.batch_ops:
+            try:
+                return await self.batch_ops.batch_duplicate_check(media_files)
+            except Exception as e:
+                logger.warning(f"Batch duplicate check failed, falling back: {e}")
+        
+        # Fallback to individual duplicate checks
+        result = {}
+        for media in media_files:
+            existing = await self.find_file(media.file_unique_id)
+            result[media.file_unique_id] = existing
+        
+        return result
 
     async def search_files(
             self,

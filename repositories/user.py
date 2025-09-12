@@ -12,6 +12,14 @@ from core.database.base import BaseRepository, AggregationMixin
 from core.utils.logger import get_logger
 logger = get_logger(__name__)
 
+# Import batch optimizations
+try:
+    from .optimizations.batch_operations import BatchOptimizations
+    BATCH_OPTIMIZATIONS_AVAILABLE = True
+except ImportError:
+    BATCH_OPTIMIZATIONS_AVAILABLE = False
+    logger.warning("Batch optimizations not available, falling back to individual operations")
+
 
 class UserStatus(Enum):
     ACTIVE = "active"
@@ -53,6 +61,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         self.premium_duration_days = premium_duration_days
         self.daily_limit = daily_limit
         self.ttl = CacheTTLConfig()  # Add this
+        
+        # Initialize batch optimizations
+        if BATCH_OPTIMIZATIONS_AVAILABLE:
+            self.batch_ops = BatchOptimizations(db_pool, cache_manager)
+        else:
+            self.batch_ops = None
 
     def _entity_to_dict(self, user: User) -> Dict[str, Any]:
         """Convert User entity to dictionary"""
@@ -286,6 +300,36 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         days_remaining = (expiry_date - datetime.now(UTC)).days
         return True, f"Premium active ({days_remaining} days remaining)"
+    
+    async def batch_check_premium_status(
+        self, 
+        user_ids: List[int]
+    ) -> Dict[int, Tuple[bool, Optional[str]]]:
+        """
+        Batch premium status check to eliminate N+1 queries
+        Uses optimized aggregation pipeline for bulk processing
+        """
+        if not user_ids:
+            return {}
+        
+        # Use batch optimization if available, fallback to individual checks
+        if self.batch_ops:
+            try:
+                return await self.batch_ops.batch_premium_status_check(user_ids)
+            except Exception as e:
+                logger.warning(f"Batch premium check failed, falling back: {e}")
+        
+        # Fallback to individual checks
+        result = {}
+        for user_id in user_ids:
+            user = await self.get_user(user_id)
+            if user:
+                status, message = await self.check_and_update_premium_status(user)
+                result[user_id] = (status, message)
+            else:
+                result[user_id] = (False, None)
+        
+        return result
 
     async def increment_retrieval_count(self, user_id: int) -> int:
         """Increment daily retrieval count"""
