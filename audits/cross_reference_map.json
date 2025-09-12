@@ -1,0 +1,328 @@
+{
+  "utility_modules": {
+    "core/utils/telegram_api.py": {
+      "symbols": {
+        "TelegramAPIWrapper": {
+          "description": "Centralized API wrapper with flood protection and rate limiting",
+          "currently_used_in": [
+            "core/services/filestore.py"
+          ],
+          "should_be_used_in": [
+            {
+              "file": "core/services/broadcast.py",
+              "lines": [88, 91, 97],
+              "reason": "Direct client calls bypass flood protection",
+              "impact": "FloodWait errors during broadcasts"
+            },
+            {
+              "file": "handlers/search.py", 
+              "lines": [374],
+              "reason": "Search result sending needs rate limiting",
+              "impact": "Potential rate limit violations in search"
+            },
+            {
+              "file": "core/services/indexing.py",
+              "lines": "multiple",
+              "reason": "Manual FloodWait handling should use centralized wrapper",
+              "impact": "Duplicate error handling code"
+            },
+            {
+              "file": "handlers/connection.py",
+              "lines": [390],
+              "reason": "Auth flow needs rate limiting",
+              "impact": "No flood protection in critical path"
+            }
+          ]
+        },
+        "with_flood_protection": {
+          "description": "Decorator for flood protection",
+          "currently_used_in": [],
+          "should_be_used_in": [
+            {
+              "file": "handlers/commands_handlers/admin.py",
+              "lines": "broadcast methods",
+              "reason": "Admin broadcast operations need protection",
+              "impact": "Admin operations could hit rate limits"
+            }
+          ]
+        }
+      }
+    },
+    "core/utils/link_parser.py": {
+      "symbols": {
+        "TelegramLinkParser": {
+          "description": "Robust Telegram link parsing and validation",
+          "currently_used_in": [
+            "handlers/filestore.py:206",
+            "handlers/deeplink.py"
+          ],
+          "should_be_used_in": [
+            {
+              "file": "core/services/indexing.py",
+              "lines": [156, 170],
+              "reason": "Custom regex parsing instead of centralized parser",
+              "impact": "Duplicate parsing logic, potential bugs"
+            },
+            {
+              "file": "handlers/filestore.py",
+              "lines": [146, 149], 
+              "reason": "Manual regex for batch links",
+              "impact": "Inconsistent with centralized parser"
+            }
+          ]
+        },
+        "validate_batch_links": {
+          "description": "Decorator for batch link validation",
+          "currently_used_in": [],
+          "should_be_used_in": [
+            {
+              "file": "handlers/filestore.py",
+              "lines": [115, 173],
+              "reason": "Batch commands should use validation decorator",
+              "impact": "Inconsistent validation patterns"
+            }
+          ]
+        }
+      }
+    },
+    "core/utils/caption.py": {
+      "symbols": {
+        "CaptionFormatter.get_parse_mode()": {
+          "description": "Centralized parse mode configuration",
+          "currently_used_in": [
+            "core/services/filestore.py"
+          ],
+          "should_be_used_in": [
+            {
+              "file": "handlers/search.py",
+              "lines": [374],
+              "reason": "Direct ParseMode.HTML usage",
+              "impact": "Bypasses centralized configuration"
+            },
+            {
+              "file": "core/services/broadcast.py",
+              "lines": [88, 91, 97],
+              "reason": "Direct ParseMode import",
+              "impact": "Not using centralized parse mode logic"
+            }
+          ]
+        },
+        "CaptionFormatter.format_file_caption()": {
+          "description": "Centralized caption formatting",
+          "currently_used_in": [
+            "core/services/filestore.py"
+          ],
+          "should_be_used_in": [
+            {
+              "file": "core/services/filter.py",
+              "lines": "multiple",
+              "reason": "Basic caption handling without formatter",
+              "impact": "Inconsistent caption formatting"
+            }
+          ]
+        }
+      }
+    },
+    "core/cache/config.py": {
+      "symbols": {
+        "CacheKeyGenerator": {
+          "description": "Centralized cache key generation",
+          "currently_used_in": [
+            "repositories/user.py",
+            "repositories/media.py",
+            "repositories/channel.py",
+            "repositories/connection.py",
+            "repositories/filter.py"
+          ],
+          "should_be_used_in": [
+            {
+              "file": "repositories/bot_settings.py",
+              "lines": [50],
+              "reason": "Direct cache key generation instead of centralized",
+              "impact": "Cache key conflicts possible"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "repository_patterns": {
+    "base_repository": {
+      "file": "core/database/base.py",
+      "symbols": {
+        "find_by_id": {
+          "currently_used_in": ["most repositories"],
+          "should_replace": [
+            {
+              "file": "repositories/media.py",
+              "lines": [87],
+              "method": "find_file()",
+              "reason": "Custom implementation duplicates base functionality",
+              "impact": "Code duplication"
+            }
+          ]
+        },
+        "create_indexes": {
+          "currently_used_in": ["some repositories"],
+          "missing_in": [
+            {
+              "file": "repositories/batch_link.py",
+              "reason": "Should use base index creation pattern",
+              "impact": "Inconsistent index management"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "error_handling_patterns": {
+    "standard_patterns": {
+      "OperationResult": {
+        "description": "Standardized response format",
+        "currently_used_in": [],
+        "should_be_used_in": [
+          {
+            "file": "repositories/user.py",
+            "reason": "Returns tuples instead of standard format",
+            "impact": "API inconsistency"
+          },
+          {
+            "file": "repositories/media.py", 
+            "reason": "Returns different tuple format",
+            "impact": "API inconsistency"
+          },
+          {
+            "file": "repositories/connection.py",
+            "reason": "Returns boolean instead of standard format",
+            "impact": "API inconsistency"
+          }
+        ]
+      }
+    }
+  },
+  "parse_mode_violations": {
+    "files_using_markdown": [
+      {
+        "file": "handlers/filestore.py",
+        "lines": [189, 218, 259, 270, 282],
+        "current": "ParseMode.MARKDOWN",
+        "should_be": "ParseMode.HTML",
+        "impact": "Critical user experience inconsistency"
+      },
+      {
+        "file": "handlers/filter.py",
+        "lines": [147, 199, 245],
+        "current": "enums.ParseMode.MARKDOWN", 
+        "should_be": "enums.ParseMode.HTML",
+        "impact": "Filter response formatting issues"
+      },
+      {
+        "file": "handlers/connection.py",
+        "lines": [150, 158],
+        "current": "enums.ParseMode.MARKDOWN",
+        "should_be": "enums.ParseMode.HTML", 
+        "impact": "Auth message formatting inconsistency"
+      },
+      {
+        "file": "handlers/commands_handlers/database.py",
+        "lines": [107, 226],
+        "current": "ParseMode.MARKDOWN",
+        "should_be": "ParseMode.HTML",
+        "impact": "Admin command formatting issues"
+      }
+    ]
+  },
+  "database_optimization_opportunities": {
+    "n_plus_one_risks": [
+      {
+        "file": "repositories/user.py",
+        "method": "check_and_update_premium_status",
+        "lines": [270, 286],
+        "issue": "Individual database updates in loops",
+        "solution": "Use batch operations from core/database/batch_ops.py"
+      },
+      {
+        "file": "repositories/media.py",
+        "method": "save_media", 
+        "lines": [144, 148],
+        "issue": "Individual duplicate checks",
+        "solution": "Batch duplicate checking method"
+      }
+    ],
+    "missing_indexes": [
+      {
+        "collection": "users",
+        "indexes": [
+          "[(is_premium, 1), (premium_activation_date, 1)]",
+          "[(user_id, 1), (last_request_date, 1)]"
+        ],
+        "impact": "Slow premium cleanup and request tracking queries"
+      },
+      {
+        "collection": "connections",
+        "indexes": [
+          "[(user_id, 1), (group_details.group_id, 1)]"
+        ],
+        "impact": "Slow connection lookup queries"
+      }
+    ]
+  },
+  "concurrency_patterns": {
+    "current_implementations": {
+      "bounded_concurrency": {
+        "file": "core/utils/telegram_api.py",
+        "description": "Semaphore-based concurrency control",
+        "pattern": "Global and per-chat semaphores"
+      }
+    },
+    "should_adopt_pattern": [
+      {
+        "file": "core/services/broadcast.py",
+        "lines": [78, 100],
+        "issue": "Unbounded concurrent operations",
+        "solution": "Add semaphore-based concurrency control"
+      },
+      {
+        "file": "handlers/indexing.py",
+        "issue": "No concurrency control in batch operations", 
+        "solution": "Follow telegram_api.py pattern"
+      }
+    ]
+  },
+  "import_patterns": {
+    "pyrogram_imports": {
+      "correct_pattern": "from pyrogram.enums import ParseMode",
+      "violations": [
+        {
+          "file": "handlers/search.py",
+          "line": 374,
+          "current": "enums.ParseMode.HTML",
+          "issue": "Uses imported enums instead of direct import"
+        }
+      ]
+    }
+  },
+  "duplicated_code_opportunities": {
+    "file_reference_extraction": [
+      {
+        "files": ["core/services/filestore.py", "core/services/indexing.py"],
+        "methods": ["_extract_file_ref"],
+        "solution": "Create shared FileReferenceExtractor utility"
+      }
+    ],
+    "media_type_detection": [
+      {
+        "files": ["core/services/indexing.py"],
+        "methods": ["_get_file_type"],
+        "solution": "Create centralized MediaTypeDetector utility"
+      }
+    ],
+    "permission_checking": [
+      {
+        "files": ["core/services/connection.py", "core/services/indexing.py"],
+        "pattern": "Bot admin status verification",
+        "solution": "Create PermissionChecker utility"
+      }
+    ]
+  }
+}
