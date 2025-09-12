@@ -165,10 +165,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             ban_date = user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'
             return False, (
                 f"❌ User is already banned!\n\n"
-                f"**User ID:** `{user_id}`\n"
-                f"**Name:** {user.name}\n"
-                f"**Reason:** {user.ban_reason or 'No reason provided'}\n"
-                f"**Banned on:** {ban_date}"
+                f"<b>User ID:</b> <code>{user_id}</code>\n"
+                f"<b>Name:</b> {user.name}\n"
+                f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
+                f"<b>Banned on:</b> {ban_date}"
             ), user
         update_data = {
             'status': UserStatus.BANNED.value,

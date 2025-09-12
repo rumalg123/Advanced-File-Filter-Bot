@@ -81,7 +81,7 @@ class AdminCommandHandler(BaseCommandHandler):
         if not message.reply_to_message:
             await message.reply_text(
                 "⚠️ Reply to a message to broadcast it.\n\n"
-                "**Features:**\n"
+                "<b>Features:</b>\n"
                 "• HTML formatting support\n"
                 "• Preview before sending\n"
                 "• Can broadcast text, photos, videos, documents\n"
@@ -369,8 +369,8 @@ class AdminCommandHandler(BaseCommandHandler):
             parts = self._parse_quoted_command(message.text)
             if len(parts) < 2:
                 await message.reply_text(
-                    "**Usage:** `/ban <user_id> [reason]`\n\n"
-                    "**Examples:**\n"
+                    "<b>Usage:</b> <code>/ban &lt;user_id&gt; [reason]</code>\n"
+                    "<b>Examples:</b>\n"
                     "• `/ban 123456789`\n"
                     "• `/ban 123456789 Spamming`\n"
                     "• `/ban 123456789 \"Spamming and hate speech\"`"
@@ -396,9 +396,9 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the banned user
             ban_notification = (
-                "🚫 **You have been banned from using this bot**\n\n"
-                f"**Reason:** {reason}\n"
-                f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                "🚫 <b>You have been banned from using this bot</b>\n"
+                f"<b>Reason:</b> {reason}\n"
+                f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "If you believe this is a mistake, please contact the bot administrator."
             )
 
@@ -409,10 +409,10 @@ class AdminCommandHandler(BaseCommandHandler):
                 try:
                     log_text = (
                         f"#UserBanned\n\n"
-                        f"**User:** `{target_user_id}` ({user_data.name})\n"
-                        f"**Reason:** {reason}\n"
-                        f"**Admin:** {message.from_user.mention}\n"
-                        f"**Notification:** {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
+                        f"<b>Reason:</b> {reason}\n"
+                        f"<b>Admin:</b> {message.from_user.mention}\n"
+                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
@@ -423,7 +423,7 @@ class AdminCommandHandler(BaseCommandHandler):
     async def unban_command(self, client: Client, message: Message):
         """Unban a user"""
         if len(message.command) < 2:
-            await message.reply_text("**Usage:** `/unban <user_id>`")
+            await message.reply_text("<b>Usage:</b> <code>/unban &lt;user_id&gt;</code>")
             return
 
         try:
@@ -441,9 +441,9 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the user
             unban_notification = (
-                "✅ **You have been unbanned!**\n\n"
+                "✅ <b>You have been unbanned!</b>\n"
                 f"You can now use the bot again.\n"
-                f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "Welcome back!"
             )
 
@@ -454,9 +454,9 @@ class AdminCommandHandler(BaseCommandHandler):
                 try:
                     log_text = (
                         f"#UserUnbanned\n\n"
-                        f"**User:** `{target_user_id}` ({user_data.name})\n"
-                        f"**Admin:** {message.from_user.mention}\n"
-                        f"**Notification:** {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
+                        f"<b>Admin:</b> {message.from_user.mention}\n"
+                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
@@ -502,10 +502,10 @@ class AdminCommandHandler(BaseCommandHandler):
                 try:
                     log_text = (
                         f"#PremiumAdded\n\n"
-                        f"**User:** `{target_user_id}` ({user_data.name})\n"
+                        f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"**Duration:** {self.bot.config.PREMIUM_DURATION_DAYS} days\n"
-                        f"**Admin:** {message.from_user.mention}\n"
-                        f"**Notification:** {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>Admin:</b> {message.from_user.mention}\n"
+                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
@@ -538,7 +538,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 f"**New Limits:**\n"
                 f"• {self.bot.config.NON_PREMIUM_DAILY_LIMIT} files per day\n"
                 f"• Standard support\n\n"
-                f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "Thank you for using our premium service!"
             )
 
@@ -549,9 +549,9 @@ class AdminCommandHandler(BaseCommandHandler):
                 try:
                     log_text = (
                         f"#PremiumRemoved\n\n"
-                        f"**User:** `{target_user_id}` ({user_data.name})\n"
-                        f"**Admin:** {message.from_user.mention}\n"
-                        f"**Notification:** {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
+                        f"<b>Admin:</b> {message.from_user.mention}\n"
+                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)

@@ -265,7 +265,7 @@ class FileCallbackHandler(BaseCommandHandler):
             status_msg = await client.send_message(
                 chat_id=user_id,
                 text=(
-                    f"📤 **Sending Files**\n\n"
+                    f"📤 <b>Sending Files</b>\n"
                     f"Query: {search_query}\n"
                     f"Total Files: {len(files_data)}\n"
                     f"Progress: 0/{len(files_data)}"
@@ -326,7 +326,7 @@ class FileCallbackHandler(BaseCommandHandler):
                 if (idx + 1) % 5 == 0 or (idx + 1) == len(files_data):
                     try:
                         await status_msg.edit_text(
-                            f"📤 **Sending Files**\n\n"
+                            f"📤 <b>Sending Files</b>\n"
                             f"Query: {search_query}\n"
                             f"Total Files: {len(files_data)}\n"
                             f"Progress: {idx + 1}/{len(files_data)}\n"
@@ -374,7 +374,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Final status
         final_text = (
-            f"✅ **Transfer Complete!**\n\n"
+            f"✅ <b>Transfer Complete!</b>\n"
             f"Query: {search_query}\n"
             f"Total Files: {len(files_data)}\n"
             f"✅ Sent: {success_count}\n"
@@ -452,7 +452,7 @@ class FileCallbackHandler(BaseCommandHandler):
         ])
 
         message_text = (
-            "🔒 **Subscription Required**\n\n"
+            "🔒 <b>Subscription Required</b>\n"
             "You need to join our channel(s) to get files.\n"
             "Please join the required channel(s) and try again."
         )
@@ -523,7 +523,7 @@ class FileCallbackHandler(BaseCommandHandler):
         ])
 
         message_text = (
-            "🔒 **Subscription Required**\n\n"
+            "🔒 <b>Subscription Required</b>\n"
             "You need to join our channel(s) to get files.\n"
             "Please join the required channel(s) and try again."
         )

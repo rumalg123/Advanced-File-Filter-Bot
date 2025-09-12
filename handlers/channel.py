@@ -308,7 +308,7 @@ class ChannelHandler:
                         try:
                             await self.bot.send_message(
                                 self.bot.config.LOG_CHANNEL,
-                                f"⚠️ **Queue Overflow Alert**\n"
+                                f"⚠️ <b>Queue Overflow Alert</b>\n"
                                 f"The message queue has overflowed {self.queue_full_warnings} times.\n"
                                 f"Current queue size: {self.message_queue.qsize()}/{self.message_queue.maxsize}\n"
                                 f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
@@ -356,7 +356,7 @@ class ChannelHandler:
         if stats['indexed'] > 0 and self.bot.config.LOG_CHANNEL:
             try:
                 summary = (
-                    f"📊 **Auto-Index Batch Summary**\n\n"
+                    f"📊 <b>Auto-Index Batch Summary</b>\n"
                     f"✅ Indexed: {stats['indexed']}\n"
                     f"🔄 Duplicates: {stats['duplicate']}\n"
                     f"❌ Errors: {stats['errors']}\n"

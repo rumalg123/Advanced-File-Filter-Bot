@@ -117,7 +117,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         # Update message
         await query.message.edit_text(
-            f"🔍 **Search Results for:** {search_query}\n\n"
+            f"🔍 <b>Search Results for:</b> {search_query}\n"
             f"📁 Found {total} files\n"
             f"📊 Page {pagination.current_page} of {pagination.total_pages}",
             reply_markup=InlineKeyboardMarkup(buttons)
