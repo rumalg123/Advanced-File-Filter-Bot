@@ -191,9 +191,9 @@ class RequestHandler:
             if success:
                 # Notify user about ban
                 ban_msg = (
-                    "🚫 <b>You have been banned from using this bot</b>\n\n"
+                    "🚫 <b>You have been banned from using this bot</b>\n"
                     f"<b>Reason:</b> Over request warning limit\n"
-                    f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                     "You exceeded the maximum number of request warnings.\n"
                     "Please contact the bot administrator to appeal."
                 )
@@ -209,7 +209,7 @@ class RequestHandler:
                 # Log to admin channel
                 if self.bot.config.LOG_CHANNEL:
                     log_text = (
-                        f"#AutoBan #RequestAbuse\n\n"
+                        f"#AutoBan #RequestAbuse\n"
                         f"<b>User:</b> <code>{user_id}</code> ({banned_user.name if banned_user else 'Unknown'})\n"
                         f"<b>Reason:</b> Over request warning limit\n"
                         f"<b>Total Requests:</b> {banned_user.total_requests if banned_user else 'N/A'}\n"
@@ -227,7 +227,7 @@ class RequestHandler:
             if self.bot.config.LOG_CHANNEL:
                 user = message.from_user
                 warning_text = (
-                    f"#RequestWarning\n\n"
+                    f"#RequestWarning\n"
                     f"👤 <b>User:</b> {user.mention} [<code>{user_id}</code>]\n"
                     f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
                     f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
@@ -374,13 +374,13 @@ class RequestHandler:
             delete_minutes = delete_time // 60
 
             caption = (
-                f"🔍 <b>Search Results for:</b> {query}\n\n"
+                f"🔍 <b>Search Results for:</b> {query}\n"
                 f"📁 Found {total} files\n"
                 f"📊 Page {pagination.current_page} of {pagination.total_pages}"
             )
 
             if not is_private or delete_time > 0:
-                caption += f"\n\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
+                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
 
             # Send message with or without photo
             if self.bot.config.PICS:
@@ -421,7 +421,7 @@ class RequestHandler:
 
         # Build request info
         request_text = (
-            f"📮 <b>New Content Request</b>\n\n"
+            f"📮 <b>New Content Request</b>\n"
             f"👤 <b>User:</b> {user.mention} [<code>{user.id}</code>]\n"
             f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
             f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -493,7 +493,7 @@ class RequestHandler:
             try:
                 user = await client.get_users(user_id)
                 mention_msg = (
-                    f"{user.mention}, due to bot being blocked, here's your request update:\n\n"
+                    f"{user.mention}, due to bot being blocked, here's your request update:\n"
                     f"{response_msg}"
                 )
 
@@ -508,7 +508,7 @@ class RequestHandler:
         # Update admin message
         await query.message.edit_reply_markup(None)
         await query.message.edit_text(
-            query.message.text + f"\n\n✅ <b>Action Taken:</b> {action.title()}"
+            query.message.text + f"\n✅ <b>Action Taken:</b> {action.title()}"
         )
 
         await query.answer(f"✅ User notified: {action.title()}")

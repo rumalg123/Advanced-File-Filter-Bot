@@ -161,11 +161,11 @@ class IndexingHandler:
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg or "chat not found" in error_msg:
                     return await message.reply(
-                        "❌ <b>Bot Access Required</b>\n\n"
+                        "❌ <b>Bot Access Required</b>\n"
                         "I cannot access this channel. Please:\n"
                         "1. Add me to the channel as an admin\n"
                         "2. Make sure the channel is public OR\n"
-                        "3. Ensure I have proper permissions\n\n"
+                        "3. Ensure I have proper permissions\n"
                         "Then try forwarding the message again."
                     )
                 else:
@@ -188,7 +188,7 @@ class IndexingHandler:
                 ]
 
                 await message.reply(
-                    f"Do you want to index this channel/group?\n\n"
+                    f"Do you want to index this channel/group?\n"
                     f"Chat ID/Username: <code>{chat_id}</code>\n"
                     f"Last Message ID: <code>{last_msg_id}</code>",
                     reply_markup=InlineKeyboardMarkup(buttons)
@@ -311,7 +311,7 @@ class IndexingHandler:
         async def update_progress(stats):
             try:
                 text = (
-                    f"🔄 <b>Indexing Progress</b>\n\n"
+                    f"🔄 <b>Indexing Progress</b>\n"
                     f"Total Messages: <code>{stats['total_messages']}</code>\n"
                     f"Files Saved: <code>{stats['total_files']}</code>\n"
                     f"Duplicates: <code>{stats['duplicate']}</code>\n"
@@ -341,7 +341,7 @@ class IndexingHandler:
             # Final message
             if self.indexing_service.cancel_indexing:
                 final_text = (
-                    f"🛑 <b>Indexing Cancelled!</b>\n\n"
+                    f"🛑 <b>Indexing Cancelled!</b>\n"
                     f"Files Saved: <code>{stats['total_files']}</code>\n"
                     f"Duplicates Skipped: <code>{stats['duplicate']}</code>\n"
                     f"Deleted Messages: <code>{stats['deleted']}</code>\n"
@@ -350,7 +350,7 @@ class IndexingHandler:
                 )
             else:
                 final_text = (
-                    f"✅ <b>Indexing Completed!</b>\n\n"
+                    f"✅ <b>Indexing Completed!</b>\n"
                     f"Successfully saved <code>{stats['total_files']}</code> files\n"
                     f"Duplicates Skipped: <code>{stats['duplicate']}</code>\n"
                     f"Deleted Messages: <code>{stats['deleted']}</code>\n"

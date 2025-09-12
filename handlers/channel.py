@@ -308,10 +308,10 @@ class ChannelHandler:
                         try:
                             await self.bot.send_message(
                                 self.bot.config.LOG_CHANNEL,
-                                f"⚠️ **Queue Overflow Alert**\n\n"
+                                f"⚠️ **Queue Overflow Alert**\n"
                                 f"The message queue has overflowed {self.queue_full_warnings} times.\n"
                                 f"Current queue size: {self.message_queue.qsize()}/{self.message_queue.maxsize}\n"
-                                f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n\n"
+                                f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
                                 f"Consider reducing the indexing rate or increasing queue size."
                             )
                         except:

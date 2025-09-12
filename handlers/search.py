@@ -229,8 +229,8 @@ class SearchHandler:
             await self._handle_group_search_no_subscription(client, message, query, user_id)
 
     @require_subscription(custom_message=(
-            "🔒 <b>Subscription Required</b>\n\n"
-            "To search for files, you need to join our channel(s) first.\n\n"
+            "🔒 <b>Subscription Required</b>\n"
+            "To search for files, you need to join our channel(s) first.\n"
             "👇 Click the button(s) below to join, then try your search again."
     ))
     async def _handle_private_search_with_subscription(
@@ -443,7 +443,7 @@ class SearchHandler:
                     ])
 
                 await message.reply_text(
-                    f"❌ No results found for <b>{query}</b>\n\n"
+                    f"❌ No results found for <b>{query}</b>\n"
                     "Try using different keywords or check spelling.",
                     reply_markup=InlineKeyboardMarkup(no_results_buttons) if no_results_buttons else None
                 )
@@ -586,13 +586,13 @@ class SearchHandler:
             delete_minutes = delete_time // 60 if delete_time > 0 else 0
 
             caption = (
-                f"🔍 <b>Search Results for:</b> {query}\n\n"
+                f"🔍 <b>Search Results for:</b> {query}\n"
                 f"📁 Found {total} files\n"
                 f"📊 Page {pagination.current_page} of {pagination.total_pages}"
             )
 
             if delete_time > 0:
-                caption += f"\n\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
+                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
 
                 # Send message with or without photo
             if self.bot.config.PICS:
@@ -650,9 +650,9 @@ class SearchHandler:
 
                         # Add a header to distinguish filter results
                         if is_private:
-                            filter_header = f"🔍 <b>Filter Match from Connected Group:</b>\n\n"
+                            filter_header = f"🔍 <b>Filter Match from Connected Group:</b>\n"
                         else:
-                            filter_header = f"🔍 <b>Filter Match:</b>\n\n"
+                            filter_header = f"🔍 <b>Filter Match:</b>\n"
 
                         # Send filter response
                         await self.bot.filter_service.send_filter_response(

@@ -173,14 +173,14 @@ class FilterHandler(BaseCommandHandler):
         count = await self.filter_service.count_filters(str(group_id))
 
         if count:
-            filterlist = f"Total number of filters in <b>{title}</b>: {count}\n\n"
+            filterlist = f"Total number of filters in <b>{title}</b>: {count}\n"
             keywords = "\n".join(f"{idx + 1}.  <code>{text}</code>" for idx, text in enumerate(sorted(filters)))
             filterlist += keywords
 
             if len(filterlist) > 4096:
                 # Send as file if too long
                 doc_keywords = "\n".join(f"{idx + 1}.  {text}" for idx, text in enumerate(sorted(filters)))
-                doc_filterlist = f"Total number of filters in {title}: {count}\n\n{doc_keywords}"
+                doc_filterlist = f"Total number of filters in {title}: {count}\n{doc_keywords}"
 
                 with io.BytesIO(str.encode(doc_filterlist)) as keyword_file:
                     keyword_file.name = "keywords.txt"
@@ -228,8 +228,8 @@ class FilterHandler(BaseCommandHandler):
             filters_to_delete = args[1:]
         except:
             return await message.reply_text(
-                "<i>Mention the filtername which you wanna delete!</i>\n\n"
-                "<code>/del filtername</code>\n\n"
+                "<i>Mention the filtername which you wanna delete!</i>\n"
+                "<code>/del filtername</code>\n"
                 "Use /filters to view all available filters",
                 quote=True
             )
