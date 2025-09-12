@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from typing import Dict, Any, Optional, List, Tuple
 
 from pyrogram import Client, enums
@@ -16,6 +17,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger
 from repositories.media import MediaRepository, MediaFile, FileType
+from repositories.batch_link import BatchLinkRepository, BatchLink
 
 logger = get_logger(__name__)
 
@@ -27,12 +29,14 @@ class FileStoreService:
             self,
             media_repo: MediaRepository,
             cache_manager: CacheManager,
-            config: Any
+            config: Any,
+            batch_link_repo: Optional[BatchLinkRepository] = None
 
     ):
         self.media_repo = media_repo
         self.cache = cache_manager
         self.config = config
+        self.batch_link_repo = batch_link_repo
         self.batch_cache = {}  # In-memory cache for batch files
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
         self.max_batch_cache_size = 100
@@ -308,6 +312,132 @@ class FileStoreService:
         b_64 = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
         bot_username = (await client.get_me()).username
         return f"https://t.me/{bot_username}?start=DSTORE-{b_64}"
+
+    async def create_premium_batch_link(
+            self,
+            client: Client,
+            first_msg_link: str,
+            last_msg_link: str,
+            protect: bool = False,
+            premium_only: bool = True,
+            created_by: int = 0
+    ) -> Optional[str]:
+        """Create premium-only batch link using the new BatchLink model"""
+        if not self.batch_link_repo:
+            logger.error("BatchLinkRepository not initialized - falling back to regular batch link")
+            return await self.create_batch_link(client, first_msg_link, last_msg_link, protect)
+        
+        # Parse message links (reuse existing logic)
+        import re
+
+        link_pattern = re.compile(
+            r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
+            r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
+        )
+
+        # Parse first link
+        match = link_pattern.match(first_msg_link.strip())
+        if not match:
+            logger.error(f"First link doesn't match pattern: {first_msg_link}")
+            return None
+
+        f_chat_id = match.group(1)
+        f_msg_id = int(match.group(2))
+
+        # Handle channel IDs (numeric IDs from /c/ links need -100 prefix)
+        if f_chat_id.isdigit():
+            if '/c/' in first_msg_link:
+                f_chat_id = int("-100" + f_chat_id)
+            else:
+                f_chat_id = int(f_chat_id)
+        else:
+            try:
+                chat = await client.get_chat(f_chat_id)
+                f_chat_id = chat.id
+            except Exception as e:
+                logger.error(f"Error resolving chat {f_chat_id}: {e}")
+                return None
+
+        # Parse last link
+        match = link_pattern.match(last_msg_link.strip())
+        if not match:
+            logger.error(f"Last link doesn't match pattern: {last_msg_link}")
+            return None
+
+        l_chat_id = match.group(1)
+        l_msg_id = int(match.group(2))
+
+        # Handle channel IDs
+        if l_chat_id.isdigit():
+            if '/c/' in last_msg_link:
+                l_chat_id = int("-100" + l_chat_id)
+            else:
+                l_chat_id = int(l_chat_id)
+        else:
+            try:
+                chat = await client.get_chat(l_chat_id)
+                l_chat_id = chat.id
+            except Exception as e:
+                logger.error(f"Error resolving chat {l_chat_id}: {e}")
+                return None
+
+        if f_chat_id != l_chat_id:
+            logger.error(f"Chat IDs don't match: {f_chat_id} != {l_chat_id}")
+            return None
+
+        # Generate unique batch link ID
+        batch_id = f"BL-{uuid.uuid4().hex[:12]}"
+        
+        # Create BatchLink entity
+        batch_link = BatchLink(
+            id=batch_id,
+            source_chat_id=f_chat_id,
+            from_msg_id=f_msg_id,
+            to_msg_id=l_msg_id,
+            protected=protect,
+            premium_only=premium_only,
+            created_by=created_by
+        )
+
+        # Save to database
+        success = await self.batch_link_repo.create_batch_link(batch_link)
+        if not success:
+            logger.error(f"Failed to save batch link: {batch_id}")
+            return None
+
+        # Generate the link
+        bot_username = (await client.get_me()).username
+        return f"https://t.me/{bot_username}?start=PBLINK-{batch_id}"
+
+    async def get_premium_batch_link(self, batch_id: str) -> Optional[BatchLink]:
+        """Get premium batch link details"""
+        if not self.batch_link_repo:
+            return None
+        return await self.batch_link_repo.get_batch_link(batch_id)
+
+    async def check_premium_batch_access(
+            self, 
+            batch_link: BatchLink, 
+            user_id: int, 
+            user_is_premium: bool, 
+            global_premium_enabled: bool
+    ) -> Tuple[bool, str]:
+        """
+        Check if user can access premium batch link based on precedence rules:
+        1. If link.premium_only = true → require user.is_premium (regardless of global setting)
+        2. Else if global_premium = true → require user.is_premium  
+        3. Else → allow
+        """
+        # Link-level premium check has highest precedence
+        if batch_link.premium_only:
+            if not user_is_premium:
+                return False, "❌ This batch link requires premium membership. Upgrade to access premium-only content!"
+        # Global premium check (only if link is not premium-only)
+        elif global_premium_enabled and not batch_link.premium_only:
+            if not user_is_premium:
+                return False, "❌ Premium membership required. Upgrade to access this content!"
+        
+        return True, ""
 
     async def get_batch_data(
             self,

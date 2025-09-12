@@ -31,14 +31,16 @@ class FileStoreHandler:
             # Admin-only commands
             handlers_to_register.extend([
                 (self.link_command, filters.command(['link', 'plink']) & filters.user(self.bot.config.ADMINS)),
-                (self.batch_command, filters.command(['batch', 'pbatch']) & filters.user(self.bot.config.ADMINS))
+                (self.batch_command, filters.command(['batch', 'pbatch']) & filters.user(self.bot.config.ADMINS)),
+                (self.premium_batch_command, filters.command(['batch_premium', 'bprem', 'pbatch_premium', 'pbprem']) & filters.user(self.bot.config.ADMINS))
             ])
 
         # Public file store (if enabled)
         if hasattr(self.bot.config, 'PUBLIC_FILE_STORE') and self.bot.config.PUBLIC_FILE_STORE:
             handlers_to_register.extend([
                 (self.link_command, filters.command(['link', 'plink'])),
-                (self.batch_command, filters.command(['batch', 'pbatch']))
+                (self.batch_command, filters.command(['batch', 'pbatch'])),
+                (self.premium_batch_command, filters.command(['batch_premium', 'bprem', 'pbatch_premium', 'pbprem']))
             ])
 
         # Register all handlers
@@ -165,4 +167,77 @@ class FileStoreHandler:
                 "• Both links are from the same channel\n"
                 "• Bot has access to the channel\n"
                 "• Links are in correct format"
+            )
+
+    async def premium_batch_command(self, client: Client, message: Message):
+        """Generate premium-only batch link for multiple files"""
+        # Parse command
+        parts = message.text.strip().split(" ")
+
+        if len(parts) != 3:
+            await message.reply(
+                "Use correct format.\n"
+                "Example: `/batch_premium https://t.me/channel/10 https://t.me/channel/20`\n"
+                "Example: `/pbatch_premium https://t.me/channel/10 https://t.me/channel/20`\n\n"
+                "Short aliases: `/bprem` or `/pbprem`"
+            )
+            return
+
+        cmd, first_link, last_link = parts
+        logger.debug(f"Premium batch cmd: {cmd}, first_link: {first_link}, last_link: {last_link}")
+        
+        # Determine if it's a protected batch
+        protect = cmd.lower() in ["/pbatch_premium", "/pbprem"]
+
+        # Create premium batch link
+        sts = await message.reply(
+            "Generating premium-only batch link...\n"
+            "This link will only be accessible by premium users."
+        )
+
+        link = await self.filestore_service.create_premium_batch_link(
+            client,
+            first_link,
+            last_link,
+            protect=protect,
+            premium_only=True,
+            created_by=message.from_user.id
+        )
+
+        if link:
+            # Count messages
+            import re
+            link_pattern = re.compile(
+                r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
+                r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
+            )
+
+            match = link_pattern.match(first_link)
+            f_msg_id = int(match.group(2)) if match else 0
+
+            match = link_pattern.match(last_link)
+            l_msg_id = int(match.group(2)) if match else 0
+
+            total_msgs = abs(l_msg_id - f_msg_id) + 1
+            
+            batch_type = "Protected Premium" if protect else "Premium"
+
+            await sts.edit(
+                f"✅ **{batch_type} Batch Link Created**\n\n"
+                f"📦 Contains approximately `{total_msgs}` messages\n"
+                f"💎 **Premium Only**: Only users with premium membership can access\n"
+                f"🔒 **Protection**: {'Protected content (non-forwardable)' if protect else 'Standard content'}\n\n"
+                f"🔗 **Link**: {link}\n\n"
+                f"⚡ **Access Rules**:\n"
+                f"• Link-level premium requirement overrides global settings\n"
+                f"• Only premium users can access this content"
+            )
+        else:
+            await sts.edit(
+                "❌ Failed to generate premium batch link.\n"
+                "Make sure:\n"
+                "• Both links are from the same channel\n"
+                "• Bot has access to the channel\n"
+                "• Links are in correct format\n"
+                "• Database is accessible"
             )

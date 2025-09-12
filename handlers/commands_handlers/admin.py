@@ -467,7 +467,7 @@ class AdminCommandHandler(BaseCommandHandler):
     async def add_premium_command(self, client: Client, message: Message):
         """Add premium status to user"""
         if len(message.command) < 2:
-            await message.reply_text("**Usage:** `/addpremium <user_id>`")
+            await message.reply_text("<b>Usage:</b> <code>/addpremium &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
             return
 
         try:
@@ -516,7 +516,7 @@ class AdminCommandHandler(BaseCommandHandler):
     async def remove_premium_command(self, client: Client, message: Message):
         """Remove premium status from user"""
         if len(message.command) < 2:
-            await message.reply_text("**Usage:** `/removepremium <user_id>`")
+            await message.reply_text("<b>Usage:</b> <code>/removepremium &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
             return
 
         try:

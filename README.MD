@@ -531,8 +531,46 @@ The system will warn you about potentially dangerous commands:
 | `/plink` | Get protected link | Admin/Public* |
 | `/batch` | Create batch link for multiple files | Admin/Public* |
 | `/pbatch` | Create protected batch link | Admin/Public* |
+| `/batch_premium` | Create premium-only batch link | Admin/Public* |
+| `/pbatch_premium` | Create premium-only protected batch link | Admin/Public* |
+| `/bprem` | Create premium batch link (alias) | Admin/Public* |
+| `/pbprem` | Create premium protected batch link (alias) | Admin/Public* |
 
 *Public if `PUBLIC_FILE_STORE=True`
+
+### 💎 Premium Batch Links
+
+The bot now supports **premium-only batch links** that provide enhanced access control:
+
+#### Features
+- **Link-Level Premium Control**: Individual batch links can require premium membership
+- **Global Setting Override**: Premium-only links bypass global premium settings
+- **Protected Content Support**: Non-forwardable content for sensitive files
+- **Precedence Rules**: Link-level settings always take priority over global settings
+
+#### Access Control Precedence
+1. **Link Premium Required** (`premium_only=true`) → User must have premium membership
+2. **Global Premium Enabled** + Link not premium-only → User must have premium membership  
+3. **No Premium Requirements** → Allow all users
+
+#### Command Examples
+```bash
+# Create premium-only batch link
+/batch_premium https://t.me/channel/100 https://t.me/channel/150
+
+# Create premium-only protected batch link (non-forwardable)
+/pbatch_premium https://t.me/channel/100 https://t.me/channel/150
+
+# Short aliases
+/bprem https://t.me/channel/100 https://t.me/channel/150
+/pbprem https://t.me/channel/100 https://t.me/channel/150
+```
+
+#### Benefits
+- **Monetization**: Offer premium content access as a paid feature
+- **Content Protection**: Protect sensitive files from unauthorized sharing
+- **Flexible Control**: Mix free and premium content as needed
+- **Override Capability**: Premium links work even when global premium is disabled
 
 ## 🗃️ Multi-Database System Guide
 

@@ -42,6 +42,9 @@ class CacheTTLConfig:
     RECENT_EDIT_FLAG: int = 2  # 2 seconds
     OPERATION_LOCK: int = 10  # 10 seconds for operation locks
     
+    # Batch links
+    BATCH_LINK: int = 86400  # 24 hours for batch links
+    
     # Rate limiting
     RATE_LIMIT_COOLDOWN: int = 3600  # 1 hour for rate limit cooldowns
     
@@ -185,6 +188,11 @@ class CacheKeyGenerator:
     @staticmethod
     def last_counter_reset_date() -> str:
         return "last_counter_reset_date"
+    
+    # Batch link keys
+    @staticmethod
+    def batch_link(batch_id: str) -> str:
+        return f"batch_link:{batch_id}"
 
 
 # Cache patterns to identify related keys for bulk operations

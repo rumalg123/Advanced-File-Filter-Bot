@@ -51,6 +51,7 @@ from core.utils.rate_limiter import RateLimiter
 from core.utils.subscription import SubscriptionManager
 from handlers.request import RequestHandler
 from repositories.bot_settings import BotSettingsRepository
+from repositories.batch_link import BatchLinkRepository
 from repositories.channel import ChannelRepository
 from repositories.connection import ConnectionRepository
 from repositories.filter import FilterRepository
@@ -302,6 +303,7 @@ class MediaSearchBot(Client):
         self.channel_repo: Optional[ChannelRepository] = None
         self.connection_repo: Optional[ConnectionRepository] = None
         self.filter_repo: Optional[FilterRepository] = None
+        self.batch_link_repo: Optional[BatchLinkRepository] = None
         self.subscription_manager: Optional[SubscriptionManager]
         self.bot_settings_repo: Optional[BotSettingsRepository] = None
 
@@ -474,6 +476,10 @@ class MediaSearchBot(Client):
                     BotCommand("plink", "🔒 Get protected link"),
                     BotCommand("batch", "📦 Create batch link"),
                     BotCommand("pbatch", "🔒 Create protected batch"),
+                    BotCommand("batch_premium", "💎 Create premium batch link"),
+                    BotCommand("pbatch_premium", "💎🔒 Create premium protected batch"),
+                    BotCommand("bprem", "💎 Premium batch (alias)"),
+                    BotCommand("pbprem", "💎🔒 Premium protected batch (alias)"),
                 ]
 
             # Admin-only commands
@@ -540,6 +546,10 @@ class MediaSearchBot(Client):
                     BotCommand("plink", "🔒 Get protected link"),
                     BotCommand("batch", "📦 Create batch link"),
                     BotCommand("pbatch", "🔒 Create protected batch"),
+                    BotCommand("batch_premium", "💎 Create premium batch link"),
+                    BotCommand("pbatch_premium", "💎🔒 Create premium protected batch"),
+                    BotCommand("bprem", "💎 Premium batch (alias)"),
+                    BotCommand("pbprem", "💎🔒 Premium protected batch (alias)"),
                 ]
 
             # === SET COMMANDS FOR DIFFERENT SCOPES ===
@@ -649,6 +659,7 @@ class MediaSearchBot(Client):
             self.channel_repo = ChannelRepository(self.db_pool, self.cache)
             self.connection_repo = ConnectionRepository(self.db_pool, self.cache)
             self.filter_repo = FilterRepository(self.db_pool, self.cache, collection_name=self.config.COLLECTION_NAME)
+            self.batch_link_repo = BatchLinkRepository(self.db_pool, self.cache)
             self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
 
             # Create basic indexes (existing)
@@ -669,6 +680,8 @@ class MediaSearchBot(Client):
             await self.user_repo.create_index([('premium_expire', 1)])  # For expired premium checks
             await self.connection_repo.create_index([('user_id', 1)])
             await self.filter_repo.create_index([('group_id', 1), ('text', 1)])
+            await self.batch_link_repo.create_index([('created_by', 1), ('created_at', -1)])  # For user batch links
+            await self.batch_link_repo.create_index([('premium_only', 1)])  # For premium filtering
             await self.bot_settings_repo.create_index([('key', 1)])
             logger.info("Database indexes created")
 
@@ -743,7 +756,8 @@ class MediaSearchBot(Client):
             self.filestore_service = FileStoreService(
                 self.media_repo,
                 self.cache,
-                self.config
+                self.config,
+                self.batch_link_repo
             )
 
             logger.info("Services initialized")
