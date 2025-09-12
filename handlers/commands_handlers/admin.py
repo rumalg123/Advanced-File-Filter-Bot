@@ -656,7 +656,7 @@ class AdminCommandHandler(BaseCommandHandler):
 
             text = (
                 "📊 **Cache Statistics**\n\n"
-                "**Memory Usage:**\n"
+                "<b>Memory Usage:</b>\n"
                 f"├ Used: {stats['memory']['used_memory_human']}\n"
                 f"├ RSS: {stats['memory']['used_memory_rss_human']}\n"
                 f"├ Peak: {stats['memory']['used_memory_peak_human']}\n"

@@ -172,7 +172,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
                     text += f"<b>URI:</b> <code>{self.bot.config.DATABASE_URI[:50]}...</code>\n"
                     text += f"<b>Name:</b> <code>{self.bot.config.DATABASE_NAME}</code>\n"
                     text += f"<b>Collection:</b> <code>{self.bot.config.COLLECTION_NAME}</code>\n"
-                    text += "💡 **Multi-database mode is not enabled.**\n"
+                    text += "💡 <b>Multi-database mode is not enabled.</b>\n"
                     text += "To enable, add `DATABASE_URIS` to your environment variables."
                 else:
                     text = "❌ Multi-database mode is not properly configured."

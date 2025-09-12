@@ -214,7 +214,7 @@ class IndexingHandler:
             error_msg = str(e).lower()
             if "channel_private" in error_msg:
                 return await message.reply(
-                    "❌ **Bot Access Required**\n\n"
+                    "❌ <b>Bot Access Required</b>\n\n"
                     "I cannot access this channel. Please:\n"
                     "1. Add me to the channel as an admin\n"
                     "2. Make sure the channel is public OR\n"

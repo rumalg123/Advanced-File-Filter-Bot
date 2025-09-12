@@ -104,7 +104,7 @@ class IndexingService:
             error_msg = str(e).lower()
             if "channel_private" in error_msg:
                 return None, (
-                    "**Bot Access Required**\n\n"
+                    "<b>Bot Access Required</b>\n\n"
                     "This is a private channel. Please:\n"
                     "1. Add me to the channel\n"
                     "2. Make me an admin\n"
