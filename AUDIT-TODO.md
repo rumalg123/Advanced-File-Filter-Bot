@@ -19,7 +19,7 @@ This audit identified **26 high-priority findings** across 8 categories, with cr
 **TOTAL PROGRESS**: 26/26 audit items completed (100% completion rate) 🎉
 
 **REMAINING ITEMS:** 
-- [x] LP-003: Create shared `FileReferenceExtractor` utility to eliminate duplicate extraction logic ✅ (see commit below)
+- [x] LP-003: Create shared `FileReferenceExtractor` utility to eliminate duplicate extraction logic ✅ (commit 1f2d44a)
 
 **RECENTLY COMPLETED:**
 - [x] DB-001: N+1 queries in premium status updates ✅ (commit 096a29c)
@@ -41,10 +41,11 @@ This audit identified **26 high-priority findings** across 8 categories, with cr
 ## Git Reconciliation Log
 **Date:** 2025-01-12  
 **Current Branch:** feature/audit-phase10-plus  
-**HEAD SHA:** 6288114  
+**HEAD SHA:** 1f2d44a  
 **Status:** Clean working tree, local branch up-to-date  
 
 **Recent Implementation Commits:**
+- `1f2d44a` refactor(utils): eliminate duplicate file reference extraction logic (LP-003) ✅
 - `6288114` Phase 13: Implement centralized configuration system (CF-001) ✅
 - `41d600c` chore(cleanup): remove dead/unused symbols validated by Vulture (DC-001, DC-002) ✅  
 - `8a1f29f` feat(async): add bounded concurrency with asyncio.Semaphore on hot paths (CC-001, CC-002) ✅
@@ -73,7 +74,7 @@ This audit identified **26 high-priority findings** across 8 categories, with cr
 | **LINK PARSING INCONSISTENCIES** |  |  |  |  |  |  |  |
 | ✅ LP-001 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`core/services/indexing.py:156-170`~~ | ~~Custom regex instead of TelegramLinkParser~~ | ~~Duplicate parsing logic, potential bugs~~ | ✅ **COMPLETED**: Replaced custom regex with `TelegramLinkParser.parse_link()` | **FIXED** in commit ea0a73b |
 | ✅ LP-002 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`handlers/filestore.py:146-149`~~ | ~~Manual regex pattern for batch links~~ | ~~Inconsistent with centralized parser~~ | ✅ **COMPLETED**: Replaced with `TelegramLinkParser.parse_link()` | **FIXED** in commit ea0a73b |
-| ✅ LP-003 | ~~minor~~ | ~~Duplication~~ | ~~`core/services/filestore.py` vs `core/services/indexing.py`~~ | ~~Duplicate file reference extraction logic~~ | ~~Code duplication~~ | ✅ **COMPLETED**: Created shared `FileReferenceExtractor` utility with centralized extraction logic | **FIXED** - see commit below |
+| ✅ LP-003 | ~~minor~~ | ~~Duplication~~ | ~~`core/services/filestore.py` vs `core/services/indexing.py`~~ | ~~Duplicate file reference extraction logic~~ | ~~Code duplication~~ | ✅ **COMPLETED**: Created shared `FileReferenceExtractor` utility with centralized extraction logic | **FIXED** in commit 1f2d44a |
 | **DATABASE LAYER INCONSISTENCIES** |  |  |  |  |  |  |  |
 | ✅ DB-001 | ~~major~~ | ~~DBQuery~~ | ~~`repositories/user.py:270-286`~~ | ~~N+1 queries in premium status updates~~ | ~~Performance degradation~~ | ✅ **COMPLETED**: Implemented MongoDB batch operations with $lookup aggregation | **FIXED** in commit 096a29c |
 | ✅ DB-002 | ~~major~~ | ~~DBQuery~~ | ~~`repositories/media.py:144-148`~~ | ~~Individual duplicate checks in batch saves~~ | ~~N+1 query pattern~~ | ✅ **COMPLETED**: Added batch duplicate checking with fallback mechanism | **FIXED** in commit 096a29c |
