@@ -1,11 +1,13 @@
 import asyncio
 import re
+from typing import Optional
 
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 from pyrogram.enums import ParseMode
 from core.services.filestore import FileStoreService
+from core.utils.errors import ErrorFactory, ErrorCode
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser
 
@@ -15,7 +17,7 @@ logger = get_logger(__name__)
 class FileStoreHandler:
     """Handler for file store operations"""
 
-    def __init__(self, bot, filestore_service: FileStoreService = None):
+    def __init__(self, bot, filestore_service: Optional[FileStoreService] = None) -> None:
         self.bot = bot
         # Use injected service or create new one (fallback)
         self.filestore_service = bot.filestore_service
@@ -91,7 +93,7 @@ class FileStoreHandler:
         self._handlers.clear()
         logger.info("FileStoreHandler cleanup complete")
 
-    async def link_command(self, client: Client, message: Message):
+    async def link_command(self, client: Client, message: Message) -> None:
         """Generate shareable link for a file"""
         if not message.reply_to_message:
             await message.reply('Reply to a message to get a shareable link.')
@@ -112,7 +114,7 @@ class FileStoreHandler:
         else:
             await message.reply("Failed to generate link. Make sure you replied to a supported media.")
 
-    async def batch_command(self, client: Client, message: Message):
+    async def batch_command(self, client: Client, message: Message) -> None:
         """Generate batch link for multiple files"""
         # Parse command
         parts = message.text.strip().split(" ")
@@ -163,7 +165,7 @@ class FileStoreHandler:
                 "• Links are in correct format"
             )
 
-    async def premium_batch_command(self, client: Client, message: Message):
+    async def premium_batch_command(self, client: Client, message: Message) -> None:
         """Generate premium-only batch link for multiple files with enhanced validation"""
         # Parse command with robust validation
         parts = message.text.strip().split(" ")
