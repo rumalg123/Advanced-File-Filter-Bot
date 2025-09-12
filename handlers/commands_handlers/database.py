@@ -71,27 +71,27 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 return
 
             # Format statistics
-            text = "📊 **Database Statistics**\n\n"
+            text = "📊 <b>Database Statistics</b>\n"
             
             for stat in stats:
                 status_emoji = "✅" if stat['is_active'] else "❌"
                 write_emoji = "✍️" if stat['is_current_write'] else "📖"
                 
-                text += f"{status_emoji} **Database {stat['index'] + 1}** {write_emoji}\n"
+                text += f"{status_emoji} <b>Database {stat['index'] + 1}</b> {write_emoji}\n"
                 text += f"   📝 Name: `{stat['name']}`\n"
                 text += f"   📦 Size: `{stat['size_gb']}GB / {stat['size_limit_gb']}GB`\n"
                 text += f"   📈 Usage: `{stat['usage_percentage']}%`\n"
                 text += f"   📄 Files: `{stat['files_count']:,}`\n"
                 
                 if stat['usage_percentage'] >= 90:
-                    text += "   ⚠️ **Near capacity!**\n"
+                    text += "   ⚠️ <b>Near capacity!</b>\n"
                 elif stat['usage_percentage'] >= 75:
-                    text += "   🔶 **High usage**\n"
+                    text += "   🔶 <b>High usage</b>\n"
                     
                 text += "\n"
             
             # Add legend
-            text += "**Legend:**\n"
+            text += "<b>Legend:</b>\n"
             text += "✅ Active Database | ❌ Inactive Database\n"
             text += "✍️ Current Write DB | 📖 Read-only DB\n"
 
@@ -122,7 +122,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             # Parse command arguments
             if len(message.command) != 2:
                 await message.reply_text(
-                    "❌ **Usage:** `/dbswitch <database_number>`\n"
+                    "❌ <b>Usage:</b> <code>/dbswitch &lt;database_number&gt;</code>\n"
                     "Example: `/dbswitch 2` (switch to database 2)"
                 )
                 return
@@ -149,7 +149,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             if success:
                 db_name = stats[db_index]['name']
                 await message.reply_text(
-                    f"✅ **Successfully switched to Database {db_index + 1}**\n"
+                    f"✅ <b>Successfully switched to Database {db_index + 1}</b>\n"
                     f"📝 Name: `{db_name}`\n"
                     f"📦 Size: `{stats[db_index]['size_gb']}GB`\n"
                     f"📄 Files: `{stats[db_index]['files_count']:,}`"
@@ -167,9 +167,9 @@ class DatabaseCommandHandler(BaseCommandHandler):
         try:
             if not hasattr(self.bot, 'multi_db_manager') or not self.bot.multi_db_manager:
                 if hasattr(self.bot, 'config') and not self.bot.config.is_multi_database_enabled:
-                    text = "📊 **Database Information**\n\n"
-                    text += "**Mode:** Single Database\n"
-                    text += f"**URI:** `{self.bot.config.DATABASE_URI[:50]}...`\n"
+                    text = "📊 <b>Database Information</b>\n"
+                    text += "<b>Mode:</b> Single Database\n"
+                    text += f"<b>URI:</b> <code>{self.bot.config.DATABASE_URI[:50]}...</code>\n"
                     text += f"**Name:** `{self.bot.config.DATABASE_NAME}`\n"
                     text += f"**Collection:** `{self.bot.config.COLLECTION_NAME}`\n\n"
                     text += "💡 **Multi-database mode is not enabled.**\n"
