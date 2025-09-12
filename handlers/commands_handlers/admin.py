@@ -373,7 +373,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     "<b>Examples:</b>\n"
                     "• <code>/ban 123456789</code>\n"
                     "• <code>/ban 123456789 Spamming</code>\n"
-                    "• <code>/ban 123456789 "Spamming and hate speech"</code>"
+                    "• <code>/ban 123456789 \"Spamming and hate speech\"</code>"
                 )
                 return
 
