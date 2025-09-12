@@ -28,7 +28,9 @@ dependencies = [
     "umongo",
     "requests",
     "aiohttp-cors",
-    "sqlalchemy"
+    "sqlalchemy",
+    "pydantic",
+    "vulture"
 ]
 
 [project.optional-dependencies]

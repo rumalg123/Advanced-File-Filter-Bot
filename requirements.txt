@@ -24,10 +24,11 @@ msgpack
 python-dotenv
 pytz
 psutil
-
+pydantic
 # Optional dependencies for enhanced functionality
 Pillow  # For image processing
 python-dateutil  # For date handling
 
 backoff
 uvloop
+vulture
