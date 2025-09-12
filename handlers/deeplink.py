@@ -8,6 +8,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
+from repositories.user import UserStatus
 
 logger = get_logger(__name__)
 
@@ -446,14 +447,10 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(reason)
             return
 
-        # Check general file access (rate limiting, etc.)
-        can_access_general, general_reason = await self.bot.user_repo.can_retrieve_file(
-            user_id,
-            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        )
-
-        if not can_access_general:
-            await message.reply_text(f"❌ {general_reason}")
+        # Check general user status (banned, etc.) but bypass premium checks for premium batch links
+        # Premium batch links have their own access control logic above
+        if user.status == UserStatus.BANNED:
+            await message.reply_text(f"❌ Access denied: {user.ban_reason or 'User banned'}")
             return
 
         sts = await message.reply("📦 <b>Processing premium batch files...</b>")
