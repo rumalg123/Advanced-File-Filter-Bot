@@ -287,7 +287,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
         await callback_query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode="markdown"
+            parse_mode=ParseMode.HTML
         )
 
     async def _show_detailed_info(self, callback_query):

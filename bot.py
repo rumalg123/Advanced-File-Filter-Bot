@@ -844,20 +844,20 @@ class MediaSearchBot(Client):
                 # Build success message with git info
                 if git_current:
                     success_msg = (
-                        f"✅ **Bot restarted successfully!**\n\n"
-                        f"📝 **Current Version:**\n"
-                        f"🔗 `{git_current['hash']}` - {git_current['date']}\n"
+                        f"✅ <b>Bot restarted successfully!</b>\n\n"
+                        f"📝 <b>Current Version:</b>\n"
+                        f"🔗 <code>{git_current['hash']}</code> - {git_current['date']}\n"
                         f"💬 {git_current['message']}"
                     )
                     
                     if git_current['has_changes']:
-                        success_msg += f"\n⚠️ **Local changes detected**"
+                        success_msg += f"\n⚠️ <b>Local changes detected</b>"
                         
                     # Show update info if we have before/after data
                     if git_before and git_before.get('full_hash') != git_current['full_hash']:
-                        success_msg += f"\n\n🆕 **Updated from:** `{git_before['hash']}`"
+                        success_msg += f"\n\n🆕 <b>Updated from:</b> <code>{git_before['hash']}</code>"
                 else:
-                    success_msg = "✅ **Bot restarted successfully!**"
+                    success_msg = "✅ <b>Bot restarted successfully!</b>"
 
                 # Try to edit the restart message
                 try:
@@ -898,10 +898,10 @@ class MediaSearchBot(Client):
 
                 for admin_id in self.config.ADMINS[:3]:  # Notify first 3 admins
                     try:
-                        error_msg = "⚠️ **Bot Configuration Issue**\n\n"
+                        error_msg = "⚠️ <b>Bot Configuration Issue</b>\n\n"
                         error_msg += "The bot cannot access some force subscription channels:\n\n"
                         for error in check_results['errors']:
-                            error_msg += f"• **{error['type']}** `{error['id']}`\n"
+                            error_msg += f"• <b>{error['type']}</b> <code>{error['id']}</code>\n"
                             error_msg += f"  Error: {error['error']}\n\n"
                         error_msg += "Please add the bot to these channels/groups and make it an admin."
 

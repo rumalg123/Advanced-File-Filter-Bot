@@ -156,7 +156,7 @@ class ConnectionHandler:
                         await telegram_api.call_api(
                             client.send_message,
                             user_id,
-                            f"Connected to **{title}**!",
+                            f"Connected to <b>{title}</b>!",
                             parse_mode=enums.ParseMode.HTML,
                             chat_id=user_id
                         )
@@ -169,7 +169,7 @@ class ConnectionHandler:
             error_msg = str(e).lower()
             if "channel_private" in error_msg or "chat not found" in error_msg:
                 await message.reply_text(
-                    "❌ **Cannot Access Group**\n\n"
+                    "❌ <b>Cannot Access Group</b>\n\n"
                     "This group is private or I'm not a member.\n"
                     "Please add me to the group and make me an admin first.",
                     quote=True

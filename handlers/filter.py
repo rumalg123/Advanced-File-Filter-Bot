@@ -142,7 +142,7 @@ class FilterHandler(BaseCommandHandler):
 
         if success:
             return await message.reply_text(
-                f"Filter for `{keyword}` added in **{title}**",
+                f"Filter for <code>{keyword}</code> added in <b>{title}</b>",
                 quote=True,
                 parse_mode=enums.ParseMode.HTML
             )
@@ -173,8 +173,8 @@ class FilterHandler(BaseCommandHandler):
         count = await self.filter_service.count_filters(str(group_id))
 
         if count:
-            filterlist = f"Total number of filters in **{title}**: {count}\n\n"
-            keywords = "\n".join(f"{idx + 1}.  `{text}`" for idx, text in enumerate(sorted(filters)))
+            filterlist = f"Total number of filters in <b>{title}</b>: {count}\n\n"
+            keywords = "\n".join(f"{idx + 1}.  <code>{text}</code>" for idx, text in enumerate(sorted(filters)))
             filterlist += keywords
 
             if len(filterlist) > 4096:
@@ -186,12 +186,12 @@ class FilterHandler(BaseCommandHandler):
                     keyword_file.name = "keywords.txt"
                     await message.reply_document(
                         document=keyword_file,
-                        caption=f"Total number of filters in **{title}**: {count}",
+                        caption=f"Total number of filters in <b>{title}</b>: {count}",
                         quote=True
                     )
                 return
         else:
-            filterlist = f"There are no active filters in **{title}**"
+            filterlist = f"There are no active filters in <b>{title}</b>"
 
         await message.reply_text(
             text=filterlist,
@@ -240,12 +240,12 @@ class FilterHandler(BaseCommandHandler):
 
             if deleted:
                 await message.reply_text(
-                    f"`{filter_name}` deleted. I'll not respond to that filter anymore.",
+                    f"<code>{filter_name}</code> deleted. I'll not respond to that filter anymore.",
                     quote=True,
                     parse_mode=enums.ParseMode.HTML
                 )
             else:
-                await message.reply_text(f"Couldn't find filter: `{filter_name}`", quote=True)
+                await message.reply_text(f"Couldn't find filter: <code>{filter_name}</code>", quote=True)
 
     async def delete_all_command(self, client: Client, message: Message):
         """Handle delete all filters command"""

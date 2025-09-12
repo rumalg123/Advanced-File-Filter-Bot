@@ -191,9 +191,9 @@ class RequestHandler:
             if success:
                 # Notify user about ban
                 ban_msg = (
-                    "🚫 **You have been banned from using this bot**\n\n"
-                    f"**Reason:** Over request warning limit\n"
-                    f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    "🚫 <b>You have been banned from using this bot</b>\n\n"
+                    f"<b>Reason:</b> Over request warning limit\n"
+                    f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                     "You exceeded the maximum number of request warnings.\n"
                     "Please contact the bot administrator to appeal."
                 )
@@ -210,11 +210,11 @@ class RequestHandler:
                 if self.bot.config.LOG_CHANNEL:
                     log_text = (
                         f"#AutoBan #RequestAbuse\n\n"
-                        f"**User:** `{user_id}` ({banned_user.name if banned_user else 'Unknown'})\n"
-                        f"**Reason:** Over request warning limit\n"
-                        f"**Total Requests:** {banned_user.total_requests if banned_user else 'N/A'}\n"
-                        f"**Warnings:** {banned_user.warning_count if banned_user else 'N/A'}\n"
-                        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                        f"<b>User:</b> <code>{user_id}</code> ({banned_user.name if banned_user else 'Unknown'})\n"
+                        f"<b>Reason:</b> Over request warning limit\n"
+                        f"<b>Total Requests:</b> {banned_user.total_requests if banned_user else 'N/A'}\n"
+                        f"<b>Warnings:</b> {banned_user.warning_count if banned_user else 'N/A'}\n"
+                        f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
                 return
@@ -228,11 +228,11 @@ class RequestHandler:
                 user = message.from_user
                 warning_text = (
                     f"#RequestWarning\n\n"
-                    f"👤 **User:** {user.mention} [`{user_id}`]\n"
-                    f"📝 **Username:** @{user.username if user.username else 'N/A'}\n"
-                    f"🔍 **Keyword:** `{keyword}`\n"
-                    f"⚠️ **Message:** {limit_message}\n"
-                    f"📅 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    f"👤 <b>User:</b> {user.mention} [<code>{user_id}</code>]\n"
+                    f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
+                    f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
+                    f"⚠️ <b>Message:</b> {limit_message}\n"
+                    f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
                 await client.send_message(self.bot.config.LOG_CHANNEL, warning_text)
             return
@@ -374,13 +374,13 @@ class RequestHandler:
             delete_minutes = delete_time // 60
 
             caption = (
-                f"🔍 **Search Results for:** {query}\n\n"
+                f"🔍 <b>Search Results for:</b> {query}\n\n"
                 f"📁 Found {total} files\n"
                 f"📊 Page {pagination.current_page} of {pagination.total_pages}"
             )
 
             if not is_private or delete_time > 0:
-                caption += f"\n\n⏱ **Note:** Results will be auto-deleted after {delete_minutes} minutes"
+                caption += f"\n\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
 
             # Send message with or without photo
             if self.bot.config.PICS:
@@ -421,11 +421,11 @@ class RequestHandler:
 
         # Build request info
         request_text = (
-            f"📮 **New Content Request**\n\n"
-            f"👤 **User:** {user.mention} [`{user.id}`]\n"
-            f"📝 **Username:** @{user.username if user.username else 'N/A'}\n"
-            f"📅 **Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"🔍 **Keyword:** `{keyword}`\n"
+            f"📮 <b>New Content Request</b>\n\n"
+            f"👤 <b>User:</b> {user.mention} [<code>{user.id}</code>]\n"
+            f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
+            f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
         )
 
         # Build buttons
@@ -508,7 +508,7 @@ class RequestHandler:
         # Update admin message
         await query.message.edit_reply_markup(None)
         await query.message.edit_text(
-            query.message.text + f"\n\n✅ **Action Taken:** {action.title()}"
+            query.message.text + f"\n\n✅ <b>Action Taken:</b> {action.title()}"
         )
 
         await query.answer(f"✅ User notified: {action.title()}")

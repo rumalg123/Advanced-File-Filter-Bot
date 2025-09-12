@@ -122,7 +122,7 @@ class FileStoreHandler:
         if len(parts) != 3:
             await message.reply(
                 "Use correct format.\n"
-                "Example: `/batch https://t.me/channel/10 https://t.me/channel/20`"
+                "Example: <code>/batch https://t.me/channel/10 https://t.me/channel/20</code>"
             )
             return
 
@@ -153,7 +153,7 @@ class FileStoreHandler:
 
             await sts.edit(
                 f"Here is your link\n"
-                f"Contains approximately `{total_msgs}` messages.\n"
+                f"Contains approximately <code>{total_msgs}</code> messages.\n"
                 f"{link}"
             )
         else:
@@ -172,15 +172,15 @@ class FileStoreHandler:
 
         if len(parts) != 3:
             await message.reply(
-                "**🚫 Invalid Format**\n\n"
-                "**Usage:**\n"
-                "• `/batch_premium <first_link> <last_link>`\n"
-                "• `/pbatch_premium <first_link> <last_link>`\n\n"
-                "**Short aliases:**\n"
-                "• `/bprem <first_link> <last_link>`\n"
-                "• `/pbprem <first_link> <last_link>`\n\n"
-                "**Example:**\n"
-                "`/batch_premium https://t.me/channel/100 https://t.me/channel/200`",
+                "<b>🚫 Invalid Format</b>\n\n"
+                "<b>Usage:</b>\n"
+                "• <code>/batch_premium &lt;first_link&gt; &lt;last_link&gt;</code>\n"
+                "• <code>/pbatch_premium &lt;first_link&gt; &lt;last_link&gt;</code>\n\n"
+                "<b>Short aliases:</b>\n"
+                "• <code>/bprem &lt;first_link&gt; &lt;last_link&gt;</code>\n"
+                "• <code>/pbprem &lt;first_link&gt; &lt;last_link&gt;</code>\n\n"
+                "<b>Example:</b>\n"
+                "<code>/batch_premium https://t.me/channel/100 https://t.me/channel/200</code>",
                 parse_mode=ParseMode.HTML
             )
             return
@@ -201,15 +201,15 @@ class FileStoreHandler:
         parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link)
         if not parsed_links:
             await message.reply(
-                "❌ **Invalid Links**\n\n"
+                "❌ <b>Invalid Links</b>\n\n"
                 "Please check that:\n"
                 "• Both links are valid Telegram message links\n"
                 "• Both links are from the same channel\n"
                 "• First message ID is less than second message ID\n"
                 "• Batch size is reasonable (< 10,000 messages)\n\n"
-                "**Valid formats:**\n"
-                "• `https://t.me/channel/123`\n"
-                "• `https://t.me/c/1234567890/123`",
+                "<b>Valid formats:</b>\n"
+                "• <code>https://t.me/channel/123</code>\n"
+                "• <code>https://t.me/c/1234567890/123</code>,"
                 parse_mode=ParseMode.HTML
             )
             return
@@ -219,10 +219,10 @@ class FileStoreHandler:
 
         # Create premium batch link
         sts = await message.reply(
-            f"🔄 **Generating Premium Batch Link**\n\n"
-            f"📊 **Messages**: ~{message_count:,}\n"
-            f"📡 **Source**: {first_parsed.chat_identifier}\n"
-            f"💎 **Type**: {'Protected Premium' if protect else 'Premium'}\n\n"
+            f"🔄 <b>Generating Premium Batch Link</b>\n\n"
+            f"📊 <b>Messages</b>: ~{message_count:,}\n"
+            f"📡 <b>Source</b>: {first_parsed.chat_identifier}\n"
+            f"💎 <b>Type</b>: {'Protected Premium' if protect else 'Premium'}\n\n"
             f"⏳ *This may take a moment...*"
         )
 
@@ -240,14 +240,14 @@ class FileStoreHandler:
                 batch_type = "Protected Premium" if protect else "Premium"
                 
                 await sts.edit(
-                    f"✅ **{batch_type} Batch Link Created**\n\n"
-                    f"📦 **Messages**: ~{message_count:,}\n"
-                    f"📡 **Source**: `{first_parsed.chat_identifier}`\n"
-                    f"📋 **Range**: `{first_parsed.message_id}` → `{last_parsed.message_id}`\n"
-                    f"💎 **Access**: Premium users only\n"
-                    f"🔒 **Protection**: {'Non-forwardable content' if protect else 'Standard content'}\n\n"
-                    f"🔗 **Link**: {link}\n\n"
-                    f"⚡ **Access Rules**:\n"
+                    f"✅ <b>{batch_type} Batch Link Created</b>\n\n"
+                    f"📦 <b>Messages</b>: ~{message_count:,}\n"
+                    f"📡 <b>Source</b>: <code>{first_parsed.chat_identifier}</code>\n"
+                    f"📋 <b>Range</b>: <code>{first_parsed.message_id}</code> → <code>{last_parsed.message_id}</code>\n"
+                    f"💎 <b>Access</b>: Premium users only\n"
+                    f"🔒 <b>Protection</b>: {'Non-forwardable content' if protect else 'Standard content'}\n\n"
+                    f"🔗 <b>Link</b>: {link}\n\n"
+                    f"⚡ <b>Access Rules</b>:\n"
                     f"• Link-level premium overrides global settings\n"
                     f"• Works even when global premium is disabled\n"
                     f"• Only premium users can access this content",
@@ -255,8 +255,8 @@ class FileStoreHandler:
                 )
             else:
                 await sts.edit(
-                    "❌ **Failed to Generate Premium Batch Link**\n\n"
-                    "**Please check:**\n"
+                    "❌ <b>Failed to Generate Premium Batch Link</b>\n\n"
+                    "<b>Please check:</b>\n"
                     "• Bot has access to the source channel\n"
                     "• Links are valid and from the same channel\n"
                     "• Database is accessible\n"
@@ -271,7 +271,7 @@ class FileStoreHandler:
                 "error": str(e)
             })
             await sts.edit(
-                "❌ **System Error**\n\n"
+                "❌ <b>System Error</b>\n\n"
                 "An unexpected error occurred while creating the batch link.\n"
                 "Please try again later or contact support.",
                 parse_mode=ParseMode.HTML
