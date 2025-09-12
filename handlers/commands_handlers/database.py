@@ -183,34 +183,34 @@ class DatabaseCommandHandler(BaseCommandHandler):
             # Get detailed information
             stats = await self.bot.multi_db_manager.get_database_stats()
             
-            text = "📊 **Multi-Database Information**\n\n"
-            text += f"**Mode:** Multi-Database ({len(stats)} databases)\n"
-            text += f"**Auto-switch:** `{'Enabled' if self.bot.config.DATABASE_AUTO_SWITCH else 'Disabled'}`\n"
-            text += f"**Size Limit:** `{self.bot.config.DATABASE_SIZE_LIMIT_GB}GB` per database\n\n"
+            text = "📊 <b>Multi-Database Information</b>\n\n"
+            text += f"<b>Mode:</b> Multi-Database ({len(stats)} databases)\n"
+            text += f"<b>Auto-switch:</b> <code>{'Enabled' if self.bot.config.DATABASE_AUTO_SWITCH else 'Disabled'}</code>\n"
+            text += f"<b>Size Limit:</b> <code>{self.bot.config.DATABASE_SIZE_LIMIT_GB}GB</code> per database\n\n"
             
             # Database details
             for i, stat in enumerate(stats):
                 status = "🟢 Active" if stat['is_active'] else "🔴 Inactive"
                 write_status = " (Current Write DB)" if stat['is_current_write'] else ""
                 
-                text += f"**Database {i + 1}:** {status}{write_status}\n"
+                text += f"<b>Database {i + 1}:</b> {status}{write_status}\n"
                 text += f"   📝 Name: <code>{stat['name']}</code>\n"
                 text += f"   📦 Storage: `{stat['size_gb']:.3f}GB / {stat['size_limit_gb']:.1f}GB`\n"
                 text += f"   📊 Usage: `{stat['usage_percentage']:.1f}%`\n"
                 text += f"   📄 Files: <code>{stat['files_count']:,}</code>\n"
                 
                 if stat['usage_percentage'] >= 90:
-                    text += "   ⚠️ **Critical: Near capacity!**\n"
+                    text += "   ⚠️ <b>Critical: Near capacity!</b>\n"
                 elif stat['usage_percentage'] >= 75:
-                    text += "   🔶 **Warning: High usage**\n"
+                    text += "   🔶 <b>Warning: High usage</b>\n"
                 elif stat['usage_percentage'] < 25:
-                    text += "   🔵 **Info: Low usage**\n"
+                    text += "   🔵 <b>Info: Low usage</b>\n"
                     
                 text += "\n"
 
             # Add usage recommendations
             if any(stat['usage_percentage'] >= 80 for stat in stats):
-                text += "💡 **Recommendations:**\n"
+                text += "💡 <b>Recommendations:</b>\n"
                 text += "• Consider adding more databases to `DATABASE_URIS`\n"
                 text += "• Monitor storage usage regularly\n"
                 text += "• Enable auto-switch if disabled\n"
@@ -267,13 +267,13 @@ class DatabaseCommandHandler(BaseCommandHandler):
         stats = await self.bot.multi_db_manager.get_database_stats()
         
         # Format updated statistics
-        text = "📊 **Database Statistics** (Updated)\n\n"
+        text = "📊 <b>Database Statistics</b> (Updated)\n\n"
         
         for stat in stats:
             status_emoji = "✅" if stat['is_active'] else "❌"
             write_emoji = "✍️" if stat['is_current_write'] else "📖"
             
-            text += f"{status_emoji} **Database {stat['index'] + 1}** {write_emoji}\n"
+            text += f"{status_emoji} <b>Database {stat['index'] + 1}</b> {write_emoji}\n"
             text += f"   📝 Name: `{stat['name']}`\n"
             text += f"   📦 Size: `{stat['size_gb']}GB / {stat['size_limit_gb']}GB`\n"
             text += f"   📈 Usage: `{stat['usage_percentage']}%`\n"

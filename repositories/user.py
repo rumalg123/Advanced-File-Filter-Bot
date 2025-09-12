@@ -197,7 +197,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, "❌ User not found in database.", None
 
         if user.status != UserStatus.BANNED:
-            return False, f"❌ User `{user_id}` is not banned!", user
+            return False, f"❌ User <code>{user_id}</code> is not banned!", user
 
         # Reset request-related counters when unbanning
         update_data = {

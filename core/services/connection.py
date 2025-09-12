@@ -81,7 +81,7 @@ class ConnectionService:
         success = await self.connection_repo.add_connection(str(user_id), str(group_id))
 
         if success:
-            return True, f"Successfully connected to **{title}**!", title
+            return True, f"Successfully connected to <b>{title}</b>!", title
         else:
             return False, "You're already connected to this chat!", title
 

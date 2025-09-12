@@ -199,9 +199,9 @@ async def verify_alignment_command(client, message):
         results = await verifier.verify_all()
 
         # Format results
-        text = "**🔧 Bot-Manager Alignment Report**\n\n"
+        text = "<b>🔧 Bot-Manager Alignment Report</b>\n\n"
 
-        text += f"**Health Score:** {results['health_score']}/100 "
+        text += f"<b>Health Score:</b> {results['health_score']}/100 "
         if results['health_score'] >= 80:
             text += "✅\n\n"
         elif results['health_score'] >= 60:
@@ -210,7 +210,7 @@ async def verify_alignment_command(client, message):
             text += "❌\n\n"
 
         if results['successes']:
-            text += f"**✅ Successes ({len(results['successes'])}):**\n"
+            text += f"<b>✅ Successes ({len(results['successes'])}):</b>\n"
             for success in results['successes'][:10]:  # Limit to 10
                 text += f"  {success}\n"
             if len(results['successes']) > 10:
@@ -218,7 +218,7 @@ async def verify_alignment_command(client, message):
             text += "\n"
 
         if results['warnings']:
-            text += f"**⚠️ Warnings ({len(results['warnings'])}):**\n"
+            text += f"<b>⚠️ Warnings ({len(results['warnings'])}):</b>\n"
             for warning in results['warnings'][:5]:
                 text += f"  • {warning}\n"
             if len(results['warnings']) > 5:
@@ -226,7 +226,7 @@ async def verify_alignment_command(client, message):
             text += "\n"
 
         if results['issues']:
-            text += f"**❌ Issues ({len(results['issues'])}):**\n"
+            text += f"<b>❌ Issues ({len(results['issues'])}):</b>\n"
             for issue in results['issues']:
                 text += f"  • {issue}\n"
             text += "\n"
@@ -234,7 +234,7 @@ async def verify_alignment_command(client, message):
         # Add manager stats - FIXED section
         if hasattr(bot, 'handler_manager') and bot.handler_manager:
             stats = bot.handler_manager.get_stats()
-            text += "**📊 Manager Statistics:**\n"
+            text += "<b>📊 Manager Statistics:</b>\n"
             text += f"  • Handlers: {stats['handlers_active']}\n"
             text += f"  • Handler Instances: {stats['handler_instances']}\n"
             text += f"  • Background Tasks: {stats['background_tasks']}\n"
@@ -246,7 +246,7 @@ async def verify_alignment_command(client, message):
 
             # Get list of named tasks if you want to show them
             if bot.handler_manager.named_tasks:
-                text += "\n**📝 Named Tasks:**\n"
+                text += "\n<b>📝 Named Tasks:</b>\n"
                 for task_name, task in bot.handler_manager.named_tasks.items():
                     status = "✅ Running" if not task.done() else "⏹ Completed"
                     text += f"  • {task_name}: {status}\n"

@@ -485,13 +485,13 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the user
             premium_notification = (
-                "🎉 **Congratulations! You have been upgraded to Premium!**\n\n"
-                f"**Benefits:**\n"
+                "🎉 <b>Congratulations! You have been upgraded to Premium!</b>\n\n"
+                f"<b>Benefits:</b>\n"
                 f"• Unlimited file downloads\n"
                 f"• Priority support\n"
                 f"• Advanced features\n"
                 f"• Valid for {self.bot.config.PREMIUM_DURATION_DAYS} days\n\n"
-                f"**Activated on:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                f"<b>Activated on:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                 "Enjoy your premium access! 🌟"
             )
 
@@ -503,7 +503,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     log_text = (
                         f"#PremiumAdded\n\n"
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
-                        f"**Duration:** {self.bot.config.PREMIUM_DURATION_DAYS} days\n"
+                        f"<b>Duration:</b> {self.bot.config.PREMIUM_DURATION_DAYS} days\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -534,8 +534,8 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the user
             premium_removal_notification = (
-                "📋 **Your premium subscription has been removed**\n\n"
-                f"**New Limits:**\n"
+                "📋 <b>Your premium subscription has been removed</b>\n\n"
+                f"<b>New Limits:</b>\n"
                 f"• {self.bot.config.NON_PREMIUM_DAILY_LIMIT} files per day\n"
                 f"• Standard support\n\n"
                 f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -614,24 +614,24 @@ class AdminCommandHandler(BaseCommandHandler):
 
             # Build response text
             text = (
-                "🚀 **Bot Performance Metrics**\n\n"
-                f"**Event Loop:** {metrics['event_loop']}\n"
-                f"**Mode:** {metrics.get('optimization', 'Standard Mode')}\n"
+                "🚀 <b>Bot Performance Metrics</b>\n\n"
+                f"<b>Event Loop:</b> {metrics['event_loop']}\n"
+                f"<b>Mode:</b> {metrics.get('optimization', 'Standard Mode')}\n"
             )
 
             if metrics['event_loop'] == 'uvloop':
-                text += f"**Performance:** {metrics.get('expected_improvement', 'Optimized')}\n"
+                text += f"<b>Performance:</b> {metrics.get('expected_improvement', 'Optimized')}\n"
             else:
-                text += f"**Note:** {metrics.get('recommendation', '')}\n"
+                text += f"<b>Note:</b> {metrics.get('recommendation', '')}\n"
 
             text += (
-                f"\n📊 **System Resources:**\n"
+                f"\n📊 <b>System Resources:</b>\n"
                 f"├ Memory: {metrics['memory_mb']:.2f} MB\n"
                 f"├ CPU: {metrics['cpu_percent']:.1f}%\n"
                 f"├ Threads: {metrics['num_threads']}\n"
                 f"├ File Descriptors: {metrics['num_fds']}\n"
                 f"└ Pending Tasks: {metrics['pending_tasks']}\n\n"
-                f"⏱ **Uptime:** {uptime_str}"
+                f"⏱ <b>Uptime:</b> {uptime_str}"
             )
 
             await message.reply_text(text)
@@ -655,27 +655,27 @@ class AdminCommandHandler(BaseCommandHandler):
                 return
 
             text = (
-                "📊 **Cache Statistics**\n\n"
+                "📊 <b>Cache Statistics</b>\n\n"
                 "<b>Memory Usage:</b>\n"
                 f"├ Used: {stats['memory']['used_memory_human']}\n"
                 f"├ RSS: {stats['memory']['used_memory_rss_human']}\n"
                 f"├ Peak: {stats['memory']['used_memory_peak_human']}\n"
                 f"└ Fragmentation: {stats['memory']['mem_fragmentation_ratio']}\n\n"
 
-                "**Performance:**\n"
+                "<b>Performance:</b>\n"
                 f"├ Hit Rate: {stats['performance']['cache_hit_rate']}\n"
                 f"├ Hits: {stats['performance']['keyspace_hits']:,}\n"
                 f"├ Misses: {stats['performance']['keyspace_misses']:,}\n"
                 f"└ Ops/sec: {stats['performance']['instantaneous_ops_per_sec']}\n\n"
 
-                "**Keys by Type:**\n"
+                "<b>Keys by Type:</b>\n"
             )
 
             for pattern, count in stats['keys']['by_pattern'].items():
                 text += f"├ {pattern}: {count:,}\n"
 
-            text += f"\n**Total Keys:** {stats['keys']['total_keys']:,}"
-            text += f"\n**Keys with TTL:** {stats['keys']['expires']:,}"
+            text += f"\n<b>Total Keys:</b> {stats['keys']['total_keys']:,}"
+            text += f"\n<b>Keys with TTL:</b> {stats['keys']['expires']:,}"
 
             await status_msg.edit_text(text)
 
@@ -696,10 +696,10 @@ class AdminCommandHandler(BaseCommandHandler):
             # Analyze usage
             analysis = await monitor.analyze_cache_usage()
 
-            text = "🔍 **Cache Analysis**\n\n"
+            text = "🔍 <b>Cache Analysis</b>\n\n"
 
             if duplicates:
-                text += f"**⚠️ Found {len(duplicates)} duplicate entries:**\n"
+                text += f"<b>⚠️ Found {len(duplicates)} duplicate entries:</b>\n"
                 for dup in duplicates[:5]:  # Show first 5
                     text += f"├ File {dup['file_id'][:10]}... has {dup['count']} cache entries\n"
                 if len(duplicates) > 5:
@@ -707,15 +707,15 @@ class AdminCommandHandler(BaseCommandHandler):
                 text += "\n"
 
             if analysis['large_values']:
-                text += f"**📦 Large Cache Values ({len(analysis['large_values'])}):**\n"
+                text += f"<b>📦 Large Cache Values ({len(analysis['large_values'])}):</b>\n"
                 for item in analysis['large_values'][:3]:
                     text += f"├ {item['key'][:30]}... - {item['size_human']}\n"
                 text += "\n"
 
             if analysis['no_ttl']:
-                text += f"**⏰ Keys without TTL: {len(analysis['no_ttl'])}**\n\n"
+                text += f"<b>⏰ Keys without TTL: {len(analysis['no_ttl'])}</b>\n\n"
 
-            text += "**📊 Key Size Distribution:**\n"
+            text += "<b>📊 Key Size Distribution:</b>\n"
             for category, count in sorted(analysis['key_size_distribution'].items()):
                 text += f"├ {category}: {count}\n"
 
@@ -729,7 +729,7 @@ class AdminCommandHandler(BaseCommandHandler):
         """Clean up duplicate cache entries"""
         if len(message.command) < 2 or message.command[1] != "confirm":
             await message.reply_text(
-                "⚠️ **Cache Cleanup**\n\n"
+                "⚠️ <b>Cache Cleanup</b>\n\n"
                 "This will remove duplicate cache entries.\n"
                 "Use <code>/cache_cleanup confirm</code> to proceed."
             )
@@ -754,7 +754,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     cleaned += 1
 
             await status_msg.edit_text(
-                f"✅ **Cache Cleanup Complete**\n\n"
+                f"✅ <b>Cache Cleanup Complete</b>\n\n"
                 f"Removed {cleaned} duplicate entries\n"
                 f"Freed up memory from {len(duplicates)} files"
             )

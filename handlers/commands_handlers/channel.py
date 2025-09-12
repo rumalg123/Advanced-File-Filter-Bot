@@ -40,7 +40,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg:
                     await message.reply_text(
-                        "❌ **Cannot Access Channel**\n\n"
+                        "❌ <b>Cannot Access Channel</b>\n\n"
                         "This is a private channel. Please:\n"
                         "1. Add me to the channel first\n"
                         "2. Make me an admin\n"
@@ -64,7 +64,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                 if "channel_private" in error_msg:
                     # Channel might be private or bot not member
                     await message.reply_text(
-                        "❌ **Cannot Access Channel**\n\n"
+                        "❌ <b>Cannot Access Channel</b>\n\n"
                         "This channel is private or I'm not a member.\n"
                         "Please add me to the channel as an admin first.\n\n"
                         "If you've already added me, wait a moment and try again."
@@ -88,7 +88,7 @@ class ChannelCommandHandler(BaseCommandHandler):
             error_msg = str(e).lower()
             if "channel_private" in error_msg or "user_not_participant" in error_msg:
                 await message.reply_text(
-                    "⚠️ **Warning:** I cannot verify my membership in this channel.\n\n"
+                    "⚠️ <b>Warning:</b> I cannot verify my membership in this channel.\n\n"
                     "Make sure:\n"
                     "1. I'm added to the channel\n"
                     "2. I'm an admin (for private channels)\n"

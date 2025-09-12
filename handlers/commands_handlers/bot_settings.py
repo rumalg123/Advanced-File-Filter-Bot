@@ -222,7 +222,7 @@ class BotSettingsHandler:
         buttons.append([InlineKeyboardButton("❌ Close", callback_data="bset_close")])
 
         text = (
-            "⚙️ **Bot Settings**\n\n"
+            "⚙️ <b>Bot Settings</b>\n\n"
             "Select a setting to view or modify.\n"
             f"Page {page + 1} of {total_pages} • Total Settings: {total_settings}"
         )
@@ -320,14 +320,14 @@ class BotSettingsHandler:
 
         protection_status = ""
         if key in self.PROTECTED_SETTINGS:
-            protection_status = "\n🔒 **Protected:** This setting cannot be changed via bot"
+            protection_status = "\n🔒 <b>Protected:</b> This setting cannot be changed via bot"
 
         text = (
-            f"⚙️ **Setting: {self._get_display_name(key)}**\n\n"
-            f"📝 **Description:** {description}\n"
-            f"🔧 **Type:** `{setting_type}`\n"
-            f"📌 **Current Value:** `{current_display}`\n"
-            f"🔄 **Default Value:** `{default_display}`\n"
+            f"⚙️ <b>Setting: {self._get_display_name(key)}</b>\n\n"
+            f"📝 <b>Description:</b> {description}\n"
+            f"🔧 <b>Type:</b> <code>{setting_type}</code>\n"
+            f"📌 <b>Current Value:</b> <code>{current_display}</code>\n"
+            f"🔄 <b>Default Value:</b> <code>{default_display}</code>\n"
             f"{protection_status}"
         )
 
@@ -394,13 +394,13 @@ class BotSettingsHandler:
         # Special handling for message templates
         if key == 'AUTO_DELETE_MESSAGE':
             text = (
-                f"✏️ **Editing: Auto Delete Message**\n\n"
+                f"✏️ <b>Editing: Auto Delete Message</b>\n\n"
                 f"Current: `{current_value}`\n\n"
-                f"**Available placeholders:**\n"
+                f"<b>Available placeholders:</b>\n"
                 f"• `{{content_type}}` - Type of content (file, message, etc.)\n"
                 f"• `{{minutes}}` - Minutes until deletion\n\n"
-                f"**HTML formatting supported:**\n"
-                f"• `<b>bold</b>` - **bold text**\n"
+                f"<b>HTML formatting supported:</b>\n"
+                f"• <code>&lt;b&gt;bold&lt;/b&gt;</code> - <b>bold text</b>\n"
                 f"• `<i>italic</i>` - _italic text_\n"
                 f"• `<code>code</code>` - `monospace`\n"
                 f"• `<u>underline</u>` - underlined\n"
@@ -413,16 +413,16 @@ class BotSettingsHandler:
             )
         elif key == 'START_MESSAGE':
             text = (
-                f"✏️ **Editing: Start Message**\n\n"
+                f"✏️ <b>Editing: Start Message</b>\n\n"
                 f"Current length: {len(current_value)} characters\n\n"
-                f"**Available placeholders:**\n"
+                f"<b>Available placeholders:</b>\n"
                 f"• `{{mention}}` - User mention\n"
                 f"• `{{user_id}}` - User ID\n"
                 f"• `{{first_name}}` - User's first name\n"
                 f"• `{{bot_name}}` - Bot's name\n"
                 f"• `{{bot_username}}` - Bot's username\n\n"
-                f"**HTML formatting supported:**\n"
-                f"• `<b>bold</b>` - **bold text**\n"
+                f"<b>HTML formatting supported:</b>\n"
+                f"• <code>&lt;b&gt;bold&lt;/b&gt;</code> - <b>bold text</b>\n"
                 f"• `<i>italic</i>` - _italic text_\n"
                 f"• `<code>code</code>` - `monospace`\n"
                 f"• `<u>underline</u>` - underlined\n"
@@ -442,7 +442,7 @@ class BotSettingsHandler:
             example = "Example: value1, value2, value3" if key != 'FILE_STORE_CHANNEL' else "Example: -100123 -100456"
 
             text = (
-                f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
+                f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
                 f"Current: `{current_value}`\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
@@ -453,7 +453,7 @@ class BotSettingsHandler:
             example = "Example: 100"
 
             text = (
-                f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
+                f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
                 f"Current: `{current_value}`\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
@@ -464,7 +464,7 @@ class BotSettingsHandler:
             example = "Example: your text here"
 
             text = (
-                f"✏️ **Editing: {self._get_display_name(key)}**\n\n"
+                f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
                 f"Current: `{current_value}`\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
@@ -570,7 +570,7 @@ class BotSettingsHandler:
         try:
             if key in self.PROTECTED_SETTINGS:
                 await message.reply_text(
-                    f"⚠️ **Security Warning**\n\n"
+                    f"⚠️ <b>Security Warning</b>\n\n"
                     f"The setting `{key}` is protected and cannot be changed via bot.\n"
                     f"Changing this setting requires:\n"
                     f"1. Manual update in environment variables\n"
@@ -602,8 +602,8 @@ class BotSettingsHandler:
                 # Send success message with restart reminder
                 success_msg = await client.send_message(
                     message.chat.id,
-                    f"✅ Setting **{self._get_display_name(key)}** updated successfully!\n\n"
-                    f"⚠️ **Important:** You must restart the bot for changes to take effect.\n\n"
+                    f"✅ Setting <b>{self._get_display_name(key)}</b> updated successfully!\n\n"
+                    f"⚠️ <b>Important:</b> You must restart the bot for changes to take effect.\n\n"
                     f"Use `/restart` command now to apply changes."
                 )
 
@@ -717,7 +717,7 @@ class BotSettingsHandler:
         # Get current git info before restart
         git_info_before = self._get_git_info()
         
-        restart_msg = await message.reply_text("🔄 **Restarting bot...**")
+        restart_msg = await message.reply_text("🔄 <b>Restarting bot...</b>")
 
         # Save restart message info and git info
         restart_data = {
@@ -735,7 +735,7 @@ class BotSettingsHandler:
         upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
 
         if upstream_repo and upstream_branch:
-            await restart_msg.edit_text("🔄 **Force pulling updates from upstream...**")
+            await restart_msg.edit_text("🔄 <b>Force pulling updates from upstream...</b>")
 
             try:
                 # Force pull from upstream (overwrites local changes)
@@ -762,21 +762,21 @@ class BotSettingsHandler:
                 if git_info_before and git_info_after:
                     if git_info_before['full_hash'] != git_info_after['full_hash']:
                         update_msg = (
-                            f"✅ **Updates pulled!**\n\n"
-                            f"📝 **Latest Commit:**\n"
+                            f"✅ <b>Updates pulled!</b>\n\n"
+                            f"📝 <b>Latest Commit:</b>\n"
                             f"🔗 `{git_info_after['hash']}` - {git_info_after['date']}\n"
                             f"💬 {git_info_after['message']}\n\n"
-                            f"🔄 **Restarting...**"
+                            f"🔄 <b>Restarting...</b>"
                         )
                     else:
-                        update_msg = "ℹ️ **No new updates available. Restarting...**"
+                        update_msg = "ℹ️ <b>No new updates available. Restarting...</b>"
                 else:
-                    update_msg = "✅ **Updates pulled! Restarting...**"
+                    update_msg = "✅ <b>Updates pulled! Restarting...</b>"
                     
                 await restart_msg.edit_text(update_msg)
             except Exception as e:
                 logger.error(f"Failed to force pull updates: {e}")
-                await restart_msg.edit_text("⚠️ **Failed to force pull updates. Restarting anyway...**")
+                await restart_msg.edit_text("⚠️ <b>Failed to force pull updates. Restarting anyway...</b>")
 
         # Platform-specific restart
         if platform.system() == "Windows":
@@ -799,7 +799,7 @@ class BotSettingsHandler:
                 sys.exit(0)
             except Exception as e:
                 logger.error(f"Windows restart failed: {e}")
-                await restart_msg.edit_text(f"❌ **Restart failed:** {str(e)}")
+                await restart_msg.edit_text(f"❌ <b>Restart failed:</b> {str(e)}")
         else:
             # Unix-like systems (Linux, macOS)
             os.execl(sys.executable, sys.executable, *sys.argv)
