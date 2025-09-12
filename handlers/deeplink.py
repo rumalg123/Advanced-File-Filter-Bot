@@ -42,6 +42,11 @@ class DeepLinkHandler(BaseCommandHandler):
         elif data.startswith("DSTORE-"):
             # Direct store request
             await self._send_dstore_files(client, message, data[7:])
+            
+        elif data.startswith("PBLINK-"):
+            # Premium batch link request
+            batch_id = data[7:]  # Remove 'PBLINK-' prefix
+            await self._send_premium_batch(client, message, batch_id)
 
         elif data.startswith("sendall_"):
             # Send all files from search
@@ -408,6 +413,73 @@ class DeepLinkHandler(BaseCommandHandler):
                 continue
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files)} files!")
+
+        # Delete the command message
+        await message.delete()
+
+    async def _send_premium_batch(self, client: Client, message: Message, batch_id: str):
+        """Send premium batch files with access control"""
+        user_id = message.from_user.id
+        
+        # Get batch link details
+        batch_link = await self.bot.filestore_service.get_premium_batch_link(batch_id)
+        if not batch_link:
+            await message.reply_text("❌ Batch link not found or expired.")
+            return
+
+        # Get user details
+        user = await self.bot.user_repo.get_user(user_id)
+        if not user:
+            await message.reply_text("❌ User not found. Please start the bot again.")
+            return
+
+        # Check premium access with precedence rules
+        global_premium_enabled = not self.bot.config.DISABLE_PREMIUM
+        can_access, reason = await self.bot.filestore_service.check_premium_batch_access(
+            batch_link, 
+            user_id, 
+            user.is_premium, 
+            global_premium_enabled
+        )
+
+        if not can_access:
+            await message.reply_text(reason)
+            return
+
+        # Check general file access (rate limiting, etc.)
+        can_access_general, general_reason = await self.bot.user_repo.can_retrieve_file(
+            user_id,
+            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        )
+
+        if not can_access_general:
+            await message.reply_text(f"❌ {general_reason}")
+            return
+
+        sts = await message.reply("📦 <b>Processing premium batch files...</b>")
+
+        # Send files from the batch link
+        success_count, total_count = await self.bot.filestore_service.send_channel_files(
+            self.bot,
+            user_id,
+            batch_link.source_chat_id,
+            batch_link.from_msg_id,
+            batch_link.to_msg_id,
+            protect=batch_link.protected
+        )
+
+        await sts.delete()
+
+        if success_count > 0:
+            batch_type = "protected premium" if batch_link.protected else "premium"
+            await message.reply_text(
+                f"✅ **Premium Batch Transfer Completed!**\n\n"
+                f"📦 Batch Type: {batch_type.title()}\n"
+                f"📊 Files sent: **{success_count}**/**{total_count}**\n"
+                f"💎 Premium access verified"
+            )
+        else:
+            await message.reply_text("❌ Failed to send batch files. Please try again.")
 
         # Delete the command message
         await message.delete()
