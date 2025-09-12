@@ -470,9 +470,9 @@ class DeepLinkHandler(BaseCommandHandler):
         if success_count > 0:
             batch_type = "protected premium" if batch_link.protected else "premium"
             await message.reply_text(
-                f"✅ **Premium Batch Transfer Completed!**\n"
+                f"✅ <b>Premium Batch Transfer Completed!</b>\n"
                 f"📦 Batch Type: {batch_type.title()}\n"
-                f"📊 Files sent: **{success_count}**/**{total_count}**\n"
+                f"📊 Files sent: <b>{success_count}</b>/<b>{total_count}</b>\n"
                 f"💎 Premium access verified"
             )
         else:

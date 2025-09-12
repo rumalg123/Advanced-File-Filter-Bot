@@ -78,10 +78,10 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 write_emoji = "✍️" if stat['is_current_write'] else "📖"
                 
                 text += f"{status_emoji} <b>Database {stat['index'] + 1}</b> {write_emoji}\n"
-                text += f"   📝 Name: `{stat['name']}`\n"
-                text += f"   📦 Size: `{stat['size_gb']}GB / {stat['size_limit_gb']}GB`\n"
-                text += f"   📈 Usage: `{stat['usage_percentage']}%`\n"
-                text += f"   📄 Files: `{stat['files_count']:,}`\n"
+                text += f"   📝 Name: <code>{stat['name']}</code>\n"
+                text += f"   📦 Size: <code>{stat['size_gb']}GB / {stat['size_limit_gb']}GB</code>\n"
+                text += f"   📈 Usage: <code>{stat['usage_percentage']}%</code>\n"
+                text += f"   📄 Files: <code>{stat['files_count']:,}</code>\n"
                 
                 if stat['usage_percentage'] >= 90:
                     text += "   ⚠️ <b>Near capacity!</b>\n"
@@ -123,7 +123,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             if len(message.command) != 2:
                 await message.reply_text(
                     "❌ <b>Usage:</b> <code>/dbswitch &lt;database_number&gt;</code>\n"
-                    "Example: `/dbswitch 2` (switch to database 2)"
+                    "Example: <code>/dbswitch 2</code> (switch to database 2)"
                 )
                 return
 
@@ -150,9 +150,9 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 db_name = stats[db_index]['name']
                 await message.reply_text(
                     f"✅ <b>Successfully switched to Database {db_index + 1}</b>\n"
-                    f"📝 Name: `{db_name}`\n"
-                    f"📦 Size: `{stats[db_index]['size_gb']}GB`\n"
-                    f"📄 Files: `{stats[db_index]['files_count']:,}`"
+                    f"📝 Name: <code>{db_name}</code>\n"
+                    f"📦 Size: <code>{stats[db_index]['size_gb']}GB</code>\n"
+                    f"📄 Files: <code>{stats[db_index]['files_count']:,}</code>"
                 )
             else:
                 await message.reply_text("❌ Failed to switch database.")
@@ -170,8 +170,8 @@ class DatabaseCommandHandler(BaseCommandHandler):
                     text = "📊 <b>Database Information</b>\n"
                     text += "<b>Mode:</b> Single Database\n"
                     text += f"<b>URI:</b> <code>{self.bot.config.DATABASE_URI[:50]}...</code>\n"
-                    text += f"**Name:** `{self.bot.config.DATABASE_NAME}`\n"
-                    text += f"**Collection:** `{self.bot.config.COLLECTION_NAME}`\n\n"
+                    text += f"<b>Name:</b> <code>{self.bot.config.DATABASE_NAME}</code>\n"
+                    text += f"<b>Collection:</b> <code>{self.bot.config.COLLECTION_NAME}</code>\n"
                     text += "💡 **Multi-database mode is not enabled.**\n"
                     text += "To enable, add `DATABASE_URIS` to your environment variables."
                 else:
@@ -194,10 +194,10 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 write_status = " (Current Write DB)" if stat['is_current_write'] else ""
                 
                 text += f"**Database {i + 1}:** {status}{write_status}\n"
-                text += f"   📝 Name: `{stat['name']}`\n"
+                text += f"   📝 Name: <code>{stat['name']}</code>\n"
                 text += f"   📦 Storage: `{stat['size_gb']:.3f}GB / {stat['size_limit_gb']:.1f}GB`\n"
                 text += f"   📊 Usage: `{stat['usage_percentage']:.1f}%`\n"
-                text += f"   📄 Files: `{stat['files_count']:,}`\n"
+                text += f"   📄 Files: <code>{stat['files_count']:,}</code>\n"
                 
                 if stat['usage_percentage'] >= 90:
                     text += "   ⚠️ **Critical: Near capacity!**\n"

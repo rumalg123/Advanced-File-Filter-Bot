@@ -371,9 +371,9 @@ class AdminCommandHandler(BaseCommandHandler):
                 await message.reply_text(
                     "<b>Usage:</b> <code>/ban &lt;user_id&gt; [reason]</code>\n"
                     "<b>Examples:</b>\n"
-                    "• `/ban 123456789`\n"
-                    "• `/ban 123456789 Spamming`\n"
-                    "• `/ban 123456789 \"Spamming and hate speech\"`"
+                    "• <code>/ban 123456789</code>\n"
+                    "• <code>/ban 123456789 Spamming</code>\n"
+                    "• <code>/ban 123456789 "Spamming and hate speech"</code>"
                 )
                 return
 
@@ -413,7 +413,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>Reason:</b> {reason}\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
-                        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                        f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
                 except Exception as e:
@@ -457,7 +457,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
-                        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                        f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
                 except Exception as e:
@@ -506,7 +506,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"**Duration:** {self.bot.config.PREMIUM_DURATION_DAYS} days\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
-                        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                        f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
                 except Exception as e:
@@ -552,7 +552,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
-                        f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                        f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
                 except Exception as e:
@@ -731,7 +731,7 @@ class AdminCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 "⚠️ **Cache Cleanup**\n\n"
                 "This will remove duplicate cache entries.\n"
-                "Use `/cache_cleanup confirm` to proceed."
+                "Use <code>/cache_cleanup confirm</code> to proceed."
             )
             return
 
