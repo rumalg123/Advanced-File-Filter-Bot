@@ -33,6 +33,15 @@ audits/
 - ✅ **Correct**: `parse_mode=ParseMode.HTML` or global Client setting
 - **Rationale**: Consistent user experience, better HTML entity handling
 
+### **HTML & Newlines Policy** - Message Formatting Standards
+**Policy**: Use single `\n` for line breaks; avoid `<br>` tags and double newlines
+- ❌ **Violations**: `<br>` tags (unsupported by Telegram), double newlines `\n\n`
+- ✅ **Correct**: Single `\n` for line breaks in HTML parse mode
+- **References**: 
+  - [Telegram Bot API - Formatting](https://core.telegram.org/bots/api#formatting-options)
+  - [<br> unsupported evidence](https://github.com/python-telegram-bot/python-telegram-bot/issues/736)
+- **Rationale**: Telegram HTML parser renders `\n` as line breaks; `<br>` tags are ignored
+
 ### **ReuseOpportunity** - Centralization Violations
 **Policy**: Use existing utilities instead of duplicate implementations
 - ❌ **Violations**: Custom regex when `TelegramLinkParser` exists
