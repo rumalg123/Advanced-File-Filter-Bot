@@ -1,7 +1,7 @@
 
 from datetime import date
 from functools import lru_cache
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
@@ -38,22 +38,18 @@ class MaintenanceService:
         # Reset daily counters for users (only once per day)
         try:
             current_date = date.today()
-            cache_key = CacheKeyGenerator.last_counter_reset_date()
             
-            # Get the last reset date from cache
-            last_reset_str = await self.cache.get(cache_key)
-            last_reset_date = None
-            if last_reset_str:
-                try:
-                    last_reset_date = date.fromisoformat(last_reset_str)
-                except ValueError:
-                    logger.warning(f"Invalid date format in cache: {last_reset_str}")
+            # Get the last reset date from database (persistent across Docker rebuilds)
+            last_reset_date = await self._get_last_counter_reset_date()
             
             # Only reset if we haven't done it today
             if last_reset_date != current_date:
                 reset_count = await self.user_repo.reset_daily_counters()
-                # Store current date in cache (expires after 25 hours to be safe)
-                await self.cache.set(cache_key, current_date.isoformat(), CacheTTLConfig.MAINTENANCE_RESET_DAILY_COUNTERS)  # 25 hours
+                # Store current date in database for persistence
+                await self._store_counter_reset_date(current_date)
+                # Also store in cache for quick access (expires after 25 hours to be safe)
+                cache_key = CacheKeyGenerator.last_counter_reset_date()
+                await self.cache.set(cache_key, current_date.isoformat(), CacheTTLConfig.MAINTENANCE_RESET_DAILY_COUNTERS)
                 logger.info(f"Daily counters reset for {reset_count} users (new day: {current_date})")
                 results['counters_reset'] = True
                 results['reset_count'] = reset_count
@@ -143,6 +139,51 @@ class MaintenanceService:
                 'avg_obj_size': 0,
                 'objects_count': 0
             }
+
+    async def _get_last_counter_reset_date(self) -> Optional[date]:
+        """Get the last counter reset date from database (persistent storage)"""
+        try:
+            # First try cache for performance
+            cache_key = CacheKeyGenerator.last_counter_reset_date()
+            cached_date_str = await self.cache.get(cache_key)
+            if cached_date_str:
+                try:
+                    return date.fromisoformat(cached_date_str)
+                except ValueError:
+                    pass
+            
+            # Fall back to database lookup using bot_settings collection
+            from repositories.bot_settings import BotSettingsRepository
+            settings_repo = BotSettingsRepository(self.user_repo.db_pool, self.cache)
+            
+            setting = await settings_repo.get_setting('last_counter_reset_date')
+            if setting and setting.value:
+                try:
+                    db_date = date.fromisoformat(setting.value)
+                    # Update cache for future quick access
+                    await self.cache.set(cache_key, setting.value, CacheTTLConfig.MAINTENANCE_RESET_DAILY_COUNTERS)
+                    return db_date
+                except ValueError:
+                    logger.warning(f"Invalid date format in database: {setting.value}")
+                    
+            return None
+        except Exception as e:
+            logger.error(f"Error getting last counter reset date: {e}")
+            return None
+    
+    async def _store_counter_reset_date(self, reset_date: date):
+        """Store the counter reset date in database for persistence"""
+        try:
+            from repositories.bot_settings import BotSettingsRepository
+            settings_repo = BotSettingsRepository(self.user_repo.db_pool, self.cache)
+            
+            await settings_repo.update_setting(
+                'last_counter_reset_date',
+                reset_date.isoformat(),
+                f'Last daily counter reset date: {reset_date}'
+            )
+        except Exception as e:
+            logger.error(f"Error storing counter reset date: {e}")
 
 @lru_cache(maxsize=1)
 def get_maintenance_service(
