@@ -12,6 +12,7 @@ from core.cache.config import CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from repositories.media import MediaRepository, MediaFile, FileType
 
 logger = get_logger(__name__)
@@ -357,10 +358,12 @@ class IndexRequestService:
             target_channel = self.index_request_channel
 
             try:
-                await client.send_message(
+                await telegram_api.call_api(
+                    client.send_message,
                     target_channel,
                     text,
-                    reply_markup=InlineKeyboardMarkup(buttons)
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    chat_id=target_channel
                 )
                 return True
             except Exception as e:
@@ -371,10 +374,12 @@ class IndexRequestService:
                         self.log_channel and
                         self.log_channel != 0):
                     try:
-                        await client.send_message(
+                        await telegram_api.call_api(
+                            client.send_message,
                             self.log_channel,
                             text + "\n\n⚠️ Failed to send to INDEX_REQ_CHANNEL",
-                            reply_markup=InlineKeyboardMarkup(buttons)
+                            reply_markup=InlineKeyboardMarkup(buttons),
+                            chat_id=self.log_channel
                         )
                         return True
                     except Exception as e2:

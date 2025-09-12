@@ -6,6 +6,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.services.connection import ConnectionService
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 
 logger = get_logger(__name__)
 
@@ -152,10 +153,12 @@ class ConnectionHandler:
                 # If connected from group, send confirmation to PM
                 if chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
                     try:
-                        await client.send_message(
+                        await telegram_api.call_api(
+                            client.send_message,
                             user_id,
                             f"Connected to **{title}**!",
-                            parse_mode=enums.ParseMode.HTML
+                            parse_mode=enums.ParseMode.HTML,
+                            chat_id=user_id
                         )
                     except Exception:
                         pass

@@ -6,6 +6,7 @@ from pyrogram.enums import ParseMode
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
+from core.utils.telegram_api import telegram_api
 from repositories.user import UserRepository, UserStatus
 
 logger = get_logger(__name__)
@@ -85,16 +86,35 @@ class BroadcastService:
                         # Check if it's a text message or media with caption
                         if message.text:
                             # For text messages, send with HTML parse mode
-                            await client.send_message(user_id, message.text, parse_mode=ParseMode.HTML)
+                            await telegram_api.call_api(
+                                client.send_message, 
+                                user_id, message.text, 
+                                parse_mode=ParseMode.HTML,
+                                chat_id=user_id
+                            )
                         elif message.caption:
                             # For media with caption, copy and set parse mode for caption
-                            await message.copy(user_id, parse_mode=ParseMode.HTML)
+                            await telegram_api.call_api(
+                                message.copy, 
+                                user_id, 
+                                parse_mode=ParseMode.HTML,
+                                chat_id=user_id
+                            )
                         else:
                             # For media without caption, just copy
-                            await message.copy(user_id)
+                            await telegram_api.call_api(
+                                message.copy, 
+                                user_id,
+                                chat_id=user_id
+                            )
                     else:
                         # Fallback: send as text message with HTML parse mode
-                        await client.send_message(user_id, str(message), parse_mode=ParseMode.HTML)
+                        await telegram_api.call_api(
+                            client.send_message, 
+                            user_id, str(message), 
+                            parse_mode=ParseMode.HTML,
+                            chat_id=user_id
+                        )
 
                     stats['success'] += 1
 
