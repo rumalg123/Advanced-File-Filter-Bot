@@ -122,9 +122,6 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             collection = await self.collection
             
             indexes = [
-                # Primary key (already exists)
-                IndexModel([("_id", ASCENDING)], unique=True),
-                
                 # Query by creator and creation date
                 IndexModel([("created_by", ASCENDING), ("created_at", DESCENDING)]),
                 
