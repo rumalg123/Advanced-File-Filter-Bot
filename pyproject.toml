@@ -30,7 +30,8 @@ dependencies = [
     "aiohttp-cors",
     "sqlalchemy",
     "pydantic",
-    "vulture"
+    "vulture",
+    "pydantic_settings"
 ]
 
 [project.optional-dependencies]
