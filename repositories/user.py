@@ -6,6 +6,7 @@ from enum import Enum
 from pymongo import UpdateOne
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.enhanced_cache import cache_user_data, cache_premium_status
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger
@@ -267,6 +268,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         action = "added" if is_premium else "removed"
         return success, f"✅ Premium status {action} successfully!" if success else f"❌ Failed to {action.replace('ed', '')} premium status.", user
 
+    @cache_premium_status(ttl=600)  # Cache for 10 minutes
     async def check_and_update_premium_status(self, user: User) -> Tuple[bool, Optional[str]]:
         """Check and update premium status if expired"""
         if not user.is_premium:

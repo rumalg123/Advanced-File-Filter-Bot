@@ -1,8 +1,9 @@
 import re
 from functools import wraps
-from typing import Optional, Union, Tuple, Any
+from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
 from pyrogram.types import Message, CallbackQuery
+from core.utils.errors import ErrorFactory, ErrorCode
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -63,6 +64,72 @@ class ValidationUtils:
     def is_special_channel(chat_id: int, special_channels: set) -> bool:
         """Check if chat is a special channel (log, req, delete, etc.)"""
         return chat_id in special_channels
+
+    @staticmethod
+    def validate_user_id(user_id: Union[str, int]) -> Tuple[bool, Optional[int], Optional[str]]:
+        """Validate and parse user ID from string or int"""
+        try:
+            if isinstance(user_id, str):
+                # Remove @ prefix if present
+                clean_id = user_id.lstrip('@')
+                
+                # Check if it's numeric
+                if clean_id.isdigit():
+                    parsed_id = int(clean_id)
+                    if parsed_id > 0:
+                        return True, parsed_id, None
+                    else:
+                        return False, None, "User ID must be positive"
+                else:
+                    return False, None, "Invalid user ID format - must be numeric"
+            
+            elif isinstance(user_id, int):
+                if user_id > 0:
+                    return True, user_id, None
+                else:
+                    return False, None, "User ID must be positive"
+            
+            else:
+                return False, None, "User ID must be string or integer"
+                
+        except (ValueError, OverflowError):
+            return False, None, "Invalid user ID format"
+
+    @staticmethod
+    def validate_pagination_params(page: Union[str, int], per_page: Union[str, int]) -> Tuple[bool, int, int, Optional[str]]:
+        """Validate pagination parameters"""
+        try:
+            page_int = int(page) if isinstance(page, str) else page
+            per_page_int = int(per_page) if isinstance(per_page, str) else per_page
+            
+            if page_int < 1:
+                return False, 0, 0, "Page number must be >= 1"
+            
+            if per_page_int < 1 or per_page_int > 100:
+                return False, 0, 0, "Items per page must be between 1 and 100"
+            
+            return True, page_int, per_page_int, None
+            
+        except (ValueError, OverflowError):
+            return False, 0, 0, "Invalid pagination parameters"
+
+    @staticmethod
+    def validate_file_types(file_types: List[str]) -> Tuple[bool, List[str], Optional[str]]:
+        """Validate file type filters"""
+        valid_types = {
+            'document', 'video', 'audio', 'photo', 'animation', 
+            'voice', 'video_note', 'sticker', 'location', 'contact'
+        }
+        
+        cleaned_types = []
+        for file_type in file_types:
+            clean_type = file_type.lower().strip()
+            if clean_type in valid_types:
+                cleaned_types.append(clean_type)
+            else:
+                return False, [], f"Invalid file type: {file_type}. Valid types: {', '.join(valid_types)}"
+        
+        return True, cleaned_types, None
 
 
 class ValidationDecorators:
