@@ -11,6 +11,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from core.cache.config import CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.helpers import sanitize_filename
+from core.utils.link_parser import TelegramLinkParser
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from repositories.media import MediaRepository, MediaFile, FileType
@@ -62,19 +63,12 @@ class IndexingService:
             client = client_or_bot.client if hasattr(client_or_bot, 'client') else client_or_bot
             # Parse channel input
             if isinstance(channel_input, str):
-                # Check if it's a link
-                link_pattern = re.compile(
-                    r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)"
-                    r"(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$"
-                )
-                match = link_pattern.match(channel_input)
-
-                if match:
-                    chat_id = match.group(4)
-                    if chat_id.isnumeric():
-                        chat_id = int("-100" + chat_id)
-                    else:
-                        chat_id = chat_id
+                # Check if it's a link using centralized parser
+                parsed_link = TelegramLinkParser.parse_link(channel_input)
+                
+                if parsed_link:
+                    # Use the parsed chat ID or identifier
+                    chat_id = parsed_link.chat_id if parsed_link.chat_id else parsed_link.chat_identifier
                 else:
                     # Assume it's a username or ID
                     try:

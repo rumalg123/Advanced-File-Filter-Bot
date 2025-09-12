@@ -135,6 +135,20 @@ class IndexOptimizer:
                 'keys': [('user_id', 1), ('daily_reset_date', 1)],
                 'name': 'daily_limit_idx',
                 'background': True
+            },
+            
+            # Premium cleanup optimization: is_premium + premium_activation_date  
+            {
+                'keys': [('is_premium', 1), ('premium_activation_date', 1)],
+                'name': 'premium_cleanup_idx',
+                'background': True
+            },
+            
+            # Request tracking optimization: user_id + last_request_date
+            {
+                'keys': [('user_id', 1), ('last_request_date', 1)],
+                'name': 'request_tracking_idx',
+                'background': True
             }
         ]
         
@@ -171,6 +185,13 @@ class IndexOptimizer:
             {
                 'keys': [('group_id', 1), ('is_active', 1)],
                 'name': 'group_active_connections_idx',
+                'background': True
+            },
+            
+            # User group detail queries: user_id + group_details.group_id
+            {
+                'keys': [('user_id', 1), ('group_details.group_id', 1)],
+                'name': 'user_group_details_idx',
                 'background': True
             }
         ]

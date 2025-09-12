@@ -140,19 +140,12 @@ class FileStoreHandler:
         )
 
         if link:
-            # Count messages
-            # In batch_command method, after "# Count messages" comment, update the link_pattern:
-            # In batch_command method, after "# Count messages" comment:
-            link_pattern = re.compile(
-                r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
-                r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
-            )
-
-            match = link_pattern.match(first_link)
-            f_msg_id = int(match.group(2)) if match else 0
-
-            match = link_pattern.match(last_link)
-            l_msg_id = int(match.group(2)) if match else 0
+            # Count messages using centralized parser
+            first_parsed = TelegramLinkParser.parse_link(first_link)
+            last_parsed = TelegramLinkParser.parse_link(last_link)
+            
+            f_msg_id = first_parsed.message_id if first_parsed else 0
+            l_msg_id = last_parsed.message_id if last_parsed else 0
 
             total_msgs = abs(l_msg_id - f_msg_id) + 1
 
