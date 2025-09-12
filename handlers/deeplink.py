@@ -30,6 +30,14 @@ class DeepLinkHandler(BaseCommandHandler):
             logger.error(f"Error replying to message: {e}")
             return None
 
+    async def safe_delete(self, message):
+        """Safely delete a message if the object supports it."""
+        try:
+            if hasattr(message, 'delete'):
+                await message.delete()
+        except Exception as e:
+            logger.debug(f"Could not delete message: {e}")
+
     async def handle_deep_link_internal(self, client: Client, message: Message, data: str):
         """Internal method for handling deep links (subscription already checked)"""
         user_id = message.from_user.id
@@ -132,11 +140,8 @@ class DeepLinkHandler(BaseCommandHandler):
                 self._auto_delete_message(sent_msg, delete_time)
             )
 
-            # Delete the command message after successful send
-            await message.delete()
-
-            # Delete the command message after successful send
-            await message.delete()
+            # Delete the command message after successful send (safe for fake messages)
+            await self.safe_delete(message)
 
         except Exception as e:
             logger.error(f"Error sending file to user {user_id}: {e}", exc_info=True)
@@ -291,7 +296,7 @@ class DeepLinkHandler(BaseCommandHandler):
         )
 
         # Delete the command message
-        await message.delete()
+        await self.safe_delete(message)
 
     async def _send_batch(self, client: Client, message: Message, batch_id: str):
         """Send batch files from a batch ID"""
@@ -416,7 +421,7 @@ class DeepLinkHandler(BaseCommandHandler):
         await message.reply_text(f"✅ Sent {success_count}/{len(files)} files!")
 
         # Delete the command message
-        await message.delete()
+        await self.safe_delete(message)
 
     async def _send_premium_batch(self, client: Client, message: Message, batch_id: str):
         """Send premium batch files with access control"""
@@ -479,4 +484,4 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text("❌ Failed to send batch files. Please try again.")
 
         # Delete the command message
-        await message.delete()
+        await self.safe_delete(message)

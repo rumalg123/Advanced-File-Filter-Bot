@@ -126,9 +126,20 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         return CacheKeyGenerator.user(user_id)
 
     async def create_user(self, user_id: int, name: str) -> bool:
-        """Create new user"""
+        """Create new user. Idempotent on duplicate key."""
         user = User(id=user_id, name=name)
-        return await self.create(user)
+        try:
+            return await self.create(user)
+        except Exception as e:
+            # Treat duplicate key as success to make user creation idempotent
+            from pymongo.errors import DuplicateKeyError
+            if isinstance(e, DuplicateKeyError):
+                logger.warning(f"User {user_id} already exists. Skipping create.")
+                # Ensure cache is consistent
+                await self.cache.delete(CacheKeyGenerator.user(user_id))
+                return True
+            logger.error(f"Error creating user {user_id}: {e}")
+            return False
 
     async def get_user(self, user_id: int) -> Optional[User]:
         """Get user by ID with proper TTL"""

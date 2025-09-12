@@ -44,9 +44,9 @@ class DatabaseConnectionPool:
                     maxPoolSize=self._pool_size,
                     minPoolSize=20 if 'uvloop' in sys.modules else 10,
                     maxIdleTimeMS=self._max_idle_time,
-                    serverSelectionTimeoutMS=5000,
-                    connectTimeoutMS=10000,
-                    socketTimeoutMS=10000,
+                    serverSelectionTimeoutMS=15000,
+                    connectTimeoutMS=20000,
+                    socketTimeoutMS=20000,
                     retryWrites=True,
                     retryReads=True,
                     waitQueueTimeoutMS=10000 if 'uvloop' in sys.modules else 5000,
@@ -122,7 +122,7 @@ class DatabaseConnectionPool:
                     raise
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
             except DuplicateKeyError as dp:
-                logger.warning(f"Duplicate key detected. Skippng..")
+                logger.warning("Duplicate key detected. Skipping.")
                 raise
             except Exception as e:
                 logger.error(f"Unexpected database error: {e}")
