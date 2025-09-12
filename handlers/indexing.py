@@ -161,7 +161,7 @@ class IndexingHandler:
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg or "chat not found" in error_msg:
                     return await message.reply(
-                        "❌ **Bot Access Required**\n\n"
+                        "❌ <b>Bot Access Required</b>\n\n"
                         "I cannot access this channel. Please:\n"
                         "1. Add me to the channel as an admin\n"
                         "2. Make sure the channel is public OR\n"
@@ -253,7 +253,7 @@ class IndexingHandler:
                 try:
                     await client.send_message(
                         int(from_user),
-                        f"❌ Your request to index `{chat_id}` has been declined by moderators.",
+                        f"❌ Your request to index <code>{chat_id}</code> has been declined by moderators.",
                         reply_to_message_id=int(param)
                     )
                 except Exception:
@@ -292,7 +292,7 @@ class IndexingHandler:
             try:
                 await client.send_message(
                     int(requested_by),
-                    f"✅ Your request to index `{chat_id}` has been accepted!\n"
+                    f"✅ Your request to index <code>{chat_id}</code> has been accepted!\n"
                     "Indexing will begin shortly.",
                     reply_to_message_id=last_msg_id
                 )

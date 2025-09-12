@@ -172,7 +172,7 @@ class SubscriptionRequired:
         # Default subscription message
         if not custom_message:
             custom_message = (
-                "🔒 **Subscription Required**\n\n"
+                "🔒 <b>Subscription Required</b>\n\n"
                 "You need to join our channel(s) to use this bot.\n"
                 "Please join the required channel(s) and try again."
             )
@@ -226,9 +226,9 @@ class BanCheck:
                 user = await self.bot.user_repo.get_user(user_id)
                 if user and user.status == UserStatus.BANNED:
                     ban_text = (
-                        "🚫 **You are banned from using this bot**\n\n"
-                        f"**Reason:** {user.ban_reason or 'No reason provided'}\n"
-                        f"**Banned on:** {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n\n"
+                        "🚫 <b>You are banned from using this bot</b>\n\n"
+                        f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
+                        f"<b>Banned on:</b> {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n\n"
                         "Contact the bot admin if you think this is a mistake."
                     )
 

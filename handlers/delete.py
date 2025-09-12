@@ -265,7 +265,7 @@ class DeleteHandler:
         if not message.reply_to_message:
             await message.reply_text(
                 "Reply to a media message to delete it from database.\n"
-                "Or use: `/delete <file_unique_id>`"
+                "Or use: <code>/delete &lt;file_unique_id&gt;</code>"
             )
             return
 
@@ -291,9 +291,9 @@ class DeleteHandler:
         """Handle delete all files by keyword"""
         if len(message.command) < 2:
             await message.reply_text(
-                "**Usage:** `/deleteall <keyword>`\n\n"
+                "<b>Usage:</b> <code>/deleteall &lt;keyword&gt;</code>\n\n"
                 "This will delete all files matching the keyword.\n"
-                "Example: `/deleteall movie`"
+                "Example: <code>/deleteall movie</code>"
             )
             return
 
@@ -301,8 +301,8 @@ class DeleteHandler:
 
         # Confirmation message
         confirm_msg = await message.reply_text(
-            f"⚠️ **Warning!**\n\n"
-            f"This will delete all files matching: **{keyword}**\n\n"
+            f"⚠️ <b>Warning!</b>\n\n"
+            f"This will delete all files matching: <b>{keyword}</b>\n\n"
             f"Reply with 'YES' within 30 seconds to confirm."
         )
 
@@ -321,7 +321,7 @@ class DeleteHandler:
                 deleted_count = await self.bot.media_repo.delete_files_by_keyword(keyword)
 
                 await status_msg.edit_text(
-                    f"✅ Deleted {deleted_count} files matching: **{keyword}**"
+                    f"✅ Deleted {deleted_count} files matching: <b>{keyword}</b>"
                 )
 
                 # Log the bulk deletion
@@ -380,7 +380,7 @@ class DeleteHandler:
         if results['deleted'] > 0 and self.bot.config.LOG_CHANNEL:
             try:
                 summary = (
-                    f"🗑 **Deletion Summary**\n\n"
+                    f"🗑 <b>Deletion Summary</b>\n\n"
                     f"✅ Deleted: {results['deleted']}\n"
                     f"❌ Not Found: {results['not_found']}\n"
                     f"⚠️ Errors: {results['errors']}\n"

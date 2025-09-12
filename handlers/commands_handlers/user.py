@@ -200,7 +200,7 @@ class UserCommandHandler(BaseCommandHandler):
         ])
 
         message_text = (
-            "🔒 **Subscription Required**\n\n"
+            "🔒 <b>Subscription Required</b>\n\n"
             "You need to join our channel(s) to access this content.\n"
             "Please join the required channel(s) and try again."
         )
@@ -356,24 +356,24 @@ class UserCommandHandler(BaseCommandHandler):
 
         # Build stats message
         text = (
-            "📊 **Your Request Statistics**\n\n"
-            f"📅 **Today's Requests:** {stats['daily_requests']}/{stats['daily_limit']}\n"
-            f"📁 **Remaining Today:** {stats['daily_remaining']}\n"
-            f"⚠️ **Warnings:** {stats['warning_count']}/{stats['warning_limit']}\n"
-            f"📈 **Total Requests:** {stats['total_requests']}\n"
+            "📊 <b>Your Request Statistics</b>\n\n"
+            f"📅 <b>Today's Requests:</b> {stats['daily_requests']}/{stats['daily_limit']}\n"
+            f"📁 <b>Remaining Today:</b> {stats['daily_remaining']}\n"
+            f"⚠️ <b>Warnings:</b> {stats['warning_count']}/{stats['warning_limit']}\n"
+            f"📈 <b>Total Requests:</b> {stats['total_requests']}\n"
         )
 
         if stats['is_at_limit']:
-            text += "\n⚠️ **Status:** Daily limit reached! Further requests will result in warnings."
+            text += "\n⚠️ <b>Status:</b> Daily limit reached! Further requests will result in warnings."
         elif stats['is_warned']:
-            text += f"\n⚠️ **Status:** You have {stats['warnings_remaining']} warnings remaining before ban."
+            text += f"\n⚠️ <b>Status:</b> You have {stats['warnings_remaining']} warnings remaining before ban."
         else:
-            text += "\n✅ **Status:** You can make requests normally."
+            text += "\n✅ <b>Status:</b> You can make requests normally."
 
         if stats['warning_reset_in_days'] is not None:
-            text += f"\n\n⏱ **Warning Reset:** {stats['warning_reset_in_days']} days"
+            text += f"\n\n⏱ <b>Warning Reset:</b> {stats['warning_reset_in_days']} days"
 
         if stats['last_request_date']:
-            text += f"\n📅 **Last Request:** {stats['last_request_date']}"
+            text += f"\n📅 <b>Last Request:</b> {stats['last_request_date']}"
 
         await message.reply_text(text)
