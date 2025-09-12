@@ -15,30 +15,30 @@ This audit identified **26 high-priority findings** across 8 categories, with cr
 | ID | Severity | Category | File(s)/Symbol(s) | Short Finding | Impact | Proposed Action | Notes/Refs |
 |---|---|---|---|---|---|---|---|
 | **CRITICAL PARSE MODE VIOLATIONS** |  |  |  |  |  |  |  |
-| PM-001 | blocker | ParseMode | `handlers/filestore.py:189,218,259,270,282` | Using `ParseMode.MARKDOWN` instead of HTML | User experience inconsistency, formatting issues | Replace all `parse_mode=ParseMode.MARKDOWN` with `parse_mode=ParseMode.HTML` | **MUST FIX**: Violates HTML-everywhere policy |
-| PM-002 | blocker | ParseMode | `handlers/filter.py:147,199,245` | Using `enums.ParseMode.MARKDOWN` | User experience inconsistency | Replace with `enums.ParseMode.HTML` | Import from `pyrogram.enums` |
-| PM-003 | blocker | ParseMode | `handlers/connection.py:150,158` | Mixed MARKDOWN usage | Inconsistent formatting | Standardize to `enums.ParseMode.HTML` | Auth message formatting issues |
-| PM-004 | blocker | ParseMode | `handlers/commands_handlers/database.py:107,226` | Database command responses using MARKDOWN | Admin command formatting issues | Replace with `ParseMode.HTML` | Admin UX consistency |
-| PM-005 | major | ParseMode | `bot.py:334-341` | Missing global parse_mode in Client init | No default HTML parsing | Add `parse_mode=enums.ParseMode.HTML` to Client constructor | Set global HTML default |
+| ✅ PM-001 | ~~blocker~~ | ~~ParseMode~~ | ~~`handlers/filestore.py:189,218,259,270,282`~~ | ~~Using `ParseMode.MARKDOWN` instead of HTML~~ | ~~User experience inconsistency, formatting issues~~ | ✅ **COMPLETED**: All instances replaced with `ParseMode.HTML` | **FIXED** in commit b72860c |
+| ✅ PM-002 | ~~blocker~~ | ~~ParseMode~~ | ~~`handlers/filter.py:147,199,245`~~ | ~~Using `enums.ParseMode.MARKDOWN`~~ | ~~User experience inconsistency~~ | ✅ **COMPLETED**: All instances replaced with `enums.ParseMode.HTML` | **FIXED** in commit b72860c |
+| ✅ PM-003 | ~~blocker~~ | ~~ParseMode~~ | ~~`handlers/connection.py:150,158`~~ | ~~Mixed MARKDOWN usage~~ | ~~Inconsistent formatting~~ | ✅ **COMPLETED**: Standardized to `enums.ParseMode.HTML` | **FIXED** in commit b72860c |
+| ✅ PM-004 | ~~blocker~~ | ~~ParseMode~~ | ~~`handlers/commands_handlers/database.py:107,226`~~ | ~~Database command responses using MARKDOWN~~ | ~~Admin command formatting issues~~ | ✅ **COMPLETED**: Replaced with `ParseMode.HTML` | **FIXED** in commit b72860c |
+| ✅ PM-005 | ~~major~~ | ~~ParseMode~~ | ~~`bot.py:334-341`~~ | ~~Missing global parse_mode in Client init~~ | ~~No default HTML parsing~~ | ✅ **COMPLETED**: Added `parse_mode=ParseMode.HTML` to Client constructor | **FIXED** in commit b72860c |
 | **API WRAPPER REUSE OPPORTUNITIES** |  |  |  |  |  |  |  |
-| RO-001 | major | ReuseOpportunity | `core/services/broadcast.py:88,91,97` | Direct client calls bypass flood protection | FloodWait errors, rate limits | Replace with `telegram_api.call_api()` wrapper | Use existing wrapper |
-| RO-002 | major | ReuseOpportunity | `handlers/search.py:374` | Direct send_message without protection | Potential flood wait | Use `telegram_api.call_api()` wrapper | Search result sending |
-| RO-003 | major | ReuseOpportunity | `core/services/indexing.py` (multiple lines) | Manual FloodWait handling instead of wrapper | Duplicate error handling code | Replace manual handling with centralized wrapper | Indexing operations |
-| RO-004 | major | ReuseOpportunity | `handlers/connection.py:390` | Direct API calls in auth flow | No rate limiting in critical path | Use centralized API wrapper | Connection management |
+| ✅ RO-001 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`core/services/broadcast.py:88,91,97`~~ | ~~Direct client calls bypass flood protection~~ | ~~FloodWait errors, rate limits~~ | ✅ **COMPLETED**: Replaced all calls with `telegram_api.call_api()` wrapper | **FIXED** in commit a36b8aa |
+| ✅ RO-002 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`handlers/search.py:374`~~ | ~~Direct send_message without protection~~ | ~~Potential flood wait~~ | ✅ **COMPLETED**: Line 374 is parse_mode setting, not API call - already uses proper patterns | **VERIFIED** - no change needed |
+| ✅ RO-003 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`core/services/indexing.py` (multiple lines)~~ | ~~Manual FloodWait handling instead of wrapper~~ | ~~Duplicate error handling code~~ | ✅ **COMPLETED**: Replaced send_message calls with centralized wrapper | **FIXED** in commit a36b8aa |
+| ✅ RO-004 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`handlers/connection.py:390`~~ | ~~Direct API calls in auth flow~~ | ~~No rate limiting in critical path~~ | ✅ **COMPLETED**: Replaced with centralized API wrapper | **FIXED** in commit a36b8aa |
 | **LINK PARSING INCONSISTENCIES** |  |  |  |  |  |  |  |
-| LP-001 | major | ReuseOpportunity | `core/services/indexing.py:156-170` | Custom regex instead of TelegramLinkParser | Duplicate parsing logic, potential bugs | Replace custom regex with `TelegramLinkParser.parse_link()` | Channel link parsing |
-| LP-002 | major | ReuseOpportunity | `handlers/filestore.py:146-149` | Manual regex pattern for batch links | Inconsistent with centralized parser | Use `TelegramLinkParser.parse_link_pair()` | Already available utility |
+| ✅ LP-001 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`core/services/indexing.py:156-170`~~ | ~~Custom regex instead of TelegramLinkParser~~ | ~~Duplicate parsing logic, potential bugs~~ | ✅ **COMPLETED**: Replaced custom regex with `TelegramLinkParser.parse_link()` | **FIXED** in commit ea0a73b |
+| ✅ LP-002 | ~~major~~ | ~~ReuseOpportunity~~ | ~~`handlers/filestore.py:146-149`~~ | ~~Manual regex pattern for batch links~~ | ~~Inconsistent with centralized parser~~ | ✅ **COMPLETED**: Replaced with `TelegramLinkParser.parse_link()` | **FIXED** in commit ea0a73b |
 | LP-003 | minor | Duplication | `core/services/filestore.py` vs `core/services/indexing.py` | Duplicate file reference extraction logic | Code duplication | Create shared `FileReferenceExtractor` utility | Both have `_extract_file_ref()` |
 | **DATABASE LAYER INCONSISTENCIES** |  |  |  |  |  |  |  |
 | DB-001 | major | DBQuery | `repositories/user.py:270-286` | N+1 queries in premium status updates | Performance degradation | Implement batch update operations | Use `core/database/batch_ops.py` |
 | DB-002 | major | DBQuery | `repositories/media.py:144-148` | Individual duplicate checks in batch saves | N+1 query pattern | Add batch duplicate checking method | Save operation optimization |
-| DB-003 | minor | DBQuery | `core/database/indexes.py` | Missing compound indexes for common queries | Slow query performance | Add missing indexes for user premium cleanup, connection lookups | See database analysis report |
+| ✅ DB-003 | ~~minor~~ | ~~DBQuery~~ | ~~`core/database/indexes.py`~~ | ~~Missing compound indexes for common queries~~ | ~~Slow query performance~~ | ✅ **COMPLETED**: Added premium_cleanup_idx, request_tracking_idx, user_group_details_idx | **FIXED** in commit ea0a73b |
 | DB-004 | major | InconsistentAPI | Multiple repositories | Different error response formats across repositories | API inconsistency | Standardize to common `OperationResult` dataclass | Some return tuples, others booleans |
 | **CACHING INCONSISTENCIES** |  |  |  |  |  |  |  |
 | CH-001 | minor | InconsistentAPI | `repositories/bot_settings.py:50` vs others | Direct cache key generation instead of centralized | Cache key conflicts possible | Use `CacheKeyGenerator.bot_setting(key)` | Consistency with other repos |
 | CH-002 | minor | Config | `core/cache/config.py` | Inconsistent TTL values for similar data types | Cache efficiency issues | Review and standardize TTL values | USER_STATS vs USER_DATA different TTLs |
 | **ERROR HANDLING STANDARDIZATION** |  |  |  |  |  |  |  |
-| EH-001 | major | ErrorHandling | `repositories/connection.py:110-112` | Duplicate create() call - possible bug | Data corruption risk | Remove duplicate line and add proper error handling | Line 111 duplicates line 110 |
+| ✅ EH-001 | ~~major~~ | ~~ErrorHandling~~ | ~~`repositories/connection.py:110-112`~~ | ~~Duplicate create() call - possible bug~~ | ~~Data corruption risk~~ | ✅ **COMPLETED**: Removed duplicate create() call | **FIXED** in commit b72860c |
 | EH-002 | minor | ErrorHandling | Multiple services | Inconsistent exception handling patterns | Developer confusion, maintenance issues | Create standardized error handling decorator | Mix of specific vs generic handling |
 | **TYPE HINTS AND CONSISTENCY** |  |  |  |  |  |  |  |
 | TY-001 | minor | Types | Multiple handler files | Missing return type hints in async methods | IDE support, maintainability | Add proper async return type hints | Focus on handler methods |
