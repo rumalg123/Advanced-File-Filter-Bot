@@ -6,7 +6,7 @@ from enum import Enum
 from pymongo import UpdateOne
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
-from core.cache.enhanced_cache import cache_user_data, cache_premium_status
+from core.cache.enhanced_cache import cache_premium_status
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger

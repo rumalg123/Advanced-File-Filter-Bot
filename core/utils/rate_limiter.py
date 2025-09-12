@@ -117,7 +117,6 @@ class DistributedRateLimiter:
     async def acquire_token(
             self,
             key: str,
-            max_tokens: int,
             refill_rate: float,
             capacity: int
     ) -> bool:

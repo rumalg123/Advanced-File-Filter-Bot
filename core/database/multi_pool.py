@@ -582,13 +582,13 @@ class MultiDatabaseManager:
                 f"Database {db_info.name} failure {circuit.failure_count}/{self.max_failures}: {error}"
             )
 
-    async def _execute_with_circuit_breaker(self, db_info: DatabaseInfo, operation_name: str, operation) -> Any:
+    async def _execute_with_circuit_breaker(self, db_info: DatabaseInfo, _operation_name: str, operation) -> Any:
         """
         Execute database operation with circuit breaker protection
         
         Args:
             db_info: Database information
-            operation_name: Name of the operation for logging
+            _operation_name: Name of the operation for logging (currently unused)
             operation: Async callable to execute
             
         Returns: Operation result

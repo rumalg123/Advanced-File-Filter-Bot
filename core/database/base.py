@@ -84,33 +84,6 @@ class BaseRepository(ABC, Generic[T]):
         }
         return collection_ttl_map.get(self.collection_name, 300)  # Default 5 minutes
 
-    async def find_by_ref_id(self, id: Any, use_cache: bool = True) -> Optional[T]:
-        """Find entity by ID with caching"""
-        cache_key = self._get_cache_key(id)
-
-        # Try cache first
-        if use_cache:
-            cached = await self.cache.get(cache_key)
-            if cached:
-                return self._dict_to_entity(cached)
-
-        # Fetch from database
-        try:
-            collection = await self.collection
-            data = await self.db_pool.execute_with_retry(
-                collection.find_one, {"file_ref": id}
-            )
-
-            if data:
-                # Cache the result
-                if use_cache:
-                    ttl = self._get_ttl_for_collection()
-                    await self.cache.set(cache_key, data, expire=ttl)
-                return self._dict_to_entity(data)
-            return None
-        except Exception as e:
-            logger.error(f"Error finding entity by id {id}: {e}")
-            return None
 
     async def find_many(
             self,

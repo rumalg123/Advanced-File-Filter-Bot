@@ -17,7 +17,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
-from core.utils.telegram_api import telegram_api, with_flood_protection
+from core.utils.telegram_api import telegram_api
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
 
