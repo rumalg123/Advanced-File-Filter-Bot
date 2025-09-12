@@ -61,220 +61,158 @@ from repositories.user import UserRepository
 from core.cache.invalidation import CacheInvalidator
 from core.utils.logger import get_logger
 import core.utils.messages as default_messages
+from config import settings
 
 logger = get_logger(__name__)
 
-#load_dotenv()
 performance_monitor = PerformanceMonitor()
 
 
-# bot.py - Replace BotConfig class (lines 33-147) with:
-
 class BotConfig:
-    """Centralized configuration management"""
-
+    """Configuration adapter for centralized Pydantic settings"""
+    
     def __init__(self):
+        # Use centralized settings
+        self._settings = settings
+        
         # Bot settings
-        self.SESSION = os.environ.get('SESSION', 'Media_search')
-        self.API_ID = int(os.environ.get('API_ID', '0'))
-        self.API_HASH = os.environ.get('API_HASH', '')
-        self.BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
-
+        self.SESSION = self._settings.telegram.session
+        self.API_ID = self._settings.telegram.api_id
+        self.API_HASH = self._settings.telegram.api_hash
+        self.BOT_TOKEN = self._settings.telegram.bot_token
+        
         # Database settings
-        self.DATABASE_URI = os.environ.get('DATABASE_URI', '')
-        self.DATABASE_NAME = os.environ.get('DATABASE_NAME', 'PIRO')
-        self.COLLECTION_NAME = os.environ.get('COLLECTION_NAME', 'FILES')
+        self.DATABASE_URI = self._settings.database.uri
+        self.DATABASE_NAME = self._settings.database.name
+        self.COLLECTION_NAME = self._settings.database.collection_name
         
         # Multi-database settings
         self.DATABASE_URIS = self._parse_database_uris()
         self.DATABASE_NAMES = self._parse_database_names()
+        self.DATABASE_SIZE_LIMIT_GB = self._settings.database.size_limit_gb
+        self.DATABASE_AUTO_SWITCH = self._settings.database.auto_switch
         
-        # Database storage settings
-        self.DATABASE_SIZE_LIMIT_GB = float(os.environ.get('DATABASE_SIZE_LIMIT_GB', '0.5'))  # 0.5GB default
-        self.DATABASE_AUTO_SWITCH = self._str_to_bool(
-            os.environ.get('DATABASE_AUTO_SWITCH', 'True')
-        )
-
         # Redis settings
-        self.REDIS_URI = os.environ.get('REDIS_URI', '')
-
+        self.REDIS_URI = self._settings.redis.uri
+        
         # Server settings
-        self.PORT = int(os.environ.get('PORT', '8000'))
-        self.WORKERS = int(os.environ.get('WORKERS', '50'))
-
+        self.PORT = self._settings.server.port
+        self.WORKERS = self._settings.server.workers
+        
         # Feature flags
-        self.USE_CAPTION_FILTER = self._str_to_bool(
-            os.environ.get('USE_CAPTION_FILTER', 'True')
-        )
-        self.DISABLE_PREMIUM = self._str_to_bool(
-            os.environ.get('DISABLE_PREMIUM', 'True')
-        )
-        self.DISABLE_FILTER = self._str_to_bool(
-            os.environ.get('DISABLE_FILTER', 'False')
-        )
-
+        self.USE_CAPTION_FILTER = self._settings.features.use_caption_filter
+        self.DISABLE_PREMIUM = self._settings.features.disable_premium
+        self.DISABLE_FILTER = self._settings.features.disable_filter
+        self.PUBLIC_FILE_STORE = self._settings.features.public_file_store
+        self.KEEP_ORIGINAL_CAPTION = self._settings.features.keep_original_caption
+        self.USE_ORIGINAL_CAPTION_FOR_BATCH = self._settings.features.use_original_caption_for_batch
+        
         # Limits
-        self.PREMIUM_DURATION_DAYS = int(
-            os.environ.get('PREMIUM_DURATION_DAYS', '30')
-        )
-        self.NON_PREMIUM_DAILY_LIMIT = int(
-            os.environ.get('NON_PREMIUM_DAILY_LIMIT', '10')
-        )
-        self.MESSAGE_DELETE_SECONDS = int(
-            os.environ.get('MESSAGE_DELETE_SECONDS', '300')
-        )
-        self.MAX_BTN_SIZE = int(
-            os.environ.get('MAX_BTN_SIZE', '12')
-        )
-
+        self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days
+        self.NON_PREMIUM_DAILY_LIMIT = self._settings.features.non_premium_daily_limit
+        self.MESSAGE_DELETE_SECONDS = self._settings.features.message_delete_seconds
+        self.MAX_BTN_SIZE = self._settings.features.max_btn_size
+        self.REQUEST_PER_DAY = self._settings.features.request_per_day
+        self.REQUEST_WARNING_LIMIT = self._settings.features.request_warning_limit
+        
         # Channel and admin settings
-        self.LOG_CHANNEL = int(os.environ.get('LOG_CHANNEL', '0'))
-        self.INDEX_REQ_CHANNEL = int(os.environ.get('INDEX_REQ_CHANNEL', '0')) or self.LOG_CHANNEL
-        self.ADMINS = self._parse_list(os.environ.get('ADMINS', ''))
-        self.CHANNELS = self._parse_list(os.environ.get('CHANNELS', '0'))
+        self.LOG_CHANNEL = self._settings.channels.log_channel
+        self.INDEX_REQ_CHANNEL = self._settings.channels.index_req_channel
+        self.FILE_STORE_CHANNEL = self._settings.channels.file_store_channel
+        self.DELETE_CHANNEL = self._settings.channels.delete_channel
+        self.REQ_CHANNEL = self._settings.channels.req_channel
+        self.SUPPORT_GROUP_ID = self._settings.channels.support_group_id
+        self.AUTH_CHANNEL = self._parse_auth_channel()
+        
+        # Lists from settings
+        self.ADMINS = self._settings.channels.get_admin_list()
+        self.CHANNELS = self._settings.channels.get_channel_list()
         if 0 in self.CHANNELS:
             self.CHANNELS.remove(0)
-
-        self.FILE_STORE_CHANNEL = self._parse_list(
-            os.environ.get('FILE_STORE_CHANNEL', '')
-        )
-        self.PUBLIC_FILE_STORE = self._str_to_bool(
-            os.environ.get('PUBLIC_FILE_STORE', 'False')
-        )
-        self.KEEP_ORIGINAL_CAPTION = self._str_to_bool(
-            os.environ.get('KEEP_ORIGINAL_CAPTION', 'True')
-        )
-        self.USE_ORIGINAL_CAPTION_FOR_BATCH = self._str_to_bool(
-            os.environ.get('USE_ORIGINAL_CAPTION_FOR_BATCH', 'True')
-        )
-        self.CUSTOM_FILE_CAPTION = os.environ.get('CUSTOM_FILE_CAPTION', '')
-        self.BATCH_FILE_CAPTION = os.environ.get('BATCH_FILE_CAPTION', '')
-
-        auth_channel = os.environ.get('AUTH_CHANNEL')
-        self.AUTH_CHANNEL = int(auth_channel) if auth_channel and auth_channel.lstrip('-').isdigit() else None
-
-        self.PICS = self._parse_list(os.environ.get('PICS', ''))
-
-        auth_groups = os.environ.get('AUTH_GROUPS', '')
-        self.AUTH_GROUPS = []
-        if auth_groups:
-            for group in auth_groups.split(','):
-                group = group.strip()
-                if group and group.lstrip('-').isdigit():
-                    self.AUTH_GROUPS.append(int(group))
-
-        auth_users = os.environ.get('AUTH_USERS', '')
-        self.AUTH_USERS = []
-        if auth_users:
-            for user in auth_users.split(','):
-                user = user.strip()
-                if user and user.isdigit():
-                    self.AUTH_USERS.append(int(user))
-
-        self.AUTH_USERS.extend(self.ADMINS)
-        self.DELETE_CHANNEL = int(os.environ.get('DELETE_CHANNEL', '0')) if os.environ.get('DELETE_CHANNEL') else None
-        self.REQ_CHANNEL = int(os.environ.get('REQ_CHANNEL', '0')) or self.LOG_CHANNEL
-        self.SUPPORT_GROUP_URL = os.environ.get('SUPPORT_GROUP_URL', '')
-        self.SUPPORT_GROUP_NAME = os.environ.get('SUPPORT_GROUP_NAME', 'Support Group')
-        self.SUPPORT_GROUP_ID = int(os.environ.get('SUPPORT_GROUP_ID', '0')) if os.environ.get(
-            'SUPPORT_GROUP_ID') else None
-        self.PAYMENT_LINK = os.environ.get('PAYMENT_LINK', 'https://buymeacoffee.com/matthewmurdock001')
-        self.REQUEST_PER_DAY = int(os.environ.get('REQUEST_PER_DAY', '3'))
-        self.REQUEST_WARNING_LIMIT = int(os.environ.get('REQUEST_WARNING_LIMIT', '5'))
+        self.PICS = self._settings.channels.get_pics_list()
+        self.AUTH_GROUPS = self._settings.channels.get_auth_groups_list()
+        self.AUTH_USERS = self._settings.channels.get_auth_users_list()
+        self.AUTH_USERS.extend(self.ADMINS)  # Add admins to auth users
+        
+        # Messages
+        self.CUSTOM_FILE_CAPTION = self._settings.messages.custom_file_caption
+        self.BATCH_FILE_CAPTION = self._settings.messages.batch_file_caption
+        self.AUTO_DELETE_MESSAGE = self._settings.messages.auto_delete_message
+        self.START_MESSAGE = self._settings.messages.start_message
+        self.SUPPORT_GROUP_URL = self._settings.messages.support_group_url
+        self.SUPPORT_GROUP_NAME = self._settings.messages.support_group_name
+        self.PAYMENT_LINK = self._settings.messages.payment_link
+        
+        # Validate request limits
         if self.REQUEST_PER_DAY >= self.REQUEST_WARNING_LIMIT:
             logger.warning(
                 "REQUEST_PER_DAY must be less than REQUEST_WARNING_LIMIT. Setting REQUEST_WARNING_LIMIT = REQUEST_PER_DAY + 2")
             self.REQUEST_WARNING_LIMIT = self.REQUEST_PER_DAY + 2
-        self.AUTO_DELETE_MESSAGE=os.environ.get('AUTO_DELETE_MESSAGE', default_messages.AUTO_DEL_MSG)
-        self.START_MESSAGE=os.environ.get('START_MESSAGE', default_messages.START_MSG)
-
-    @staticmethod
-    def _str_to_bool(value: str) -> bool:
-        """Convert string to boolean"""
-        return value.lower() in ['true', 'yes', '1', 'enable', 'y']
-
-    @staticmethod
-    def _parse_list(value: str) -> list:
-        """Parse comma-separated list"""
-        if not value:
-            return []
-        items = []
-        for item in value.split(','):
-            item = item.strip()
-            try:
-                items.append(int(item))
-            except ValueError:
-                items.append(item)
-        return items
-
+    
+    def _parse_auth_channel(self) -> Optional[int]:
+        """Parse auth channel from settings"""
+        if self._settings.channels.auth_channel:
+            auth_channel = self._settings.channels.auth_channel
+            if auth_channel.lstrip('-').isdigit():
+                return int(auth_channel)
+        return None
+    
     def _parse_database_uris(self) -> List[str]:
-        """Parse multiple database URIs from environment variables"""
+        """Parse multiple database URIs from settings"""
         uris = []
         
         # Always include primary DATABASE_URI first
         if self.DATABASE_URI:
             uris.append(self.DATABASE_URI)
         
-        # Add additional URIs from DATABASE_URIS if provided
-        additional_uris = os.environ.get('DATABASE_URIS', '')
-        if additional_uris:
-            for uri in additional_uris.split(','):
-                uri = uri.strip()
-                if uri and uri not in uris:  # Avoid duplicates
-                    uris.append(uri)
+        # Add additional URIs from settings
+        additional_uris = self._settings.database.get_additional_uris()
+        for uri in additional_uris:
+            if uri and uri not in uris:  # Avoid duplicates
+                uris.append(uri)
         
         return uris
-
+    
     def _parse_database_names(self) -> List[str]:
-        """Parse multiple database names from environment variables"""
+        """Parse multiple database names from settings"""
         names = []
         
         # Always include primary DATABASE_NAME first
         names.append(self.DATABASE_NAME)
         
-        # Add additional names from DATABASE_NAMES if provided
-        additional_names = os.environ.get('DATABASE_NAMES', '')
-        if additional_names:
-            for name in additional_names.split(','):
-                name = name.strip()
-                if name:
-                    names.append(name)
-        else:
-            # If no additional names specified, use same name for all databases
-            for i in range(1, len(self.DATABASE_URIS)):
-                names.append(self.DATABASE_NAME)
+        # Add additional names from settings
+        additional_names = self._settings.database.get_additional_names()
+        names.extend(additional_names)
         
-        # Ensure we have equal number of names and URIs
+        # If no additional names specified, use same name for all databases
         while len(names) < len(self.DATABASE_URIS):
             names.append(self.DATABASE_NAME)
         
         return names[:len(self.DATABASE_URIS)]  # Trim to match URI count
-
+    
     @property
     def is_multi_database_enabled(self) -> bool:
         """Check if multi-database mode is enabled"""
         return len(self.DATABASE_URIS) > 1
-
+    
     def validate(self) -> bool:
-        """Validate required configuration"""
-        required = [
-            'BOT_TOKEN',
-            'API_ID',
-            'API_HASH',
-            'DATABASE_URI',
-            'DATABASE_NAME'
-        ]
-
-        for field in required:
-            value = getattr(self, field)
-            if not value or (isinstance(value, int) and value == 0):
-                logger.error(f"Missing required configuration: {field}")
+        """Validate required configuration using Pydantic validation"""
+        try:
+            # Pydantic will validate during instantiation, so if we get here,
+            # basic validation has already passed
+            errors = self._settings.validate_all()
+            if errors:
+                for error in errors:
+                    logger.error(f"Config validation error: {error}")
                 return False
-
-        if not self.ADMINS:
-            logger.warning("No ADMINS configured - admin commands will be disabled")
-
-        return True
+            
+            if not self.ADMINS:
+                logger.warning("No ADMINS configured - admin commands will be disabled")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Configuration validation failed: {e}")
+            return False
 
 
 class MediaSearchBot(Client):
@@ -1099,16 +1037,16 @@ class MediaSearchBot(Client):
 
 async def initialize_bot() -> MediaSearchBot:
     """Initialize bot with all dependencies"""
-    # Load configuration
+    # Load configuration (now uses centralized settings)
     config = BotConfig()
 
     # Validate configuration
     if not config.validate():
         raise ValueError("Invalid configuration")
 
-    # Initialize components
+    # Initialize components using centralized settings
     db_pool = DatabaseConnectionPool()
-    cache_manager = CacheManager(config.REDIS_URI)
+    cache_manager = CacheManager(settings.redis.uri)
     session_manager = UnifiedSessionManager(cache_manager)
     rate_limiter = RateLimiter(cache_manager)
 

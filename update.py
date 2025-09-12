@@ -27,6 +27,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import centralized settings
+try:
+    from config import settings
+    SETTINGS_AVAILABLE = True
+except ImportError:
+    logger.warning("Centralized settings not available, falling back to environment variables")
+    SETTINGS_AVAILABLE = False
+
 class SecureUpdater:
     """Secure bot updater with validation and rollback."""
     
@@ -99,8 +107,11 @@ class SecureUpdater:
                 else:
                     return True
         
-        # Check environment variables
-        return bool(os.getenv("KUBERNETES_SERVICE_HOST")) or bool(os.getenv("IN_DOCKER"))
+        # Check environment variables using centralized settings if available
+        if SETTINGS_AVAILABLE:
+            return settings.is_kubernetes or settings.is_docker
+        else:
+            return bool(os.getenv("KUBERNETES_SERVICE_HOST")) or bool(os.getenv("IN_DOCKER"))
         
     def _run_command(self, cmd: list, cwd: Optional[Path] = None, capture_output: bool = True) -> subprocess.CompletedProcess:
         """Safely run a command with proper error handling."""
@@ -360,16 +371,24 @@ Examples:
         """
     )
     
+    # Get default values from centralized settings if available
+    if SETTINGS_AVAILABLE:
+        default_repo = settings.updates.repo
+        default_branch = settings.updates.branch
+    else:
+        default_repo = os.getenv("UPDATE_REPO", "https://github.com/rumalg123/Advanced-File-Filter-Bot.git")
+        default_branch = os.getenv("UPDATE_BRANCH", "main")
+    
     parser.add_argument(
         "--repo", "--repository",
         help="Repository URL (HTTPS only)",
-        default=os.getenv("UPDATE_REPO", "https://github.com/rumalg123/Advanced-File-Filter-Bot.git")
+        default=default_repo
     )
     
     parser.add_argument(
         "--branch",
         help="Git branch to update from",
-        default=os.getenv("UPDATE_BRANCH", "main")
+        default=default_branch
     )
     
     parser.add_argument(
