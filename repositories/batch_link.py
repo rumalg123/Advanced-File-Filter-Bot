@@ -3,6 +3,9 @@ from datetime import datetime, UTC
 from dataclasses import dataclass, asdict
 from enum import Enum
 
+from pymongo import IndexModel, ASCENDING, DESCENDING
+from pymongo.errors import DuplicateKeyError
+
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
@@ -60,8 +63,12 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
         return CacheKeyGenerator.batch_link(batch_id)
 
     async def create_batch_link(self, batch_link: BatchLink) -> bool:
-        """Create a new batch link"""
+        """Create a new batch link with validation"""
         try:
+            # Validate batch link data
+            if not self._validate_batch_link(batch_link):
+                return False
+                
             collection = await self.collection
             data = self._entity_to_dict(batch_link)
             
@@ -76,8 +83,79 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             logger.info(f"Created batch link: {batch_link.id}")
             return True
             
+        except DuplicateKeyError:
+            logger.warning(f"Duplicate batch link ID: {batch_link.id}")
+            return False
         except Exception as e:
             logger.error(f"Error creating batch link: {e}")
+            return False
+    
+    def _validate_batch_link(self, batch_link: BatchLink) -> bool:
+        """Validate batch link data integrity"""
+        if not batch_link.id or not isinstance(batch_link.id, str):
+            logger.error("Invalid batch link ID")
+            return False
+            
+        if not batch_link.source_chat_id or not isinstance(batch_link.source_chat_id, int):
+            logger.error("Invalid source chat ID")
+            return False
+            
+        if batch_link.from_msg_id <= 0 or batch_link.to_msg_id <= 0:
+            logger.error("Invalid message IDs")
+            return False
+            
+        if batch_link.from_msg_id >= batch_link.to_msg_id:
+            logger.error("Invalid message range")
+            return False
+            
+        # Check reasonable batch size
+        message_count = batch_link.to_msg_id - batch_link.from_msg_id + 1
+        if message_count > 10000:
+            logger.error(f"Batch too large: {message_count} messages")
+            return False
+            
+        return True
+    
+    async def create_indexes(self) -> bool:
+        """Create optimized indexes for batch links"""
+        try:
+            collection = await self.collection
+            
+            indexes = [
+                # Primary key (already exists)
+                IndexModel([("_id", ASCENDING)], unique=True),
+                
+                # Query by creator and creation date
+                IndexModel([("created_by", ASCENDING), ("created_at", DESCENDING)]),
+                
+                # Query by premium status for filtering
+                IndexModel([("premium_only", ASCENDING)]),
+                
+                # Query by source for deduplication
+                IndexModel([
+                    ("source_chat_id", ASCENDING),
+                    ("from_msg_id", ASCENDING),
+                    ("to_msg_id", ASCENDING),
+                    ("protected", ASCENDING),
+                    ("premium_only", ASCENDING)
+                ], sparse=True),
+                
+                # TTL index for expired links (if expires_at is set)
+                IndexModel([("expires_at", ASCENDING)], expireAfterSeconds=0, sparse=True),
+                
+                # Query by creation date for cleanup
+                IndexModel([("created_at", ASCENDING)])
+            ]
+            
+            await self.db_pool.execute_with_retry(
+                collection.create_indexes, indexes
+            )
+            
+            logger.info("Created batch link indexes successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating batch link indexes: {e}")
             return False
 
     async def get_batch_link(self, batch_id: str) -> Optional[BatchLink]:

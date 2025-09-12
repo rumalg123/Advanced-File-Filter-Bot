@@ -7,6 +7,7 @@ from pyrogram.types import Message
 
 from core.services.filestore import FileStoreService
 from core.utils.logger import get_logger
+from core.utils.link_parser import TelegramLinkParser
 
 logger = get_logger(__name__)
 
@@ -170,74 +171,113 @@ class FileStoreHandler:
             )
 
     async def premium_batch_command(self, client: Client, message: Message):
-        """Generate premium-only batch link for multiple files"""
-        # Parse command
+        """Generate premium-only batch link for multiple files with enhanced validation"""
+        # Parse command with robust validation
         parts = message.text.strip().split(" ")
 
         if len(parts) != 3:
             await message.reply(
-                "Use correct format.\n"
-                "Example: `/batch_premium https://t.me/channel/10 https://t.me/channel/20`\n"
-                "Example: `/pbatch_premium https://t.me/channel/10 https://t.me/channel/20`\n\n"
-                "Short aliases: `/bprem` or `/pbprem`"
+                "**🚫 Invalid Format**\n\n"
+                "**Usage:**\n"
+                "• `/batch_premium <first_link> <last_link>`\n"
+                "• `/pbatch_premium <first_link> <last_link>`\n\n"
+                "**Short aliases:**\n"
+                "• `/bprem <first_link> <last_link>`\n"
+                "• `/pbprem <first_link> <last_link>`\n\n"
+                "**Example:**\n"
+                "`/batch_premium https://t.me/channel/100 https://t.me/channel/200`",
+                parse_mode="Markdown"
             )
             return
 
         cmd, first_link, last_link = parts
-        logger.debug(f"Premium batch cmd: {cmd}, first_link: {first_link}, last_link: {last_link}")
+        logger.info(f"Premium batch command", extra={
+            "event": "batch.command.premium",
+            "user_id": message.from_user.id,
+            "command": cmd,
+            "first_link": first_link,
+            "last_link": last_link
+        })
         
         # Determine if it's a protected batch
         protect = cmd.lower() in ["/pbatch_premium", "/pbprem"]
 
+        # Pre-validate links using robust parser
+        parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link)
+        if not parsed_links:
+            await message.reply(
+                "❌ **Invalid Links**\n\n"
+                "Please check that:\n"
+                "• Both links are valid Telegram message links\n"
+                "• Both links are from the same channel\n"
+                "• First message ID is less than second message ID\n"
+                "• Batch size is reasonable (< 10,000 messages)\n\n"
+                "**Valid formats:**\n"
+                "• `https://t.me/channel/123`\n"
+                "• `https://t.me/c/1234567890/123`",
+                parse_mode="Markdown"
+            )
+            return
+
+        first_parsed, last_parsed = parsed_links
+        message_count = last_parsed.message_id - first_parsed.message_id + 1
+
         # Create premium batch link
         sts = await message.reply(
-            "Generating premium-only batch link...\n"
-            "This link will only be accessible by premium users."
+            f"🔄 **Generating Premium Batch Link**\n\n"
+            f"📊 **Messages**: ~{message_count:,}\n"
+            f"📡 **Source**: {first_parsed.chat_identifier}\n"
+            f"💎 **Type**: {'Protected Premium' if protect else 'Premium'}\n\n"
+            f"⏳ *This may take a moment...*"
         )
 
-        link = await self.filestore_service.create_premium_batch_link(
-            client,
-            first_link,
-            last_link,
-            protect=protect,
-            premium_only=True,
-            created_by=message.from_user.id
-        )
-
-        if link:
-            # Count messages
-            import re
-            link_pattern = re.compile(
-                r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
-                r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
+        try:
+            link = await self.filestore_service.create_premium_batch_link(
+                client,
+                first_link,
+                last_link,
+                protect=protect,
+                premium_only=True,
+                created_by=message.from_user.id
             )
 
-            match = link_pattern.match(first_link)
-            f_msg_id = int(match.group(2)) if match else 0
-
-            match = link_pattern.match(last_link)
-            l_msg_id = int(match.group(2)) if match else 0
-
-            total_msgs = abs(l_msg_id - f_msg_id) + 1
-            
-            batch_type = "Protected Premium" if protect else "Premium"
-
+            if link:
+                batch_type = "Protected Premium" if protect else "Premium"
+                
+                await sts.edit(
+                    f"✅ **{batch_type} Batch Link Created**\n\n"
+                    f"📦 **Messages**: ~{message_count:,}\n"
+                    f"📡 **Source**: `{first_parsed.chat_identifier}`\n"
+                    f"📋 **Range**: `{first_parsed.message_id}` → `{last_parsed.message_id}`\n"
+                    f"💎 **Access**: Premium users only\n"
+                    f"🔒 **Protection**: {'Non-forwardable content' if protect else 'Standard content'}\n\n"
+                    f"🔗 **Link**: {link}\n\n"
+                    f"⚡ **Access Rules**:\n"
+                    f"• Link-level premium overrides global settings\n"
+                    f"• Works even when global premium is disabled\n"
+                    f"• Only premium users can access this content",
+                    parse_mode="Markdown"
+                )
+            else:
+                await sts.edit(
+                    "❌ **Failed to Generate Premium Batch Link**\n\n"
+                    "**Please check:**\n"
+                    "• Bot has access to the source channel\n"
+                    "• Links are valid and from the same channel\n"
+                    "• Database is accessible\n"
+                    "• You have permission to create batch links\n\n"
+                    "*Try again in a few moments*",
+                    parse_mode="Markdown"
+                )
+        except Exception as e:
+            logger.error(f"Error creating premium batch link: {e}", extra={
+                "event": "batch.command.error",
+                "user_id": message.from_user.id,
+                "error": str(e)
+            })
             await sts.edit(
-                f"✅ **{batch_type} Batch Link Created**\n\n"
-                f"📦 Contains approximately `{total_msgs}` messages\n"
-                f"💎 **Premium Only**: Only users with premium membership can access\n"
-                f"🔒 **Protection**: {'Protected content (non-forwardable)' if protect else 'Standard content'}\n\n"
-                f"🔗 **Link**: {link}\n\n"
-                f"⚡ **Access Rules**:\n"
-                f"• Link-level premium requirement overrides global settings\n"
-                f"• Only premium users can access this content"
-            )
-        else:
-            await sts.edit(
-                "❌ Failed to generate premium batch link.\n"
-                "Make sure:\n"
-                "• Both links are from the same channel\n"
-                "• Bot has access to the channel\n"
-                "• Links are in correct format\n"
-                "• Database is accessible"
+                "❌ **System Error**\n\n"
+                "An unexpected error occurred while creating the batch link.\n"
+                "Please try again later or contact support.",
+                parse_mode="Markdown"
             )

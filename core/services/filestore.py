@@ -16,6 +16,8 @@ from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
 from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger
+from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
+from core.utils.telegram_api import telegram_api, with_flood_protection
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
 
@@ -322,78 +324,69 @@ class FileStoreService:
             premium_only: bool = True,
             created_by: int = 0
     ) -> Optional[str]:
-        """Create premium-only batch link using the new BatchLink model"""
+        """Create premium-only batch link using robust parsing and validation"""
         if not self.batch_link_repo:
             logger.error("BatchLinkRepository not initialized - falling back to regular batch link")
             return await self.create_batch_link(client, first_msg_link, last_msg_link, protect)
         
-        # Parse message links (reuse existing logic)
-        import re
-
-        link_pattern = re.compile(
-            r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
-            r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
-        )
-
-        # Parse first link
-        match = link_pattern.match(first_msg_link.strip())
-        if not match:
-            logger.error(f"First link doesn't match pattern: {first_msg_link}")
+        # Use robust link parser
+        parsed_links = TelegramLinkParser.parse_link_pair(first_msg_link, last_msg_link)
+        if not parsed_links:
+            logger.error(f"Failed to parse link pair: {first_msg_link} -> {last_msg_link}")
             return None
-
-        f_chat_id = match.group(1)
-        f_msg_id = int(match.group(2))
-
-        # Handle channel IDs (numeric IDs from /c/ links need -100 prefix)
-        if f_chat_id.isdigit():
-            if '/c/' in first_msg_link:
-                f_chat_id = int("-100" + f_chat_id)
-            else:
-                f_chat_id = int(f_chat_id)
-        else:
+            
+        first_parsed, last_parsed = parsed_links
+        
+        # Resolve chat ID if needed (for username-based links)
+        chat_id = first_parsed.chat_id
+        if chat_id is None:
             try:
-                chat = await client.get_chat(f_chat_id)
-                f_chat_id = chat.id
+                # Use API wrapper for flood protection
+                chat = await telegram_api.call_api(
+                    client.get_chat, 
+                    first_parsed.chat_identifier,
+                    chat_id=None  # No per-chat limiting for get_chat
+                )
+                chat_id = chat.id
+                logger.info(f"Resolved chat {first_parsed.chat_identifier} to ID {chat_id}")
             except Exception as e:
-                logger.error(f"Error resolving chat {f_chat_id}: {e}")
+                logger.error(f"Error resolving chat {first_parsed.chat_identifier}: {e}")
                 return None
-
-        # Parse last link
-        match = link_pattern.match(last_msg_link.strip())
-        if not match:
-            logger.error(f"Last link doesn't match pattern: {last_msg_link}")
+        
+        # Validate bot has access to source channel
+        try:
+            # Check if bot can access the first message (quick validation)
+            await telegram_api.call_api(
+                client.get_messages,
+                chat_id,
+                first_parsed.message_id,
+                chat_id=chat_id
+            )
+        except Exception as e:
+            logger.error(f"Bot cannot access source channel {chat_id}: {e}")
             return None
 
-        l_chat_id = match.group(1)
-        l_msg_id = int(match.group(2))
-
-        # Handle channel IDs
-        if l_chat_id.isdigit():
-            if '/c/' in last_msg_link:
-                l_chat_id = int("-100" + l_chat_id)
-            else:
-                l_chat_id = int(l_chat_id)
-        else:
-            try:
-                chat = await client.get_chat(l_chat_id)
-                l_chat_id = chat.id
-            except Exception as e:
-                logger.error(f"Error resolving chat {l_chat_id}: {e}")
-                return None
-
-        if f_chat_id != l_chat_id:
-            logger.error(f"Chat IDs don't match: {f_chat_id} != {l_chat_id}")
-            return None
+        # Check for duplicate batch links to prevent spam
+        existing_links = await self.batch_link_repo.get_user_batch_links(created_by, limit=5)
+        for existing in existing_links:
+            if (existing.source_chat_id == chat_id and 
+                existing.from_msg_id == first_parsed.message_id and
+                existing.to_msg_id == last_parsed.message_id and
+                existing.protected == protect and
+                existing.premium_only == premium_only):
+                logger.info(f"Returning existing duplicate batch link: {existing.id}")
+                bot_username = (await client.get_me()).username
+                return f"https://t.me/{bot_username}?start=PBLINK-{existing.id}"
 
         # Generate unique batch link ID
         batch_id = f"BL-{uuid.uuid4().hex[:12]}"
         
-        # Create BatchLink entity
+        # Create BatchLink entity with validated data
         batch_link = BatchLink(
             id=batch_id,
-            source_chat_id=f_chat_id,
-            from_msg_id=f_msg_id,
-            to_msg_id=l_msg_id,
+            source_chat_id=chat_id,
+            from_msg_id=first_parsed.message_id,
+            to_msg_id=last_parsed.message_id,
             protected=protect,
             premium_only=premium_only,
             created_by=created_by
@@ -405,9 +398,26 @@ class FileStoreService:
             logger.error(f"Failed to save batch link: {batch_id}")
             return None
 
-        # Generate the link
-        bot_username = (await client.get_me()).username
-        return f"https://t.me/{bot_username}?start=PBLINK-{batch_id}"
+        # Structured logging for audit trail
+        logger.info(f"Created premium batch link", extra={
+            "event": "batch.link.created",
+            "batch_id": batch_id,
+            "created_by": created_by,
+            "source_chat_id": chat_id,
+            "message_range": f"{first_parsed.message_id}-{last_parsed.message_id}",
+            "message_count": last_parsed.message_id - first_parsed.message_id + 1,
+            "protected": protect,
+            "premium_only": premium_only
+        })
+
+        # Generate the link using API wrapper
+        try:
+            me = await telegram_api.call_api(client.get_me)
+            bot_username = me.username
+            return f"https://t.me/{bot_username}?start=PBLINK-{batch_id}"
+        except Exception as e:
+            logger.error(f"Failed to get bot username: {e}")
+            return None
 
     async def get_premium_batch_link(self, batch_id: str) -> Optional[BatchLink]:
         """Get premium batch link details"""
@@ -424,19 +434,71 @@ class FileStoreService:
     ) -> Tuple[bool, str]:
         """
         Check if user can access premium batch link based on precedence rules:
-        1. If link.premium_only = true → require user.is_premium (regardless of global setting)
+        1. If link.premium_only = true → require user.is_premium (OVERRIDES global setting)
         2. Else if global_premium = true → require user.is_premium  
         3. Else → allow
+        
+        CRITICAL: Link-level premium setting has absolute precedence over global setting
         """
-        # Link-level premium check has highest precedence
+        correlation_id = f"user_{user_id}_batch_{batch_link.id}"
+        
+        # Link-level premium check has ABSOLUTE precedence
         if batch_link.premium_only:
             if not user_is_premium:
+                logger.info(f"Premium batch access denied - link requires premium", extra={
+                    "event": "batch.access.denied",
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "batch_id": batch_link.id,
+                    "reason": "link_premium_required",
+                    "user_premium": user_is_premium,
+                    "global_premium": global_premium_enabled,
+                    "link_premium_only": batch_link.premium_only
+                })
                 return False, "❌ This batch link requires premium membership. Upgrade to access premium-only content!"
-        # Global premium check (only if link is not premium-only)
-        elif global_premium_enabled and not batch_link.premium_only:
-            if not user_is_premium:
-                return False, "❌ Premium membership required. Upgrade to access this content!"
+            else:
+                logger.info(f"Premium batch access granted - user has premium", extra={
+                    "event": "batch.access.granted",
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "batch_id": batch_link.id,
+                    "reason": "link_premium_satisfied",
+                    "user_premium": user_is_premium
+                })
+                return True, ""
         
+        # Global premium check (only applies if link is not premium-only)
+        elif global_premium_enabled:
+            if not user_is_premium:
+                logger.info(f"Batch access denied - global premium required", extra={
+                    "event": "batch.access.denied",
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "batch_id": batch_link.id,
+                    "reason": "global_premium_required",
+                    "user_premium": user_is_premium,
+                    "global_premium": global_premium_enabled
+                })
+                return False, "❌ Premium membership required. Upgrade to access this content!"
+            else:
+                logger.info(f"Batch access granted - global premium satisfied", extra={
+                    "event": "batch.access.granted",
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "batch_id": batch_link.id,
+                    "reason": "global_premium_satisfied",
+                    "user_premium": user_is_premium
+                })
+                return True, ""
+        
+        # No premium requirements
+        logger.info(f"Batch access granted - no premium required", extra={
+            "event": "batch.access.granted",
+            "correlation_id": correlation_id,
+            "user_id": user_id,
+            "batch_id": batch_link.id,
+            "reason": "no_premium_required"
+        })
         return True, ""
 
     async def get_batch_data(
@@ -573,12 +635,14 @@ class FileStoreService:
                     auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                 )
 
-                sent_msg = await client.send_cached_media(
+                sent_msg = await telegram_api.call_api(
+                    client.send_cached_media,
                     chat_id=user_id,
                     file_id=file_id_to_send,
                     caption=caption,
                     protect_content=file_data.get("protect", False),
-                    parse_mode=CaptionFormatter.get_parse_mode()
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=user_id  # For per-chat rate limiting
                 )
 
                 # Schedule auto-deletion if enabled
@@ -666,12 +730,14 @@ class FileStoreService:
                             auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                         )
 
-                        # Copy message
-                        sent_msg = await message.copy(
+                                # Copy message with flood protection
+                        sent_msg = await telegram_api.call_api(
+                            message.copy,
                             user_id,
                             caption=caption,
                             protect_content=protect,
-                            parse_mode=CaptionFormatter.get_parse_mode()
+                            parse_mode=CaptionFormatter.get_parse_mode(),
+                            chat_id=user_id  # For per-chat rate limiting
                         )
 
                         # Schedule auto-deletion if enabled

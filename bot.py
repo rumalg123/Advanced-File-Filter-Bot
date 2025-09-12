@@ -680,8 +680,7 @@ class MediaSearchBot(Client):
             await self.user_repo.create_index([('premium_expire', 1)])  # For expired premium checks
             await self.connection_repo.create_index([('user_id', 1)])
             await self.filter_repo.create_index([('group_id', 1), ('text', 1)])
-            await self.batch_link_repo.create_index([('created_by', 1), ('created_at', -1)])  # For user batch links
-            await self.batch_link_repo.create_index([('premium_only', 1)])  # For premium filtering
+            await self.batch_link_repo.create_indexes()  # Create all batch link indexes
             await self.bot_settings_repo.create_index([('key', 1)])
             logger.info("Database indexes created")
 
