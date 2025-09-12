@@ -104,7 +104,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML
             )
 
         except Exception as e:
@@ -223,7 +223,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML
             )
 
         except Exception as e:

@@ -144,7 +144,7 @@ class FilterHandler(BaseCommandHandler):
             return await message.reply_text(
                 f"Filter for `{keyword}` added in **{title}**",
                 quote=True,
-                parse_mode=enums.ParseMode.MARKDOWN
+                parse_mode=enums.ParseMode.HTML
             )
         else:
             return await message.reply_text("Failed to add filter!", quote=True)
@@ -196,7 +196,7 @@ class FilterHandler(BaseCommandHandler):
         await message.reply_text(
             text=filterlist,
             quote=True,
-            parse_mode=enums.ParseMode.MARKDOWN
+            parse_mode=enums.ParseMode.HTML
         )
 
     async def delete_filter_command(self, client: Client, message: Message):
@@ -242,7 +242,7 @@ class FilterHandler(BaseCommandHandler):
                 await message.reply_text(
                     f"`{filter_name}` deleted. I'll not respond to that filter anymore.",
                     quote=True,
-                    parse_mode=enums.ParseMode.MARKDOWN
+                    parse_mode=enums.ParseMode.HTML
                 )
             else:
                 await message.reply_text(f"Couldn't find filter: `{filter_name}`", quote=True)

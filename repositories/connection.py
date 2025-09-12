@@ -107,8 +107,6 @@ class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
                 active_group=group_id
             )
             success = await self.create(user_conn)
-            if success:
-                await self.create(user_conn)
             return success
 
     async def get_active_connection(self, user_id: str) -> Optional[str]:

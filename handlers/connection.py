@@ -147,7 +147,7 @@ class ConnectionHandler:
             )
 
             if success:
-                await message.reply_text(msg, quote=True, parse_mode=enums.ParseMode.MARKDOWN)
+                await message.reply_text(msg, quote=True, parse_mode=enums.ParseMode.HTML)
 
                 # If connected from group, send confirmation to PM
                 if chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
@@ -155,7 +155,7 @@ class ConnectionHandler:
                         await client.send_message(
                             user_id,
                             f"Connected to **{title}**!",
-                            parse_mode=enums.ParseMode.MARKDOWN
+                            parse_mode=enums.ParseMode.HTML
                         )
                     except Exception:
                         pass

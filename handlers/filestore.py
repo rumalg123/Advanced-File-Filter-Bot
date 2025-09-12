@@ -186,7 +186,7 @@ class FileStoreHandler:
                 "• `/pbprem <first_link> <last_link>`\n\n"
                 "**Example:**\n"
                 "`/batch_premium https://t.me/channel/100 https://t.me/channel/200`",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML
             )
             return
 
@@ -215,7 +215,7 @@ class FileStoreHandler:
                 "**Valid formats:**\n"
                 "• `https://t.me/channel/123`\n"
                 "• `https://t.me/c/1234567890/123`",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML
             )
             return
 
@@ -256,7 +256,7 @@ class FileStoreHandler:
                     f"• Link-level premium overrides global settings\n"
                     f"• Works even when global premium is disabled\n"
                     f"• Only premium users can access this content",
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.HTML
                 )
             else:
                 await sts.edit(
@@ -267,7 +267,7 @@ class FileStoreHandler:
                     "• Database is accessible\n"
                     "• You have permission to create batch links\n\n"
                     "*Try again in a few moments*",
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.HTML
                 )
         except Exception as e:
             logger.error(f"Error creating premium batch link: {e}", extra={
@@ -279,5 +279,5 @@ class FileStoreHandler:
                 "❌ **System Error**\n\n"
                 "An unexpected error occurred while creating the batch link.\n"
                 "Please try again later or contact support.",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML
             )
