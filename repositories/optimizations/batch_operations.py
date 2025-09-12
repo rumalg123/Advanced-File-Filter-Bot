@@ -4,15 +4,18 @@ Using MongoDB aggregation pipelines for efficient joins and lookups
 """
 
 import asyncio
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
 from datetime import datetime, UTC, date, timedelta
 
 from pymongo import UpdateOne, InsertOne
 from pymongo.errors import BulkWriteError
 
 from core.utils.logger import get_logger
-from repositories.media import MediaFile
-from repositories.user import User
+
+# Use TYPE_CHECKING to avoid circular imports
+if TYPE_CHECKING:
+    from repositories.media import MediaFile
+    from repositories.user import User
 
 logger = get_logger(__name__)
 
@@ -122,8 +125,8 @@ class BatchOptimizations:
     
     async def batch_duplicate_check(
         self, 
-        media_files: List[MediaFile]
-    ) -> Dict[str, Optional[MediaFile]]:
+        media_files: List['MediaFile']
+    ) -> Dict[str, Optional['MediaFile']]:
         """
         Batch duplicate check using aggregation pipeline with $lookup
         Eliminates N+1 duplicate checking queries
@@ -155,7 +158,8 @@ class BatchOptimizations:
             existing_map = {}
             for result in results:
                 unique_id = result["file_unique_id"]
-                # Convert back to MediaFile object
+                # Convert back to MediaFile object (dynamic import to avoid circular dependency)
+                from repositories.media import MediaFile
                 existing_file = MediaFile(
                     file_id=result["file_id"],
                     file_unique_id=result["file_unique_id"],
