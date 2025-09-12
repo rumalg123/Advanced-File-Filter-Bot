@@ -209,7 +209,7 @@ class FileStoreHandler:
                 "• Batch size is reasonable (< 10,000 messages)\n\n"
                 "<b>Valid formats:</b>\n"
                 "• <code>https://t.me/channel/123</code>\n"
-                "• <code>https://t.me/c/1234567890/123</code>,"
+                "• <code>https://t.me/c/1234567890/123</code>",
                 parse_mode=ParseMode.HTML
             )
             return
