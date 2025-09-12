@@ -10,6 +10,13 @@ from pymongo import InsertOne, UpdateOne
 
 from core.utils.logger import get_logger
 
+# Import concurrency control
+try:
+    from core.concurrency.semaphore_manager import semaphore_manager
+    CONCURRENCY_CONTROL_AVAILABLE = True
+except ImportError:
+    CONCURRENCY_CONTROL_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 
@@ -205,8 +212,17 @@ class BatchOperationManager:
                     )
                     tasks.append(task)
                 
-                # Execute all searches concurrently
-                concurrent_results = await asyncio.gather(*tasks, return_exceptions=True)
+                # Execute all searches with bounded concurrency
+                if CONCURRENCY_CONTROL_AVAILABLE:
+                    # Use bounded concurrency for database operations
+                    concurrent_results = []
+                    for task in tasks:
+                        async with semaphore_manager.acquire('database_read'):
+                            result = await task
+                            concurrent_results.append(result)
+                else:
+                    # Fallback to unbounded gather
+                    concurrent_results = await asyncio.gather(*tasks, return_exceptions=True)
                 
                 for i, result in enumerate(concurrent_results):
                     if isinstance(result, Exception):
@@ -262,7 +278,15 @@ class BatchOperationManager:
         ]
         
         try:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Execute aggregations with bounded concurrency
+            if CONCURRENCY_CONTROL_AVAILABLE:
+                results = []
+                for task in tasks:
+                    async with semaphore_manager.acquire('database_read'):
+                        result = await task
+                        results.append(result)
+            else:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Handle any failed aggregations
             final_results = []

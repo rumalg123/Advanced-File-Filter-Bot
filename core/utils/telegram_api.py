@@ -10,6 +10,13 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait, RPCError
 from core.utils.logger import get_logger
 
+# Import concurrency control
+try:
+    from core.concurrency.semaphore_manager import semaphore_manager
+    CONCURRENCY_CONTROL_AVAILABLE = True
+except ImportError:
+    CONCURRENCY_CONTROL_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 
@@ -48,14 +55,28 @@ class TelegramAPIWrapper:
         retries = 0
         last_exception = None
         
-        # Acquire semaphores
-        async with self._global_semaphore:
-            if chat_id:
-                chat_sem = self.get_chat_semaphore(chat_id)
-                async with chat_sem:
-                    return await self._execute_with_retry(api_func, *args, **kwargs)
-            else:
+        # Determine operation domain for concurrency control
+        func_name = getattr(api_func, '__name__', 'unknown')
+        if 'send' in func_name.lower():
+            domain = 'telegram_send'
+        elif 'get' in func_name.lower() or 'fetch' in func_name.lower():
+            domain = 'telegram_fetch'
+        else:
+            domain = 'telegram_general'
+        
+        # Use global semaphore manager if available, fallback to local semaphores
+        if CONCURRENCY_CONTROL_AVAILABLE:
+            async with semaphore_manager.acquire(domain, f"{func_name}_{chat_id or 'global'}"):
                 return await self._execute_with_retry(api_func, *args, **kwargs)
+        else:
+            # Fallback to original semaphore logic
+            async with self._global_semaphore:
+                if chat_id:
+                    chat_sem = self.get_chat_semaphore(chat_id)
+                    async with chat_sem:
+                        return await self._execute_with_retry(api_func, *args, **kwargs)
+                else:
+                    return await self._execute_with_retry(api_func, *args, **kwargs)
     
     async def _execute_with_retry(self, api_func: Callable, *args, **kwargs) -> Any:
         """Execute API call with retry logic"""
