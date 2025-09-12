@@ -629,8 +629,7 @@ class FileStoreService:
                     file_id=file_id_to_send,
                     caption=caption,
                     protect_content=file_data.get("protect", False),
-                    parse_mode=CaptionFormatter.get_parse_mode(),
-                    chat_id=user_id  # For per-chat rate limiting
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
 
                 # Schedule auto-deletion if enabled
