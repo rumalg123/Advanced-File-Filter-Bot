@@ -18,6 +18,7 @@ from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
+from core.utils.file_reference import FileReferenceExtractor
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
 
@@ -113,19 +114,6 @@ class FileStoreService:
         """Backward compatibility - same as decode_file_identifier"""
         return self.decode_file_identifier(encoded)
 
-    def _extract_file_ref(self, file_id: str) -> str:
-        """Extract file reference from file_id"""
-        try:
-            from pyrogram.file_id import FileId
-            decoded = FileId.decode(file_id)
-            file_ref = base64.urlsafe_b64encode(
-                decoded.file_reference
-            ).decode().rstrip("=")
-            return file_ref
-        except Exception:
-            # If extraction fails, create a hash-based ref
-            import hashlib
-            return hashlib.md5(file_id.encode()).hexdigest()[:20]
 
 
 
@@ -170,7 +158,7 @@ class FileStoreService:
 
         if not file:
             # File not in database, create and save it
-            file_ref = self._extract_file_ref(media.file_id)
+            file_ref = FileReferenceExtractor.extract_file_ref(media.file_id)
             identifier = media_file_unique_id
 
             # Create MediaFile and save to database

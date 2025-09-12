@@ -14,6 +14,7 @@ from core.utils.helpers import sanitize_filename
 from core.utils.link_parser import TelegramLinkParser
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
+from core.utils.file_reference import FileReferenceExtractor
 from repositories.media import MediaRepository, MediaFile, FileType
 
 logger = get_logger(__name__)
@@ -213,7 +214,7 @@ class IndexingService:
             media_file = MediaFile(
                 file_id=media.file_id,
                 file_unique_id=media.file_unique_id,
-                file_ref=self._extract_file_ref(media.file_id),
+                file_ref=FileReferenceExtractor.extract_file_ref(media.file_id),
                 file_name=sanitize_filename(
                     getattr(media, 'file_name', f'file_{media.file_unique_id}')
                 ),
@@ -261,18 +262,6 @@ class IndexingService:
         return mapping.get(media_type, FileType.DOCUMENT)
 
 
-    def _extract_file_ref(self, file_id: str) -> str:
-        """Extract file reference from file_id"""
-        try:
-            decoded = FileId.decode(file_id)
-            file_ref = base64.urlsafe_b64encode(
-                decoded.file_reference
-            ).decode().rstrip("=")
-            return file_ref
-        except Exception:
-            # Generate a fallback ref
-            import hashlib
-            return hashlib.md5(file_id.encode()).hexdigest()[:20]
 
     def _encode_file_id(self, s: bytes) -> str:
         """Encode file ID to URL-safe base64"""

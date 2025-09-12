@@ -12,6 +12,7 @@ from pyrogram.types import Message
 from core.cache.config import CacheTTLConfig
 from core.utils.helpers import sanitize_filename, format_file_size
 from core.utils.logger import get_logger
+from core.utils.file_reference import FileReferenceExtractor
 from repositories.channel import ChannelRepository
 from repositories.media import MediaFile, FileType
 
@@ -389,7 +390,7 @@ class ChannelHandler:
             media_file = MediaFile(
                 file_id=media.file_id,
                 file_unique_id=media.file_unique_id,
-                file_ref=self._extract_file_ref(media.file_id),
+                file_ref=FileReferenceExtractor.extract_file_ref(media.file_id),
                 file_name=sanitize_filename(
                     getattr(media, 'file_name', f'{file_type}_{media.file_unique_id}')
                 ),
@@ -498,19 +499,6 @@ class ChannelHandler:
         return mapping.get(media_type, FileType.DOCUMENT)
 
 
-    @staticmethod
-    def _extract_file_ref(file_id: str) -> str:
-        """Extract file reference from file_id"""
-        try:
-            decoded = FileId.decode(file_id)
-            file_ref = base64.urlsafe_b64encode(
-                decoded.file_reference
-            ).decode().rstrip("=")
-            return file_ref
-        except Exception:
-            # Generate a fallback ref
-            import hashlib
-            return hashlib.md5(file_id.encode()).hexdigest()[:20]
 
     async def _send_index_notification(
             self,
