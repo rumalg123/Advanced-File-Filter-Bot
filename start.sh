@@ -142,27 +142,53 @@ check_config() {
         fi
     done
     
-    # Check environment file
-    if [ ! -f "$SCRIPT_DIR/config.env" ] && [ ! -f "$SCRIPT_DIR/.env" ]; then
-        log_warn "No config.env or .env file found"
-        log_warn "Make sure to set environment variables for the bot"
-        echo
-        echo "Required environment variables:"
-        echo "  - BOT_TOKEN: Your Telegram bot token"
-        echo "  - API_ID: Your Telegram API ID" 
-        echo "  - API_HASH: Your Telegram API hash"
-        echo "  - ADMINS: Admin user IDs (comma separated)"
-        echo "  - DATABASE_URI: MongoDB connection string"
-        echo "  - REDIS_URI: Redis connection URL (optional)"
-        echo
-        echo "Optional variables:"
-        echo "  - LOG_CHANNEL: Channel ID for bot logs"
-        echo "  - AUTH_CHANNEL: Force subscription channel"
-        echo "  - SUPPORT_GROUP_ID: Support group for #request feature"
-        echo
-        wait_for_input
+    # Check for env files and/or platform environment variables
+    local env_file_found=false
+    if [ -f "$SCRIPT_DIR/config.env" ] || [ -f "$SCRIPT_DIR/.env" ]; then
+        env_file_found=true
     fi
-    
+
+    # Validate presence of required environment variables when no .env is present
+    local required_vars=("BOT_TOKEN" "API_ID" "API_HASH" "ADMINS" "DATABASE_URI" "REDIS_URI")
+    local missing_vars=()
+    for var in "${required_vars[@]}"; do
+        if [ -z "${!var:-}" ]; then
+            missing_vars+=("$var")
+        fi
+    done
+
+    if [ "$env_file_found" = false ]; then
+        if [ ${#missing_vars[@]} -eq 0 ]; then
+            # Running without .env, but all required vars are present (e.g., Railway/Heroku)
+            log_warn "No config.env or .env file found"
+            log_info "Environment variables detected via platform — continuing without .env"
+        else
+            log_warn "No config.env or .env file found"
+            log_warn "Missing required environment variables: ${missing_vars[*]}"
+            echo
+            echo "Required environment variables:"
+            echo "  - BOT_TOKEN: Your Telegram bot token"
+            echo "  - API_ID: Your Telegram API ID"
+            echo "  - API_HASH: Your Telegram API hash"
+            echo "  - ADMINS: Admin user IDs (comma separated)"
+            echo "  - DATABASE_URI: MongoDB connection string"
+            echo "  - REDIS_URI: Redis connection URL (required)"
+            echo
+            echo "Optional variables:"
+            echo "  - LOG_CHANNEL: Channel ID for bot logs"
+            echo "  - AUTH_CHANNEL: Force subscription channel"
+            echo "  - SUPPORT_GROUP_ID: Support group for #request feature"
+            echo
+            # If interactive TTY, allow continuing; otherwise fail fast
+            if [ -t 0 ]; then
+                wait_for_input
+            else
+                log_error "Non-interactive environment and missing variables — exiting"
+                exit 1
+            fi
+        fi
+    fi
+
     log_info "Configuration check complete"
 }
 
