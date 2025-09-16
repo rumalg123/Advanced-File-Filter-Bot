@@ -49,6 +49,16 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
         """Generate cache key for setting"""
         return f"bot_setting:{key}"
 
+    def _infer_value_type(self, value: Any) -> str:
+        """Infer a simple value_type from the Python value."""
+        if isinstance(value, bool):
+            return "bool"
+        if isinstance(value, int) and not isinstance(value, bool):
+            return "int"
+        if isinstance(value, (list, tuple)):
+            return "list"
+        return "str"
+
     async def get_setting(self, key: str) -> Optional[BotSetting]:
         """Get a setting by key"""
         return await self.find_by_id(key)
@@ -126,3 +136,47 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
                 await self.cache.delete(cache_key)
 
         return True
+
+    async def update_setting(
+            self,
+            key: str,
+            value: Any,
+            description: Optional[str] = None
+    ) -> bool:
+        """
+        Update the value (and optionally description) of an existing setting.
+        If the setting doesn't exist, create it, inferring value_type.
+        """
+        existing = await self.get_setting(key)
+        now = datetime.now(UTC)
+
+        if existing:
+            update_doc = {
+                "$set": {
+                    "value": value,
+                    "updated_at": now.isoformat(),
+                }
+            }
+            if description is not None:
+                update_doc["$set"]["description"] = description
+
+            collection = await self.collection
+            result = await collection.update_one({"_id": key}, update_doc)
+            success = bool(result.matched_count)
+
+        else:
+            # Create with inferred type and provided description (or empty)
+            success = await self.set_setting(
+                key=key,
+                value=value,
+                value_type=self._infer_value_type(value),
+                default_value=None,
+                description=description or ""
+            )
+
+        if success:
+            # Invalidate cache for this key
+            cache_key = CacheKeyGenerator.bot_setting(key)
+            await self.cache.delete(cache_key)
+
+        return success
