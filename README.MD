@@ -550,17 +550,24 @@ The bot now supports **premium-only batch links** that provide enhanced access c
 
 #### Features
 - **Link-Level Premium Control**: Individual batch links can require premium membership
-- **Global Setting Override**: Premium-only links bypass global premium settings
+- **Global Premium Integration**: Premium batch commands require global premium to be enabled
 - **Protected Content Support**: Non-forwardable content for sensitive files
-- **Precedence Rules**: Link-level settings always take priority over global settings
+- **Consistent Premium System**: Works in harmony with global premium settings
 
-#### Access Control Precedence
-1. **Link Premium Required** (`premium_only=true`) → User must have premium membership
-2. **Global Premium Enabled** + Link not premium-only → User must have premium membership  
-3. **No Premium Requirements** → Allow all users
+#### Requirements
+- **Global Premium Must Be Enabled**: Set `DISABLE_PREMIUM=false` to use premium batch commands
+- **Admin Only**: Only admins can create premium batch links (or public if `PUBLIC_FILE_STORE=True`)
+
+#### Access Control Rules
+1. **Global Premium Disabled** (`DISABLE_PREMIUM=true`) → Premium batch commands unavailable
+2. **Premium Batch Link** (`premium_only=true`) → User must have premium membership
+3. **Global Premium Enabled** → All batch access requires premium membership
+4. **No Premium Requirements** → Allow all users (when global premium is disabled)
 
 #### Command Examples
 ```bash
+# Note: These commands only work when DISABLE_PREMIUM=false
+
 # Create premium-only batch link
 /batch_premium https://t.me/channel/100 https://t.me/channel/150
 
@@ -576,7 +583,7 @@ The bot now supports **premium-only batch links** that provide enhanced access c
 - **Monetization**: Offer premium content access as a paid feature
 - **Content Protection**: Protect sensitive files from unauthorized sharing
 - **Flexible Control**: Mix free and premium content as needed
-- **Override Capability**: Premium links work even when global premium is disabled
+- **System Consistency**: Premium features work together seamlessly
 
 ## 🗃️ Multi-Database System Guide
 

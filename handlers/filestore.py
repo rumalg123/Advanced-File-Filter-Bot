@@ -167,6 +167,18 @@ class FileStoreHandler:
 
     async def premium_batch_command(self, client: Client, message: Message) -> None:
         """Generate premium-only batch link for multiple files with enhanced validation"""
+        # Check if global premium is enabled first
+        if self.bot.config.DISABLE_PREMIUM:
+            await message.reply(
+                "⚠️ <b>Premium Features Disabled</b>\n\n"
+                "Premium batch links are not available because premium features are globally disabled.\n\n"
+                "👨‍💼 <b>Admins:</b> Enable premium features by setting:\n"
+                "<code>DISABLE_PREMIUM=false</code>\n\n"
+                "Once premium features are enabled, you can create premium-only batch links.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+
         # Parse command with robust validation
         parts = message.text.strip().split(" ")
 
@@ -248,9 +260,9 @@ class FileStoreHandler:
                     f"🔒 <b>Protection</b>: {'Non-forwardable content' if protect else 'Standard content'}\n\n"
                     f"🔗 <b>Link</b>: {link}\n\n"
                     f"⚡ <b>Access Rules</b>:\n"
-                    f"• Link-level premium overrides global settings\n"
-                    f"• Works even when global premium is disabled\n"
-                    f"• Only premium users can access this content",
+                    f"• Only premium users can access this content\n"
+                    f"• Global premium features are currently enabled\n"
+                    f"• Users must have active premium membership",
                     parse_mode=ParseMode.HTML
                 )
             else:

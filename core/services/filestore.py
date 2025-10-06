@@ -414,24 +414,41 @@ class FileStoreService:
         return await self.batch_link_repo.get_batch_link(batch_id)
 
     async def check_premium_batch_access(
-            self, 
-            batch_link: BatchLink, 
-            user_id: int, 
-            user_is_premium: bool, 
+            self,
+            batch_link: BatchLink,
+            user_id: int,
+            user_is_premium: bool,
             global_premium_enabled: bool
     ) -> Tuple[bool, str]:
         """
-        Check if user can access premium batch link based on precedence rules:
-        1. If link.premium_only = true → require user.is_premium (OVERRIDES global setting)
-        2. Else if global_premium = true → require user.is_premium  
+        Check if user can access premium batch link based on updated rules:
+        1. If link.premium_only = true:
+           - If global premium is DISABLED → deny (premium features not available)
+           - If global premium is ENABLED → require user.is_premium
+        2. Else if global_premium = true → require user.is_premium
         3. Else → allow
-        
-        CRITICAL: Link-level premium setting has absolute precedence over global setting
+
+        Premium batch links now require global premium to be enabled
         """
         correlation_id = f"user_{user_id}_batch_{batch_link.id}"
-        
-        # Link-level premium check has ABSOLUTE precedence
+
+        # Premium batch link check
         if batch_link.premium_only:
+            # Check if global premium is disabled
+            if not global_premium_enabled:
+                logger.info(f"Premium batch access denied - premium features disabled", extra={
+                    "event": "batch.access.denied",
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "batch_id": batch_link.id,
+                    "reason": "premium_features_disabled",
+                    "user_premium": user_is_premium,
+                    "global_premium": global_premium_enabled,
+                    "link_premium_only": batch_link.premium_only
+                })
+                return False, "❌ Premium features are currently disabled. This batch link requires premium features to be enabled."
+
+            # Global premium is enabled, check user premium status
             if not user_is_premium:
                 logger.info(f"Premium batch access denied - link requires premium", extra={
                     "event": "batch.access.denied",
@@ -454,7 +471,7 @@ class FileStoreService:
                     "user_premium": user_is_premium
                 })
                 return True, ""
-        
+
         # Global premium check (only applies if link is not premium-only)
         elif global_premium_enabled:
             if not user_is_premium:
@@ -478,7 +495,7 @@ class FileStoreService:
                     "user_premium": user_is_premium
                 })
                 return True, ""
-        
+
         # No premium requirements
         logger.info(f"Batch access granted - no premium required", extra={
             "event": "batch.access.granted",

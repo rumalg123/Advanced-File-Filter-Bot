@@ -7,7 +7,7 @@ This guide covers migrating to the new premium batch links feature.
 ### Premium-Only Batch Links
 - New commands: `/batch_premium`, `/pbatch_premium` (aliases: `/bprem`, `/pbprem`)
 - Links that require premium membership to access
-- Link-level premium settings override global premium configuration
+- Commands only work when global premium is enabled (`DISABLE_PREMIUM=false`)
 - Protected content support with `protect_content=true`
 
 ## Database Changes
@@ -49,14 +49,16 @@ The system automatically creates a new MongoDB collection to store premium batch
 ### No New Environment Variables Required
 The premium batch links feature works with existing configuration:
 
-- Uses existing `DISABLE_PREMIUM` setting for global premium control
-- Links with `premium_only=true` override global settings
+- Requires `DISABLE_PREMIUM=false` for premium batch commands to work
+- Premium batch links respect global premium settings
+- When premium is disabled globally, premium batch commands are not available
 - No additional configuration needed
 
 ### Access Control Precedence
-1. **Link-level premium** (`premium_only=true`) → Always requires premium
-2. **Global premium enabled** → Requires premium for non-premium-only links  
-3. **No restrictions** → Open access
+1. **Global premium disabled** (`DISABLE_PREMIUM=true`) → Premium batch commands unavailable
+2. **Premium batch link** (`premium_only=true`) → Requires premium membership (when global premium is enabled)
+3. **Global premium enabled** → Requires premium for all batch access
+4. **No restrictions** → Open access (when global premium is disabled)
 
 ## Deployment Steps
 
@@ -84,11 +86,13 @@ Check that new commands appear in the bot menu:
 ## Usage Examples
 
 ### Creating Premium Batch Links
+**Note:** Premium batch commands only work when global premium is enabled (`DISABLE_PREMIUM=false`)
+
 ```bash
-# Premium-only batch (anyone can create, only premium can access)
+# Premium-only batch (admins can create, only premium users can access)
 /batch_premium https://t.me/channel/100 https://t.me/channel/200
 
-# Premium-only protected batch (non-forwardable)  
+# Premium-only protected batch (non-forwardable)
 /pbatch_premium https://t.me/channel/100 https://t.me/channel/200
 
 # Short aliases
