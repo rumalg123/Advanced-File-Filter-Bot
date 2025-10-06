@@ -48,7 +48,7 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(
                 "🔒 <b>Inline Mode Disabled</b>\n\n"
                 "Inline mode is currently unavailable because premium features are enabled.\n\n"
-                "<b>Why?,/b>\n"
+                "<b>Why?</b>\n"
                 "• Inline mode sends files directly from Telegram servers\n"
                 "• We cannot track file usage in inline mode\n"
                 "• Daily limits cannot be enforced for inline results\n\n"
