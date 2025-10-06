@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Optional, List, Tuple
+from datetime import date
 
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
@@ -61,6 +62,20 @@ class FileAccessService:
         can_access, reason = await self.user_repo.can_retrieve_file(user_id, owner_id)
 
         logger.info(f"can_access={can_access}, increment={increment}")
+
+        # For non-premium users, check if they would exceed limit AFTER incrementing
+        if can_access and increment and not self.config.DISABLE_PREMIUM:
+            user = await self.user_repo.get_user(user_id)
+            is_admin = user_id in self.config.ADMINS if self.config.ADMINS else False
+
+            if user and not user.is_premium and user_id != owner_id and not is_admin:
+                # Check if incrementing would exceed the limit
+                today = date.today()
+                current_count = user.daily_retrieval_count if user.last_retrieval_date == today else 0
+
+                if current_count >= self.user_repo.daily_limit:
+                    return False, f"Daily limit reached ({current_count}/{self.user_repo.daily_limit})", None
+
         if can_access and increment:
             # Increment retrieval count for non-premium users when premium is enabled
             # Use the config passed to the service, not a new instance
