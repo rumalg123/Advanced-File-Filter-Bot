@@ -42,6 +42,24 @@ class DeepLinkHandler(BaseCommandHandler):
         """Internal method for handling deep links (subscription already checked)"""
         user_id = message.from_user.id
 
+        # Handle special parameters first
+        if data == "inline_disabled":
+            # Explain why inline mode is disabled
+            await message.reply_text(
+                "🔒 **Inline Mode Disabled**\n\n"
+                "Inline mode is currently unavailable because premium features are enabled.\n\n"
+                "**Why?**\n"
+                "• Inline mode sends files directly from Telegram servers\n"
+                "• We cannot track file usage in inline mode\n"
+                "• Daily limits cannot be enforced for inline results\n\n"
+                "**Alternatives:**\n"
+                "• Use the search feature in groups or private chat\n"
+                "• Request files using #request in support group\n"
+                "• Upgrade to premium for unlimited access\n\n"
+                "Thank you for understanding! 🙏"
+            )
+            return
+
         # Handle different deep link types
         if data.startswith("batch_"):
             # Batch file request
