@@ -13,9 +13,9 @@ class PaginationBuilder:
                  query: str,
                  user_id: int,
                  callback_prefix: str = "search",
-                 max_visible_pages: int = 11,
-                 boundary_pages: int = 2,
-                 surrounding_pages: int = 2):
+                 max_visible_pages: int = 8,
+                 boundary_pages: int = 1,
+                 surrounding_pages: int = 1):
         """
         Initialize pagination builder with React-style pagination
 
@@ -26,9 +26,9 @@ class PaginationBuilder:
             query: Search query string
             user_id: User ID for callback data
             callback_prefix: Prefix for callback data (e.g., "search", "filter")
-            max_visible_pages: Maximum number of page buttons to show (default 11)
-            boundary_pages: Number of pages to show at start and end (default 2)
-            surrounding_pages: Number of pages to show around current page (default 2)
+            max_visible_pages: Maximum number of page buttons to show (default 8 - Telegram limit)
+            boundary_pages: Number of pages to show at start and end (default 1)
+            surrounding_pages: Number of pages to show around current page (default 1)
         """
         self.total_items = total_items
         self.page_size = page_size
@@ -49,43 +49,64 @@ class PaginationBuilder:
         Calculate page numbers to display with React-style pagination
         Returns list of page numbers with None representing ellipsis
 
-        Example outputs:
-        - [1, 2, 3, 4, 5] for 5 pages total
-        - [1, 2, 3, None, 98, 99, 100] for 100 pages at start
-        - [1, 2, None, 49, 50, 51, None, 99, 100] for 100 pages at middle
-        - [1, 2, None, 98, 99, 100] for 100 pages at end
+        Strictly ensures the result fits within Telegram's button limit (8 buttons per row)
         """
         if self.total_pages <= self.max_visible_pages:
             # Show all pages if total is less than max visible
             return list(range(1, self.total_pages + 1))
 
         pages = []
+        max_buttons = self.max_visible_pages
 
-        # Always include first pages
-        for i in range(1, min(self.boundary_pages + 1, self.total_pages + 1)):
-            pages.append(i)
+        # We'll use a simple approach: always show first, last, current and nearby pages
+        # Pattern: [1] ... [current-1] [current] [current+1] ... [last]
 
-        # Calculate range around current page
-        start_around = max(self.boundary_pages + 1, self.current_page - self.surrounding_pages)
-        end_around = min(self.total_pages - self.boundary_pages, self.current_page + self.surrounding_pages)
+        # Always include page 1
+        pages.append(1)
 
-        # Add ellipsis before current range if needed
-        if start_around > self.boundary_pages + 1:
-            pages.append(None)  # Ellipsis
+        # Determine range around current page
+        if self.current_page <= 3:
+            # Near beginning: show pages 1-5, then ellipsis, then last page
+            for i in range(2, min(6, self.total_pages)):
+                pages.append(i)
+            if self.total_pages > 6:
+                pages.append(None)  # ellipsis
+                pages.append(self.total_pages)
 
-        # Add pages around current page
-        for i in range(start_around, end_around + 1):
-            if i not in pages and i > self.boundary_pages and i <= self.total_pages - self.boundary_pages:
+        elif self.current_page >= self.total_pages - 2:
+            # Near end: show first page, ellipsis, then last 5 pages
+            if self.total_pages > 6:
+                pages.append(None)  # ellipsis
+            for i in range(max(2, self.total_pages - 4), self.total_pages + 1):
                 pages.append(i)
 
-        # Add ellipsis after current range if needed
-        if end_around < self.total_pages - self.boundary_pages:
-            pages.append(None)  # Ellipsis
+        else:
+            # In middle: 1 ... current-1 current current+1 ... last
+            pages.append(None)  # ellipsis before
 
-        # Always include last pages
-        for i in range(max(self.total_pages - self.boundary_pages + 1, self.boundary_pages + 1), self.total_pages + 1):
-            if i not in pages:
-                pages.append(i)
+            # Add page before current (if not page 2)
+            if self.current_page > 2:
+                pages.append(self.current_page - 1)
+
+            pages.append(self.current_page)  # current page
+
+            # Add page after current (if not second to last)
+            if self.current_page < self.total_pages - 1:
+                pages.append(self.current_page + 1)
+
+            pages.append(None)  # ellipsis after
+            pages.append(self.total_pages)  # last page
+
+        # Final safety check - ensure we never exceed max_buttons
+        while len(pages) > max_buttons:
+            # Find a non-essential page to remove
+            for i in range(1, len(pages) - 1):
+                if pages[i] not in [1, self.current_page, self.total_pages, None]:
+                    pages.pop(i)
+                    break
+            else:
+                # If we can't find any page to remove, break
+                break
 
         return pages
 
