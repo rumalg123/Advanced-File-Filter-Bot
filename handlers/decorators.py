@@ -212,19 +212,25 @@ class BanCheck:
                 # Get user based on message type
                 if isinstance(message, CallbackQuery):
                     user_id = message.from_user.id if message.from_user else None
+                    logger.info(f"check_ban decorator: CallbackQuery from user {user_id}, data: {message.data if hasattr(message, 'data') else 'No data'}")
                 else:
                     user_id = message.from_user.id if message.from_user else None
+                    logger.info(f"check_ban decorator: Message from user {user_id}")
 
                 if not user_id:
+                    logger.warning("check_ban decorator: No user_id found, returning")
                     return
 
                 # Skip ban check for admins
                 if user_id in self.bot.config.ADMINS:
+                    logger.info(f"check_ban decorator: User {user_id} is admin, skipping ban check")
                     return await func(self, client, message, *args, **kwargs)
 
                 # Check if user is banned
+                logger.info(f"check_ban decorator: Checking ban status for user {user_id}")
                 user = await self.bot.user_repo.get_user(user_id)
                 if user and user.status == UserStatus.BANNED:
+                    logger.info(f"check_ban decorator: User {user_id} is banned, blocking access")
                     ban_text = (
                         "🚫 <b>You are banned from using this bot</b>\n"
                         f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
@@ -238,6 +244,7 @@ class BanCheck:
                         await message.answer(ban_text, show_alert=True)
                     return
 
+                logger.info(f"check_ban decorator: User {user_id} is not banned, proceeding to function {func.__name__}")
                 return await func(self, client, message, *args, **kwargs)
 
             return wrapper

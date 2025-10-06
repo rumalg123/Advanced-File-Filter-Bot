@@ -81,6 +81,7 @@ class DeepLinkHandler(BaseCommandHandler):
         """Send a file from filestore link - subscription already checked by decorator"""
         user_id = message.from_user.id
 
+        logger.info(f"_send_filestore_file called via deeplink for user {user_id}")
         logger.info(f"Processing filestore request - User: {user_id}, Encoded: {encoded}")
 
         # Decode file identifier
@@ -93,12 +94,15 @@ class DeepLinkHandler(BaseCommandHandler):
         logger.info(f"Decoded file_identifier: {file_identifier}, protect: {protect}")
 
         # Check user access using unified lookup
+        logger.info(f"Calling check_and_grant_access from deeplink for user {user_id}, file: {file_identifier}, increment=True")
+        logger.info(f"ADMINS: {self.bot.config.ADMINS}, DISABLE_PREMIUM: {self.bot.config.DISABLE_PREMIUM}")
         can_access, reason, file = await self.bot.file_service.check_and_grant_access(
             user_id,
             file_identifier,
             increment=True,
             owner_id=self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
         )
+        logger.info(f"check_and_grant_access result: can_access={can_access}, reason={reason}, file={'found' if file else 'not found'}")
 
         if not can_access:
             logger.warning(f"Access denied for user {user_id}: {reason}")

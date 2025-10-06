@@ -31,15 +31,21 @@ class FileCallbackHandler(BaseCommandHandler):
     async def handle_file_callback(self, client: Client, query: CallbackQuery):
         """Handle file request callbacks - redirect to PM from groups"""
         callback_user_id = query.from_user.id
+        logger.info(f"handle_file_callback called for user {callback_user_id}, data: {query.data}")
 
         # Extract file identifier and original user_id
         parts = query.data.split('#', 2)
+        logger.info(f"Callback data parts after split: {parts}")
         if len(parts) < 3:
             _, file_identifier = parts
             original_user_id = callback_user_id  # Assume current user
+            logger.info(f"No original_user_id in callback, using current user: {callback_user_id}")
         else:
             _, file_identifier, original_user_id = parts
             original_user_id = int(original_user_id)
+            logger.info(f"Original user_id from callback: {original_user_id}")
+
+        logger.info(f"File identifier extracted: {file_identifier}")
 
         # Check if the callback user is the original requester
         if original_user_id and not is_original_requester(callback_user_id, original_user_id):
@@ -58,11 +64,12 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         # We're in PM now, check subscription
+        logger.info(f"In PM, checking subscription for user {callback_user_id}")
         if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Skip subscription check for admins and auth users
             skip_sub_check = skip_subscription_check(
-                callback_user_id, 
-                self.bot.config.ADMINS, 
+                callback_user_id,
+                self.bot.config.ADMINS,
                 getattr(self.bot.config, 'AUTH_USERS', [])
             )
 
@@ -91,6 +98,8 @@ class FileCallbackHandler(BaseCommandHandler):
             pass
 
         # Check access
+        logger.info(f"Calling check_and_grant_access for user {callback_user_id}, file: {file_identifier}, increment=True")
+        logger.info(f"ADMINS: {self.bot.config.ADMINS}, DISABLE_PREMIUM: {self.bot.config.DISABLE_PREMIUM}")
         can_access, reason, file = await self.bot.file_service.check_and_grant_access(
             callback_user_id,
             file_identifier,
@@ -149,6 +158,7 @@ class FileCallbackHandler(BaseCommandHandler):
     async def handle_sendall_callback(self, client: Client, query: CallbackQuery):
         """Handle send all files callback - redirect to PM from groups"""
         callback_user_id = query.from_user.id
+        logger.info(f"handle_sendall_callback called for user {callback_user_id}, data: {query.data}")
 
         # Extract search key and original user_id
         parts = query.data.split('#', 2)

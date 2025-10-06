@@ -128,12 +128,14 @@ class CommandHandler:
                 filters.regex(r"^checksub")
             )
         )
+        logger.info("Registering file callback handler with pattern: ^file#")
         self.bot.add_handler(
             CallbackQueryHandler(
                 self.file_callback_handler.handle_file_callback,
                 filters.regex(r"^file#")
             )
         )
+        logger.info("File callback handler registered successfully")
         self.bot.add_handler(
             CallbackQueryHandler(
                 self.file_callback_handler.handle_sendall_callback,

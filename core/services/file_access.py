@@ -42,6 +42,8 @@ class FileAccessService:
         Now uses unified lookup that works with both file_id and file_ref
         Returns: (allowed, message, file_object)
         """
+        logger.info(f"check_and_grant_access: user_id={user_id}, file={file_identifier}, increment={increment}, owner_id={owner_id}")
+
         # Check rate limit first
         is_allowed, cooldown = await self.rate_limiter.check_rate_limit(
             user_id, 'file_request'
@@ -55,22 +57,37 @@ class FileAccessService:
             return False, "File not found.", None
 
         # Check user access
+        logger.info(f"Checking user access for user_id={user_id}, owner_id={owner_id}")
         can_access, reason = await self.user_repo.can_retrieve_file(user_id, owner_id)
 
+        logger.info(f"can_access={can_access}, increment={increment}")
         if can_access and increment:
             # Increment retrieval count for non-premium users when premium is enabled
-            from bot import BotConfig
-            config = BotConfig()
+            # Use the config passed to the service, not a new instance
+            if not self.config:
+                logger.error("FileAccessService config is None, cannot check premium settings")
+                return can_access, reason, file if can_access else None
 
+            logger.info(f"DISABLE_PREMIUM={self.config.DISABLE_PREMIUM}")
             # Only increment if premium system is enabled
-            if not config.DISABLE_PREMIUM:
+            if not self.config.DISABLE_PREMIUM:
                 user = await self.user_repo.get_user(user_id)
-                if user and not user.is_premium and user_id != owner_id:
+                logger.info(f"User found: {user is not None}")
+                if user:
+                    logger.info(f"User {user_id}: is_premium={user.is_premium}, daily_count={user.daily_retrieval_count}")
+
+                # Check if user is admin
+                is_admin = user_id in self.config.ADMINS if self.config.ADMINS else False
+                logger.info(f"Is admin: {is_admin}, Is owner: {user_id == owner_id}")
+
+                if user and not user.is_premium and user_id != owner_id and not is_admin:
                     logger.info(f"Incrementing retrieval count for user {user_id}")
                     count = await self.user_repo.increment_retrieval_count(user_id)
                     logger.info(f"New retrieval count for user {user_id}: {count}")
                 else:
-                    logger.info(f"Not incrementing: user_premium={user.is_premium if user else 'no_user'}, is_owner={user_id == owner_id}")
+                    logger.info(f"Not incrementing: user_premium={user.is_premium if user else 'no_user'}, is_owner={user_id == owner_id}, is_admin={is_admin}")
+            else:
+                logger.info(f"Not incrementing: DISABLE_PREMIUM is True")
 
         return can_access, reason, file if can_access else None
 
