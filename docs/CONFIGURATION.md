@@ -72,6 +72,7 @@ Feature toggles and limits.
 | `USE_ORIGINAL_CAPTION_FOR_BATCH` | bool | No | true | Use original captions in batch mode |
 | `PREMIUM_DURATION_DAYS` | int | No | 30 | Premium subscription duration in days |
 | `NON_PREMIUM_DAILY_LIMIT` | int | No | 10 | Daily file limit for free users |
+| `PREMIUM_PRICE` | string | No | $1 | Premium subscription price with currency (e.g., $1, LKR 450, INR 450) |
 | `MESSAGE_DELETE_SECONDS` | int | No | 300 | Auto-delete timeout in seconds |
 | `MAX_BTN_SIZE` | int | No | 12 | Maximum button size |
 | `REQUEST_PER_DAY` | int | No | 3 | Requests per day limit |

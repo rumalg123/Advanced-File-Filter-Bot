@@ -110,6 +110,7 @@ class BotConfig:
         # Limits
         self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days
         self.NON_PREMIUM_DAILY_LIMIT = self._settings.features.non_premium_daily_limit
+        self.PREMIUM_PRICE = self._settings.features.premium_price
         self.MESSAGE_DELETE_SECONDS = self._settings.features.message_delete_seconds
         self.MAX_BTN_SIZE = self._settings.features.max_btn_size
         self.REQUEST_PER_DAY = self._settings.features.request_per_day

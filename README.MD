@@ -296,6 +296,7 @@ docker run -d \
 | `DISABLE_PREMIUM` | Disable premium features | `True` |
 | `DISABLE_FILTER` | Disable filter features | `False` |
 | `NON_PREMIUM_DAILY_LIMIT` | Daily file limit for free users | `10` |
+| `PREMIUM_PRICE` | Premium subscription price with currency | `$1` |
 | `MESSAGE_DELETE_SECONDS` | Auto-delete time in seconds | `300` |
 | `USE_CAPTION_FILTER` | Search in file captions | `True` |
 | `MAX_BTN_SIZE` | Maximum buttons per page | `10` |

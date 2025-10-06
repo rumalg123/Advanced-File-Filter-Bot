@@ -147,6 +147,7 @@ class FeatureConfig(BaseSettings):
     # Premium system
     premium_duration_days: int = Field(default=30, description="Premium subscription duration in days")
     non_premium_daily_limit: int = Field(default=10, description="Daily file limit for free users")
+    premium_price: str = Field(default="$1", description="Premium subscription price with currency")
     
     # Timeouts and limits
     message_delete_seconds: int = Field(default=300, description="Auto-delete timeout in seconds")

@@ -193,6 +193,12 @@ class BotSettingsService:
             'description': 'Daily file limit for non-premium users',
             'category': 'premium'
         },
+        'PREMIUM_PRICE': {
+            'type': 'str',
+            'default': '$1',
+            'description': 'Premium subscription price with currency (e.g., $1, LKR 450, INR 450)',
+            'category': 'premium'
+        },
         'MESSAGE_DELETE_SECONDS': {
             'type': 'int',
             'default': 300,

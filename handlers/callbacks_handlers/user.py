@@ -103,7 +103,7 @@ class UserCallbackHandler(BaseCommandHandler):
             f"├ {self.bot.config.NON_PREMIUM_DAILY_LIMIT} files per day\n"
             f"├ Basic search features\n"
             f"└ Standard support\n\n"
-            f"⭐ <b>Premium Plan:</b>\n"
+            f"⭐ <b>Premium Plan:</b> <b>{self.bot.config.PREMIUM_PRICE}</b>\n"
             f"├ Unlimited file access\n"
             f"├ Priority support\n"
             f"├ Advanced features\n"
