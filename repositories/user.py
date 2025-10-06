@@ -343,31 +343,99 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         return result
 
     async def increment_retrieval_count(self, user_id: int) -> int:
-        """Increment daily retrieval count"""
+        """Increment daily retrieval count using atomic operation to prevent race conditions"""
+        today = date.today().isoformat()
+
+        # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
         if not user:
             return 0
 
-        today = date.today().isoformat()
-
-        # Reset count if it's a new day
+        # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
-            user.daily_retrieval_count = 0
+            # Reset count for new day
+            result = await self.collection.update_one(
+                {'_id': user_id},
+                {
+                    '$set': {
+                        'daily_retrieval_count': 1,  # Set to 1 since we're incrementing
+                        'last_retrieval_date': today,
+                        'updated_at': datetime.now(UTC)
+                    }
+                }
+            )
+            # Clear cache
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            return 1
 
-        user.daily_retrieval_count += 1
-
-        update_data = {
-            'daily_retrieval_count': user.daily_retrieval_count,
-            'last_retrieval_date': today,
-            'updated_at': datetime.now(UTC)
-        }
-
-        await self.update(user_id, update_data)
+        # Use atomic increment for same day to prevent race conditions
+        result = await self.collection.find_one_and_update(
+            {'_id': user_id},
+            {
+                '$inc': {'daily_retrieval_count': 1},
+                '$set': {
+                    'last_retrieval_date': today,
+                    'updated_at': datetime.now(UTC)
+                }
+            },
+            return_document=True  # Return updated document
+        )
 
         # Clear cache to ensure next read gets updated value
         await self.cache.delete(CacheKeyGenerator.user(user_id))
 
-        return user.daily_retrieval_count
+        if result:
+            return result.get('daily_retrieval_count', 0)
+        return 0
+
+    async def increment_retrieval_count_batch(self, user_id: int, count: int) -> int:
+        """Increment daily retrieval count by specific amount (for batch operations)"""
+        if count <= 0:
+            return 0
+
+        today = date.today().isoformat()
+
+        # First check if we need to reset the count (new day)
+        user = await self.get_user(user_id)
+        if not user:
+            return 0
+
+        # If it's a new day, reset the count first
+        if user.last_retrieval_date != today:
+            # Reset count for new day and add the batch count
+            result = await self.collection.update_one(
+                {'_id': user_id},
+                {
+                    '$set': {
+                        'daily_retrieval_count': count,  # Set to the batch count
+                        'last_retrieval_date': today,
+                        'updated_at': datetime.now(UTC)
+                    }
+                }
+            )
+            # Clear cache
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            return count
+
+        # Use atomic increment for same day with batch count
+        result = await self.collection.find_one_and_update(
+            {'_id': user_id},
+            {
+                '$inc': {'daily_retrieval_count': count},
+                '$set': {
+                    'last_retrieval_date': today,
+                    'updated_at': datetime.now(UTC)
+                }
+            },
+            return_document=True  # Return updated document
+        )
+
+        # Clear cache to ensure next read gets updated value
+        await self.cache.delete(CacheKeyGenerator.user(user_id))
+
+        if result:
+            return result.get('daily_retrieval_count', 0)
+        return 0
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""

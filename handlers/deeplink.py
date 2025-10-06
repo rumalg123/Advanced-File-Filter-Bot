@@ -282,15 +282,17 @@ class DeepLinkHandler(BaseCommandHandler):
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
-                # Update retrieval count for non-premium
-                if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
-                    await self.bot.user_repo.increment_retrieval_count(user_id)
+                # Note: We'll increment all at once after the loop to avoid race conditions
 
                 await asyncio.sleep(1)  # Avoid flooding
 
             except Exception as e:
                 logger.error(f"Error sending file: {e}")
                 continue
+
+        # Increment retrieval count for all successfully sent files at once (batch operation)
+        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+            await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files_data)} files!")
         await client.delete_messages(

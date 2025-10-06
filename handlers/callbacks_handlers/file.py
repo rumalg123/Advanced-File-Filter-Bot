@@ -322,8 +322,7 @@ class FileCallbackHandler(BaseCommandHandler):
                 sent_messages.append(sent_msg)
                 success_count += 1
 
-                if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
-                    await self.bot.user_repo.increment_retrieval_count(user_id)
+                # Note: We'll increment all at once after the loop to avoid race conditions
 
                 # Update progress every 5 files
                 if (idx + 1) % 5 == 0 or (idx + 1) == len(files_data):
@@ -374,6 +373,10 @@ class FileCallbackHandler(BaseCommandHandler):
             except Exception as e:
                 logger.error(f"Error sending file: {e}")
                 failed_count += 1
+
+        # Increment retrieval count for all successfully sent files at once (batch operation)
+        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+            await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         # Final status
         final_text = (
