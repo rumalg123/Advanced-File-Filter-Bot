@@ -9,7 +9,7 @@ from core.utils.logger import get_logger
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 from repositories.user import UserStatus
-
+from pyrogram.enums import ParseMode
 logger = get_logger(__name__)
 
 
@@ -46,17 +46,18 @@ class DeepLinkHandler(BaseCommandHandler):
         if data == "inline_disabled":
             # Explain why inline mode is disabled
             await message.reply_text(
-                "🔒 **Inline Mode Disabled**\n\n"
+                "🔒 <b>Inline Mode Disabled</b>\n\n"
                 "Inline mode is currently unavailable because premium features are enabled.\n\n"
-                "**Why?**\n"
+                "<b>Why?,/b>\n"
                 "• Inline mode sends files directly from Telegram servers\n"
                 "• We cannot track file usage in inline mode\n"
                 "• Daily limits cannot be enforced for inline results\n\n"
-                "**Alternatives:**\n"
+                "<b>Alternatives:</b>\n"
                 "• Use the search feature in groups or private chat\n"
                 "• Request files using #request in support group\n"
                 "• Upgrade to premium for unlimited access\n\n"
                 "Thank you for understanding! 🙏"
+                ,parse_mode=ParseMode.HTML
             )
             return
 
