@@ -260,7 +260,14 @@ class FileCallbackHandler(BaseCommandHandler):
         # Force fresh fetch from DB, not cache, to get accurate count
         await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
         user = await self.bot.user_repo.get_user(user_id)
-        if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+
+        # Check if user is admin or owner
+        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        is_owner = user_id == owner_id
+
+        # Only check quota for non-premium, non-admin, non-owner users
+        if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
             remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
             if remaining < len(files_data):
                 await query.answer(
@@ -385,7 +392,12 @@ class FileCallbackHandler(BaseCommandHandler):
                 failed_count += 1
 
         # Increment retrieval count for all successfully sent files at once (batch operation)
-        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+        # Only increment for non-premium, non-admin, non-owner users
+        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        is_owner = user_id == owner_id
+
+        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         # Final status

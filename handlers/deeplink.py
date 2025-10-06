@@ -243,7 +243,14 @@ class DeepLinkHandler(BaseCommandHandler):
         from core.cache.config import CacheKeyGenerator
         await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
         user = await self.bot.user_repo.get_user(user_id)
-        if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+
+        # Check if user is admin or owner
+        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        is_owner = user_id == owner_id
+
+        # Only check quota for non-premium, non-admin, non-owner users
+        if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
             remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
             if remaining < len(files_data):
                 await message.reply_text(
@@ -295,7 +302,12 @@ class DeepLinkHandler(BaseCommandHandler):
                 continue
 
         # Increment retrieval count for all successfully sent files at once (batch operation)
-        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+        # Only increment for non-premium, non-admin, non-owner users
+        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        is_owner = user_id == owner_id
+
+        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files_data)} files!")
@@ -416,9 +428,13 @@ class DeepLinkHandler(BaseCommandHandler):
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
-                # Update retrieval count for non-premium
+                # Update retrieval count for non-premium, non-admin, non-owner users
                 user = await self.bot.user_repo.get_user(user_id)
-                if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+                is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+                owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+                is_owner = user_id == owner_id
+
+                if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
                     await self.bot.user_repo.increment_retrieval_count(user_id)
 
                 await asyncio.sleep(1)  # Avoid flooding

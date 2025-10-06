@@ -475,11 +475,18 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""
-        # Owner always has access
+        # Check if premium is disabled
         from bot import BotConfig
         config = BotConfig()
         if config.DISABLE_PREMIUM:
             return True, "Unlimited access (Premium disabled)"
+
+        # Check if user is admin
+        is_admin = user_id in config.ADMINS if config.ADMINS else False
+        if is_admin:
+            return True, "Admin access"
+
+        # Check if user is owner
         logger.info(f"owner_id: {owner_id}, user_id: {user_id}")
         if owner_id and user_id == owner_id:
             return True, "Owner access"
