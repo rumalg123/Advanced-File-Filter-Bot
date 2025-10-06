@@ -7,7 +7,7 @@ from weakref import WeakSet
 from pyrogram import Client, filters, enums
 from pyrogram.handlers import MessageHandler, InlineQueryHandler
 from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument, InlineKeyboardButton, \
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.session.manager import SessionType
@@ -319,6 +319,28 @@ class SearchHandler:
 
         # Perform search
         try:
+            # For inline mode, we need to be more strict about daily limits
+            # since clicking results won't increment the count
+            if not self.bot.config.DISABLE_PREMIUM:
+                user = await self.bot.user_repo.get_user(user_id)
+                is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+                owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+
+                if user and not user.is_premium and user_id != owner_id and not is_admin:
+                    from datetime import date
+                    today = date.today()
+                    current_count = user.daily_retrieval_count if user.last_retrieval_date == today else 0
+
+                    # Block inline search if user has reached their limit
+                    if current_count >= self.bot.config.NON_PREMIUM_DAILY_LIMIT:
+                        await query.answer(
+                            results=[],
+                            cache_time=0,
+                            switch_pm_text=f"❌ Daily limit reached ({current_count}/{self.bot.config.NON_PREMIUM_DAILY_LIMIT})",
+                            switch_pm_parameter="premium"
+                        )
+                        return
+
             offset = int(query.offset or 0)
             files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
                 user_id=user_id,
@@ -349,6 +371,20 @@ class SearchHandler:
 
             # Build inline results
             results = []
+
+            # Check user's remaining quota for inline warning
+            remaining_quota = None
+            if not self.bot.config.DISABLE_PREMIUM:
+                user = await self.bot.user_repo.get_user(user_id)
+                is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+                owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+
+                if user and not user.is_premium and user_id != owner_id and not is_admin:
+                    from datetime import date
+                    today = date.today()
+                    current_count = user.daily_retrieval_count if user.last_retrieval_date == today else 0
+                    remaining_quota = self.bot.config.NON_PREMIUM_DAILY_LIMIT - current_count
+
             for i, file in enumerate(files):
                 # Create unique ID for each result
                 unique_id = f"{offset}_{i}_{file.file_unique_id}"
@@ -363,7 +399,11 @@ class SearchHandler:
                     auto_delete_message=None
                 )
 
-                # Create inline result
+                # Add quota warning to caption if applicable
+                if remaining_quota is not None and remaining_quota > 0:
+                    caption += f"\n\n⚠️ <i>Daily quota remaining: {remaining_quota}/{self.bot.config.NON_PREMIUM_DAILY_LIMIT}</i>"
+
+                # Create inline result - Note: We can't actually prevent sending, just warn
                 file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                 result = InlineQueryResultCachedDocument(
                     id=unique_id,
@@ -376,12 +416,16 @@ class SearchHandler:
                 results.append(result)
 
             # Answer the inline query
+            switch_text = f"📁 Found {total} files" if total > 0 else "🔍 Search Files"
+            if remaining_quota is not None and remaining_quota > 0:
+                switch_text = f"📁 {total} files | Quota: {remaining_quota}/{self.bot.config.NON_PREMIUM_DAILY_LIMIT}"
+
             await query.answer(
                 results=results,
                 cache_time=30,
                 is_personal=True,
                 next_offset=str(next_offset) if next_offset else "",
-                switch_pm_text=f"📁 Found {total} files" if total > 0 else "🔍 Search Files",
+                switch_pm_text=switch_text,
                 switch_pm_parameter="start"
             )
 
