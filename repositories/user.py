@@ -344,9 +344,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def increment_retrieval_count(self, user_id: int) -> int:
         """Increment daily retrieval count using atomic operation to prevent race conditions"""
-        today = date.today().isoformat()
+        today = date.today()
+        today_str = today.isoformat()
 
-        logger.info(f"increment_retrieval_count called for user {user_id}, today={today}")
+        logger.info(f"increment_retrieval_count called for user {user_id}, today={today_str}")
 
         # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
@@ -370,7 +371,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 {
                     '$set': {
                         'daily_retrieval_count': 1,  # Set to 1 since we're incrementing
-                        'last_retrieval_date': today,
+                        'last_retrieval_date': today_str,
                         'updated_at': datetime.now(UTC)
                     }
                 }
@@ -387,7 +388,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             {
                 '$inc': {'daily_retrieval_count': 1},
                 '$set': {
-                    'last_retrieval_date': today,
+                    'last_retrieval_date': today_str,
                     'updated_at': datetime.now(UTC)
                 }
             },
@@ -410,9 +411,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if count <= 0:
             return 0
 
-        today = date.today().isoformat()
+        today = date.today()
+        today_str = today.isoformat()
 
-        logger.info(f"increment_retrieval_count_batch called for user {user_id}, count={count}, today={today}")
+        logger.info(f"increment_retrieval_count_batch called for user {user_id}, count={count}, today={today_str}")
 
         # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
@@ -436,7 +438,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 {
                     '$set': {
                         'daily_retrieval_count': count,  # Set to the batch count
-                        'last_retrieval_date': today,
+                        'last_retrieval_date': today_str,
                         'updated_at': datetime.now(UTC)
                     }
                 }
@@ -453,7 +455,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             {
                 '$inc': {'daily_retrieval_count': count},
                 '$set': {
-                    'last_retrieval_date': today,
+                    'last_retrieval_date': today_str,
                     'updated_at': datetime.now(UTC)
                 }
             },
