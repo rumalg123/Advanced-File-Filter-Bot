@@ -363,6 +363,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         }
 
         await self.update(user_id, update_data)
+
+        # Clear cache to ensure next read gets updated value
+        await self.cache.delete(CacheKeyGenerator.user(user_id))
+
         return user.daily_retrieval_count
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:

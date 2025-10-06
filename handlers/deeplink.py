@@ -235,6 +235,9 @@ class DeepLinkHandler(BaseCommandHandler):
             return
 
         # Check quota for non-premium users
+        # Force fresh fetch from DB, not cache, to get accurate count
+        from core.cache.config import CacheKeyGenerator
+        await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
         user = await self.bot.user_repo.get_user(user_id)
         if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
             remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
@@ -280,7 +283,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 success_count += 1
 
                 # Update retrieval count for non-premium
-                if not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
+                if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
                     await self.bot.user_repo.increment_retrieval_count(user_id)
 
                 await asyncio.sleep(1)  # Avoid flooding

@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait, UserIsBlocked
 from pyrogram.types import CallbackQuery
 
+from core.cache.config import CacheKeyGenerator
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import is_original_requester, is_private_chat, skip_subscription_check
@@ -246,6 +247,8 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         # Check if user has enough quota for all files
+        # Force fresh fetch from DB, not cache, to get accurate count
+        await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
         user = await self.bot.user_repo.get_user(user_id)
         if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM:
             remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
