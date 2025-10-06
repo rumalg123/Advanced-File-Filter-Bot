@@ -13,9 +13,11 @@ class PaginationBuilder:
                  query: str,
                  user_id: int,
                  callback_prefix: str = "search",
-                 max_visible_pages: int = 11):
+                 max_visible_pages: int = 11,
+                 boundary_pages: int = 2,
+                 surrounding_pages: int = 2):
         """
-        Initialize pagination builder
+        Initialize pagination builder with React-style pagination
 
         Args:
             total_items: Total number of items
@@ -25,6 +27,8 @@ class PaginationBuilder:
             user_id: User ID for callback data
             callback_prefix: Prefix for callback data (e.g., "search", "filter")
             max_visible_pages: Maximum number of page buttons to show (default 11)
+            boundary_pages: Number of pages to show at start and end (default 2)
+            surrounding_pages: Number of pages to show around current page (default 2)
         """
         self.total_items = total_items
         self.page_size = page_size
@@ -33,38 +37,57 @@ class PaginationBuilder:
         self.user_id = user_id
         self.callback_prefix = callback_prefix
         self.max_visible_pages = max_visible_pages
+        self.boundary_pages = boundary_pages  # Pages to show at beginning and end
+        self.surrounding_pages = surrounding_pages  # Pages to show around current
 
         # Calculate page info
         self.current_page = (current_offset // page_size) + 1
         self.total_pages = ((total_items - 1) // page_size) + 1 if total_items > 0 else 1
 
-    def _get_page_range(self) -> Tuple[int, int]:
+    def _get_page_numbers(self) -> List[Optional[int]]:
         """
-        Calculate the range of page numbers to display
-        Returns tuple of (start_page, end_page) inclusive
+        Calculate page numbers to display with React-style pagination
+        Returns list of page numbers with None representing ellipsis
+
+        Example outputs:
+        - [1, 2, 3, 4, 5] for 5 pages total
+        - [1, 2, 3, None, 98, 99, 100] for 100 pages at start
+        - [1, 2, None, 49, 50, 51, None, 99, 100] for 100 pages at middle
+        - [1, 2, None, 98, 99, 100] for 100 pages at end
         """
         if self.total_pages <= self.max_visible_pages:
             # Show all pages if total is less than max visible
-            return 1, self.total_pages
+            return list(range(1, self.total_pages + 1))
 
-        # Calculate the range centered around current page
-        half_visible = self.max_visible_pages // 2
+        pages = []
 
-        # Start with current page in the middle
-        start_page = self.current_page - half_visible
-        end_page = self.current_page + half_visible
+        # Always include first pages
+        for i in range(1, min(self.boundary_pages + 1, self.total_pages + 1)):
+            pages.append(i)
 
-        # Adjust if we're near the beginning
-        if start_page < 1:
-            start_page = 1
-            end_page = min(self.max_visible_pages, self.total_pages)
+        # Calculate range around current page
+        start_around = max(self.boundary_pages + 1, self.current_page - self.surrounding_pages)
+        end_around = min(self.total_pages - self.boundary_pages, self.current_page + self.surrounding_pages)
 
-        # Adjust if we're near the end
-        elif end_page > self.total_pages:
-            end_page = self.total_pages
-            start_page = max(1, self.total_pages - self.max_visible_pages + 1)
+        # Add ellipsis before current range if needed
+        if start_around > self.boundary_pages + 1:
+            pages.append(None)  # Ellipsis
 
-        return start_page, end_page
+        # Add pages around current page
+        for i in range(start_around, end_around + 1):
+            if i not in pages and i > self.boundary_pages and i <= self.total_pages - self.boundary_pages:
+                pages.append(i)
+
+        # Add ellipsis after current range if needed
+        if end_around < self.total_pages - self.boundary_pages:
+            pages.append(None)  # Ellipsis
+
+        # Always include last pages
+        for i in range(max(self.total_pages - self.boundary_pages + 1, self.boundary_pages + 1), self.total_pages + 1):
+            if i not in pages:
+                pages.append(i)
+
+        return pages
 
     def _create_callback_data(self, action: str, offset: Optional[int] = None) -> str:
         """Create callback data string"""
@@ -89,7 +112,7 @@ class PaginationBuilder:
 
     def build_pagination_buttons(self) -> List[List[InlineKeyboardButton]]:
         """
-        Build smart pagination buttons with dynamic page range
+        Build smart pagination buttons with React-style dynamic page range
 
         Returns:
             List of button rows for pagination
@@ -145,45 +168,35 @@ class PaginationBuilder:
 
         buttons.append(nav_row)
 
-        # Second row: Page number buttons (if more than 1 page)
+        # Second row: Page number buttons (if more than 1 page) with React-style pagination
         if self.total_pages > 1:
             page_row = []
-            start_page, end_page = self._get_page_range()
+            page_numbers = self._get_page_numbers()
 
-            # Add ellipsis at the beginning if needed
-            if start_page > 1:
-                page_row.append(
-                    InlineKeyboardButton(
-                        "...",
-                        callback_data=self._create_callback_data("noop")
+            for page_item in page_numbers:
+                if page_item is None:
+                    # Add ellipsis
+                    page_row.append(
+                        InlineKeyboardButton(
+                            "...",
+                            callback_data=self._create_callback_data("noop")
+                        )
                     )
-                )
-
-            # Add page number buttons
-            for page_num in range(start_page, end_page + 1):
-                page_offset = (page_num - 1) * self.page_size
-
-                # Highlight current page
-                if page_num == self.current_page:
-                    button_text = f"[{page_num}]"
                 else:
-                    button_text = str(page_num)
+                    page_offset = (page_item - 1) * self.page_size
 
-                page_row.append(
-                    InlineKeyboardButton(
-                        button_text,
-                        callback_data=self._create_callback_data("page", page_offset)
-                    )
-                )
+                    # Highlight current page
+                    if page_item == self.current_page:
+                        button_text = f"[{page_item}]"
+                    else:
+                        button_text = str(page_item)
 
-            # Add ellipsis at the end if needed
-            if end_page < self.total_pages:
-                page_row.append(
-                    InlineKeyboardButton(
-                        "...",
-                        callback_data=self._create_callback_data("noop")
+                    page_row.append(
+                        InlineKeyboardButton(
+                            button_text,
+                            callback_data=self._create_callback_data("page", page_offset)
+                        )
                     )
-                )
 
             buttons.append(page_row)
 
