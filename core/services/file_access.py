@@ -58,10 +58,19 @@ class FileAccessService:
         can_access, reason = await self.user_repo.can_retrieve_file(user_id, owner_id)
 
         if can_access and increment:
-            # Increment retrieval count for non-premium users
-            user = await self.user_repo.get_user(user_id)
-            if user and not user.is_premium and user_id != owner_id:
-                await self.user_repo.increment_retrieval_count(user_id)
+            # Increment retrieval count for non-premium users when premium is enabled
+            from bot import BotConfig
+            config = BotConfig()
+
+            # Only increment if premium system is enabled
+            if not config.DISABLE_PREMIUM:
+                user = await self.user_repo.get_user(user_id)
+                if user and not user.is_premium and user_id != owner_id:
+                    logger.info(f"Incrementing retrieval count for user {user_id}")
+                    count = await self.user_repo.increment_retrieval_count(user_id)
+                    logger.info(f"New retrieval count for user {user_id}: {count}")
+                else:
+                    logger.info(f"Not incrementing: user_premium={user.is_premium if user else 'no_user'}, is_owner={user_id == owner_id}")
 
         return can_access, reason, file if can_access else None
 

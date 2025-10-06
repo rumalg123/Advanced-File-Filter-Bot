@@ -346,10 +346,20 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """Increment daily retrieval count using atomic operation to prevent race conditions"""
         today = date.today().isoformat()
 
+        logger.info(f"increment_retrieval_count called for user {user_id}, today={today}")
+
         # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
         if not user:
-            return 0
+            logger.error(f"User {user_id} not found in database!")
+            # Create the user if they don't exist
+            await self.create_user(user_id, "User")
+            user = await self.get_user(user_id)
+            if not user:
+                logger.error(f"Failed to create user {user_id}")
+                return 0
+
+        logger.info(f"User {user_id} current count: {user.daily_retrieval_count}, last_date: {user.last_retrieval_date}")
 
         # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
@@ -364,6 +374,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     }
                 }
             )
+            logger.info(f"New day - reset count to 1 for user {user_id}, modified: {result.modified_count}")
             # Clear cache
             await self.cache.delete(CacheKeyGenerator.user(user_id))
             return 1
@@ -385,7 +396,11 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         await self.cache.delete(CacheKeyGenerator.user(user_id))
 
         if result:
-            return result.get('daily_retrieval_count', 0)
+            new_count = result.get('daily_retrieval_count', 0)
+            logger.info(f"Incremented count for user {user_id} to {new_count}")
+            return new_count
+        else:
+            logger.error(f"Failed to increment count for user {user_id}")
         return 0
 
     async def increment_retrieval_count_batch(self, user_id: int, count: int) -> int:
@@ -395,10 +410,20 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         today = date.today().isoformat()
 
+        logger.info(f"increment_retrieval_count_batch called for user {user_id}, count={count}, today={today}")
+
         # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
         if not user:
-            return 0
+            logger.error(f"User {user_id} not found in database!")
+            # Create the user if they don't exist
+            await self.create_user(user_id, "User")
+            user = await self.get_user(user_id)
+            if not user:
+                logger.error(f"Failed to create user {user_id}")
+                return 0
+
+        logger.info(f"User {user_id} current count: {user.daily_retrieval_count}, last_date: {user.last_retrieval_date}")
 
         # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
@@ -413,6 +438,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     }
                 }
             )
+            logger.info(f"New day - set count to {count} for user {user_id}, modified: {result.modified_count}")
             # Clear cache
             await self.cache.delete(CacheKeyGenerator.user(user_id))
             return count
@@ -434,7 +460,11 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         await self.cache.delete(CacheKeyGenerator.user(user_id))
 
         if result:
-            return result.get('daily_retrieval_count', 0)
+            new_count = result.get('daily_retrieval_count', 0)
+            logger.info(f"Batch incremented count for user {user_id} by {count} to {new_count}")
+            return new_count
+        else:
+            logger.error(f"Failed to batch increment count for user {user_id}")
         return 0
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
