@@ -143,12 +143,6 @@ class BotConfig:
         self.SUPPORT_GROUP_URL = self._settings.messages.support_group_url
         self.SUPPORT_GROUP_NAME = self._settings.messages.support_group_name
         self.PAYMENT_LINK = self._settings.messages.payment_link
-        
-        # Validate request limits
-        if self.REQUEST_PER_DAY >= self.REQUEST_WARNING_LIMIT:
-            logger.warning(
-                "REQUEST_PER_DAY must be less than REQUEST_WARNING_LIMIT. Setting REQUEST_WARNING_LIMIT = REQUEST_PER_DAY + 2")
-            self.REQUEST_WARNING_LIMIT = self.REQUEST_PER_DAY + 2
     
     def _parse_auth_channel(self) -> Optional[int]:
         """Parse auth channel from settings"""
