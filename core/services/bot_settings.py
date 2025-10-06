@@ -97,6 +97,36 @@ class BotSettingsService:
             'description': 'Redis connection URI',
             'category': 'database'
         },
+        'DATABASE_SIZE_LIMIT_GB': {
+            'type': 'float',
+            'default': 0.5,
+            'description': 'Database size limit in GB for auto-switching',
+            'category': 'database'
+        },
+        'DATABASE_AUTO_SWITCH': {
+            'type': 'bool',
+            'default': True,
+            'description': 'Enable automatic database switching when size limit reached',
+            'category': 'database'
+        },
+        'DATABASE_MAX_FAILURES': {
+            'type': 'int',
+            'default': 5,
+            'description': 'Max failures before circuit breaker opens',
+            'category': 'database'
+        },
+        'DATABASE_RECOVERY_TIMEOUT': {
+            'type': 'int',
+            'default': 300,
+            'description': 'Circuit breaker recovery timeout in seconds',
+            'category': 'database'
+        },
+        'DATABASE_HALF_OPEN_CALLS': {
+            'type': 'int',
+            'default': 3,
+            'description': 'Max calls in circuit breaker half-open state',
+            'category': 'database'
+        },
         'PUBLIC_FILE_STORE': {
             'type': 'bool',
             'default': False,

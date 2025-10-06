@@ -33,13 +33,15 @@ MongoDB connection and multi-database settings.
 | `DATABASE_URI` | str | ⚠️ Yes | '' | Primary MongoDB connection URI |
 | `DATABASE_NAME` | str | No | 'PIRO' | Primary database name |
 | `COLLECTION_NAME` | str | No | 'FILES' | Collection name for media files |
-| `DATABASE_SIZE_LIMIT_GB` | float | No | 0.5 | Database size limit in GB |
-| `DATABASE_AUTO_SWITCH` | bool | No | true | Enable automatic database switching |
+| `DATABASE_SIZE_LIMIT_GB` ✏️ | float | No | 0.5 | Database size limit in GB |
+| `DATABASE_AUTO_SWITCH` ✏️ | bool | No | true | Enable automatic database switching |
 | `DATABASE_URIS` | str | No | '' | Additional database URIs (comma-separated) |
 | `DATABASE_NAMES` | str | No | '' | Additional database names (comma-separated) |
-| `DATABASE_MAX_FAILURES` | int | No | 5 | Max failures before circuit breaker opens |
-| `DATABASE_RECOVERY_TIMEOUT` | int | No | 300 | Recovery timeout in seconds |
-| `DATABASE_HALF_OPEN_CALLS` | int | No | 3 | Max calls in half-open state |
+| `DATABASE_MAX_FAILURES` ✏️ | int | No | 5 | Max failures before circuit breaker opens |
+| `DATABASE_RECOVERY_TIMEOUT` ✏️ | int | No | 300 | Recovery timeout in seconds |
+| `DATABASE_HALF_OPEN_CALLS` ✏️ | int | No | 3 | Max calls in half-open state |
+
+✏️ = Can be changed via bot `/settings` command
 
 ### 🔴 Redis Configuration (`RedisConfig`)
 

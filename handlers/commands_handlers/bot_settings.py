@@ -844,6 +844,12 @@ class BotSettingsHandler:
             'REQUEST_WARNING_LIMIT': "Request warning limit",
             'AUTO_DELETE_MESSAGE': 'Auto Delete Msg',
             'START_MESSAGE': 'Start Message',
+            'PREMIUM_PRICE': 'Premium Price',
+            'DATABASE_SIZE_LIMIT_GB': 'DB Size Limit (GB)',
+            'DATABASE_AUTO_SWITCH': 'DB Auto Switch',
+            'DATABASE_MAX_FAILURES': 'Circuit Max Failures',
+            'DATABASE_RECOVERY_TIMEOUT': 'Circuit Recovery Time',
+            'DATABASE_HALF_OPEN_CALLS': 'Circuit Half-Open Calls',
         }
 
         return display_map.get(key, key)

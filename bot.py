@@ -91,6 +91,11 @@ class BotConfig:
         self.DATABASE_NAMES = self._parse_database_names()
         self.DATABASE_SIZE_LIMIT_GB = self._settings.database.size_limit_gb
         self.DATABASE_AUTO_SWITCH = self._settings.database.auto_switch
+
+        # Circuit breaker settings
+        self.DATABASE_MAX_FAILURES = self._settings.database.max_failures
+        self.DATABASE_RECOVERY_TIMEOUT = self._settings.database.recovery_timeout
+        self.DATABASE_HALF_OPEN_CALLS = self._settings.database.half_open_calls
         
         # Redis settings
         self.REDIS_URI = self._settings.redis.uri
