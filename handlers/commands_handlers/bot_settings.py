@@ -504,9 +504,9 @@ class BotSettingsHandler:
         # Delete the cancel message itself
         try:
             await message.delete()
-        except:
+        except Exception:
             pass
-            
+
         logger.info(f"Cancelled edit session for user {user_id}")
         raise StopPropagation  # Prevent any other handlers from processing /cancel
 
@@ -556,9 +556,9 @@ class BotSettingsHandler:
             # Delete the cancel message itself
             try:
                 await message.delete()
-            except:
+            except Exception:
                 pass
-                
+
             # Clean up session
             await self.session_manager.cancel_edit_session(user_id)
             raise StopPropagation  # Prevent any other handlers from processing this message

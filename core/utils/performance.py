@@ -27,7 +27,7 @@ class PerformanceMonitor:
             if 'uvloop' in loop_class_name:
                 using_uvloop = True
                 event_loop_type = 'uvloop'
-        except:
+        except RuntimeError:
             # Fallback to checking sys.modules
             if 'uvloop' in sys.modules:
                 using_uvloop = True

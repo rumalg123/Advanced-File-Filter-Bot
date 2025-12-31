@@ -314,7 +314,7 @@ class ChannelHandler:
                                 f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
                                 f"Consider reducing the indexing rate or increasing queue size."
                             )
-                        except:
+                        except Exception:
                             pass
         except Exception as e:
             logger.error(f"Error adding message to queue: {e}")
@@ -367,7 +367,7 @@ class ChannelHandler:
                     self.bot.config.LOG_CHANNEL,
                     summary
                 )
-            except:
+            except Exception:
                 pass
 
     async def _process_single_message(self, message: Message) -> str:

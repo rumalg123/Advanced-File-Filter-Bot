@@ -103,7 +103,7 @@ class SecureUpdater:
                         content = indicator.read_text()
                         if "docker" in content or "containerd" in content:
                             return True
-                    except:
+                    except (IOError, OSError):
                         pass
                 else:
                     return True

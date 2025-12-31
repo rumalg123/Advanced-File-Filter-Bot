@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Optional, List, Tuple
 
@@ -47,7 +48,7 @@ class FilterService:
             try:
                 chat = await client.get_chat(group_id)
                 return int(group_id), chat.title
-            except:
+            except Exception:
                 return int(group_id), f"Group {group_id}"
         else:
             # Use current chat in groups
@@ -171,7 +172,7 @@ class FilterService:
         """Check if text matches any filter and send response"""
         keywords = await self.get_all_filters(group_id)
 
-        for keyword in reversed(sorted(keywords, key=len)):
+        for keyword in sorted(keywords, key=len, reverse=True):
             pattern = r"( |^|[^\w])" + re.escape(keyword) + r"( |$|[^\w])"
             if re.search(pattern, text, flags=re.IGNORECASE):
                 reply_text, btn, alert, fileid = await self.get_filter(
@@ -208,7 +209,7 @@ class FilterService:
                         )
                     else:
                         # Text with buttons
-                        button = eval(btn)
+                        button = json.loads(btn)
                         await client.send_message(
                             message.chat.id,
                             reply_text,
@@ -228,7 +229,7 @@ class FilterService:
                             reply_to_message_id=reply_id
                         )
                     else:
-                        button = eval(btn)
+                        button = json.loads(btn)
                         await client.send_cached_media(
                             message.chat.id,
                             fileid,

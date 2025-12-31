@@ -92,7 +92,7 @@ class FilterHandler(BaseCommandHandler):
         import shlex
         try:
             return shlex.split(text)
-        except:
+        except ValueError:
             return text.split(None, 1)
 
     async def add_filter_command(self, client: Client, message: Message):
@@ -226,7 +226,7 @@ class FilterHandler(BaseCommandHandler):
             if len(args) < 2:
                 raise ValueError("No filter names provided")
             filters_to_delete = args[1:]
-        except:
+        except (ValueError, IndexError):
             return await message.reply_text(
                 "<i>Mention the filtername which you wanna delete!</i>\n"
                 "<code>/del filtername</code>\n"

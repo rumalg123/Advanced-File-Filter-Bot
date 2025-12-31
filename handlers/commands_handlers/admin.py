@@ -943,7 +943,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"❌ Unexpected error occurred",
                     parse_mode=ParseMode.HTML
                 )
-            except:
+            except Exception:
                 await message.reply_text(
                     f"🐚 <b>Shell Command Error</b>\n\n"
                     f"<b>Error:</b> {str(e)}\n\n"

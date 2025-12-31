@@ -391,12 +391,11 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(f"❌ {reason}")
             return
 
-        # Search for files with specific type
+        # Validate file type if specified
         from repositories.media import FileType
-        file_type_enum = None
         if file_type:
             try:
-                file_type_enum = FileType(file_type.lower())
+                FileType(file_type.lower())  # Validate the type exists
             except ValueError:
                 await message.reply_text("❌ Invalid file type.")
                 return
@@ -406,7 +405,7 @@ class DeepLinkHandler(BaseCommandHandler):
             user_id=user_id,
             query=search_query,
             chat_id=user_id,
-            file_type=file_type,
+            file_type=file_type.lower() if file_type else None,
             offset=0,
             limit=100  # Adjust based on your needs
         )
@@ -421,6 +420,17 @@ class DeepLinkHandler(BaseCommandHandler):
 
         # Send files
         await message.reply_text(f"📤 Sending {len(files)} {file_type or 'all'} files...")
+
+        # Pre-compute user info and admin status (avoid repeated lookups in loop)
+        user = await self.bot.user_repo.get_user(user_id)
+        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        is_owner = user_id == owner_id
+        should_track_retrieval = (
+            user and not user.is_premium and
+            not self.bot.config.DISABLE_PREMIUM and
+            not is_admin and not is_owner
+        )
 
         success_count = 0
         for file in files:
@@ -448,12 +458,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 success_count += 1
 
                 # Update retrieval count for non-premium, non-admin, non-owner users
-                user = await self.bot.user_repo.get_user(user_id)
-                is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
-                owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-                is_owner = user_id == owner_id
-
-                if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
+                if should_track_retrieval:
                     await self.bot.user_repo.increment_retrieval_count(user_id)
 
                 await asyncio.sleep(1)  # Avoid flooding

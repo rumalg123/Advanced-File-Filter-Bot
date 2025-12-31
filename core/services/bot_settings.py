@@ -439,7 +439,7 @@ class BotSettingsService:
                             result.append(int(item))
                         else:
                             result.append(item)
-                    except:
+                    except (ValueError, AttributeError):
                         result.append(item)
                 return result
             return []

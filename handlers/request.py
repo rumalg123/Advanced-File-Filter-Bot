@@ -203,7 +203,7 @@ class RequestHandler:
                 # Try to send PM notification
                 try:
                     await client.send_message(user_id, ban_msg)
-                except:
+                except Exception:
                     pass
 
                 # Log to admin channel

@@ -216,7 +216,7 @@ class DeleteHandler:
                         self.bot.config.LOG_CHANNEL,
                         "⚠️ Delete queue is full! Consider increasing queue size or processing rate."
                     )
-                except:
+                except Exception:
                     pass
 
     def _extract_file_info(self, message: Message) -> Dict[str, Any] | None:

@@ -1,5 +1,4 @@
 import asyncio
-from functools import lru_cache
 from typing import Dict
 
 from pyrogram.enums import ParseMode
@@ -149,12 +148,3 @@ class BroadcastService:
             await progress_callback(stats)
 
         return stats
-
-@lru_cache(maxsize=1)
-def get_broadcast_service(
-        user_repo: UserRepository,
-        cache_manager: CacheManager,
-        rate_limiter: RateLimiter
-) -> BroadcastService:
-    """Get singleton BroadcastService instance"""
-    return BroadcastService(user_repo, cache_manager, rate_limiter)

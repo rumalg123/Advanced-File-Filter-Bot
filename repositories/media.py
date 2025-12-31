@@ -104,7 +104,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         cache_key = CacheKeyGenerator.media(identifier)
         cached = await self.cache.get(cache_key)
         if cached:
-            return self._dict_to_entity(cached)
+            try:
+                return self._dict_to_entity(cached)
+            except (KeyError, TypeError, ValueError) as e:
+                # Cache data is corrupt, delete and fall through to DB lookup
+                logger.warning(f"Corrupt cache data for {identifier}, clearing: {e}")
+                await self.cache.delete(cache_key)
 
         if self.is_multi_db:
             # Search across all databases

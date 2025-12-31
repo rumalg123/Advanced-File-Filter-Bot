@@ -44,6 +44,7 @@ class FileStoreService:
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
         self.max_batch_cache_size = 100
         self.batch_cache_access_time = {}
+        self._batch_cache_lock = asyncio.Lock()  # Protect concurrent cache access
 
     async def _auto_delete_message(self, message: Message, delay: int):
         """Auto-delete message after delay"""
@@ -62,7 +63,7 @@ class FileStoreService:
         string = prefix + file_identifier
         return base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
 
-    def decode_file_identifier(self, encoded: str) -> Tuple[str|None, bool]:
+    def decode_file_identifier(self, encoded: str) -> Tuple[Optional[str], bool]:
         """
         Decode file identifier from shareable string
         Returns: (file_identifier, is_protected)
@@ -119,16 +120,17 @@ class FileStoreService:
 
     async def _cleanup_batch_cache(self):
         """Remove oldest entries if cache is too large"""
-        if len(self.batch_cache) > self.max_batch_cache_size:
-            # Sort by access time and remove oldest
-            sorted_keys = sorted(
-                self.batch_cache_access_time.items(),
-                key=lambda x: x[1]
-            )
-            to_remove = len(self.batch_cache) - self.max_batch_cache_size
-            for key, _ in sorted_keys[:to_remove]:
-                self.batch_cache.pop(key, None)
-                self.batch_cache_access_time.pop(key, None)
+        async with self._batch_cache_lock:
+            if len(self.batch_cache) > self.max_batch_cache_size:
+                # Sort by access time and remove oldest
+                sorted_keys = sorted(
+                    self.batch_cache_access_time.items(),
+                    key=lambda x: x[1]
+                )
+                to_remove = len(self.batch_cache) - self.max_batch_cache_size
+                for key, _ in sorted_keys[:to_remove]:
+                    self.batch_cache.pop(key, None)
+                    self.batch_cache_access_time.pop(key, None)
 
 
 
@@ -512,11 +514,9 @@ class FileStoreService:
             batch_identifier: str
     ) -> Optional[List[Dict[str, Any]]]:
         """Retrieve batch data from cache or download"""
+        # Check in-memory cache first
         if batch_identifier in self.batch_cache:
             self.batch_cache_access_time[batch_identifier] = time.time()
-            return self.batch_cache[batch_identifier]
-        # Check cache first
-        if batch_identifier in self.batch_cache:
             return self.batch_cache[batch_identifier]
 
         # Try to find file by identifier
@@ -534,11 +534,10 @@ class FileStoreService:
             with open(file_path, 'r', encoding='utf-8') as f:
                 batch_data = json.load(f)
 
-            # Cache for future use
-            self.batch_cache[batch_identifier] = batch_data
-
-            # Clean up
+            # Clean up downloaded file
             os.remove(file_path)
+
+            # Cache for future use
             if batch_data:
                 self.batch_cache[batch_identifier] = batch_data
                 self.batch_cache_access_time[batch_identifier] = time.time()

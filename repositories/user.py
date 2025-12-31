@@ -367,7 +367,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 if isinstance(activation_date, str):
                     activation_date = datetime.fromisoformat(activation_date)
 
-                expiry_date = activation_date + timedelta(days=30)
+                expiry_date = activation_date + timedelta(days=self.premium_duration_days)
                 if datetime.now(UTC) > expiry_date:
                     result[user_id] = (False, "Premium subscription expired")
                     expired_users.append(user_id)

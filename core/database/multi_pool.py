@@ -74,6 +74,7 @@ class MultiDatabaseManager:
             self._switch_lock = asyncio.Lock()  # Prevent race conditions in database switching
             self._circuit_breaker_lock = asyncio.Lock()  # Protect circuit breaker state changes
             self._db_state_lock = asyncio.Lock()  # Protect database active state changes
+            self._init_lock = asyncio.Lock()  # Prevent double initialization
 
             # Circuit breaker configuration from environment variables
             import os
@@ -82,14 +83,14 @@ class MultiDatabaseManager:
             self.half_open_max_calls: int = int(os.environ.get('DATABASE_HALF_OPEN_CALLS', '3'))
 
     async def initialize(
-        self, 
-        uris: List[str], 
+        self,
+        uris: List[str],
         names: List[str],
         size_limit_gb: float = 0.5,
         auto_switch: bool = True
     ) -> None:
         """Initialize multiple database connections"""
-        async with self._lock:
+        async with self._init_lock:
             if self.databases:  # Already initialized
                 return
 

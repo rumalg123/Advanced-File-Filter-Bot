@@ -114,8 +114,8 @@ class SubscriptionRequired:
                 try:
                     chat = await client.get_chat(bot.config.AUTH_CHANNEL)
                     channel_name = chat.title or f"Channel {bot.config.AUTH_CHANNEL}"
-                except:
-                    channel_name = f"Updates Channel"
+                except Exception:
+                    channel_name = "Updates Channel"
 
                 buttons.append([
                     InlineKeyboardButton(
@@ -138,8 +138,8 @@ class SubscriptionRequired:
                     try:
                         chat = await client.get_chat(group_id)
                         group_name = chat.title or f"Group {group_id}"
-                    except:
-                        group_name = f"Required Group"
+                    except Exception:
+                        group_name = "Required Group"
 
                     buttons.append([
                         InlineKeyboardButton(

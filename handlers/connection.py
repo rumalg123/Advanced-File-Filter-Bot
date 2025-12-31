@@ -210,7 +210,7 @@ class ConnectionHandler:
                         enums.ChatMemberStatus.OWNER
                     ]:
                         return
-                except:
+                except Exception:
                     return
 
             success, msg = await self.connection_service.disconnect_from_group(
@@ -265,7 +265,7 @@ class ConnectionHandler:
                     enums.ChatMemberStatus.OWNER
                 ]:
                     return await query.answer("You need admin rights!", show_alert=True)
-            except:
+            except Exception:
                 return await query.answer("Error checking permissions", show_alert=True)
 
         # Delete filters
