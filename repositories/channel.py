@@ -163,6 +163,7 @@ class ChannelRepository(BaseRepository[Channel]):
         """Increment indexed count and update last indexed time"""
         channel = await self.find_by_id(channel_id)
         if not channel:
+            logger.warning(f"Cannot update indexed count: channel {channel_id} not found")
             return False
 
         return await self.update(

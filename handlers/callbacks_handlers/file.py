@@ -34,16 +34,24 @@ class FileCallbackHandler(BaseCommandHandler):
         logger.info(f"handle_file_callback called for user {callback_user_id}, data: {query.data}")
 
         # Extract file identifier and original user_id
-        parts = query.data.split('#', 2)
-        logger.info(f"Callback data parts after split: {parts}")
-        if len(parts) < 3:
-            _, file_identifier = parts
-            original_user_id = callback_user_id  # Assume current user
-            logger.info(f"No original_user_id in callback, using current user: {callback_user_id}")
-        else:
-            _, file_identifier, original_user_id = parts
-            original_user_id = int(original_user_id)
-            logger.info(f"Original user_id from callback: {original_user_id}")
+        try:
+            parts = query.data.split('#', 2)
+            logger.info(f"Callback data parts after split: {parts}")
+            if len(parts) < 2:
+                await query.answer("❌ Invalid callback data", show_alert=True)
+                return
+
+            file_identifier = parts[1]
+            if len(parts) >= 3:
+                original_user_id = int(parts[2])
+                logger.info(f"Original user_id from callback: {original_user_id}")
+            else:
+                original_user_id = callback_user_id  # Assume current user
+                logger.info(f"No original_user_id in callback, using current user: {callback_user_id}")
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid callback data format: {query.data}, error: {e}")
+            await query.answer("❌ Invalid request format", show_alert=True)
+            return
 
         logger.info(f"File identifier extracted: {file_identifier}")
 
@@ -161,13 +169,21 @@ class FileCallbackHandler(BaseCommandHandler):
         logger.info(f"handle_sendall_callback called for user {callback_user_id}, data: {query.data}")
 
         # Extract search key and original user_id
-        parts = query.data.split('#', 2)
-        if len(parts) < 3:
-            _, search_key = parts
-            original_user_id = callback_user_id
-        else:
-            _, search_key, original_user_id = parts
-            original_user_id = int(original_user_id)
+        try:
+            parts = query.data.split('#', 2)
+            if len(parts) < 2:
+                await query.answer("❌ Invalid callback data", show_alert=True)
+                return
+
+            search_key = parts[1]
+            if len(parts) >= 3:
+                original_user_id = int(parts[2])
+            else:
+                original_user_id = callback_user_id
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid sendall callback data: {query.data}, error: {e}")
+            await query.answer("❌ Invalid request format", show_alert=True)
+            return
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
@@ -352,8 +368,8 @@ class FileCallbackHandler(BaseCommandHandler):
                             f"✅ Success: {success_count}\n"
                             f"❌ Failed: {failed_count}"
                         )
-                    except:
-                        pass
+                    except Exception:
+                        pass  # Status message update is non-critical
 
                 # Small delay to avoid flooding
                 await asyncio.sleep(1)
@@ -382,7 +398,8 @@ class FileCallbackHandler(BaseCommandHandler):
                         )
                         sent_messages.append(sent_msg)
                         success_count += 1
-                    except:
+                    except Exception as e:
+                        logger.debug(f"Failed to resend file after FloodWait: {e}")
                         failed_count += 1
                 else:
                     failed_count += 1
@@ -493,8 +510,8 @@ class FileCallbackHandler(BaseCommandHandler):
                 reply_markup=InlineKeyboardMarkup(buttons),
                 disable_web_page_preview=True
             )
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to send subscription message: {e}")
 
     async def _send_subscription_message_for_sendall(self, client: Client, query: CallbackQuery, search_key: str):
         """Send subscription required message for sendall callback"""
@@ -564,5 +581,5 @@ class FileCallbackHandler(BaseCommandHandler):
                 reply_markup=InlineKeyboardMarkup(buttons),
                 disable_web_page_preview=True
             )
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to send subscription message for sendall: {e}")

@@ -5,6 +5,7 @@ Provides bounded concurrency for different operation domains
 
 import asyncio
 import time
+from functools import wraps
 from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
@@ -229,6 +230,7 @@ semaphore_manager = SemaphoreManager()
 def with_concurrency_limit(domain: str, operation_id: Optional[str] = None):
     """Decorator to add concurrency limiting to async functions"""
     def decorator(func):
+        @wraps(func)
         async def wrapper(*args, **kwargs):
             async with semaphore_manager.acquire(domain, operation_id):
                 return await func(*args, **kwargs)

@@ -30,7 +30,8 @@ class CacheManager:
                     self.redis_url,
                     decode_responses=False,
                     max_connections=self._max_connections,
-                    # Remove socket_keepalive options entirely as they're causing issues
+                    socket_timeout=30.0,  # Timeout for socket operations
+                    socket_connect_timeout=10.0,  # Timeout for initial connection
                 )
 
                 # Test connection

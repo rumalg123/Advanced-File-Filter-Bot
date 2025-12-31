@@ -9,12 +9,16 @@ class FilterCallBackHandler(BaseCommandHandler):
 
     async def handle_filter_alert_callback(self, client: Client, query: CallbackQuery):
         """Handle filter alert callbacks"""
-        data = query.data.split(":")
-        if len(data) < 3:
-            return await query.answer("Invalid data", show_alert=True)
+        try:
+            data = query.data.split(":")
+            if len(data) < 3:
+                return await query.answer("Invalid data", show_alert=True)
 
-        _, alert_index, keyword = data
-        alert_index = int(alert_index)
+            _, alert_index, keyword = data[0], data[1], ":".join(data[2:])  # Handle keywords with colons
+            alert_index = int(alert_index)
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid filter alert callback: {query.data}, error: {e}")
+            return await query.answer("Invalid data format", show_alert=True)
 
         # Get the filter to find alerts
         if not query.message:
@@ -37,8 +41,16 @@ class FilterCallBackHandler(BaseCommandHandler):
     async def handle_delall_confirm_callback(self, client: Client, query: CallbackQuery):
         """Handle delete all filters confirmation"""
         user_id = query.from_user.id
-        _, group_id = query.data.split("#")
-        group_id = int(group_id)
+
+        # Parse callback data safely
+        try:
+            parts = query.data.split("#", 1)
+            if len(parts) < 2:
+                return await query.answer("Invalid callback data", show_alert=True)
+            group_id = int(parts[1])
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid delall callback: {query.data}, error: {e}")
+            return await query.answer("Invalid data format", show_alert=True)
 
         # Check permissions
         try:
@@ -47,7 +59,8 @@ class FilterCallBackHandler(BaseCommandHandler):
                     member.status == enums.ChatMemberStatus.OWNER or
                     user_id in self.bot.config.ADMINS
             )
-        except:
+        except Exception as e:
+            logger.debug(f"Could not get chat member for permission check: {e}")
             is_authorized = user_id in self.bot.config.ADMINS
 
         if not is_authorized:
@@ -63,7 +76,7 @@ class FilterCallBackHandler(BaseCommandHandler):
             try:
                 chat = await client.get_chat(group_id)
                 title = chat.title
-            except:
+            except Exception:
                 title = f"Group {group_id}"
 
             await query.message.edit_text(f"All filters from {title} has been removed")
@@ -75,5 +88,5 @@ class FilterCallBackHandler(BaseCommandHandler):
         await query.message.delete()
         try:
             await query.message.reply_to_message.delete()
-        except:
-            pass
+        except Exception:
+            pass  # Reply message may already be deleted or inaccessible

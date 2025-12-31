@@ -5,7 +5,7 @@ from pathlib import Path
 import aiohttp_cors
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
-from core.utils.performance import performance_monitor, PerformanceMonitor
+from core.utils.performance import performance_monitor
 from handlers.manager import HandlerManager
 
 UVLOOP_AVAILABLE = False
@@ -64,8 +64,6 @@ import core.utils.messages as default_messages
 from config import settings
 
 logger = get_logger(__name__)
-
-performance_monitor = PerformanceMonitor()
 
 
 class BotConfig:

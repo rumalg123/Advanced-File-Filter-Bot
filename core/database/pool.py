@@ -92,8 +92,8 @@ class DatabaseConnectionPool:
                 # Close all connections in the pool
                 self._client.close()
 
-                # Wait a bit for connections to close gracefully
-                await asyncio.sleep(0.5)
+                # Wait for pending operations to complete
+                await asyncio.sleep(0.1)
 
                 self._client = None
                 self._database = None

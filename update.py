@@ -6,6 +6,7 @@ This script safely updates the bot from a git repository with proper validation,
 backup creation, and rollback capabilities.
 """
 
+import ast
 import os
 import sys
 import shutil
@@ -214,7 +215,8 @@ class SecureUpdater:
         for file_name in python_files:
             try:
                 with open(source_dir / file_name, 'r', encoding='utf-8') as f:
-                    compile(f.read(), file_name, 'exec')
+                    # Use ast.parse instead of compile for safer syntax validation
+                    ast.parse(f.read(), filename=file_name)
             except SyntaxError as e:
                 logger.error(f"Syntax error in {file_name}: {e}")
                 return False
