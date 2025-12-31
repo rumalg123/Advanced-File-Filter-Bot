@@ -31,5 +31,5 @@ Pillow  # For image processing
 python-dateutil  # For date handling
 
 backoff
-uvloop==0.21.0
+uvloop==0.21.0; platform_system == "Linux"
 vulture
