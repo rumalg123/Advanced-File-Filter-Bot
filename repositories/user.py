@@ -313,7 +313,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         return True, f"Premium active ({days_remaining} days remaining)"
     
     async def batch_check_premium_status(
-        self, 
+        self,
         user_ids: List[int]
     ) -> Dict[int, Tuple[bool, Optional[str]]]:
         """
@@ -322,25 +322,103 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """
         if not user_ids:
             return {}
-        
-        # Use batch optimization if available, fallback to individual checks
+
+        # Use batch optimization if available
         if self.batch_ops:
             try:
                 return await self.batch_ops.batch_premium_status_check(user_ids)
             except Exception as e:
                 logger.warning(f"Batch premium check failed, falling back: {e}")
-        
-        # Fallback to individual checks
-        result = {}
-        for user_id in user_ids:
-            user = await self.get_user(user_id)
-            if user:
-                status, message = await self.check_and_update_premium_status(user)
-                result[user_id] = (status, message)
-            else:
-                result[user_id] = (False, None)
-        
-        return result
+
+        # Inline fallback using batch $in query instead of N+1 individual queries
+        try:
+            collection = await self.get_collection()
+
+            # Single batch query using $in operator
+            cursor = collection.find(
+                {"_id": {"$in": user_ids}},
+                {"_id": 1, "is_premium": 1, "premium_activation_date": 1}
+            )
+            user_docs = await cursor.to_list(length=len(user_ids))
+
+            # Build result map from batch query
+            result = {}
+            users_by_id = {doc["_id"]: doc for doc in user_docs}
+            expired_users = []
+
+            for user_id in user_ids:
+                if user_id not in users_by_id:
+                    result[user_id] = (False, None)
+                    continue
+
+                doc = users_by_id[user_id]
+                if not doc.get("is_premium", False):
+                    result[user_id] = (False, None)
+                    continue
+
+                # Check if premium is still active
+                activation_date = doc.get("premium_activation_date")
+                if not activation_date:
+                    result[user_id] = (False, "Premium subscription expired")
+                    expired_users.append(user_id)
+                    continue
+
+                # Parse activation date if needed
+                if isinstance(activation_date, str):
+                    activation_date = datetime.fromisoformat(activation_date)
+
+                expiry_date = activation_date + timedelta(days=30)
+                if datetime.now(UTC) > expiry_date:
+                    result[user_id] = (False, "Premium subscription expired")
+                    expired_users.append(user_id)
+                else:
+                    days_remaining = (expiry_date - datetime.now(UTC)).days
+                    result[user_id] = (True, f"Premium active ({days_remaining} days remaining)")
+
+            # Batch expire users who have expired premium
+            if expired_users:
+                await self._batch_expire_premium(expired_users)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Inline batch premium check also failed: {e}")
+            # Final fallback to individual queries (worst case)
+            result = {}
+            for user_id in user_ids:
+                user = await self.get_user(user_id)
+                if user:
+                    status, message = await self.check_and_update_premium_status(user)
+                    result[user_id] = (status, message)
+                else:
+                    result[user_id] = (False, None)
+            return result
+
+    async def _batch_expire_premium(self, user_ids: List[int]) -> None:
+        """Batch expire premium for multiple users"""
+        if not user_ids:
+            return
+
+        try:
+            collection = await self.get_collection()
+            await self.db_pool.execute_with_retry(
+                collection.update_many,
+                {"_id": {"$in": user_ids}},
+                {"$set": {
+                    "is_premium": False,
+                    "premium_activation_date": None,
+                    "updated_at": datetime.now(UTC)
+                }}
+            )
+
+            # Invalidate cache for all affected users
+            for user_id in user_ids:
+                cache_key = self._get_cache_key(user_id)
+                await self.cache.delete(cache_key)
+
+            logger.info(f"Batch expired premium for {len(user_ids)} users")
+        except Exception as e:
+            logger.error(f"Batch premium expiration failed: {e}")
 
     async def increment_retrieval_count(self, user_id: int) -> int:
         """Increment daily retrieval count using atomic operation to prevent race conditions"""
@@ -476,6 +554,116 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         else:
             logger.error(f"Failed to batch increment count for user {user_id}")
         return 0
+
+    async def reserve_quota_atomic(self, user_id: int, requested_count: int, daily_limit: int) -> Tuple[bool, int, str]:
+        """
+        Atomically reserve quota for file retrieval.
+        Uses increment-first approach to prevent race conditions.
+
+        Returns: (success, reserved_count, message)
+        - If success: returns the count that was reserved
+        - If failed: returns 0 and the reason
+        """
+        if requested_count <= 0:
+            return True, 0, "No quota needed"
+
+        today = date.today()
+        today_str = today.isoformat()
+
+        # Get user to check current state
+        user = await self.get_user(user_id)
+        if not user:
+            await self.create_user(user_id, "User")
+            user = await self.get_user(user_id)
+            if not user:
+                return False, 0, "Failed to create user"
+
+        # If it's a new day, reset count first
+        collection = await self.get_collection()
+
+        if user.last_retrieval_date != today:
+            # New day - reset and set to requested_count atomically
+            if requested_count > daily_limit:
+                return False, 0, f"Requested {requested_count} exceeds daily limit of {daily_limit}"
+
+            result = await self.db_pool.execute_with_retry(
+                collection.find_one_and_update,
+                {'_id': user_id},
+                {
+                    '$set': {
+                        'daily_retrieval_count': requested_count,
+                        'last_retrieval_date': today_str,
+                        'updated_at': datetime.now(UTC)
+                    }
+                },
+                return_document=True
+            )
+
+            if result:
+                await self.cache.delete(CacheKeyGenerator.user(user_id))
+                return True, requested_count, f"Reserved {requested_count} quota (new day)"
+            return False, 0, "Failed to reserve quota"
+
+        # Same day - atomically increment and check
+        # First, calculate what the new total would be
+        current_count = user.daily_retrieval_count
+        projected_total = current_count + requested_count
+
+        if projected_total > daily_limit:
+            remaining = daily_limit - current_count
+            if remaining <= 0:
+                return False, 0, "Daily limit reached"
+            return False, 0, f"Can only retrieve {remaining} more files today"
+
+        # Atomically increment
+        result = await self.db_pool.execute_with_retry(
+            collection.find_one_and_update,
+            {
+                '_id': user_id,
+                'daily_retrieval_count': {'$lte': daily_limit - requested_count}  # Guard condition
+            },
+            {
+                '$inc': {'daily_retrieval_count': requested_count},
+                '$set': {
+                    'last_retrieval_date': today_str,
+                    'updated_at': datetime.now(UTC)
+                }
+            },
+            return_document=True
+        )
+
+        if result:
+            new_count = result.get('daily_retrieval_count', 0)
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            logger.info(f"Reserved {requested_count} quota for user {user_id}, new total: {new_count}")
+            return True, requested_count, f"Reserved {requested_count} quota"
+
+        # Guard condition failed - someone else took the quota
+        logger.warning(f"Quota reservation failed for user {user_id} - concurrent access detected")
+        return False, 0, "Quota changed during reservation, please try again"
+
+    async def release_quota(self, user_id: int, count: int) -> bool:
+        """
+        Release previously reserved quota (e.g., when files fail to send).
+        This decrements the count to give back unused quota.
+        """
+        if count <= 0:
+            return True
+
+        collection = await self.get_collection()
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {'_id': user_id, 'daily_retrieval_count': {'$gte': count}},
+            {'$inc': {'daily_retrieval_count': -count}}
+        )
+
+        if result.modified_count > 0:
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            logger.info(f"Released {count} quota for user {user_id}")
+            return True
+
+        logger.warning(f"Failed to release {count} quota for user {user_id}")
+        return False
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""

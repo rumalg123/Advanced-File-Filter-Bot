@@ -294,23 +294,32 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(f"❌ {reason}", show_alert=True)
             return
 
-        # Check if user has enough quota for all files
-        # Force fresh fetch from DB, not cache, to get accurate count
-        await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
-        user = await self.bot.user_repo.get_user(user_id)
-
-        # Check if user is admin or owner
+        # Check if user is admin or owner (they bypass quota)
         is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
         owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
         is_owner = user_id == owner_id
 
-        # Only check quota for non-premium, non-admin, non-owner users
-        if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
-            remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
-            if remaining < len(files_data):
+        # Get user for premium check
+        user = await self.bot.user_repo.get_user(user_id)
+        needs_quota = (
+            user and
+            not user.is_premium and
+            not self.bot.config.DISABLE_PREMIUM and
+            not is_admin and
+            not is_owner
+        )
+
+        # Reserve quota atomically BEFORE sending files (prevents race conditions)
+        reserved_count = 0
+        if needs_quota:
+            success, reserved_count, message = await self.bot.user_repo.reserve_quota_atomic(
+                user_id,
+                len(files_data),
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT
+            )
+            if not success:
                 await query.answer(
-                    f"❌ You can only retrieve {remaining} more files today. "
-                    f"Upgrade to premium for unlimited access!",
+                    f"❌ {message}. Upgrade to premium for unlimited access!",
                     show_alert=True
                 )
                 return
@@ -430,14 +439,13 @@ class FileCallbackHandler(BaseCommandHandler):
                 logger.error(f"Error sending file: {e}")
                 failed_count += 1
 
-        # Increment retrieval count for all successfully sent files at once (batch operation)
-        # Only increment for non-premium, non-admin, non-owner users
-        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
-        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        is_owner = user_id == owner_id
-
-        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
-            await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
+        # Release unused quota if some files failed (quota was reserved upfront)
+        # The quota was already reserved at the start, so we only need to release
+        # the difference between reserved and actually sent files
+        if needs_quota and reserved_count > 0:
+            unused_quota = reserved_count - success_count
+            if unused_quota > 0:
+                await self.bot.user_repo.release_quota(user_id, unused_quota)
 
         # Final status
         final_text = (

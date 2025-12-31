@@ -199,7 +199,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             return False, 2, None
 
     async def batch_check_duplicates(
-        self, 
+        self,
         media_files: List[MediaFile]
     ) -> Dict[str, Optional[MediaFile]]:
         """
@@ -208,21 +208,50 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """
         if not media_files:
             return {}
-        
-        # Use batch optimization if available, fallback to individual checks
+
+        # Use batch optimization if available
         if self.batch_ops:
             try:
                 return await self.batch_ops.batch_duplicate_check(media_files)
             except Exception as e:
                 logger.warning(f"Batch duplicate check failed, falling back: {e}")
-        
-        # Fallback to individual duplicate checks
-        result = {}
-        for media in media_files:
-            existing = await self.find_file(media.file_unique_id)
-            result[media.file_unique_id] = existing
-        
-        return result
+
+        # Inline fallback using batch $in query instead of N+1 individual queries
+        try:
+            unique_ids = [media.file_unique_id for media in media_files]
+            collection = await self.get_collection()
+
+            # Single batch query using $in operator
+            cursor = collection.find(
+                {"file_unique_id": {"$in": unique_ids}},
+                {"file_unique_id": 1, "_id": 1, "file_name": 1, "file_size": 1,
+                 "file_type": 1, "file_ref": 1, "mime_type": 1, "caption": 1,
+                 "indexed_at": 1, "updated_at": 1}
+            )
+            existing_docs = await cursor.to_list(length=len(unique_ids))
+
+            # Build result map from batch query results
+            result = {}
+            existing_by_unique_id = {doc["file_unique_id"]: doc for doc in existing_docs}
+
+            for media in media_files:
+                if media.file_unique_id in existing_by_unique_id:
+                    result[media.file_unique_id] = self._dict_to_entity(
+                        existing_by_unique_id[media.file_unique_id]
+                    )
+                else:
+                    result[media.file_unique_id] = None
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Inline batch duplicate check also failed: {e}")
+            # Final fallback to individual queries (worst case)
+            result = {}
+            for media in media_files:
+                existing = await self.find_file(media.file_unique_id)
+                result[media.file_unique_id] = existing
+            return result
 
     async def search_files(
             self,
@@ -236,15 +265,21 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         Search for files across all databases
         Returns: (files, next_offset, total_count)
         """
-        # Generate cache key
+        # Get current cache version for versioned cache keys
+        cache_version = await self.cache_invalidator.get_search_cache_version()
+
+        # Generate versioned cache key
         normalized_query = normalize_query(query)
-        cache_key = CacheKeyGenerator.search_results(
+        base_cache_key = CacheKeyGenerator.search_results(
             query,
             file_type.value if file_type else None,
             offset,
             limit,
             use_caption
         )
+        # Include version in cache key - when version changes, old keys become stale
+        cache_key = f"{base_cache_key}:v{cache_version}"
+
         cached = await self.cache.get(cache_key)
         if cached:
             return (

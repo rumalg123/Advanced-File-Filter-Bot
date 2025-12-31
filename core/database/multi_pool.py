@@ -52,14 +52,17 @@ class MultiDatabaseManager:
     """Manager for multiple database connections with automatic failover"""
 
     _instance: Optional['MultiDatabaseManager'] = None
-    _lock = asyncio.Lock()
+    _creation_lock = asyncio.Lock()
 
     def __new__(cls) -> 'MultiDatabaseManager':
+        # Note: This is not fully thread-safe, but acceptable for singleton pattern
+        # The real thread-safety is ensured by _init_lock in __init__
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
+        # Use a reentrant check that's safe for asyncio context
         if not hasattr(self, '_initialized'):
             self._initialized = True
             self.databases: List[DatabaseInfo] = []
@@ -69,7 +72,9 @@ class MultiDatabaseManager:
             self._stats_cache: Dict[str, Any] = {}
             self._stats_cache_time: float = 0
             self._switch_lock = asyncio.Lock()  # Prevent race conditions in database switching
-            
+            self._circuit_breaker_lock = asyncio.Lock()  # Protect circuit breaker state changes
+            self._db_state_lock = asyncio.Lock()  # Protect database active state changes
+
             # Circuit breaker configuration from environment variables
             import os
             self.max_failures: int = int(os.environ.get('DATABASE_MAX_FAILURES', '5'))
@@ -346,7 +351,7 @@ class MultiDatabaseManager:
                     collections.append(collection)
                 except Exception as e:
                     logger.error(f"Error getting collection from {db_info.name}: {e}")
-                    db_info.is_active = False
+                    await self._mark_database_inactive(db_info, f"get_collection failed: {e}")
         return collections
 
     async def find_file_in_all_databases(
@@ -487,10 +492,10 @@ class MultiDatabaseManager:
             # Get ALL matching results (no limit) for proper cross-database sorting
             # We'll apply the overall limit after combining all results
             return await cursor.to_list(length=None)
-            
+
         except Exception as e:
             logger.error(f"Error getting all matching from database {db_info.name}: {e}")
-            db_info.is_active = False
+            await self._mark_database_inactive(db_info, f"search query failed: {e}")
             return []
 
 
@@ -549,67 +554,90 @@ class MultiDatabaseManager:
             # Normal operation
             return True
 
-    def _record_success(self, db_info: DatabaseInfo) -> None:
-        """Record a successful operation"""
-        circuit = db_info.circuit_breaker
-        circuit.last_success_time = datetime.now()
-        
-        if circuit.state == CircuitBreakerState.HALF_OPEN:
-            # Success in HALF_OPEN state, reset circuit breaker
-            circuit.state = CircuitBreakerState.CLOSED
-            circuit.failure_count = 0
-            logger.info(f"Circuit breaker for {db_info.name} CLOSED (recovery successful)")
-        elif circuit.state == CircuitBreakerState.CLOSED:
-            # Reset failure count on successful operation
-            circuit.failure_count = 0
+    async def _record_success(self, db_info: DatabaseInfo) -> None:
+        """Record a successful operation (thread-safe)"""
+        async with self._circuit_breaker_lock:
+            circuit = db_info.circuit_breaker
+            circuit.last_success_time = datetime.now()
 
-    def _record_failure(self, db_info: DatabaseInfo, error: Exception) -> None:
-        """Record a failed operation and update circuit breaker state"""
-        circuit = db_info.circuit_breaker
-        circuit.failure_count += 1
-        circuit.last_failure_time = datetime.now()
-        
-        if circuit.failure_count >= self.max_failures:
-            if circuit.state != CircuitBreakerState.OPEN:
-                circuit.state = CircuitBreakerState.OPEN
-                db_info.is_active = False  # Mark database as inactive
-                logger.error(
-                    f"🔴 Circuit breaker OPENED for database {db_info.name} "
-                    f"after {circuit.failure_count} failures. Last error: {error}"
+            if circuit.state == CircuitBreakerState.HALF_OPEN:
+                # Success in HALF_OPEN state, reset circuit breaker
+                circuit.state = CircuitBreakerState.CLOSED
+                circuit.failure_count = 0
+                logger.info(f"Circuit breaker for {db_info.name} CLOSED (recovery successful)")
+            elif circuit.state == CircuitBreakerState.CLOSED:
+                # Reset failure count on successful operation
+                circuit.failure_count = 0
+
+    async def _record_failure(self, db_info: DatabaseInfo, error: Exception) -> None:
+        """Record a failed operation and update circuit breaker state (thread-safe)"""
+        should_deactivate = False
+
+        async with self._circuit_breaker_lock:
+            circuit = db_info.circuit_breaker
+            circuit.failure_count += 1
+            circuit.last_failure_time = datetime.now()
+
+            if circuit.failure_count >= self.max_failures:
+                if circuit.state != CircuitBreakerState.OPEN:
+                    circuit.state = CircuitBreakerState.OPEN
+                    should_deactivate = True
+                    logger.error(
+                        f"🔴 Circuit breaker OPENED for database {db_info.name} "
+                        f"after {circuit.failure_count} failures. Last error: {error}"
+                    )
+            else:
+                logger.warning(
+                    f"Database {db_info.name} failure {circuit.failure_count}/{self.max_failures}: {error}"
                 )
-        else:
-            logger.warning(
-                f"Database {db_info.name} failure {circuit.failure_count}/{self.max_failures}: {error}"
-            )
+
+        # Acquire db_state_lock separately to avoid nested locks
+        if should_deactivate:
+            async with self._db_state_lock:
+                db_info.is_active = False
+
+    async def _mark_database_inactive(self, db_info: DatabaseInfo, reason: str) -> None:
+        """Mark a database as inactive in a thread-safe way"""
+        async with self._db_state_lock:
+            if db_info.is_active:
+                db_info.is_active = False
+                logger.warning(f"Database {db_info.name} marked inactive: {reason}")
+
+    async def _mark_database_active(self, db_info: DatabaseInfo, reason: str) -> None:
+        """Mark a database as active in a thread-safe way"""
+        async with self._db_state_lock:
+            if not db_info.is_active:
+                db_info.is_active = True
+                logger.info(f"Database {db_info.name} marked active: {reason}")
 
     async def _execute_with_circuit_breaker(self, db_info: DatabaseInfo, _operation_name: str, operation) -> Any:
         """
         Execute database operation with circuit breaker protection
-        
+
         Args:
             db_info: Database information
             _operation_name: Name of the operation for logging (currently unused)
             operation: Async callable to execute
-            
+
         Returns: Operation result
         Raises: Exception if circuit is OPEN or operation fails
         """
         # Check if circuit breaker allows this operation
         if not self._check_circuit_breaker(db_info):
             raise Exception(f"Circuit breaker OPEN for database {db_info.name}")
-            
+
         try:
             # Execute the operation
             result = await operation()
-            
-            # Record success
-            self._record_success(db_info)
-            
+
+            # Record success (async for thread-safety)
+            await self._record_success(db_info)
+
             return result
-            
+
         except Exception as e:
-            # Record failure and update circuit breaker
-            self._record_failure(db_info, e)
+            # Record failure and update circuit breaker (async for thread-safety)
+            await self._record_failure(db_info, e)
             raise e
 
     async def _update_database_stats_with_circuit_breaker(self, force: bool = False) -> None:
@@ -645,8 +673,7 @@ class MultiDatabaseManager:
                 
                 # If database was inactive due to circuit breaker, mark as active
                 if not db_info.is_active and db_info.circuit_breaker.state == CircuitBreakerState.CLOSED:
-                    db_info.is_active = True
-                    logger.info(f"Database {db_info.name} marked as active (circuit breaker closed)")
+                    await self._mark_database_active(db_info, "circuit breaker closed")
                 
                 logger.debug(f"Database {db_info.name}: {db_info.size_gb:.3f}GB, {db_info.files_count} files")
                 
