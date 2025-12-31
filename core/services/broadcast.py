@@ -1,8 +1,8 @@
 import asyncio
 from typing import Dict
 
-from pyrogram.enums import ParseMode
 from core.cache.redis_cache import CacheManager
+from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
 from core.utils.telegram_api import telegram_api
@@ -88,7 +88,7 @@ class BroadcastService:
                             await telegram_api.call_api(
                                 client.send_message, 
                                 user_id, message.text, 
-                                parse_mode=ParseMode.HTML,
+                                parse_mode=CaptionFormatter.get_parse_mode(),
                                 chat_id=user_id
                             )
                         elif message.caption:
@@ -96,7 +96,7 @@ class BroadcastService:
                             await telegram_api.call_api(
                                 message.copy, 
                                 user_id, 
-                                parse_mode=ParseMode.HTML,
+                                parse_mode=CaptionFormatter.get_parse_mode(),
                                 chat_id=user_id
                             )
                         else:
@@ -111,7 +111,7 @@ class BroadcastService:
                         await telegram_api.call_api(
                             client.send_message, 
                             user_id, str(message), 
-                            parse_mode=ParseMode.HTML,
+                            parse_mode=CaptionFormatter.get_parse_mode(),
                             chat_id=user_id
                         )
 

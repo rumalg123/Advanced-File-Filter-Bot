@@ -10,9 +10,9 @@ from typing import Dict, List
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.enums import ParseMode
 
 from core.cache.monitor import CacheMonitor
+from core.utils.caption import CaptionFormatter
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.performance import performance_monitor
@@ -87,7 +87,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 "• Can broadcast text, photos, videos, documents\n"
                 "• Use HTML tags: <b>bold</b>, <i>italic</i>, <code>code</code>\n"
                 "• Confirmation buttons for safety",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
 
@@ -152,7 +152,7 @@ class AdminCommandHandler(BaseCommandHandler):
             'admin_message_id': message.id
         }
 
-        await message.reply_text(preview_text, reply_markup=buttons, parse_mode=ParseMode.HTML)
+        await message.reply_text(preview_text, reply_markup=buttons, parse_mode=CaptionFormatter.get_parse_mode())
 
     async def handle_broadcast_confirmation(self, client: Client, callback_query):
         """Handle broadcast confirmation callback"""
@@ -206,7 +206,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         )
 
                         try:
-                            await callback_query.message.edit_text(text, parse_mode=ParseMode.HTML)
+                            await callback_query.message.edit_text(text, parse_mode=CaptionFormatter.get_parse_mode())
                         except FloodWait as e:
                             await asyncio.sleep(e.value)
                 except Exception as e:
@@ -241,7 +241,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"⚠️ Failed: {final_stats['failed']:,}"
                 )
 
-                await callback_query.message.edit_text(final_text, parse_mode=ParseMode.HTML)
+                await callback_query.message.edit_text(final_text, parse_mode=CaptionFormatter.get_parse_mode())
 
                 # Log broadcast
                 if self.bot.config.LOG_CHANNEL:
@@ -251,14 +251,14 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"Admin: {callback_query.from_user.mention}\n"
                         f"Total: {final_stats['total']:,}\n"
                         f"Success: {final_stats['success']:,}",
-                        parse_mode=ParseMode.HTML
+                        parse_mode=CaptionFormatter.get_parse_mode()
                     )
 
             except asyncio.CancelledError:
                 await callback_query.message.edit_text(
                     "🛑 <b>Broadcast Stopped</b>\n\n"
                     "The broadcast was manually stopped by an admin.",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 # Reset rate limit when broadcast is cancelled
                 await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
@@ -267,7 +267,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 await callback_query.message.edit_text(
                     f"❌ <b>Broadcast Failed</b>\n\n"
                     f"Error: {str(e)}",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 # Reset rate limit when broadcast fails
                 await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
@@ -321,13 +321,13 @@ class AdminCommandHandler(BaseCommandHandler):
                 self.bot._active_broadcast_task = None
         
         if task_cancelled:
-            await message.reply_text("🛑 <b>Broadcast stopped!</b>\n\nThe ongoing broadcast has been cancelled.", parse_mode=ParseMode.HTML)
+            await message.reply_text("🛑 <b>Broadcast stopped!</b>\n\nThe ongoing broadcast has been cancelled.", parse_mode=CaptionFormatter.get_parse_mode())
         else:
             # Handle case where bot was restarted but broadcast state persisted
             await message.reply_text(
                 "🛑 <b>Broadcast state cleared!</b>\n\n"
                 "The broadcast was likely interrupted by a restart. State has been reset.",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
 
     @admin_only
@@ -339,7 +339,7 @@ class AdminCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 "✅ <b>Broadcast Rate Limit Reset</b>\n\n"
                 "You can now use the broadcast command again.",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             logger.info(f"Admin {user_id} reset their broadcast rate limit")
         except Exception as e:
@@ -467,7 +467,7 @@ class AdminCommandHandler(BaseCommandHandler):
     async def add_premium_command(self, client: Client, message: Message):
         """Add premium status to user"""
         if len(message.command) < 2:
-            await message.reply_text("<b>Usage:</b> <code>/addpremium &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
+            await message.reply_text("<b>Usage:</b> <code>/addpremium &lt;user_id&gt;</code>", parse_mode=CaptionFormatter.get_parse_mode())
             return
 
         try:
@@ -516,7 +516,7 @@ class AdminCommandHandler(BaseCommandHandler):
     async def remove_premium_command(self, client: Client, message: Message):
         """Remove premium status from user"""
         if len(message.command) < 2:
-            await message.reply_text("<b>Usage:</b> <code>/removepremium &lt;user_id&gt;</code>", parse_mode=ParseMode.HTML)
+            await message.reply_text("<b>Usage:</b> <code>/removepremium &lt;user_id&gt;</code>", parse_mode=CaptionFormatter.get_parse_mode())
             return
 
         try:
@@ -787,7 +787,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     "• Git operations: <code>git status</code>, <code>git log</code>\n\n"
                     "<b>Dangerous Commands:</b>\n"
                     "❌ Avoid: <code>rm -rf</code>, <code>chmod 777</code>, <code>sudo su</code>, etc.",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 return
             
@@ -810,7 +810,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"This command appears to be potentially destructive. "
                     f"Please review carefully before execution.\n\n"
                     f"Reply with <code>EXECUTE ANYWAY</code> to proceed or cancel this operation.",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 return
             
@@ -820,7 +820,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 f"<b>Command:</b> <code>{command}</code>\n"
                 f"<b>Status:</b> Running...\n\n"
                 f"⏳ Please wait for output...",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             
             logger.info(f"Shell command initiated by owner: {command}")
@@ -858,7 +858,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"<b>Command:</b> <code>{command}</code>\n"
                     f"<b>Error:</b> {str(e)}\n\n"
                     f"❌ Execution failed before completion",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 logger.error(f"Shell command execution failed: {e}")
                 return
@@ -900,7 +900,7 @@ class AdminCommandHandler(BaseCommandHandler):
 
 ⚠️ <b>Output too long - sending as file...</b>"""
                 
-                await status_msg.edit_text(basic_info, parse_mode=ParseMode.HTML)
+                await status_msg.edit_text(basic_info, parse_mode=CaptionFormatter.get_parse_mode())
                 
                 # Create output file
                 output_filename = f"shell_output_{int(start_time.timestamp())}.txt"
@@ -922,14 +922,14 @@ class AdminCommandHandler(BaseCommandHandler):
                 await message.reply_document(
                     output_filename,
                     caption=f"📄 Shell command output\n<b>Command:</b> <code>{command}</code>",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 
                 # Clean up temp file
                 os.remove(output_filename)
             else:
                 # Send normal message
-                await status_msg.edit_text(result_message, parse_mode=ParseMode.HTML)
+                await status_msg.edit_text(result_message, parse_mode=CaptionFormatter.get_parse_mode())
             
             logger.info(f"Shell command completed: {command} (exit code: {return_code}, time: {execution_time:.2f}s)")
             
@@ -941,12 +941,12 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"<b>Command:</b> <code>{command if 'command' in locals() else 'Unknown'}</code>\n"
                     f"<b>Error:</b> {str(e)}\n\n"
                     f"❌ Unexpected error occurred",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
             except Exception:
                 await message.reply_text(
                     f"🐚 <b>Shell Command Error</b>\n\n"
                     f"<b>Error:</b> {str(e)}\n\n"
                     f"❌ Failed to execute shell command",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )

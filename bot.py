@@ -31,8 +31,8 @@ import pytz
 from aiohttp import web
 #from dotenv import load_dotenv
 from pyrogram import Client, __version__
-from pyrogram.enums import ParseMode
 from pyrogram.raw.all import layer
+from core.utils.caption import CaptionFormatter
 from pyrogram.types import Message
 
 from core.cache.redis_cache import CacheManager
@@ -274,7 +274,7 @@ class MediaSearchBot(Client):
             bot_token=config.BOT_TOKEN,
             workers=config.WORKERS,
             sleep_threshold=5,
-            parse_mode=ParseMode.HTML,
+            parse_mode=CaptionFormatter.get_parse_mode(),
         )
         self.handler_manager = HandlerManager(self)
         logger.info("HandlerManager initialized")

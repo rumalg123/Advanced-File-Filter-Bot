@@ -5,8 +5,8 @@ Database management commands for multi-database system
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
-from pyrogram.enums import ParseMode
 
+from core.utils.caption import CaptionFormatter
 from core.utils.validators import admin_only
 from handlers.commands_handlers.base import BaseCommandHandler
 from core.utils.logger import get_logger
@@ -104,7 +104,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
 
         except Exception as e:
@@ -223,7 +223,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
 
         except Exception as e:
@@ -287,7 +287,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
         await callback_query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=ParseMode.HTML
+            parse_mode=CaptionFormatter.get_parse_mode()
         )
 
     async def _show_detailed_info(self, callback_query):

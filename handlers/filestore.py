@@ -2,9 +2,9 @@ from typing import Optional
 
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from pyrogram.enums import ParseMode
 
 from core.services.filestore import FileStoreService
+from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser
 from handlers.base import BaseHandler
@@ -131,7 +131,7 @@ class FileStoreHandler(BaseHandler):
                 "👨‍💼 <b>Admins:</b> Enable premium features by setting:\n"
                 "<code>DISABLE_PREMIUM=false</code>\n\n"
                 "Once premium features are enabled, you can create premium-only batch links.",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
 
@@ -149,7 +149,7 @@ class FileStoreHandler(BaseHandler):
                 "• <code>/pbprem &lt;first_link&gt; &lt;last_link&gt;</code>\n\n"
                 "<b>Example:</b>\n"
                 "<code>/batch_premium https://t.me/channel/100 https://t.me/channel/200</code>",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
 
@@ -178,7 +178,7 @@ class FileStoreHandler(BaseHandler):
                 "<b>Valid formats:</b>\n"
                 "• <code>https://t.me/channel/123</code>\n"
                 "• <code>https://t.me/c/1234567890/123</code>",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
 
@@ -219,7 +219,7 @@ class FileStoreHandler(BaseHandler):
                     f"• Only premium users can access this content\n"
                     f"• Global premium features are currently enabled\n"
                     f"• Users must have active premium membership",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
             else:
                 await sts.edit(
@@ -230,7 +230,7 @@ class FileStoreHandler(BaseHandler):
                     "• Database is accessible\n"
                     "• You have permission to create batch links\n\n"
                     "*Try again in a few moments*",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
         except Exception as e:
             logger.error(f"Error creating premium batch link: {e}", extra={
@@ -242,5 +242,5 @@ class FileStoreHandler(BaseHandler):
                 "❌ <b>System Error</b>\n\n"
                 "An unexpected error occurred while creating the batch link.\n"
                 "Please try again later or contact support.",
-                parse_mode=ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
