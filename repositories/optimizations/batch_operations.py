@@ -166,7 +166,9 @@ class BatchOptimizations:
                     file_ref="",  # Not needed for duplicate check
                     file_name=result["file_name"],
                     file_size=result["file_size"],
-                    file_type=result["file_type"]
+                    file_type=result["file_type"],
+                    mime_type=result.get("mime_type", ""),
+                    caption=result.get("caption", "")
                 )
                 existing_map[unique_id] = existing_file
             

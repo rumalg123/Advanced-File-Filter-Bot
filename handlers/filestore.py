@@ -19,8 +19,8 @@ class FileStoreHandler:
 
     def __init__(self, bot, filestore_service: Optional[FileStoreService] = None) -> None:
         self.bot = bot
-        # Use injected service or create new one (fallback)
-        self.filestore_service = bot.filestore_service
+        # Use injected service or fallback to bot's service
+        self.filestore_service = filestore_service or bot.filestore_service
         self._handlers = []  # Track handlers
         self._shutdown = asyncio.Event()
         self.register_handlers()

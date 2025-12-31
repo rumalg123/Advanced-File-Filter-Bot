@@ -155,10 +155,9 @@ class ConnectionHandler:
                     try:
                         await telegram_api.call_api(
                             client.send_message,
-                            user_id,
-                            f"Connected to <b>{title}</b>!",
-                            parse_mode=enums.ParseMode.HTML,
-                            chat_id=user_id
+                            chat_id=user_id,
+                            text=f"Connected to <b>{title}</b>!",
+                            parse_mode=enums.ParseMode.HTML
                         )
                     except Exception:
                         pass

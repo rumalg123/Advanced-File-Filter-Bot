@@ -185,7 +185,13 @@ def require_premium(
     global_premium_required: bool = False,
     link_premium_required: bool = False
 ) -> Callable:
-    """Decorator to require premium permissions with precedence rules"""
+    """
+    Decorator to require premium permissions with precedence rules.
+
+    Note: This decorator requires the handler class to have a bot attribute
+    with a user_repo that has a get_user(user_id) method returning a user
+    object with is_premium attribute.
+    """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs) -> Any:
@@ -193,33 +199,45 @@ def require_premium(
             if not user_id:
                 await message.reply("❌ Unable to identify user.")
                 return
-            
-            # Get user premium status (would need to be injected or retrieved)
-            # This is a placeholder - in practice you'd get this from user repository
-            user_premium_status = False  # Replace with actual lookup
-            
+
+            # Get user premium status from user repository
+            user_premium_status = False
+            if hasattr(self, 'bot') and hasattr(self.bot, 'user_repo'):
+                try:
+                    user = await self.bot.user_repo.get_user(user_id)
+                    if user:
+                        user_premium_status = getattr(user, 'is_premium', False)
+                except Exception as e:
+                    logger.error(f"Error checking premium status: {e}")
+
             allowed, error_msg = await Guards.check_premium_permission(
-                user_id, 
+                user_id,
                 user_premium_status,
                 global_premium_required,
                 link_premium_required
             )
-            
+
             if not allowed:
                 if isinstance(message, CallbackQuery):
                     await message.answer(error_msg, show_alert=True)
                 else:
                     await message.reply(error_msg)
                 return
-            
+
             return await func(self, client, message, *args, **kwargs)
-        
+
         return wrapper
     return decorator
 
 
 def check_banned() -> Callable:
-    """Decorator to check if user is banned"""
+    """
+    Decorator to check if user is banned.
+
+    Note: This decorator requires the handler class to have a bot attribute
+    with a user_repo that has a get_user(user_id) method returning a user
+    object with is_banned attribute.
+    """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs) -> Any:
@@ -227,11 +245,17 @@ def check_banned() -> Callable:
             if not user_id:
                 await message.reply("❌ Unable to identify user.")
                 return
-            
-            # Get user ban status (would need to be injected or retrieved)
-            # This is a placeholder - in practice you'd get this from user repository
-            is_banned = False  # Replace with actual lookup
-            
+
+            # Get user ban status from user repository
+            is_banned = False
+            if hasattr(self, 'bot') and hasattr(self.bot, 'user_repo'):
+                try:
+                    user = await self.bot.user_repo.get_user(user_id)
+                    if user:
+                        is_banned = getattr(user, 'is_banned', False)
+                except Exception as e:
+                    logger.error(f"Error checking ban status: {e}")
+
             allowed, error_msg = await Guards.check_ban_status(user_id, is_banned)
             if not allowed:
                 if isinstance(message, CallbackQuery):
@@ -239,8 +263,8 @@ def check_banned() -> Callable:
                 else:
                     await message.reply(error_msg)
                 return
-            
+
             return await func(self, client, message, *args, **kwargs)
-        
+
         return wrapper
     return decorator

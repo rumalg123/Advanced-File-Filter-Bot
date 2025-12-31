@@ -4,26 +4,10 @@ from typing import Dict, Any, Optional, List
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
-from core.database.base import BaseRepository, AggregationMixin
+from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-@dataclass
-class Connection:
-    """Connection entity for user-group connections"""
-    user_id: str
-    group_id: str
-    is_active: bool = False
-    created_at: datetime = None
-    updated_at: datetime = None
-
-    def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.now(UTC)
-        if self.updated_at is None:
-            self.updated_at = datetime.now(UTC)
 
 
 @dataclass
@@ -42,7 +26,7 @@ class UserConnection:
             self.updated_at = datetime.now(UTC)
 
 
-class ConnectionRepository(BaseRepository[UserConnection], AggregationMixin):
+class ConnectionRepository(BaseRepository[UserConnection]):
     """Repository for connection operations"""
 
     def __init__(self, db_pool, cache_manager):

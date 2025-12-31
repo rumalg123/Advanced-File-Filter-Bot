@@ -395,15 +395,15 @@ class RequestHandler:
                     reply_markup=InlineKeyboardMarkup(buttons)
                 )
 
-            # Schedule deletion
+            # Schedule deletion using proper task tracking
             if delete_time > 0:
-                asyncio.create_task(
+                self._create_auto_delete_task(
                     self._auto_delete_message(sent_msg, delete_time)
                 )
 
                 # Also delete the user's search query message in private
                 if is_private:
-                    asyncio.create_task(
+                    self._create_auto_delete_task(
                         self._auto_delete_message(message, delete_time)
                     )
 

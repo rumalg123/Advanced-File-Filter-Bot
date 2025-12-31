@@ -18,7 +18,7 @@ class DeleteHandler:
         self.bot = bot
         self.delete_queue = asyncio.Queue(maxsize=1000)
         self._shutdown = asyncio.Event()
-        self.handlers = []  # Store handlers for cleanup
+        self._handlers = []  # Store handlers for cleanup (underscore for consistency)
         self.background_task = None  # Track background task
 
         # Register handlers first
@@ -52,7 +52,7 @@ class DeleteHandler:
             else:
                 self.bot.add_handler(handler)
 
-            self.handlers.append(handler)
+            self._handlers.append(handler)
             handlers_registered += 1
             logger.info(f"Registered DELETE_CHANNEL handler for channel {self.bot.config.DELETE_CHANNEL}")
 
@@ -75,7 +75,7 @@ class DeleteHandler:
                 self.bot.add_handler(handler1)
                 self.bot.add_handler(handler2)
 
-            self.handlers.extend([handler1, handler2])
+            self._handlers.extend([handler1, handler2])
             handlers_registered += 2
             logger.info(f"Registered delete commands for {len(self.bot.config.ADMINS)} admins")
 
@@ -104,10 +104,10 @@ class DeleteHandler:
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             logger.info("HandlerManager will handle handler removal and task cancellation")
             # Mark our handlers as removed in the manager
-            for handler in self.handlers:
+            for handler in self._handlers:
                 handler_id = id(handler)
                 self.bot.handler_manager.removed_handlers.add(handler_id)
-            self.handlers.clear()
+            self._handlers.clear()
             logger.info("DeleteHandler cleanup complete")
             return
 
@@ -121,7 +121,7 @@ class DeleteHandler:
                 logger.info("Background task cancelled successfully")
 
         # Remove handlers
-        for handler in self.handlers:
+        for handler in self._handlers:
             try:
                 self.bot.remove_handler(handler)
             except ValueError as e:
@@ -132,7 +132,7 @@ class DeleteHandler:
             except Exception as e:
                 logger.error(f"Error removing handler: {e}")
 
-        self.handlers.clear()
+        self._handlers.clear()
         logger.info("DeleteHandler cleanup complete")
 
     async def _process_delete_queue(self):

@@ -46,8 +46,8 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
         return BotSetting(**data)
 
     def _get_cache_key(self, key: str) -> str:
-        """Generate cache key for setting"""
-        return f"bot_setting:{key}"
+        """Generate cache key for setting using centralized generator"""
+        return CacheKeyGenerator.bot_setting(key)
 
     def _infer_value_type(self, value: Any) -> str:
         """Infer a simple value_type from the Python value."""

@@ -78,10 +78,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             data['premium_activation_date'] = data['premium_activation_date'].isoformat()
         if data.get('last_retrieval_date'):
             data['last_retrieval_date'] = data['last_retrieval_date'].isoformat()
-        # ADD THIS LINE:
         if data.get('last_request_date'):
             data['last_request_date'] = data['last_request_date'].isoformat()
-        # Also add for last_warning_date while you're at it:
         if data.get('last_warning_date'):
             data['last_warning_date'] = data['last_warning_date'].isoformat()
         data['created_at'] = data['created_at'].isoformat()
@@ -106,7 +104,6 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             if isinstance(data['last_request_date'], str):
                 data['last_request_date'] = date.fromisoformat(data['last_request_date'])
 
-        # ADD THIS:
         if data.get('last_warning_date'):
             if isinstance(data['last_warning_date'], str):
                 data['last_warning_date'] = datetime.fromisoformat(data['last_warning_date'])
@@ -255,7 +252,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         banned_ids = [user.id for user in users]
 
         cache_key = CacheKeyGenerator.banned_users()
-        await self.cache.set(cache_key, banned_ids, expire=self.ttl.USER_CONNECTIONS)
+        await self.cache.set(cache_key, banned_ids, expire=self.ttl.BANNED_USERS_LIST)
 
         logger.debug(f"Refreshed banned users cache: {len(banned_ids)} users")
         return banned_ids

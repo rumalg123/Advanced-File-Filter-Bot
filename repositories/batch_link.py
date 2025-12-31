@@ -76,9 +76,9 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
                 collection.insert_one, data
             )
             
-            # Cache the batch link
+            # Cache the batch link as dict (not dataclass) for proper serialization
             cache_key = self._get_cache_key(batch_link.id)
-            await self.cache.set(cache_key, batch_link, expire=self.ttl.BATCH_LINK)
+            await self.cache.set(cache_key, self._entity_to_dict(batch_link), expire=self.ttl.BATCH_LINK)
             
             logger.info(f"Created batch link: {batch_link.id}")
             return True
@@ -172,7 +172,8 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             
             if data:
                 batch_link = self._dict_to_entity(data)
-                await self.cache.set(cache_key, batch_link, expire=self.ttl.BATCH_LINK)
+                # Cache as dict for proper serialization
+                await self.cache.set(cache_key, self._entity_to_dict(batch_link), expire=self.ttl.BATCH_LINK)
                 return batch_link
                 
         except Exception as e:
