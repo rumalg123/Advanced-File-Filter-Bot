@@ -148,6 +148,106 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 return file
 
         return None
+
+    async def find_files_batch(
+        self,
+        file_unique_ids: List[str]
+    ) -> Dict[str, Optional[MediaFile]]:
+        """
+        Find multiple files by their unique IDs in a single batch operation.
+        Uses $in operator for efficient batch lookup instead of N individual queries.
+
+        Args:
+            file_unique_ids: List of file_unique_id values to look up
+
+        Returns:
+            Dictionary mapping file_unique_id to MediaFile (or None if not found)
+        """
+        if not file_unique_ids:
+            return {}
+
+        result: Dict[str, Optional[MediaFile]] = {uid: None for uid in file_unique_ids}
+
+        # First, check cache for all files
+        cache_hits = []
+        cache_misses = []
+
+        for uid in file_unique_ids:
+            cache_key = CacheKeyGenerator.media(uid)
+            cached = await self.cache.get(cache_key)
+            if cached:
+                try:
+                    result[uid] = self._dict_to_entity(cached)
+                    cache_hits.append(uid)
+                except (KeyError, TypeError, ValueError) as e:
+                    logger.warning(f"Corrupt cache data for {uid}, clearing: {e}")
+                    await self.cache.delete(cache_key)
+                    cache_misses.append(uid)
+            else:
+                cache_misses.append(uid)
+
+        if not cache_misses:
+            # All found in cache
+            return result
+
+        # Batch fetch from database for cache misses
+        try:
+            if self.is_multi_db:
+                # Search across all databases using $in
+                for db_pool in await self.multi_db_manager.get_all_pools():
+                    collection = await db_pool.get_collection(self.collection_name)
+                    cursor = collection.find(
+                        {"file_unique_id": {"$in": cache_misses}}
+                    )
+                    async for data in cursor:
+                        try:
+                            file = self._dict_to_entity(data)
+                            uid = file.file_unique_id
+                            result[uid] = file
+                            # Cache the found file
+                            cache_key = CacheKeyGenerator.media(uid)
+                            await self.cache.set(
+                                cache_key,
+                                self._entity_to_dict(file),
+                                expire=self.ttl.MEDIA_FILE
+                            )
+                            # Remove from cache_misses
+                            if uid in cache_misses:
+                                cache_misses.remove(uid)
+                        except Exception as e:
+                            logger.warning(f"Error processing batch result: {e}")
+            else:
+                # Single database mode
+                collection = await self.collection
+                cursor = collection.find(
+                    {"file_unique_id": {"$in": cache_misses}}
+                )
+                async for data in cursor:
+                    try:
+                        file = self._dict_to_entity(data)
+                        uid = file.file_unique_id
+                        result[uid] = file
+                        # Cache the found file
+                        cache_key = CacheKeyGenerator.media(uid)
+                        await self.cache.set(
+                            cache_key,
+                            self._entity_to_dict(file),
+                            expire=self.ttl.MEDIA_FILE
+                        )
+                    except Exception as e:
+                        logger.warning(f"Error processing batch result: {e}")
+
+            logger.debug(
+                f"Batch file lookup: {len(cache_hits)} cache hits, "
+                f"{len(file_unique_ids) - len(cache_hits) - len(cache_misses)} DB hits, "
+                f"{len(cache_misses)} not found"
+            )
+
+        except Exception as e:
+            logger.error(f"Error in batch file lookup: {e}")
+
+        return result
+
     async def delete(self, id: Any) -> bool:
         """Delete entity"""
         try:

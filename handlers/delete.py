@@ -6,6 +6,7 @@ from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 
 from core.cache.config import CacheKeyGenerator
+from core.constants import ProcessingConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -142,9 +143,9 @@ class DeleteHandler:
         while not self._shutdown.is_set():
             try:
                 batch = []
-                deadline = asyncio.get_event_loop().time() + 5  # 5 second batch window
+                deadline = asyncio.get_event_loop().time() + ProcessingConstants.DELETE_BATCH_TIMEOUT
 
-                while len(batch) < 50 and not self._shutdown.is_set():
+                while len(batch) < ProcessingConstants.DELETE_BATCH_SIZE and not self._shutdown.is_set():
                     try:
                         remaining = deadline - asyncio.get_event_loop().time()
                         if remaining <= 0:

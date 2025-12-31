@@ -1,17 +1,16 @@
 import asyncio
-import base64
 import time
 from collections import defaultdict
 from typing import List, Dict
 
 from pyrogram import Client, filters
-from pyrogram.file_id import FileId
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 
 from config.settings import settings
 from core.cache.config import CacheTTLConfig
-from core.utils.helpers import sanitize_filename, format_file_size
+from core.constants import ProcessingConstants
+from core.utils.helpers import sanitize_filename
 from core.utils.logger import get_logger
 from core.utils.file_reference import FileReferenceExtractor
 from repositories.channel import ChannelRepository
@@ -124,7 +123,7 @@ class ChannelHandler:
 
     async def _cleanup_user_counts(self):
         """Periodically clean up old user message counts"""
-        cleanup_interval = 3600  # 1 hour
+        cleanup_interval = ProcessingConstants.USER_COUNT_CLEANUP_INTERVAL
 
         while not self._shutdown.is_set():
             try:
@@ -502,32 +501,3 @@ class ChannelHandler:
             'document': FileType.DOCUMENT,
         }
         return mapping.get(media_type, FileType.DOCUMENT)
-
-
-
-    async def _send_index_notification(
-            self,
-            client: Client,
-            message: Message,
-            media_file: MediaFile,
-            status: str
-    ):
-        """Send indexing notification to log channel"""
-        try:
-            notification = (
-                f"<b>{status}</b>\n\n"
-                f"📁 <b>File:</b> <code>{media_file.file_name}</code>\n"
-                f"📊 <b>Size:</b> {format_file_size(media_file.file_size)}\n"
-                f"🎬 <b>Type:</b> {media_file.file_type.value.title()}\n"
-                f"📢 <b>Channel:</b> {message.chat.title or message.chat.id}\n"
-                f"🔗 <b>Message:</b> {message.link if message.link else 'N/A'}"
-            )
-
-            await client.send_message(
-                self.bot.config.LOG_CHANNEL,
-                notification,
-                disable_web_page_preview=True
-            )
-        except Exception as e:
-            logger.error(f"Failed to send index notification: {e}")
-

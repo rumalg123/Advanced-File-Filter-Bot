@@ -22,7 +22,6 @@ class RequestHandler(BaseHandler):
 
     def __init__(self, bot):
         super().__init__(bot)
-        self.ttl = CacheTTLConfig()
         self.background_tasks: List = []  # Track any background tasks
         self.register_handlers()
 
@@ -218,7 +217,7 @@ class RequestHandler(BaseHandler):
             await self.bot.cache.set(
                 search_key,
                 {'files': files_data, 'query': query, 'user_id': user_id},
-                expire=self.ttl.SEARCH_SESSION  # 1 hour expiry
+                expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
             )
 
             # Create pagination builder

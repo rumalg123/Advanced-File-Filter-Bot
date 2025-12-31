@@ -5,9 +5,9 @@ Using MongoDB aggregation pipelines for efficient joins and lookups
 
 import asyncio
 from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
-from datetime import datetime, UTC, date, timedelta
+from datetime import datetime, UTC, timedelta
 
-from pymongo import UpdateOne, InsertOne
+from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
 from core.utils.logger import get_logger

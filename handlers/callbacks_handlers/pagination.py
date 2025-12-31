@@ -3,7 +3,7 @@ import uuid
 from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from core.cache.config import CacheTTLConfig
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.file_emoji import get_file_emoji
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder, PaginationHelper
@@ -57,7 +57,8 @@ class PaginationCallbackHandler(BaseCommandHandler):
             return await query.answer("No more results", show_alert=True)
 
         # Generate a unique key for this search result set
-        search_key = f"search_results_{user_id}_{uuid.uuid4().hex[:8]}"
+        session_id = uuid.uuid4().hex[:8]
+        search_key = CacheKeyGenerator.search_session(user_id, session_id)
 
         # Store file IDs in cache for "Send All" functionality - optimized
         # Use list comprehension for better memory efficiency
@@ -73,11 +74,10 @@ class PaginationCallbackHandler(BaseCommandHandler):
             for f in files
         ]
 
-        ttl = CacheTTLConfig()
         await self.bot.cache.set(
             search_key,
             {'files': files_data, 'query': search_query},
-            expire=ttl.SEARCH_SESSION  # 1 hour expiry
+            expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
         )
 
         # Build response with new pagination builder

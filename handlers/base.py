@@ -5,10 +5,12 @@ All handlers should inherit from BaseHandler to get consistent:
 - Handler registration with handler_manager support
 - Cleanup logic with proper shutdown handling
 - Auto-delete task tracking
+- Queue management
+- Background task cleanup
 """
 import asyncio
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable, Tuple, Any
+from typing import List, Optional, Callable, Tuple, Any, Dict
 from weakref import WeakSet
 
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
@@ -28,6 +30,8 @@ class BaseHandler(ABC):
         self._shutdown = asyncio.Event()
         self.auto_delete_tasks: WeakSet = WeakSet()
         self._handler_name = self.__class__.__name__
+        self._background_tasks: List[asyncio.Task] = []
+        self._queues: List[asyncio.Queue] = []
 
     def _register_handler(self, handler) -> None:
         """Register a single handler with handler_manager support"""
@@ -87,6 +91,32 @@ class BaseHandler(ABC):
         coro = self._auto_delete_message(message, delay)
         return self._create_auto_delete_task(coro)
 
+    def _track_task(self, coro) -> Optional[asyncio.Task]:
+        """Create and track a background task"""
+        if self._shutdown.is_set():
+            coro.close()
+            return None
+
+        task = asyncio.create_task(coro)
+        self._background_tasks.append(task)
+        return task
+
+    def _register_queue(self, queue: asyncio.Queue) -> None:
+        """Register a queue for cleanup"""
+        self._queues.append(queue)
+
+    def _clear_queues(self) -> int:
+        """Clear all registered queues, returns total items cleared"""
+        total_cleared = 0
+        for queue in self._queues:
+            while not queue.empty():
+                try:
+                    queue.get_nowait()
+                    total_cleared += 1
+                except asyncio.QueueEmpty:
+                    break
+        return total_cleared
+
     async def _auto_delete_message(self, message: Message, delay: int) -> None:
         """Auto-delete message after delay"""
         try:
@@ -105,9 +135,26 @@ class BaseHandler(ABC):
         # Signal shutdown
         self._shutdown.set()
 
-        # If handler_manager is available, let it handle everything
+        # Clear queues first (always do this)
+        queue_items_cleared = self._clear_queues()
+        if queue_items_cleared > 0:
+            logger.info(f"{self._handler_name}: Cleared {queue_items_cleared} items from queues")
+
+        # Cancel and await background tasks
+        if self._background_tasks:
+            cancelled_bg = 0
+            for task in self._background_tasks:
+                if not task.done():
+                    task.cancel()
+                    cancelled_bg += 1
+            if cancelled_bg > 0:
+                await asyncio.gather(*self._background_tasks, return_exceptions=True)
+                logger.debug(f"{self._handler_name}: Cancelled {cancelled_bg} background tasks")
+            self._background_tasks.clear()
+
+        # If handler_manager is available, let it handle handler removal
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info(f"{self._handler_name}: HandlerManager will handle cleanup")
+            logger.info(f"{self._handler_name}: HandlerManager will handle handler removal")
             for handler in self._handlers:
                 handler_id = id(handler)
                 self.bot.handler_manager.removed_handlers.add(handler_id)
@@ -129,7 +176,7 @@ class BaseHandler(ABC):
         if active_tasks:
             await asyncio.gather(*active_tasks, return_exceptions=True)
 
-        logger.debug(f"{self._handler_name}: Cancelled {cancelled_count} tasks")
+        logger.debug(f"{self._handler_name}: Cancelled {cancelled_count} auto-delete tasks")
 
         # Remove handlers
         for handler in self._handlers:

@@ -1,45 +1,37 @@
 """
-Reusable guard functions for role and permission checks
+Reusable guard functions for role and permission checks.
+
+This module provides static methods for permission checking that can be used
+directly in handlers. For decorator-based guards, see handlers/decorators.py.
 """
-from functools import wraps
-from typing import Optional, Callable, Any, Union, List
+from typing import Optional, List, Tuple
 
-from pyrogram import Client
-from pyrogram.types import Message, CallbackQuery
-
-from core.utils.errors import ErrorFactory, ErrorCode
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class Guards:
-    """Reusable permission and role guard functions"""
-    
+    """
+    Reusable permission and role guard functions.
+
+    These are static methods that can be called directly from handlers
+    for permission checking. Returns (allowed: bool, error_message: Optional[str]).
+    """
+
     @staticmethod
     async def check_admin_permission(
-        user_id: int, 
-        admin_list: List[int], 
+        user_id: int,
+        admin_list: List[int],
         correlation_id: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str]]:
         """Check if user has admin permissions"""
         if user_id in admin_list:
-            logger.info(f"Admin access granted", extra={
-                "event": "admin_check",
-                "user_id": user_id,
-                "correlation_id": correlation_id,
-                "outcome": "granted"
-            })
+            logger.debug(f"Admin access granted for user {user_id}")
             return True, None
-        
-        error = ErrorFactory.create_error(
-            ErrorCode.INSUFFICIENT_PERMISSIONS,
-            "This command requires admin privileges",
-            correlation_id=correlation_id,
-            user_id=user_id
-        )
-        
-        return False, "⚠️ This command is restricted to bot admins only."
+
+        logger.debug(f"Admin access denied for user {user_id}")
+        return False, "This command is restricted to bot admins only."
     
     @staticmethod
     async def check_premium_permission(
@@ -48,7 +40,7 @@ class Guards:
         global_premium_required: bool,
         link_premium_required: bool = False,
         correlation_id: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str]]:
         """
         Check premium permissions with precedence rules:
         1. Link-level premium overrides global settings
@@ -58,54 +50,20 @@ class Guards:
         # Link-level premium requirement takes precedence
         if link_premium_required:
             if user_premium_status:
-                logger.info("Premium access granted via link-level requirement", extra={
-                    "event": "premium_check", 
-                    "user_id": user_id,
-                    "correlation_id": correlation_id,
-                    "link_premium": True,
-                    "user_premium": user_premium_status,
-                    "outcome": "granted"
-                })
+                logger.debug(f"Premium access granted for user {user_id} (link requirement)")
                 return True, None
             else:
-                error = ErrorFactory.create_error(
-                    ErrorCode.PREMIUM_REQUIRED,
-                    "This content requires premium membership",
-                    correlation_id=correlation_id,
-                    user_id=user_id,
-                    details={"link_premium_required": True}
-                )
-                return False, "💎 This content requires premium membership to access."
-        
+                return False, "This content requires premium membership to access."
+
         # Global premium requirement (if no link override)
-        elif global_premium_required:
+        if global_premium_required:
             if user_premium_status:
-                logger.info("Premium access granted via global requirement", extra={
-                    "event": "premium_check",
-                    "user_id": user_id, 
-                    "correlation_id": correlation_id,
-                    "global_premium": True,
-                    "user_premium": user_premium_status,
-                    "outcome": "granted"
-                })
+                logger.debug(f"Premium access granted for user {user_id} (global requirement)")
                 return True, None
             else:
-                error = ErrorFactory.create_error(
-                    ErrorCode.PREMIUM_REQUIRED,
-                    "Premium membership required", 
-                    correlation_id=correlation_id,
-                    user_id=user_id,
-                    details={"global_premium_required": True}
-                )
-                return False, "💎 Premium membership required to use this bot."
-        
+                return False, "Premium membership required to use this bot."
+
         # No premium requirements
-        logger.info("Access granted - no premium requirements", extra={
-            "event": "premium_check",
-            "user_id": user_id,
-            "correlation_id": correlation_id,
-            "outcome": "granted"
-        })
         return True, None
     
     @staticmethod
@@ -113,19 +71,14 @@ class Guards:
         user_id: int,
         is_banned: bool,
         correlation_id: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str]]:
         """Check if user is banned"""
         if is_banned:
-            error = ErrorFactory.create_error(
-                ErrorCode.BANNED_USER,
-                "User is banned from using this bot",
-                correlation_id=correlation_id,
-                user_id=user_id
-            )
-            return False, "🚫 You are banned from using this bot."
-        
+            logger.debug(f"User {user_id} is banned")
+            return False, "You are banned from using this bot."
+
         return True, None
-    
+
     @staticmethod
     async def check_rate_limit(
         user_id: int,
@@ -133,138 +86,31 @@ class Guards:
         limit: int,
         reset_time: Optional[str] = None,
         correlation_id: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str]]:
         """Check rate limiting"""
         if current_count >= limit:
-            error = ErrorFactory.create_error(
-                ErrorCode.RATE_LIMIT_EXCEEDED,
-                f"Rate limit exceeded: {current_count}/{limit}",
-                correlation_id=correlation_id,
-                user_id=user_id,
-                details={
-                    "current_count": current_count,
-                    "limit": limit,
-                    "reset_time": reset_time
-                }
-            )
-            
-            message = f"⏰ Rate limit exceeded. You've used {current_count}/{limit} requests."
+            logger.debug(f"Rate limit exceeded for user {user_id}: {current_count}/{limit}")
+
+            message = f"Rate limit exceeded. You've used {current_count}/{limit} requests."
             if reset_time:
                 message += f" Limit resets at {reset_time}."
-                
+
             return False, message
-        
+
         return True, None
 
-
-def require_admin(admin_list: List[int]) -> Callable:
-    """Decorator to require admin permissions"""
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs) -> Any:
-            user_id = message.from_user.id if message.from_user else None
-            if not user_id:
-                await message.reply("❌ Unable to identify user.")
-                return
-            
-            allowed, error_msg = await Guards.check_admin_permission(user_id, admin_list)
-            if not allowed:
-                if isinstance(message, CallbackQuery):
-                    await message.answer(error_msg, show_alert=True)
-                else:
-                    await message.reply(error_msg)
-                return
-            
-            return await func(self, client, message, *args, **kwargs)
-        
-        return wrapper
-    return decorator
-
-
-def require_premium(
-    global_premium_required: bool = False,
-    link_premium_required: bool = False
-) -> Callable:
-    """
-    Decorator to require premium permissions with precedence rules.
-
-    Note: This decorator requires the handler class to have a bot attribute
-    with a user_repo that has a get_user(user_id) method returning a user
-    object with is_premium attribute.
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs) -> Any:
-            user_id = message.from_user.id if message.from_user else None
-            if not user_id:
-                await message.reply("❌ Unable to identify user.")
-                return
-
-            # Get user premium status from user repository
-            user_premium_status = False
-            if hasattr(self, 'bot') and hasattr(self.bot, 'user_repo'):
-                try:
-                    user = await self.bot.user_repo.get_user(user_id)
-                    if user:
-                        user_premium_status = getattr(user, 'is_premium', False)
-                except Exception as e:
-                    logger.error(f"Error checking premium status: {e}")
-
-            allowed, error_msg = await Guards.check_premium_permission(
-                user_id,
-                user_premium_status,
-                global_premium_required,
-                link_premium_required
-            )
-
-            if not allowed:
-                if isinstance(message, CallbackQuery):
-                    await message.answer(error_msg, show_alert=True)
-                else:
-                    await message.reply(error_msg)
-                return
-
-            return await func(self, client, message, *args, **kwargs)
-
-        return wrapper
-    return decorator
-
-
-def check_banned() -> Callable:
-    """
-    Decorator to check if user is banned.
-
-    Note: This decorator requires the handler class to have a bot attribute
-    with a user_repo that has a get_user(user_id) method returning a user
-    object with is_banned attribute.
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs) -> Any:
-            user_id = message.from_user.id if message.from_user else None
-            if not user_id:
-                await message.reply("❌ Unable to identify user.")
-                return
-
-            # Get user ban status from user repository
-            is_banned = False
-            if hasattr(self, 'bot') and hasattr(self.bot, 'user_repo'):
-                try:
-                    user = await self.bot.user_repo.get_user(user_id)
-                    if user:
-                        is_banned = getattr(user, 'is_banned', False)
-                except Exception as e:
-                    logger.error(f"Error checking ban status: {e}")
-
-            allowed, error_msg = await Guards.check_ban_status(user_id, is_banned)
-            if not allowed:
-                if isinstance(message, CallbackQuery):
-                    await message.answer(error_msg, show_alert=True)
-                else:
-                    await message.reply(error_msg)
-                return
-
-            return await func(self, client, message, *args, **kwargs)
-
-        return wrapper
-    return decorator
+    @staticmethod
+    def is_admin_or_owner(
+        user_id: int,
+        admin_list: List[int],
+        auth_users: Optional[List[int]] = None
+    ) -> bool:
+        """
+        Quick check if user is admin, owner, or auth user.
+        Used for skipping permission checks.
+        """
+        if user_id in admin_list:
+            return True
+        if auth_users and user_id in auth_users:
+            return True
+        return False
