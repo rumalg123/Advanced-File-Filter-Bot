@@ -25,8 +25,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         if not parsed_data:
             return await query.answer("Invalid data", show_alert=True)
 
-        # Extract parsed values
-        action = parsed_data['action']
+        # Extract parsed values (action is in callback data but offset is pre-calculated by PaginationBuilder)
         search_query = parsed_data['query']
         current_offset = parsed_data['offset']
         total = parsed_data['total']

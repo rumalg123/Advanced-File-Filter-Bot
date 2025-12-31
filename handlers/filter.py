@@ -2,9 +2,10 @@
 import io
 from typing import List
 
-from pyrogram import Client, filters, enums
+from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
+from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from handlers.base import BaseHandler
 
@@ -97,7 +98,7 @@ class FilterHandler(BaseHandler):
             return await message.reply_text(
                 f"Filter for <code>{keyword}</code> added in <b>{title}</b>",
                 quote=True,
-                parse_mode=enums.ParseMode.HTML
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
         else:
             return await message.reply_text("Failed to add filter!", quote=True)
@@ -149,7 +150,7 @@ class FilterHandler(BaseHandler):
         await message.reply_text(
             text=filterlist,
             quote=True,
-            parse_mode=enums.ParseMode.HTML
+            parse_mode=CaptionFormatter.get_parse_mode()
         )
 
     async def delete_filter_command(self, client: Client, message: Message):
@@ -195,7 +196,7 @@ class FilterHandler(BaseHandler):
                 await message.reply_text(
                     f"<code>{filter_name}</code> deleted. I'll not respond to that filter anymore.",
                     quote=True,
-                    parse_mode=enums.ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
             else:
                 await message.reply_text(f"Couldn't find filter: <code>{filter_name}</code>", quote=True)

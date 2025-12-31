@@ -311,37 +311,35 @@ class CommandHandler:
                 )
             )
 
-            if self.bot.config.ADMINS:
-                # Cache monitoring commands
-                self.bot.add_handler(
-                    MessageHandler(
-                        self.admin_handler.cache_stats_command,
-                        filters.command("cache_stats") & filters.user(self.bot.config.ADMINS)
-                    )
+            # Cache monitoring commands
+            self.bot.add_handler(
+                MessageHandler(
+                    self.admin_handler.cache_stats_command,
+                    filters.command("cache_stats") & filters.user(self.bot.config.ADMINS)
                 )
+            )
 
-                self.bot.add_handler(
-                    MessageHandler(
-                        self.admin_handler.cache_analyze_command,
-                        filters.command("cache_analyze") & filters.user(self.bot.config.ADMINS)
-                    )
+            self.bot.add_handler(
+                MessageHandler(
+                    self.admin_handler.cache_analyze_command,
+                    filters.command("cache_analyze") & filters.user(self.bot.config.ADMINS)
                 )
+            )
 
-                self.bot.add_handler(
-                    MessageHandler(
-                        self.admin_handler.cache_cleanup_command,
-                        filters.command("cache_cleanup") & filters.user(self.bot.config.ADMINS)
-                    )
+            self.bot.add_handler(
+                MessageHandler(
+                    self.admin_handler.cache_cleanup_command,
+                    filters.command("cache_cleanup") & filters.user(self.bot.config.ADMINS)
                 )
+            )
 
-                # Shell command - only for primary admin
-                if self.bot.config.ADMINS:
-                    self.bot.add_handler(
-                        MessageHandler(
-                            self.admin_handler.shell_command,
-                            filters.command("shell") & filters.user(self.bot.config.ADMINS[0:1])
-                        )
-                    )
+            # Shell command - only for primary admin
+            self.bot.add_handler(
+                MessageHandler(
+                    self.admin_handler.shell_command,
+                    filters.command("shell") & filters.user(self.bot.config.ADMINS[0:1])
+                )
+            )
 
 
 

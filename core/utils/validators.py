@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 from functools import wraps
 from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
@@ -480,6 +481,57 @@ class InputValidation:
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', caption)
         # Limit length
         return sanitized[:1024]
+
+
+@dataclass
+class UserAccessContext:
+    """
+    Context object containing user permission and tracking information.
+
+    Use this to avoid repeatedly computing admin/owner checks in handlers.
+    """
+    user_id: int
+    is_admin: bool
+    is_owner: bool
+    is_premium: bool
+    should_track_retrieval: bool
+    owner_id: Optional[int]
+
+    @classmethod
+    def from_config(cls, user_id: int, user, config) -> 'UserAccessContext':
+        """
+        Create access context from user and bot config.
+
+        Args:
+            user_id: The user's ID
+            user: User object from repository (may be None)
+            config: Bot configuration object
+
+        Returns:
+            UserAccessContext with computed permission flags
+        """
+        admins = config.ADMINS if config.ADMINS else []
+        is_admin = user_id in admins
+        owner_id = admins[0] if admins else None
+        is_owner = user_id == owner_id
+        is_premium = user.is_premium if user else False
+
+        should_track = (
+            user is not None and
+            not is_premium and
+            not getattr(config, 'DISABLE_PREMIUM', False) and
+            not is_admin and
+            not is_owner
+        )
+
+        return cls(
+            user_id=user_id,
+            is_admin=is_admin,
+            is_owner=is_owner,
+            is_premium=is_premium,
+            should_track_retrieval=should_track,
+            owner_id=owner_id
+        )
 
 
 # Convenience exports for easy importing

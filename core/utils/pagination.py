@@ -313,32 +313,3 @@ class PaginationHelper:
             }
 
         return None
-
-    @staticmethod
-    def calculate_new_offset(action: str, current_offset: int, page_size: int, total: int) -> int:
-        """
-        Calculate new offset based on action
-
-        Args:
-            action: Navigation action (first, prev, next, last, page)
-            current_offset: Current offset
-            page_size: Items per page
-            total: Total items
-
-        Returns:
-            New offset value
-        """
-        if action == "first":
-            return 0
-        elif action == "prev":
-            return max(0, current_offset - page_size)
-        elif action == "next":
-            max_offset = ((total - 1) // page_size) * page_size
-            return min(current_offset + page_size, max_offset)
-        elif action == "last":
-            return ((total - 1) // page_size) * page_size
-        elif action == "page":
-            # For direct page navigation, offset should be passed separately
-            return current_offset
-        else:
-            return current_offset

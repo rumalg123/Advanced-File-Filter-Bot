@@ -9,7 +9,6 @@ from core.utils.logger import get_logger
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 from repositories.user import UserStatus
-from pyrogram.enums import ParseMode
 logger = get_logger(__name__)
 
 
@@ -57,7 +56,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 "• Request files using #request in support group\n"
                 "• Upgrade to premium for unlimited access\n\n"
                 "Thank you for understanding! 🙏"
-                ,parse_mode=ParseMode.HTML
+                , parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
 
@@ -321,12 +320,14 @@ class DeepLinkHandler(BaseCommandHandler):
                 continue
 
         # Increment retrieval count for all successfully sent files at once (batch operation)
-        # Only increment for non-premium, non-admin, non-owner users
-        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
-        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        is_owner = user_id == owner_id
+        # Reuse is_admin, owner_id, is_owner computed earlier (lines 267-269)
+        should_track_retrieval = (
+            user and not user.is_premium and
+            not self.bot.config.DISABLE_PREMIUM and
+            not is_admin and not is_owner
+        )
 
-        if success_count > 0 and user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
+        if success_count > 0 and should_track_retrieval:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files_data)} files!")
@@ -457,15 +458,15 @@ class DeepLinkHandler(BaseCommandHandler):
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
-                # Update retrieval count for non-premium, non-admin, non-owner users
-                if should_track_retrieval:
-                    await self.bot.user_repo.increment_retrieval_count(user_id)
-
                 await asyncio.sleep(1)  # Avoid flooding
 
             except Exception as e:
                 logger.error(f"Error sending file: {e}")
                 continue
+
+        # Batch increment retrieval count after loop (more efficient than per-file)
+        if should_track_retrieval and success_count > 0:
+            await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files)} files!")
 

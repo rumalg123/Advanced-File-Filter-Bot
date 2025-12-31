@@ -384,7 +384,7 @@ class SearchHandler:
                     document_file_id=file.file_id,
                     description=f"📊 {format_file_size(file.file_size)} • {file.file_type.value.title()}",
                     caption=caption,
-                    parse_mode=enums.ParseMode.HTML
+                    parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 results.append(result)
 

@@ -106,3 +106,38 @@ class CaptionFormatter:
     def get_parse_mode() -> enums.ParseMode:
         """Get parse mode for captions"""
         return enums.ParseMode.HTML
+
+    @classmethod
+    def format_caption_from_config(
+        cls,
+        file: MediaFile,
+        config,
+        is_batch: bool = False
+    ) -> Optional[str]:
+        """
+        Format file caption using bot configuration values.
+
+        Convenience wrapper for format_file_caption() that extracts
+        configuration values automatically.
+
+        Args:
+            file: MediaFile object
+            config: Bot configuration object with caption settings
+            is_batch: Whether this is a batch file
+
+        Returns:
+            Formatted caption string or None
+        """
+        delete_minutes = None
+        if hasattr(config, 'MESSAGE_DELETE_SECONDS') and config.MESSAGE_DELETE_SECONDS > 0:
+            delete_minutes = config.MESSAGE_DELETE_SECONDS // 60
+
+        return cls.format_file_caption(
+            file=file,
+            custom_caption=getattr(config, 'CUSTOM_FILE_CAPTION', None),
+            batch_caption=getattr(config, 'BATCH_FILE_CAPTION', None),
+            keep_original=getattr(config, 'KEEP_ORIGINAL_CAPTION', False),
+            is_batch=is_batch,
+            auto_delete_minutes=delete_minutes,
+            auto_delete_message=getattr(config, 'AUTO_DELETE_MESSAGE', None)
+        )

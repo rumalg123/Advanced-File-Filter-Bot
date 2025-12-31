@@ -1,9 +1,9 @@
 
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, List
 
 from pyrogram import Client, enums
 from pyrogram.errors import UserNotParticipant, ChatAdminRequired
-from pyrogram.types import Message, CallbackQuery, InlineQuery
+from pyrogram.types import Message, CallbackQuery, InlineQuery, InlineKeyboardButton
 
 from core.utils.logger import get_logger
 logger = get_logger(__name__)
@@ -118,6 +118,90 @@ class SubscriptionManager:
         except Exception as e:
             logger.error(f"Error getting chat link for {chat_id}: {e}")
             return f"Chat ID: {chat_id}"
+
+    async def build_subscription_buttons(
+        self,
+        client: Client,
+        user_id: int,
+        callback_type: str = "general",
+        extra_data: Optional[str] = None,
+        session_key: Optional[str] = None
+    ) -> List[List[InlineKeyboardButton]]:
+        """
+        Build subscription button list for force subscribe prompts.
+
+        This consolidates the duplicate button-building logic from:
+        - handlers/decorators.py
+        - handlers/commands_handlers/user.py
+        - handlers/callbacks_handlers/file.py
+
+        Args:
+            client: Pyrogram client
+            user_id: User requesting access
+            callback_type: Type of callback ('general', 'deeplink', 'file', 'sendall', 'search')
+            extra_data: Additional data for callback (file_identifier, search_key, etc.)
+            session_key: Session key for deeplink caching (optional)
+
+        Returns:
+            List of button rows for InlineKeyboardMarkup
+        """
+        buttons = []
+
+        # AUTH_CHANNEL button
+        if self.auth_channel:
+            try:
+                chat_link = await self.get_chat_link(client, self.auth_channel)
+                try:
+                    chat = await client.get_chat(self.auth_channel)
+                    channel_name = chat.title or "Updates Channel"
+                except Exception:
+                    channel_name = "Updates Channel"
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"📢 Join {channel_name}",
+                        url=chat_link
+                    )
+                ])
+            except Exception as e:
+                logger.error(f"Error creating AUTH_CHANNEL button: {e}")
+
+        # AUTH_GROUPS buttons
+        for group_id in self.auth_groups:
+            try:
+                chat_link = await self.get_chat_link(client, group_id)
+                try:
+                    chat = await client.get_chat(group_id)
+                    group_name = chat.title or "Required Group"
+                except Exception:
+                    group_name = "Required Group"
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        f"👥 Join {group_name}",
+                        url=chat_link
+                    )
+                ])
+            except Exception as e:
+                logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
+
+        # Build Try Again callback data based on type
+        if callback_type == "deeplink" and session_key:
+            callback_data = f"checksub#dl#{session_key}"
+        elif callback_type == "file" and extra_data:
+            callback_data = f"checksub#{user_id}#file#{extra_data}"
+        elif callback_type == "sendall" and extra_data:
+            callback_data = f"checksub#{user_id}#sendall#{extra_data}"
+        elif callback_type == "search":
+            callback_data = f"checksub#{user_id}#search"
+        else:
+            callback_data = f"checksub#{user_id}#general"
+
+        buttons.append([
+            InlineKeyboardButton("🔄 Try Again", callback_data=callback_data)
+        ])
+
+        return buttons
 
     async def check_auth_channels_accessibility(self, client: Client) -> Dict[str, Any]:
         """Check if bot can access AUTH_CHANNEL and AUTH_GROUPS"""

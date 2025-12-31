@@ -1,7 +1,8 @@
-from pyrogram import Client, filters, enums
+from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.connection import ConnectionService
+from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from handlers.base import BaseHandler
@@ -91,7 +92,7 @@ class ConnectionHandler(BaseHandler):
             )
 
             if success:
-                await message.reply_text(msg, quote=True, parse_mode=enums.ParseMode.HTML)
+                await message.reply_text(msg, quote=True, parse_mode=CaptionFormatter.get_parse_mode())
 
                 # If connected from group, send confirmation to PM
                 if chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
@@ -100,7 +101,7 @@ class ConnectionHandler(BaseHandler):
                             client.send_message,
                             chat_id=user_id,
                             text=f"Connected to <b>{title}</b>!",
-                            parse_mode=enums.ParseMode.HTML
+                            parse_mode=CaptionFormatter.get_parse_mode()
                         )
                     except Exception:
                         pass
@@ -332,7 +333,7 @@ class ConnectionHandler(BaseHandler):
         await query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
+            parse_mode=CaptionFormatter.get_parse_mode()
         )
 
     async def connection_action_callback(self, client: Client, query: CallbackQuery):
