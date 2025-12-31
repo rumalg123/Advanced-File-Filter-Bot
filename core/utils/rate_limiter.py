@@ -38,7 +38,7 @@ class RateLimiter:
             action: str
     ) -> Tuple[bool, Optional[int]]:
         """
-        Check if user has exceeded rate limit
+        Check if user has exceeded rate limit using atomic operations.
         Returns: (is_allowed, seconds_until_reset)
         """
         config = self.configs.get(action)
@@ -53,10 +53,16 @@ class RateLimiter:
         if cooldown:
             return False, int(cooldown)
 
-        # Get current count
-        current_count = await self.cache.get(key) or 0
+        # ATOMIC: Increment first, then check value
+        # This prevents race conditions where multiple requests pass the check
+        new_count = await self.cache.increment(key)
 
-        if current_count >= config.max_requests:
+        # Set expiration on first request (when count becomes 1)
+        if new_count == 1:
+            await self.cache.expire(key, config.time_window)
+
+        # Check if limit exceeded AFTER incrementing
+        if new_count > config.max_requests:
             # Apply cooldown
             await self.cache.set(
                 cooldown_key,
@@ -64,12 +70,6 @@ class RateLimiter:
                 expire=config.cooldown_time
             )
             return False, config.cooldown_time
-
-        # Increment counter and ensure expiration is always set
-        new_count = await self.cache.increment(key)
-        
-        # Always set expiration to prevent keys without TTL
-        await self.cache.expire(key, config.time_window)
 
         return True, None
 

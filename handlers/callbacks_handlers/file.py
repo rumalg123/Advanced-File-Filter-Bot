@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from typing import Set
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait, UserIsBlocked
@@ -17,6 +18,27 @@ logger = get_logger(__name__)
 
 class FileCallbackHandler(BaseCommandHandler):
     """Handler for file-related callbacks"""
+
+    def __init__(self, bot):
+        super().__init__(bot)
+        # Track pending auto-delete tasks for cleanup on shutdown
+        self._pending_delete_tasks: Set[asyncio.Task] = set()
+
+    def _track_task(self, coro) -> asyncio.Task:
+        """Create a tracked task that auto-removes from pending set on completion"""
+        task = asyncio.create_task(coro)
+        self._pending_delete_tasks.add(task)
+        task.add_done_callback(self._pending_delete_tasks.discard)
+        return task
+
+    async def cancel_pending_tasks(self):
+        """Cancel all pending auto-delete tasks (call during shutdown)"""
+        if self._pending_delete_tasks:
+            logger.info(f"Cancelling {len(self._pending_delete_tasks)} pending delete tasks")
+            for task in self._pending_delete_tasks:
+                task.cancel()
+            await asyncio.gather(*self._pending_delete_tasks, return_exceptions=True)
+            self._pending_delete_tasks.clear()
 
     def encode_file_identifier(self, file_identifier: str, protect: bool = False) -> str:
         """
@@ -147,8 +169,8 @@ class FileCallbackHandler(BaseCommandHandler):
 
             await query.answer("✅ File sent!", show_alert=False)
 
-            # Schedule deletion
-            asyncio.create_task(
+            # Schedule deletion with task tracking for cleanup
+            self._track_task(
                 self._auto_delete_message(sent_msg, delete_time)
             )
 
@@ -435,10 +457,10 @@ class FileCallbackHandler(BaseCommandHandler):
 
         await status_msg.edit_text(final_text)
 
-        # Schedule auto-deletion for all sent messages
+        # Schedule auto-deletion for all sent messages with task tracking
         if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
             for sent_msg in sent_messages:
-                asyncio.create_task(
+                self._track_task(
                     self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
                 )
 

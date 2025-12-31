@@ -1,4 +1,4 @@
-
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List, TypeVar, Generic
 
@@ -20,14 +20,24 @@ class BaseRepository(ABC, Generic[T]):
         self.cache = cache_manager
         self.collection_name = collection_name
         self._collection = None
-        self.ttl = CacheTTLConfig()  # Add this
+        self._collection_lock = asyncio.Lock()
+        self.ttl = CacheTTLConfig()
+
+    async def get_collection(self):
+        """Get collection with lazy initialization (thread-safe)"""
+        if self._collection is not None:
+            return self._collection
+
+        async with self._collection_lock:
+            # Double-check after acquiring lock
+            if self._collection is None:
+                self._collection = await self.db_pool.get_collection(self.collection_name)
+        return self._collection
 
     @property
     async def collection(self):
-        """Lazy load collection"""
-        if self._collection is None:
-            self._collection = await self.db_pool.get_collection(self.collection_name)
-        return self._collection
+        """Lazy load collection - deprecated, use get_collection() instead"""
+        return await self.get_collection()
 
     @abstractmethod
     def _entity_to_dict(self, entity: T) -> Dict[str, Any]:

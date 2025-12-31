@@ -34,6 +34,7 @@ class OptimizedSerializer:
     COMPRESSION_THRESHOLD = 1024  # 1KB
     
     # Method preferences based on data type
+    # Note: Avoid pickle for security - use JSON/msgpack only
     METHOD_PREFERENCES = {
         dict: SerializationMethod.MSGPACK,
         list: SerializationMethod.MSGPACK,
@@ -43,6 +44,9 @@ class OptimizedSerializer:
         bool: SerializationMethod.JSON,
         type(None): SerializationMethod.JSON,
     }
+
+    # SECURITY: Disable pickle for new serializations
+    PICKLE_DISABLED = True
     
     def __init__(self, compression_level: int = 6):
         """
@@ -64,10 +68,14 @@ class OptimizedSerializer:
     def _choose_method(self, data: Any, hint: Optional[SerializationMethod] = None) -> SerializationMethod:
         """Choose optimal serialization method based on data type and size"""
         if hint:
+            # If pickle is disabled, redirect pickle hints to msgpack
+            if self.PICKLE_DISABLED and hint in (SerializationMethod.PICKLE, SerializationMethod.COMPRESSED_PICKLE):
+                return SerializationMethod.MSGPACK
             return hint
-        
+
         data_type = type(data)
-        return self.METHOD_PREFERENCES.get(data_type, SerializationMethod.PICKLE)
+        default = SerializationMethod.MSGPACK if self.PICKLE_DISABLED else SerializationMethod.PICKLE
+        return self.METHOD_PREFERENCES.get(data_type, default)
     
     def _serialize_json(self, data: Any) -> bytes:
         """Serialize using JSON with datetime support"""
@@ -143,8 +151,12 @@ class OptimizedSerializer:
             
         except Exception as e:
             logger.error(f"Serialization failed: {e}")
-            # Fallback to pickle
-            fallback = b'p' + pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
+            # Fallback to msgpack (safer than pickle)
+            try:
+                fallback = b'm' + self._serialize_msgpack(data)
+            except Exception:
+                # Last resort: JSON with string conversion
+                fallback = b'j' + json.dumps(str(data)).encode('utf-8')
             self._stats['serializations'] += 1
             return fallback
     
@@ -162,7 +174,10 @@ class OptimizedSerializer:
         return msgpack.unpackb(data, object_hook=msgpack_decoder, raw=False)
     
     def _deserialize_pickle(self, data: bytes) -> Any:
-        """Deserialize pickle data"""
+        """Deserialize pickle data (legacy support only - security warning)"""
+        # SECURITY WARNING: pickle can execute arbitrary code
+        # This is only kept for backward compatibility with existing cache data
+        logger.warning("Deserializing pickle data - this format is deprecated for security reasons")
         return pickle.loads(data)
     
     def deserialize(self, data: bytes) -> Any:
@@ -223,16 +238,21 @@ class OptimizedSerializer:
             return json.loads(data.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError):
             try:
-                # Try pickle (binary format)
-                return pickle.loads(data)
-            except:
+                # Try msgpack (binary format, safer than pickle)
+                return msgpack.unpackb(data, raw=False)
+            except Exception:
                 try:
-                    # Try as plain string
-                    return data.decode('utf-8')
-                except UnicodeDecodeError:
-                    # Last resort - return None for corrupted data
-                    logger.warning(f"Could not deserialize data of length {len(data)}")
-                    return None
+                    # Try pickle as last binary option (legacy support with warning)
+                    logger.warning("Deserializing legacy pickle data - this format is deprecated")
+                    return pickle.loads(data)
+                except Exception:
+                    try:
+                        # Try as plain string
+                        return data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        # Last resort - return None for corrupted data
+                        logger.warning(f"Could not deserialize data of length {len(data)}")
+                        return None
     
     def estimate_memory_usage(self, data: Any) -> Dict[str, int]:
         """Estimate memory usage for different serialization methods"""

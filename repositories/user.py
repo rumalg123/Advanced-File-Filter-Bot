@@ -366,7 +366,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if user.last_retrieval_date != today:
             # Reset count for new day
             collection = await self.collection
-            result = await collection.update_one(
+            result = await self.db_pool.execute_with_retry(
+                collection.update_one,
                 {'_id': user_id},
                 {
                     '$set': {
@@ -383,7 +384,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Use atomic increment for same day to prevent race conditions
         collection = await self.collection
-        result = await collection.find_one_and_update(
+        result = await self.db_pool.execute_with_retry(
+            collection.find_one_and_update,
             {'_id': user_id},
             {
                 '$inc': {'daily_retrieval_count': 1},
@@ -433,7 +435,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if user.last_retrieval_date != today:
             # Reset count for new day and add the batch count
             collection = await self.collection
-            result = await collection.update_one(
+            result = await self.db_pool.execute_with_retry(
+                collection.update_one,
                 {'_id': user_id},
                 {
                     '$set': {
@@ -450,7 +453,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Use atomic increment for same day with batch count
         collection = await self.collection
-        result = await collection.find_one_and_update(
+        result = await self.db_pool.execute_with_retry(
+            collection.find_one_and_update,
             {'_id': user_id},
             {
                 '$inc': {'daily_retrieval_count': count},
