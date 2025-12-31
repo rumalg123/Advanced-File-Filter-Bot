@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
@@ -219,7 +219,7 @@ class DeleteHandler:
                 except Exception:
                     pass
 
-    def _extract_file_info(self, message: Message) -> Dict[str, Any] | None:
+    def _extract_file_info(self, message: Message) -> Optional[Dict[str, Any]]:
         """Extract file information from message"""
         media_types = [
             ('document', lambda m: m.document),

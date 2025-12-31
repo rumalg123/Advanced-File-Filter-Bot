@@ -224,7 +224,6 @@ class MediaSearchBot(Client):
             rate_limiter: RateLimiter
     ):
         self.background_tasks = None
-        self.subscription_manager = None
         self.config = config
         self.db_pool = db_pool
         self.cache = cache_manager

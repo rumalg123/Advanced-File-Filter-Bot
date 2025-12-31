@@ -1,11 +1,10 @@
-import asyncio
 import random
 import re
 import uuid
 from datetime import datetime
-from weakref import WeakSet
+from typing import Optional, List
+
 from pyrogram import Client, filters
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
@@ -13,156 +12,58 @@ from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.file_emoji import get_file_emoji
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class RequestHandler:
+class RequestHandler(BaseHandler):
     """Handler for #request feature in support group"""
 
     def __init__(self, bot):
-        self.bot = bot
+        super().__init__(bot)
         self.ttl = CacheTTLConfig()
-        self._handlers = []  # Add this to track handlers
-        self._shutdown = asyncio.Event()  # Add shutdown signaling
-        self.auto_delete_tasks = WeakSet()  # Track auto-delete tasks
-        self.background_tasks = []  # Track any background tasks
+        self.background_tasks: List = []  # Track any background tasks
         self.register_handlers()
 
-    def register_handlers(self):
+    def register_handlers(self) -> None:
         """Register request handlers"""
         if not self.bot.config.SUPPORT_GROUP_ID:
             logger.info("Support group not configured, skipping request handler")
             return
 
         # Handle #request messages in support group
-        handler1 = MessageHandler(
-            self.handle_request_message,
-            filters.chat(self.bot.config.SUPPORT_GROUP_ID) & filters.text & filters.regex(r"^#request\s+")
-        )
-
-        # Use handler_manager if available
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            self.bot.handler_manager.add_handler(handler1)
-        else:
-            self.bot.add_handler(handler1)
-
-        self._handlers.append(handler1)
+        self._register_message_handlers([
+            (self.handle_request_message,
+             filters.chat(self.bot.config.SUPPORT_GROUP_ID) & filters.text & filters.regex(r"^#request\s+"))
+        ])
 
         # Handle request action callbacks
-        handler2 = CallbackQueryHandler(
-            self.handle_request_callback,
-            filters.regex(r"^req_action#")
-        )
-
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            self.bot.handler_manager.add_handler(handler2)
-        else:
-            self.bot.add_handler(handler2)
-
-        self._handlers.append(handler2)
+        self._register_callback_handlers([
+            (self.handle_request_callback, filters.regex(r"^req_action#"))
+        ])
 
         logger.info(f"RequestHandler registered {len(self._handlers)} handlers")
 
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up RequestHandler...")
-        logger.info(f"Active auto-delete tasks: {len(self.auto_delete_tasks)}")
-
-        # Signal shutdown
-        self._shutdown.set()
-
-        # If handler_manager is available, let it handle everything
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info("HandlerManager will handle cleanup")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
-            self._handlers.clear()
-            self.auto_delete_tasks.clear()
-            self.background_tasks.clear()
-            logger.info("RequestHandler cleanup complete")
-            return
-
-        # Manual cleanup only if no handler_manager
-        # Cancel auto-delete tasks
-        active_tasks = list(self.auto_delete_tasks)
-        cancelled_count = 0
-
-        for task in active_tasks:
-            if not task.done():
-                task.cancel()
-                cancelled_count += 1
-
-        # Wait for tasks to complete
-        if active_tasks:
-            await asyncio.gather(*active_tasks, return_exceptions=True)
-
-        logger.info(f"Cancelled {cancelled_count} of {len(active_tasks)} auto-delete tasks")
-
-        # Cancel any background tasks
+    # cleanup() method is inherited from BaseHandler, with background_tasks cleanup added
+    async def cleanup(self) -> None:
+        """Clean up handler resources including background tasks"""
+        # Cancel any background tasks specific to this handler
         for task in self.background_tasks:
             if not task.done():
                 task.cancel()
 
         if self.background_tasks:
+            import asyncio
             await asyncio.gather(*self.background_tasks, return_exceptions=True)
 
-        # Remove handlers
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except ValueError as e:
-                if "x not in list" in str(e):
-                    logger.debug(f"Handler already removed")
-                else:
-                    logger.error(f"Error removing handler: {e}")
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        self._handlers.clear()
-        self.auto_delete_tasks.clear()
         self.background_tasks.clear()
-        logger.info("RequestHandler cleanup complete")
 
-    def _create_auto_delete_task(self, coro):
-        """Create an auto-delete task with proper tracking"""
-        if self._shutdown.is_set():
-            logger.debug("Shutdown in progress, not creating new auto-delete task")
-            coro.close()
-            return None
+        # Call parent cleanup
+        await super().cleanup()
 
-        # Use handler_manager if available
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            return self.bot.handler_manager.create_auto_delete_task(coro)
-        else:
-            # Fallback to local tracking
-            task = asyncio.create_task(coro)
-            self.auto_delete_tasks.add(task)
-            return task
-
-    def _schedule_auto_delete(self, message: Message, delay: int):
-        """Schedule auto-deletion using handler_manager if available"""
-        if delay <= 0 or self._shutdown.is_set():
-            return None
-
-        coro = self._auto_delete_message(message, delay)
-        return self._create_auto_delete_task(coro)
-
-    async def _auto_delete_message(self, message: Message, delay: int):
-        """Auto-delete message after delay"""
-        try:
-            await asyncio.sleep(delay)
-            if not self._shutdown.is_set():  # Only delete if not shutting down
-                await message.delete()
-        except asyncio.CancelledError:
-            logger.debug("Auto-delete task cancelled")
-            pass
-        except Exception as e:
-            logger.debug(f"Failed to delete message: {e}")
-
-    # Update the handle_request_message method in RequestHandler:
+    # _create_auto_delete_task, _schedule_auto_delete, and _auto_delete_message
+    # are all inherited from BaseHandler
 
     async def handle_request_message(self, client: Client, message: Message):
         """Handle #request messages in support group"""
@@ -250,7 +151,7 @@ class RequestHandler:
             )
             await self._forward_request_to_admins(client, message, keyword)
 
-    async def _search_for_request(self, client: Client, message: Message, keyword: str, user_id: int) -> bool | None:
+    async def _search_for_request(self, client: Client, message: Message, keyword: str, user_id: int) -> Optional[bool]:
         """Search for files matching the request"""
         try:
             # Don't search if shutting down

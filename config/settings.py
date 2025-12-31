@@ -125,9 +125,43 @@ class ServerConfig(BaseSettings):
         return v
 
 
+class ProcessingLimitsConfig(BaseSettings):
+    """Processing limits and batch configuration constants"""
+
+    model_config = SettingsConfigDict(
+        env_prefix='PROCESSING_',
+        case_sensitive=False,
+        env_file='.env',
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
+
+    # Channel indexing batch sizes (dynamic based on queue size)
+    batch_size_high_load: int = Field(default=50, description="Batch size when queue > 500")
+    batch_size_medium_load: int = Field(default=30, description="Batch size when queue > 200")
+    batch_size_low_load: int = Field(default=20, description="Batch size when queue <= 200")
+
+    # Queue thresholds for dynamic batch sizing
+    queue_high_threshold: int = Field(default=500, description="Queue size threshold for high load")
+    queue_medium_threshold: int = Field(default=200, description="Queue size threshold for medium load")
+
+    # Batch link limits
+    max_batch_messages: int = Field(default=10000, description="Maximum messages in a single batch link")
+
+    # Queue sizes
+    message_queue_size: int = Field(default=1000, description="Maximum message queue size")
+    overflow_queue_size: int = Field(default=500, description="Maximum overflow queue size")
+
+    # Processing delays
+    inter_message_delay: float = Field(default=0.5, description="Delay between processing messages in seconds")
+    batch_wait_time_high: int = Field(default=2, description="Wait time in high load")
+    batch_wait_time_medium: int = Field(default=3, description="Wait time in medium load")
+    batch_wait_time_low: int = Field(default=5, description="Wait time in low load")
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags and toggles"""
-    
+
     model_config = SettingsConfigDict(
         env_prefix='',
         case_sensitive=False,
@@ -135,7 +169,7 @@ class FeatureConfig(BaseSettings):
         env_file_encoding='utf-8',
         extra='ignore'
     )
-    
+
     # Feature toggles
     use_caption_filter: bool = Field(default=True, description="Enable caption filtering")
     disable_premium: bool = Field(default=True, description="Disable premium features")
@@ -143,12 +177,12 @@ class FeatureConfig(BaseSettings):
     public_file_store: bool = Field(default=False, description="Enable public file store")
     keep_original_caption: bool = Field(default=True, description="Keep original file captions")
     use_original_caption_for_batch: bool = Field(default=True, description="Use original captions in batch mode")
-    
+
     # Premium system
     premium_duration_days: int = Field(default=30, description="Premium subscription duration in days")
     non_premium_daily_limit: int = Field(default=10, description="Daily file limit for free users")
     premium_price: str = Field(default="$1", description="Premium subscription price with currency")
-    
+
     # Timeouts and limits
     message_delete_seconds: int = Field(default=300, description="Auto-delete timeout in seconds")
     max_btn_size: int = Field(default=12, description="Maximum button size")
@@ -286,7 +320,7 @@ class UpdateConfig(BaseSettings):
 
 class Settings:
     """Main application settings"""
-    
+
     def __init__(self):
         """Initialize all sub-configurations"""
         # Initialize sub-configurations directly to avoid nested Pydantic JSON parsing issues
@@ -294,6 +328,7 @@ class Settings:
         self.database = DatabaseConfig()
         self.redis = RedisConfig()
         self.server = ServerConfig()
+        self.processing = ProcessingLimitsConfig()
         self.features = FeatureConfig()
         self.channels = ChannelConfig()
         self.messages = MessageConfig()

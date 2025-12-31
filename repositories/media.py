@@ -83,8 +83,21 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """Convert dictionary to MediaFile entity"""
         if isinstance(data, MediaFile):
             return data  # Already the correct type
-        data['file_id'] = data.pop('_id')
-        data['file_type'] = FileType(data['file_type'])
+
+        # Handle _id to file_id conversion safely
+        if '_id' in data:
+            data['file_id'] = data.pop('_id')
+        elif 'file_id' not in data:
+            raise KeyError("Missing required field: '_id' or 'file_id'")
+
+        # Convert file_type safely
+        file_type_value = data.get('file_type')
+        if isinstance(file_type_value, str):
+            data['file_type'] = FileType(file_type_value)
+        elif isinstance(file_type_value, FileType):
+            pass  # Already correct type
+        else:
+            data['file_type'] = FileType.DOCUMENT  # Default fallback
         if data.get('indexed_at'):
             if isinstance(data['indexed_at'], str):
                 data['indexed_at'] = datetime.fromisoformat(data['indexed_at'])

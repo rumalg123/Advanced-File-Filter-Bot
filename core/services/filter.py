@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 from pyrogram import Client
 from pyrogram.enums import ChatType
@@ -122,7 +122,7 @@ class FilterService:
         """Get a filter by keyword"""
         return await self.filter_repo.find_filter(group_id, keyword)
 
-    async def delete_filter(self, group_id: str | int | None, keyword: str) -> int:
+    async def delete_filter(self, group_id: Optional[Union[str, int]], keyword: str) -> int:
         """Delete a filter"""
         if group_id is None:
             logger.warning("Attempted to delete filter with None group_id")

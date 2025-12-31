@@ -1,91 +1,44 @@
 # handlers/filter.py
-import asyncio
 import io
 from typing import List
 
 from pyrogram import Client, filters, enums
-from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.utils.logger import get_logger
-from handlers.commands_handlers.base import BaseCommandHandler
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class FilterHandler(BaseCommandHandler):
+class FilterHandler(BaseHandler):
     """Handler for filter-related commands and messages"""
 
     def __init__(self, bot):
         super().__init__(bot)
-        self.bot = bot
         self.filter_service = bot.filter_service
         self.connection_service = bot.connection_service
-        self._handlers = []  # Track handlers
-        self._shutdown = asyncio.Event()
         self.register_handlers()
 
-    def register_handlers(self):
+    def register_handlers(self) -> None:
         """Register filter handlers"""
         # Check if filters are disabled
         if self.bot.config.DISABLE_FILTER:
             logger.info("Filters are disabled via DISABLE_FILTER config")
             return
 
-        # Command handlers
-        handlers_to_register = [
+        # Command handlers - use BaseHandler's method
+        self._register_message_handlers([
             (self.add_filter_command, filters.command(["add", "filter"]) & (filters.private | filters.group)),
             (self.view_filters_command,
              filters.command(["filters", "viewfilters"]) & (filters.private | filters.group)),
             (self.delete_filter_command, filters.command(["delf", "deletef"]) & (filters.private | filters.group)),
             (self.delete_all_command, filters.command(["delallf", "deleteallf"]) & (filters.private | filters.group))
-        ]
-
-        for handler_func, handler_filter in handlers_to_register:
-            handler = MessageHandler(handler_func, handler_filter)
-
-            # Use handler_manager if available
-            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-                self.bot.handler_manager.add_handler(handler)
-            else:
-                self.bot.add_handler(handler)
-
-            self._handlers.append(handler)
+        ])
 
         logger.info(f"FilterHandler registered {len(self._handlers)} handlers")
 
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up FilterHandler...")
-
-        # Signal shutdown
-        self._shutdown.set()
-
-        # If handler_manager is available, let it handle everything
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info("HandlerManager will handle handler removal")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
-            self._handlers.clear()
-            logger.info("FilterHandler cleanup complete")
-            return
-
-        # Manual cleanup only if no handler_manager
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except ValueError as e:
-                if "x not in list" in str(e):
-                    logger.debug(f"Handler already removed")
-                else:
-                    logger.error(f"Error removing handler: {e}")
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        self._handlers.clear()
-        logger.info("FilterHandler cleanup complete")
+    # cleanup() method is inherited from BaseHandler
 
     def _split_quotes(self, text: str) -> List[str]:
         """Split text respecting quotes"""

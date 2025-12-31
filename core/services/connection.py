@@ -175,7 +175,7 @@ class ConnectionService:
             user_id: int,
             chat_id: int,
             chat_type: enums.ChatType
-    ) -> Tuple[int | None, Optional[str]]:
+    ) -> Tuple[Optional[int], Optional[str]]:
         """
         Get appropriate chat ID based on context
         Returns: (chat_id, chat_title)

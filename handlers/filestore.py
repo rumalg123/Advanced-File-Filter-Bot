@@ -1,31 +1,27 @@
-import asyncio
-import re
 from typing import Optional
 
 from pyrogram import Client, filters
-from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 from pyrogram.enums import ParseMode
+
 from core.services.filestore import FileStoreService
-from core.utils.errors import ErrorFactory, ErrorCode
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class FileStoreHandler:
+class FileStoreHandler(BaseHandler):
     """Handler for file store operations"""
 
     def __init__(self, bot, filestore_service: Optional[FileStoreService] = None) -> None:
-        self.bot = bot
+        super().__init__(bot)
         # Use injected service or fallback to bot's service
         self.filestore_service = filestore_service or bot.filestore_service
-        self._handlers = []  # Track handlers
-        self._shutdown = asyncio.Event()
         self.register_handlers()
 
-    def register_handlers(self):
+    def register_handlers(self) -> None:
         """Register filestore handlers"""
         handlers_to_register = []
 
@@ -46,52 +42,12 @@ class FileStoreHandler:
                 (self.premium_batch_command, filters.command(['batch_premium', 'bprem', 'pbatch_premium', 'pbprem']))
             ])
 
-        # Register all handlers
-        for handler_func, handler_filter in handlers_to_register:
-            handler = MessageHandler(handler_func, handler_filter)
-
-            # Use handler_manager if available
-            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-                self.bot.handler_manager.add_handler(handler)
-            else:
-                self.bot.add_handler(handler)
-
-            self._handlers.append(handler)
+        # Register all handlers using BaseHandler's method
+        self._register_message_handlers(handlers_to_register)
 
         logger.info(f"FileStoreHandler registered {len(self._handlers)} handlers")
 
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up FileStoreHandler...")
-
-        # Signal shutdown
-        self._shutdown.set()
-
-        # If handler_manager is available, let it handle everything
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info("HandlerManager will handle handler removal")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
-            self._handlers.clear()
-            logger.info("FileStoreHandler cleanup complete")
-            return
-
-        # Manual cleanup only if no handler_manager
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except ValueError as e:
-                if "x not in list" in str(e):
-                    logger.debug(f"Handler already removed")
-                else:
-                    logger.error(f"Error removing handler: {e}")
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        self._handlers.clear()
-        logger.info("FileStoreHandler cleanup complete")
+    # cleanup() method is inherited from BaseHandler
 
     async def link_command(self, client: Client, message: Message) -> None:
         """Generate shareable link for a file"""

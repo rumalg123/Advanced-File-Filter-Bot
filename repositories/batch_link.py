@@ -6,11 +6,15 @@ from enum import Enum
 from pymongo import IndexModel, ASCENDING, DESCENDING
 from pymongo.errors import DuplicateKeyError
 
+from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Processing limits from config
+_processing_config = settings.processing
 
 
 @dataclass
@@ -49,7 +53,15 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
 
     def _dict_to_entity(self, data: Dict[str, Any]) -> BatchLink:
         """Convert dictionary to BatchLink entity"""
-        data['id'] = data.pop('_id')
+        if isinstance(data, BatchLink):
+            return data  # Already the correct type
+
+        # Handle _id to id conversion safely
+        if '_id' in data:
+            data['id'] = data.pop('_id')
+        elif 'id' not in data:
+            raise KeyError("Missing required field: '_id' or 'id'")
+
         if data.get('created_at'):
             if isinstance(data['created_at'], str):
                 data['created_at'] = datetime.fromisoformat(data['created_at'])
@@ -108,10 +120,10 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             logger.error("Invalid message range")
             return False
             
-        # Check reasonable batch size
+        # Check reasonable batch size using config limit
         message_count = batch_link.to_msg_id - batch_link.from_msg_id + 1
-        if message_count > 10000:
-            logger.error(f"Batch too large: {message_count} messages")
+        if message_count > _processing_config.max_batch_messages:
+            logger.error(f"Batch too large: {message_count} messages (max: {_processing_config.max_batch_messages})")
             return False
             
         return True

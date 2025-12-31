@@ -5,12 +5,17 @@ from enum import Enum
 
 from pymongo import UpdateOne
 
+from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.enhanced_cache import cache_premium_status
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger
 logger = get_logger(__name__)
+
+# Feature config reference to avoid circular imports
+_feature_config = settings.features
+_channel_config = settings.channels
 
 # Import batch optimizations
 try:
@@ -664,14 +669,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""
-        # Check if premium is disabled
-        from bot import BotConfig
-        config = BotConfig()
-        if config.DISABLE_PREMIUM:
+        # Check if premium is disabled - use settings to avoid circular import
+        if _feature_config.disable_premium:
             return True, "Unlimited access (Premium disabled)"
 
         # Check if user is admin
-        is_admin = user_id in config.ADMINS if config.ADMINS else False
+        admin_list = _channel_config.get_admin_list()
+        is_admin = user_id in admin_list if admin_list else False
         if is_admin:
             return True, "Admin access"
 
@@ -786,12 +790,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.create_user(user_id, "Unknown")
             user = await self.get_user(user_id)
 
-        # Get settings from config
-        from bot import BotConfig
-        config = BotConfig()
-
-        REQUEST_PER_DAY = config.REQUEST_PER_DAY if hasattr(config, 'REQUEST_PER_DAY') else 3
-        REQUEST_WARNING_LIMIT = config.REQUEST_WARNING_LIMIT if hasattr(config, 'REQUEST_WARNING_LIMIT') else 5
+        # Get settings from config - use settings to avoid circular import
+        REQUEST_PER_DAY = _feature_config.request_per_day
+        REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
         today = date.today()
 
@@ -872,10 +873,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 'exists': False
             }
 
-        from bot import BotConfig
-        config = BotConfig()
-        REQUEST_PER_DAY = config.REQUEST_PER_DAY if hasattr(config, 'REQUEST_PER_DAY') else 3
-        REQUEST_WARNING_LIMIT = config.REQUEST_WARNING_LIMIT if hasattr(config, 'REQUEST_WARNING_LIMIT') else 5
+        # Use settings to avoid circular import
+        REQUEST_PER_DAY = _feature_config.request_per_day
+        REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
         today = date.today()
         daily_count = user.daily_request_count if user.last_request_date == today else 0

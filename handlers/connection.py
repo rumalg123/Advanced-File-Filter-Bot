@@ -1,105 +1,48 @@
-import asyncio
-
 from pyrogram import Client, filters, enums
-from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.connection import ConnectionService
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class ConnectionHandler:
+class ConnectionHandler(BaseHandler):
     """Handler for connection management commands"""
 
     def __init__(self, bot, connection_service: ConnectionService):
-        self.bot = bot
+        super().__init__(bot)
         self.connection_service = connection_service
-        self._handlers = []  # Track handlers
-        self._shutdown = asyncio.Event()
         self.register_handlers()
 
-    def register_handlers(self):
+    def register_handlers(self) -> None:
         """Register connection handlers"""
         # Check if filters are disabled (connections are mainly for filters)
         if self.bot.config.DISABLE_FILTER:
             logger.info("Connections are disabled via DISABLE_FILTER config")
             return
 
-        # Command handlers
-        command_handlers = [
+        # Command handlers - use BaseHandler's method
+        self._register_message_handlers([
             (self.connect_command, filters.command("connect") & (filters.private | filters.group)),
             (self.disconnect_command, filters.command("disconnect") & (filters.private | filters.group)),
             (self.connections_command, filters.command("connections") & filters.private)
-        ]
+        ])
 
-        for handler_func, handler_filter in command_handlers:
-            handler = MessageHandler(handler_func, handler_filter)
-
-            # Use handler_manager if available
-            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-                self.bot.handler_manager.add_handler(handler)
-            else:
-                self.bot.add_handler(handler)
-
-            self._handlers.append(handler)
-
-        # Callback handlers
-        callback_handlers = [
+        # Callback handlers - use BaseHandler's method
+        self._register_callback_handlers([
             (self.connection_callback, filters.regex(r"^groupcb:")),
             (self.connection_action_callback, filters.regex(
                 r"^(connect_group|deactivate_group|delete_connection|disconnect_group|disconnect_group_with_filters):")),
             (self.cleanup_connections_callback, filters.regex(r"^cleanup_connections$")),
             (self.delete_group_filters_callback, filters.regex(r"^delete_group_filters:"))
-        ]
-
-        for handler_func, handler_filter in callback_handlers:
-            handler = CallbackQueryHandler(handler_func, handler_filter)
-
-            # Use handler_manager if available
-            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-                self.bot.handler_manager.add_handler(handler)
-            else:
-                self.bot.add_handler(handler)
-
-            self._handlers.append(handler)
+        ])
 
         logger.info(f"ConnectionHandler registered {len(self._handlers)} handlers")
 
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up ConnectionHandler...")
-
-        # Signal shutdown
-        self._shutdown.set()
-
-        # If handler_manager is available, let it handle everything
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info("HandlerManager will handle handler removal")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
-            self._handlers.clear()
-            logger.info("ConnectionHandler cleanup complete")
-            return
-
-        # Manual cleanup only if no handler_manager
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except ValueError as e:
-                if "x not in list" in str(e):
-                    logger.debug(f"Handler already removed")
-                else:
-                    logger.error(f"Error removing handler: {e}")
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        self._handlers.clear()
-        logger.info("ConnectionHandler cleanup complete")
+    # cleanup() method is inherited from BaseHandler
 
     async def connect_command(self, client: Client, message: Message):
         """Handle /connect command"""

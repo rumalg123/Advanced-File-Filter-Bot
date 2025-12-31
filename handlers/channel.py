@@ -9,6 +9,7 @@ from pyrogram.file_id import FileId
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 
+from config.settings import settings
 from core.cache.config import CacheTTLConfig
 from core.utils.helpers import sanitize_filename, format_file_size
 from core.utils.logger import get_logger
@@ -29,10 +30,11 @@ class ChannelHandler:
         self._handlers = []
         self._shutdown = asyncio.Event()
         self._update_lock = asyncio.Lock()
-        # Add rate limiting for bulk messages
-        self.message_queue = asyncio.Queue(maxsize=1000)
+        # Add rate limiting for bulk messages - use config values
+        self.processing_config = settings.processing
+        self.message_queue = asyncio.Queue(maxsize=self.processing_config.message_queue_size)
         self.overflow_queue = []  # Backup queue for overflow
-        self.max_overflow_size = 500  # Maximum overflow items
+        self.max_overflow_size = self.processing_config.overflow_queue_size
         self.queue_full_warnings = 0
         self.last_warning_time = 0
         self.user_message_counts = defaultdict(lambda: {'count': 0, 'reset_time': time.time()})
@@ -169,10 +171,18 @@ class ChannelHandler:
                 batch = []
                 deadline = asyncio.get_event_loop().time() + 5
 
-                # Dynamic batch sizing
+                # Dynamic batch sizing using config values
                 queue_size = self.message_queue.qsize()
-                max_batch_size = 50 if queue_size > 500 else (30 if queue_size > 200 else 20)
-                wait_time = 2 if queue_size > 500 else (3 if queue_size > 200 else 5)
+                cfg = self.processing_config
+                if queue_size > cfg.queue_high_threshold:
+                    max_batch_size = cfg.batch_size_high_load
+                    wait_time = cfg.batch_wait_time_high
+                elif queue_size > cfg.queue_medium_threshold:
+                    max_batch_size = cfg.batch_size_medium_load
+                    wait_time = cfg.batch_wait_time_medium
+                else:
+                    max_batch_size = cfg.batch_size_low_load
+                    wait_time = cfg.batch_wait_time_low
 
                 while len(batch) < max_batch_size and not self._shutdown.is_set():
                     try:
@@ -417,11 +427,6 @@ class ChannelHandler:
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             return "error"
-
-    def _initialize_channels(self):
-        """Initialize channels from config on startup"""
-        # FIX 4: Track the initialization task
-        self.init_task = asyncio.create_task(self._setup_initial_channels())
 
     async def _setup_initial_channels(self):
         """Setup initial channels from config"""
