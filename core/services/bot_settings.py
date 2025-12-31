@@ -415,7 +415,21 @@ class BotSettingsService:
     def _parse_value(self, value: Any, value_type: str) -> Any:
         """Parse value based on type"""
         if value_type == 'int':
-            return int(value) if value else 0
+            if not value:
+                return 0
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                logger.warning(f"Failed to parse '{value}' as int, defaulting to 0")
+                return 0
+        elif value_type == 'float':
+            if not value:
+                return 0.0
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                logger.warning(f"Failed to parse '{value}' as float, defaulting to 0.0")
+                return 0.0
         elif value_type == 'bool':
             if isinstance(value, bool):
                 return value

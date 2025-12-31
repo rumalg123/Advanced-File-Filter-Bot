@@ -124,6 +124,9 @@ class FilterService:
 
     async def delete_filter(self, group_id: str | int | None, keyword: str) -> int:
         """Delete a filter"""
+        if group_id is None:
+            logger.warning("Attempted to delete filter with None group_id")
+            return 0
         return await self.filter_repo.delete_filter(str(group_id), keyword)
 
     async def get_all_filters(self, group_id: str) -> List[str]:
@@ -239,4 +242,46 @@ class FilterService:
                             reply_to_message_id=reply_id
                         )
             except Exception as e:
-                logger.error(f"Error sending filter response: {e}")
+                logger.error(f"Error sending filter response in private chat: {e}")
+        else:
+            # Group chat response
+            try:
+                if fileid == "None":
+                    # Text-only response
+                    if btn == "[]":
+                        await client.send_message(
+                            message.chat.id,
+                            reply_text,
+                            disable_web_page_preview=True,
+                            reply_to_message_id=reply_id
+                        )
+                    else:
+                        # Text with buttons
+                        button = json.loads(btn)
+                        await client.send_message(
+                            message.chat.id,
+                            reply_text,
+                            disable_web_page_preview=True,
+                            reply_markup=InlineKeyboardMarkup(button),
+                            reply_to_message_id=reply_id
+                        )
+                else:
+                    # Media response
+                    if btn == "[]":
+                        await client.send_cached_media(
+                            message.chat.id,
+                            fileid,
+                            caption=reply_text or "",
+                            reply_to_message_id=reply_id
+                        )
+                    else:
+                        button = json.loads(btn)
+                        await client.send_cached_media(
+                            message.chat.id,
+                            fileid,
+                            caption=reply_text or "",
+                            reply_markup=InlineKeyboardMarkup(button),
+                            reply_to_message_id=reply_id
+                        )
+            except Exception as e:
+                logger.error(f"Error sending filter response in group chat: {e}")

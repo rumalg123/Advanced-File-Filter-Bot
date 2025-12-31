@@ -39,71 +39,101 @@ class CacheInvalidator:
             new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
         return new_version
 
-    async def invalidate_user_cache(self, user_id: int):
+    async def invalidate_user_cache(self, user_id: int) -> bool:
         """Invalidate all cache entries for a user"""
-        patterns = CachePatterns.user_related(user_id)
-        for pattern in patterns:
-            if '*' in pattern:
-                # Handle wildcard patterns
-                # Note: This would require SCAN command implementation
-                await self.cache.delete_pattern(pattern)
-            else:
-                await self.cache.delete(pattern)
+        try:
+            patterns = CachePatterns.user_related(user_id)
+            for pattern in patterns:
+                if '*' in pattern:
+                    await self.cache.delete_pattern(pattern)
+                else:
+                    await self.cache.delete(pattern)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate user cache for {user_id}: {e}")
+            return False
 
-    async def invalidate_media_cache(self, file_id: str, file_ref: str = None, file_unique_id: str = None):
+    async def invalidate_media_cache(self, file_id: str, file_ref: str = None, file_unique_id: str = None) -> bool:
         """Invalidate media-related cache"""
-        keys = CachePatterns.media_related(file_id, file_ref, file_unique_id)
-        for key in keys:
-            await self.cache.delete(key)
+        try:
+            keys = CachePatterns.media_related(file_id, file_ref, file_unique_id)
+            for key in keys:
+                await self.cache.delete(key)
+            # Use versioning instead of direct deletion for search caches
+            await self.increment_search_cache_version()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate media cache for {file_id}: {e}")
+            return False
 
-        # Use versioning instead of direct deletion for search caches
-        await self.increment_search_cache_version()
-
-    async def invalidate_group_cache(self, group_id: str):
+    async def invalidate_group_cache(self, group_id: str) -> bool:
         """Invalidate group-related cache"""
-        patterns = CachePatterns.group_related(group_id)
-        for pattern in patterns:
-            if '*' in pattern:
-                # Handle wildcard patterns
-                await self.cache.delete_pattern(pattern)
-            else:
-                await self.cache.delete(pattern)
+        try:
+            patterns = CachePatterns.group_related(group_id)
+            for pattern in patterns:
+                if '*' in pattern:
+                    await self.cache.delete_pattern(pattern)
+                else:
+                    await self.cache.delete(pattern)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate group cache for {group_id}: {e}")
+            return False
 
-    async def invalidate_all_search_results(self):
+    async def invalidate_all_search_results(self) -> bool:
         """
         Invalidate all search result caches using versioning.
         Uses throttling to prevent cache stampedes on bulk operations.
         """
-        current_time = time.time()
+        try:
+            current_time = time.time()
 
-        # Throttle full invalidation to prevent cache stampedes
-        if current_time - CacheInvalidator._last_full_invalidation < self.FULL_INVALIDATION_COOLDOWN:
-            logger.debug("Skipping search cache invalidation (throttled)")
-            return
+            # Throttle full invalidation to prevent cache stampedes
+            if current_time - CacheInvalidator._last_full_invalidation < self.FULL_INVALIDATION_COOLDOWN:
+                logger.debug("Skipping search cache invalidation (throttled)")
+                return True
 
-        CacheInvalidator._last_full_invalidation = current_time
+            CacheInvalidator._last_full_invalidation = current_time
 
-        # Increment version instead of deleting all keys
-        # This is O(1) instead of O(n) where n is number of cached search results
-        new_version = await self.increment_search_cache_version()
-        logger.debug(f"Search cache version incremented to {new_version}")
+            # Increment version instead of deleting all keys
+            # This is O(1) instead of O(n) where n is number of cached search results
+            new_version = await self.increment_search_cache_version()
+            logger.debug(f"Search cache version incremented to {new_version}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate all search results: {e}")
+            return False
 
-    async def invalidate_channels_cache(self):
+    async def invalidate_channels_cache(self) -> bool:
         """Invalidate channels list cache"""
-        await self.cache.delete("active_channels_list")
+        try:
+            await self.cache.delete("active_channels_list")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate channels cache: {e}")
+            return False
 
-    async def invalidate_connection_cache(self, user_id: str):
+    async def invalidate_connection_cache(self, user_id: str) -> bool:
         """Invalidate all cache entries for a user's connections"""
-        # Clear the main connection cache
-        cache_key = CacheKeyGenerator.user_connections(user_id)
-        await self.cache.delete(cache_key)
+        try:
+            cache_key = CacheKeyGenerator.user_connections(user_id)
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate connection cache for {user_id}: {e}")
+            return False
 
-    async def invalidate_file_cache(self, file: 'MediaFile'):
+    async def invalidate_file_cache(self, file: 'MediaFile') -> bool:
         """Invalidate all cache entries for a file"""
-        # Clear main cache entries
-        if file.file_unique_id:
-            cache_key = CacheKeyGenerator.media(file.file_unique_id)
-            await self.cache.delete(cache_key)
-        if file.file_id:
-            cache_key = CacheKeyGenerator.media(file.file_id)
-            await self.cache.delete(cache_key)
+        try:
+            # Clear main cache entries
+            if file.file_unique_id:
+                cache_key = CacheKeyGenerator.media(file.file_unique_id)
+                await self.cache.delete(cache_key)
+            if file.file_id:
+                cache_key = CacheKeyGenerator.media(file.file_id)
+                await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate file cache: {e}")
+            return False

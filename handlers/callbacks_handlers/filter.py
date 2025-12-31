@@ -30,11 +30,17 @@ class FilterCallBackHandler(BaseCommandHandler):
 
         if alerts:
             import ast
-            alerts = ast.literal_eval(alerts)
-            if alert_index < len(alerts):
-                alert = alerts[alert_index]
-                alert = alert.replace("\\n", "\n").replace("\\t", "\t")
-                await query.answer(alert, show_alert=True)
+            try:
+                parsed_alerts = ast.literal_eval(alerts)
+                if isinstance(parsed_alerts, list) and alert_index < len(parsed_alerts):
+                    alert = parsed_alerts[alert_index]
+                    alert = alert.replace("\\n", "\n").replace("\\t", "\t")
+                    await query.answer(alert, show_alert=True)
+                else:
+                    await query.answer("Alert index out of range", show_alert=True)
+            except (ValueError, SyntaxError) as e:
+                logger.warning(f"Failed to parse alerts data: {e}")
+                await query.answer("Error parsing alert data", show_alert=True)
         else:
             await query.answer("Alert not found", show_alert=True)
 

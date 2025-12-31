@@ -1,5 +1,3 @@
-# core/utils/performance.py - New file for performance monitoring
-
 import asyncio
 import psutil
 import time
@@ -12,7 +10,6 @@ class PerformanceMonitor:
 
     def __init__(self):
         self.start_time = time.time()
-        #self.using_uvloop = 'uvloop' in sys.modules
 
     async def get_metrics(self) -> Dict[str, Any]:
         """Get current performance metrics"""
@@ -54,5 +51,4 @@ class PerformanceMonitor:
         return metrics
 
 
-# Add to bot.py initialization
 performance_monitor = PerformanceMonitor()

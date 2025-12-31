@@ -47,7 +47,7 @@ from core.services.file_access import FileAccessService
 from core.services.filestore import FileStoreService
 from core.services.filter import FilterService
 from core.services.indexing import IndexingService, IndexRequestService
-from core.services.maintainence import MaintenanceService
+from core.services.maintenance import MaintenanceService
 from core.utils.rate_limiter import RateLimiter
 from core.utils.subscription import SubscriptionManager
 from handlers.request import RequestHandler
