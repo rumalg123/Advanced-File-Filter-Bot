@@ -67,6 +67,28 @@ class ValidationUtils:
         return chat_id in special_channels
 
     @staticmethod
+    def get_special_channels(config) -> set:
+        """
+        Get set of special channel IDs from config.
+
+        Consolidates the repeated pattern of collecting LOG_CHANNEL,
+        INDEX_REQ_CHANNEL, REQ_CHANNEL, DELETE_CHANNEL into a single call.
+
+        Args:
+            config: Bot configuration object with channel attributes
+
+        Returns:
+            Set of channel IDs (excludes None values)
+        """
+        channels = [
+            getattr(config, 'LOG_CHANNEL', None),
+            getattr(config, 'INDEX_REQ_CHANNEL', None),
+            getattr(config, 'REQ_CHANNEL', None),
+            getattr(config, 'DELETE_CHANNEL', None),
+        ]
+        return {ch for ch in channels if ch}
+
+    @staticmethod
     def validate_user_id(user_id: Union[str, int]) -> Tuple[bool, Optional[int], Optional[str]]:
         """Validate and parse user ID from string or int"""
         try:
@@ -542,6 +564,7 @@ is_private_chat = ValidationUtils.is_private_chat
 is_group_chat = ValidationUtils.is_group_chat
 is_bot_user = ValidationUtils.is_bot_user
 is_special_channel = ValidationUtils.is_special_channel
+get_special_channels = ValidationUtils.get_special_channels
 
 admin_only = ValidationDecorators.admin_only
 owner_only = ValidationDecorators.owner_only

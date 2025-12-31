@@ -6,7 +6,6 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait, UserIsBlocked
 from pyrogram.types import CallbackQuery
 
-from core.cache.config import CacheKeyGenerator
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import is_original_requester, is_private_chat, skip_subscription_check

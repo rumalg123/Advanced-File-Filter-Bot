@@ -205,16 +205,10 @@ class SearchHandler:
                 logger.info(f"[SEARCH_BLOCKED] User {user_id} has active edit session - blocking search for: '{message.text}'")
                 return
         
-        # Legacy check for recent edit flag
+        # Check for recent edit flag (blocks search during settings edit)
         recent_edit_key = CacheKeyGenerator.recent_settings_edit(user_id)
         if await self.bot.cache.exists(recent_edit_key):
             logger.info(f"[SEARCH_BLOCKED] User {user_id} has recent edit activity - blocking search")
-            return
-
-        # Check for recent settings edit flag
-        cache_key = CacheKeyGenerator.recent_settings_edit(user_id)
-        if await self.bot.cache.exists(cache_key):
-            logger.debug(f"User {user_id} recently edited settings, skipping search")
             return
 
         # Get search query
