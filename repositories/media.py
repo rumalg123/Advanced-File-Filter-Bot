@@ -114,12 +114,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         if self.is_multi_db:
             # Search across all databases
             data, db_index = await self.multi_db_manager.find_file_in_all_databases(
-                self.collection_name, 
+                self.collection_name,
                 {"file_unique_id": identifier}
             )
             if data:
                 file = self._dict_to_entity(data)
-                await self.cache.set(cache_key, file, expire=self.ttl.MEDIA_FILE)
+                # Cache as dict for proper serialization
+                await self.cache.set(cache_key, self._entity_to_dict(file), expire=self.ttl.MEDIA_FILE)
                 return file
         else:
             # Single database mode
@@ -129,7 +130,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             )
             if data:
                 file = self._dict_to_entity(data)
-                await self.cache.set(cache_key, file, expire=self.ttl.MEDIA_FILE)
+                # Cache as dict for proper serialization
+                await self.cache.set(cache_key, self._entity_to_dict(file), expire=self.ttl.MEDIA_FILE)
                 return file
 
         return None
@@ -178,9 +180,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 )
                 if result.inserted_id:
                     logger.info(f"Saved file to database: {media.file_name}")
-                    # Cache the new file
+                    # Cache the new file as dict for proper serialization
                     cache_key = self._get_cache_key(media.file_unique_id)
-                    await self.cache.set(cache_key, media, expire=self.ttl.MEDIA_FILE)
+                    await self.cache.set(cache_key, self._entity_to_dict(media), expire=self.ttl.MEDIA_FILE)
                     # Invalidate search caches
                     await self.cache_invalidator.invalidate_all_search_results()
                     return True, 1, None
