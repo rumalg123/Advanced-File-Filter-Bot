@@ -252,19 +252,13 @@ class ValidationDecorators:
                 chat = message.message.chat if message.message else None
             else:
                 chat = message.chat
-            
+
             if chat:
-                special_channels = {
-                    self.bot.config.LOG_CHANNEL,
-                    self.bot.config.INDEX_REQ_CHANNEL,
-                    self.bot.config.REQ_CHANNEL,
-                    self.bot.config.DELETE_CHANNEL
-                }
-                special_channels = {ch for ch in special_channels if ch}
-                
+                special_channels = ValidationUtils.get_special_channels(self.bot.config)
+
                 if ValidationUtils.is_special_channel(chat.id, special_channels):
                     return  # Skip execution in special channels
-            
+
             return await func(self, client, message, *args, **kwargs)
         return wrapper
 

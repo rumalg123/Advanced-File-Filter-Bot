@@ -6,11 +6,12 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.logger import get_logger
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class BotSettingsHandler:
+class BotSettingsHandler(BaseHandler):
     """Handler for bot settings management"""
     PROTECTED_SETTINGS = [
         'DATABASE_URI',
@@ -23,67 +24,25 @@ class BotSettingsHandler:
     ]
 
     def __init__(self, bot):
-        self.bot = bot
+        super().__init__(bot)
         self.settings_service = bot.bot_settings_service
         self.current_page = 0
         self.ttl = CacheTTLConfig()
-        self._shutdown = asyncio.Event()
-        self._handlers = []  # Track handlers
-        
+
         # Use unified session manager
         self.session_manager = getattr(bot, 'session_manager', None)
-        
-        # Register handlers
-        self._register_handlers()
 
-    def _register_handlers(self):
-        """Register all handlers with tracking"""
-        # This method should be called instead of directly registering in __init__
-        # The handlers should be registered through the main command handler
+        # Handlers are registered through the main command handler system
+        # so register_handlers() is intentionally empty
+
+    def register_handlers(self) -> None:
+        """
+        Register handlers - intentionally empty.
+        BotSettingsHandler's handlers are registered through the main command handler system.
+        """
         pass
 
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up BotSettingsHandler...")
-
-        # Signal shutdown
-        self._shutdown.set()
-
-        # Session cleanup handled by unified session manager
-
-        # If handler_manager is available, let it handle everything
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info("HandlerManager will handle task and handler cleanup")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
-            self._handlers.clear()
-            logger.info("BotSettingsHandler cleanup complete")
-            return
-
-        # Manual cleanup only if no handler_manager
-        if hasattr(self, 'cleanup_task') and self.cleanup_task and not self.cleanup_task.done():
-            self.cleanup_task.cancel()
-            try:
-                await self.cleanup_task
-            except asyncio.CancelledError:
-                pass
-
-        # Remove handlers
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except ValueError as e:
-                if "x not in list" in str(e):
-                    logger.debug(f"Handler already removed")
-                else:
-                    logger.error(f"Error removing handler: {e}")
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        self._handlers.clear()
-        logger.info("BotSettingsHandler cleanup complete")
+    # cleanup() method inherited from BaseHandler
 
     async def invalidate_related_caches(self, key: str):
         """Invalidate caches related to a specific setting"""

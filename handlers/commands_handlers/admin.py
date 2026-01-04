@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 from datetime import datetime
@@ -60,7 +61,6 @@ class AdminCommandHandler(BaseCommandHandler):
 
     def _parse_quoted_command(self, text: str) -> List[str]:
         """Parse command with quoted arguments"""
-        import shlex
         try:
             return shlex.split(text)
         except ValueError:

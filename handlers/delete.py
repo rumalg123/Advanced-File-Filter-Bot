@@ -2,41 +2,35 @@ import asyncio
 from typing import List, Dict, Any, Optional
 
 from pyrogram import Client, filters
-from pyrogram.handlers import MessageHandler
-from pyrogram.types import Message
+from pyrogram.handlers import MessageHandler, CallbackQueryHandler
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.config import CacheKeyGenerator
 from core.constants import ProcessingConstants
+from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class DeleteHandler:
+class DeleteHandler(BaseHandler):
     """Handler for file deletion from database"""
 
     def __init__(self, bot):
-        self.bot = bot
+        super().__init__(bot)
         self.delete_queue = asyncio.Queue(maxsize=1000)
-        self._shutdown = asyncio.Event()
-        self._handlers = []  # Store handlers for cleanup (underscore for consistency)
-        self.background_task = None  # Track background task
+        self._register_queue(self.delete_queue)
 
-        # Register handlers first
-        self._register_handlers()
+        # Register handlers
+        self.register_handlers()
 
-        # Create background task with proper tracking
-        if hasattr(bot, 'handler_manager') and bot.handler_manager:
-            self.background_task = bot.handler_manager.create_background_task(
-                self._process_delete_queue(),
-                name="delete_queue_processor"
-            )
-        else:
-            # Fallback if handler_manager not available
-            logger.warning("HandlerManager not available for DeleteHandler")
-            self.background_task = asyncio.create_task(self._process_delete_queue())
+        # Create background task for queue processing
+        task = self._track_task(self._process_delete_queue())
+        if task:
+            logger.info("Delete queue processor task created")
 
-    def _register_handlers(self):
+    def register_handlers(self) -> None:
         """Register delete handlers"""
         handlers_registered = 0
 
@@ -46,95 +40,26 @@ class DeleteHandler:
                 self.handle_delete_channel_message,
                 filters.chat(self.bot.config.DELETE_CHANNEL)
             )
-
-            # Use handler_manager if available
-            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-                self.bot.handler_manager.add_handler(handler)
-            else:
-                self.bot.add_handler(handler)
-
-            self._handlers.append(handler)
+            self._register_handler(handler)
             handlers_registered += 1
             logger.info(f"Registered DELETE_CHANNEL handler for channel {self.bot.config.DELETE_CHANNEL}")
 
         # Register admin commands if ADMINS configured
         if self.bot.config.ADMINS:
-            handler1 = MessageHandler(
-                self.handle_delete_command,
-                filters.command("delete") & filters.user(self.bot.config.ADMINS)
-            )
-            handler2 = MessageHandler(
-                self.handle_deleteall_command,
-                filters.command("deleteall") & filters.user(self.bot.config.ADMINS)
-            )
-
-            # Use handler_manager if available
-            if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-                self.bot.handler_manager.add_handler(handler1)
-                self.bot.handler_manager.add_handler(handler2)
-            else:
-                self.bot.add_handler(handler1)
-                self.bot.add_handler(handler2)
-
-            self._handlers.extend([handler1, handler2])
+            self._register_message_handlers([
+                (self.handle_delete_command, filters.command("delete") & filters.user(self.bot.config.ADMINS)),
+                (self.handle_deleteall_command, filters.command("deleteall") & filters.user(self.bot.config.ADMINS))
+            ])
             handlers_registered += 2
+
+            # Callback handler for deleteall confirmation
+            self._register_callback_handlers([
+                (self.handle_deleteall_callback, filters.regex(r"^deleteall_(confirm|cancel)#"))
+            ])
+            handlers_registered += 1
             logger.info(f"Registered delete commands for {len(self.bot.config.ADMINS)} admins")
 
         logger.info(f"DeleteHandler registered {handlers_registered} handlers")
-
-    async def cleanup(self):
-        """Clean up handler resources"""
-        logger.info("Cleaning up DeleteHandler...")
-        logger.info(f"Queue size: {self.delete_queue.qsize()}")
-
-        # Signal shutdown
-        self._shutdown.set()
-
-        # Clear queue (always do this)
-        items_cleared = 0
-        while not self.delete_queue.empty():
-            try:
-                self.delete_queue.get_nowait()
-                items_cleared += 1
-            except asyncio.QueueEmpty:
-                break
-
-        logger.info(f"Cleared {items_cleared} items from delete queue")
-
-        # If handler_manager is available, let it handle everything
-        if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            logger.info("HandlerManager will handle handler removal and task cancellation")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
-            self._handlers.clear()
-            logger.info("DeleteHandler cleanup complete")
-            return
-
-        # Manual cleanup only if no handler_manager
-        # Cancel background task if it exists
-        if hasattr(self, 'background_task') and self.background_task and not self.background_task.done():
-            self.background_task.cancel()
-            try:
-                await self.background_task
-            except asyncio.CancelledError:
-                logger.info("Background task cancelled successfully")
-
-        # Remove handlers
-        for handler in self._handlers:
-            try:
-                self.bot.remove_handler(handler)
-            except ValueError as e:
-                if "x not in list" in str(e):
-                    logger.debug(f"Handler already removed")
-                else:
-                    logger.error(f"Error removing handler: {e}")
-            except Exception as e:
-                logger.error(f"Error removing handler: {e}")
-
-        self._handlers.clear()
-        logger.info("DeleteHandler cleanup complete")
 
     async def _process_delete_queue(self):
         """Process delete queue in background"""
@@ -195,7 +120,7 @@ class DeleteHandler:
             return
 
         # Extract file information
-        file_info = self._extract_file_info(message)
+        file_info = extract_file_info(message)
 
         if not file_info:
             logger.warning("No supported media type found in message")
@@ -220,36 +145,6 @@ class DeleteHandler:
                 except Exception:
                     pass
 
-    def _extract_file_info(self, message: Message) -> Optional[Dict[str, Any]]:
-        """Extract file information from message"""
-        media_types = [
-            ('document', lambda m: m.document),
-            ('video', lambda m: m.video),
-            ('audio', lambda m: m.audio),
-            ('photo', lambda m: m.photo),
-            ('animation', lambda m: m.animation),
-            ('voice', lambda m: m.voice),
-            ('video_note', lambda m: m.video_note),
-            ('sticker', lambda m: m.sticker)
-        ]
-
-        for media_type, getter in media_types:
-            media = getter(message)
-            if media:
-                file_name = getattr(media, 'file_name', None)
-                if not file_name:
-                    # Generate a descriptive name
-                    file_name = f"{media_type.title()}_{media.file_unique_id[:10]}"
-
-                return {
-                    'file_unique_id': media.file_unique_id,
-                    'file_id': media.file_id,
-                    'file_name': file_name,
-                    'message': message
-                }
-
-        return None
-
     async def handle_delete_command(self, client: Client, message: Message):
         """Handle manual delete command"""
         if len(message.command) > 1:
@@ -271,7 +166,7 @@ class DeleteHandler:
             return
 
         # Extract file info from replied message
-        file_info = self._extract_file_info(message.reply_to_message)
+        file_info = extract_file_info(message.reply_to_message)
 
         if not file_info:
             await message.reply_text("❌ No supported media found in the message.")
@@ -299,46 +194,85 @@ class DeleteHandler:
             return
 
         keyword = " ".join(message.command[1:])
+        user_id = message.from_user.id
 
-        # Confirmation message
-        confirm_msg = await message.reply_text(
+        # Store pending deletion in cache for callback handler
+        cache_key = f"deleteall_pending:{user_id}"
+        await self.bot.cache.set(cache_key, keyword, expire=60)  # 60 second TTL
+
+        # Confirmation message with buttons
+        await message.reply_text(
             f"⚠️ <b>Warning!</b>\n\n"
             f"This will delete all files matching: <b>{keyword}</b>\n\n"
-            f"Reply with 'YES' within 30 seconds to confirm."
+            f"Click 'Confirm' to proceed or 'Cancel' to abort.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Confirm", callback_data=f"deleteall_confirm#{user_id}"),
+                    InlineKeyboardButton("❌ Cancel", callback_data=f"deleteall_cancel#{user_id}")
+                ]
+            ])
         )
 
-        # Wait for confirmation
-        try:
-            response = await client.wait_for_message(
-                chat_id=message.chat.id,
-                filters=filters.user(message.from_user.id) & filters.text,
-                timeout=30
+    async def handle_deleteall_callback(self, client: Client, callback_query):
+        """Handle deleteall confirmation callback"""
+        data = callback_query.data
+        parts = data.split('#')
+
+        if len(parts) < 2:
+            await callback_query.answer("Invalid callback data", show_alert=True)
+            return
+
+        action = parts[0]
+        original_user_id = int(parts[1])
+        callback_user_id = callback_query.from_user.id
+
+        # Only the original requester can confirm/cancel
+        if callback_user_id != original_user_id:
+            await callback_query.answer("❌ You cannot interact with this!", show_alert=True)
+            return
+
+        cache_key = f"deleteall_pending:{original_user_id}"
+        keyword = await self.bot.cache.get(cache_key)
+
+        if action == "deleteall_cancel":
+            await self.bot.cache.delete(cache_key)
+            await callback_query.message.edit_text("❌ Deletion cancelled.")
+            await callback_query.answer()
+            return
+
+        if action == "deleteall_confirm":
+            if not keyword:
+                await callback_query.message.edit_text("❌ Deletion request expired. Please try again.")
+                await callback_query.answer()
+                return
+
+            # Delete from cache
+            await self.bot.cache.delete(cache_key)
+
+            # Update message to show progress
+            await callback_query.message.edit_text("🗑 Deleting files...")
+
+            # Delete files
+            deleted_count = await self.bot.media_repo.delete_files_by_keyword(keyword)
+
+            await callback_query.message.edit_text(
+                f"✅ Deleted {deleted_count} files matching: <b>{keyword}</b>"
             )
 
-            if response and response.text and response.text.upper() == "YES":
-                # Delete files
-                status_msg = await message.reply_text("🗑 Deleting files...")
-
-                deleted_count = await self.bot.media_repo.delete_files_by_keyword(keyword)
-
-                await status_msg.edit_text(
-                    f"✅ Deleted {deleted_count} files matching: <b>{keyword}</b>"
-                )
-
-                # Log the bulk deletion
-                if self.bot.config.LOG_CHANNEL:
+            # Log the bulk deletion
+            if self.bot.config.LOG_CHANNEL:
+                try:
                     await self.bot.send_message(
                         self.bot.config.LOG_CHANNEL,
                         f"#BulkDelete\n"
-                        f"Admin: {message.from_user.mention}\n"
+                        f"Admin: {callback_query.from_user.mention}\n"
                         f"Keyword: {keyword}\n"
                         f"Files deleted: {deleted_count}"
                     )
-            else:
-                await confirm_msg.edit_text("❌ Deletion cancelled.")
+                except Exception as e:
+                    logger.error(f"Failed to log bulk deletion: {e}")
 
-        except asyncio.TimeoutError:
-            await confirm_msg.edit_text("❌ Deletion cancelled (timeout).")
+            await callback_query.answer("Deletion complete!")
 
     async def _process_delete_batch(self, batch: List[Dict[str, Any]]):
         """Process a batch of delete requests"""

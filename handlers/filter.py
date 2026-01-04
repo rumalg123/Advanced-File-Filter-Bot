@@ -1,5 +1,6 @@
 # handlers/filter.py
 import io
+import shlex
 from typing import List
 
 from pyrogram import Client, filters, enums
@@ -43,7 +44,6 @@ class FilterHandler(BaseHandler):
 
     def _split_quotes(self, text: str) -> List[str]:
         """Split text respecting quotes"""
-        import shlex
         try:
             return shlex.split(text)
         except ValueError:
@@ -175,7 +175,6 @@ class FilterHandler(BaseHandler):
 
         # Parse command
         try:
-            import shlex
             args = shlex.split(message.text)
             if len(args) < 2:
                 raise ValueError("No filter names provided")
