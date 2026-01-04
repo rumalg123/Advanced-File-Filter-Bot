@@ -578,7 +578,7 @@ class SearchHandler:
 
                 file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                 file_button = InlineKeyboardButton(
-                    f"{file.file_size} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
+                    f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
                     callback_data=callback_data
                 )
                 buttons.append([file_button])
