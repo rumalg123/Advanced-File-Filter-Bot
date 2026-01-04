@@ -105,7 +105,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
             file_identifier = file.file_unique_id if file.file_unique_id else file.file_id
             file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
             file_button = InlineKeyboardButton(
-                f"{file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
+                f"{file.file_size} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
                 callback_data=f"file#{file_identifier}#{callback_user_id}"
             )
             buttons.append([file_button])
