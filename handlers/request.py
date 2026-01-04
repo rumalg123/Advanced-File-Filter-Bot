@@ -171,7 +171,7 @@ class RequestHandler(BaseHandler):
             if has_access and files:
                 # Send search results
                 search_sent = await self._send_search_results(
-                    client, message, files, keyword, total, page_size, user_id, is_private=True
+                    client, message, files, keyword, total, page_size, user_id, is_private=False
                 )
                 if search_sent:
                     return search_sent
