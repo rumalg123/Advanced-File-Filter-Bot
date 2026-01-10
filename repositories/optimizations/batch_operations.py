@@ -46,6 +46,7 @@ class BatchOptimizations:
             {"$project": {
                 "_id": 1,
                 "is_premium": 1,
+                "premium_expiry_date": 1,
                 "premium_activation_date": 1,
                 "computed_status": {
                     "$cond": {
@@ -53,25 +54,19 @@ class BatchOptimizations:
                         "then": {
                             "is_active": {
                                 "$cond": {
-                                    "if": {"$ne": ["$premium_activation_date", None]},
+                                    "if": {"$ne": ["$premium_expiry_date", None]},
                                     "then": {
-                                        "$gt": [
-                                            {"$add": ["$premium_activation_date", {"$multiply": [30, 24, 60, 60, 1000]}]},  # 30 days in ms
-                                            {"$toDate": "$$NOW"}
-                                        ]
+                                        "$gt": ["$premium_expiry_date", "$$NOW"]
                                     },
                                     "else": False
                                 }
                             },
                             "days_remaining": {
                                 "$cond": {
-                                    "if": {"$ne": ["$premium_activation_date", None]},
+                                    "if": {"$ne": ["$premium_expiry_date", None]},
                                     "then": {
                                         "$divide": [
-                                            {"$subtract": [
-                                                {"$add": ["$premium_activation_date", {"$multiply": [30, 24, 60, 60, 1000]}]},
-                                                {"$toDate": "$$NOW"}
-                                            ]},
+                                            {"$subtract": ["$premium_expiry_date", "$$NOW"]},
                                             {"$multiply": [24, 60, 60, 1000]}  # Convert ms to days
                                         ]
                                     },
@@ -279,6 +274,7 @@ class BatchOptimizations:
                     {"$set": {
                         "is_premium": False,
                         "premium_activation_date": None,
+                        "premium_expiration_date": None,
                         "updated_at": datetime.now(UTC)
                     }}
                 ) for user_id in user_ids
@@ -300,7 +296,7 @@ class BatchOptimizations:
 OPTIMIZED_INDEXES = {
     'users': [
         # Compound index for premium status checks
-        ('is_premium', 'premium_activation_date', '_id'),
+        ('is_premium', 'premium_activation_date', 'premium_expiry_date','_id'),
         # Index for user activity lookups
         ('_id', 'created_at', 'last_retrieval_date'),
     ],

@@ -41,6 +41,7 @@ class User:
     ban_reason: Optional[str] = None
     is_premium: bool = False
     premium_activation_date: Optional[datetime] = None
+    premium_expiry_date: Optional[datetime] = None
     daily_retrieval_count: int = 0
     last_retrieval_date: Optional[date] = None
     daily_request_count: int = 0
@@ -81,6 +82,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # Convert dates to ISO format for JSON serialization
         if data.get('premium_activation_date'):
             data['premium_activation_date'] = data['premium_activation_date'].isoformat()
+        if data.get('premium_expiry_date'):
+            data['premium_expiry_date'] = data['premium_expiry_date'].isoformat()
         if data.get('last_retrieval_date'):
             data['last_retrieval_date'] = data['last_retrieval_date'].isoformat()
         if data.get('last_request_date'):
@@ -100,6 +103,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if data.get('premium_activation_date'):
             if isinstance(data['premium_activation_date'], str):
                 data['premium_activation_date'] = datetime.fromisoformat(data['premium_activation_date'])
+
+        if data.get('premium_expiry_date'):
+            if isinstance(data['premium_expiry_date'], str):
+                data['premium_expiry_date'] = datetime.fromisoformat(data['premium_expiry_date'])
 
         if data.get('last_retrieval_date'):
             if isinstance(data['last_retrieval_date'], str):
@@ -276,6 +283,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         update_data: Dict[str, Any] = {
             'is_premium': is_premium,
             'premium_activation_date': datetime.now(UTC) if is_premium else None,
+            'premium_expiry_date': datetime.now(UTC) + timedelta(days=self.premium_duration_days) if is_premium else None,
             'updated_at': datetime.now(UTC)
         }
 
@@ -288,6 +296,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.is_premium = is_premium
             user.premium_activation_date = datetime.now(UTC) if is_premium else None
             user.updated_at = datetime.now(UTC)
+            user.premium_expiry_date = datetime.now(UTC) + timedelta(days=self.premium_duration_days) if is_premium else None
             if not is_premium:
                 user.daily_retrieval_count = 0
             await self.cache.delete(CacheKeyGenerator.user(user_id))
@@ -304,7 +313,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if not user.premium_activation_date:
             return False, None
 
-        expiry_date = user.premium_activation_date + timedelta(days=self.premium_duration_days)
+        expiry_date = user.premium_expiry_date
 
         if datetime.now(UTC) > expiry_date:
             # Premium expired
@@ -369,7 +378,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 if isinstance(activation_date, str):
                     activation_date = datetime.fromisoformat(activation_date)
 
-                expiry_date = activation_date + timedelta(days=self.premium_duration_days)
+                expiry_date = doc.get("premium_expiry_date")
                 if datetime.now(UTC) > expiry_date:
                     result[user_id] = (False, "Premium subscription expired")
                     expired_users.append(user_id)
@@ -751,11 +760,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def cleanup_expired_premium(self) -> int:
         """Cleanup expired premium subscriptions"""
-        cutoff_date = datetime.now(UTC) - timedelta(days=self.premium_duration_days)
-
         filter_query = {
             'is_premium': True,
-            'premium_activation_date': {'$lte': cutoff_date.isoformat()}
+            'premium_expiry_date': {'$lte': datetime.now(UTC)}
         }
 
         users = await self.find_many(filter_query)
@@ -769,6 +776,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                         {'$set': {
                             'is_premium': False,
                             'premium_activation_date': None,
+                            'premium_expiry_date': None,
                             'updated_at': datetime.now(UTC)
                         }}
                     )
