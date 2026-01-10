@@ -289,7 +289,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if not is_premium:
             update_data['daily_retrieval_count'] = 0
-
+        logger.info(f"Updating premium status for user {user_id} with duration {self.premium_duration_days} days")
         success = await self.update(user_id, update_data)
         if success:
             # Update user object
