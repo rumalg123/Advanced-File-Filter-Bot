@@ -272,6 +272,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
     async def update_premium_status(self, user_id: int, is_premium: bool) -> Tuple[bool, str, Optional[User]]:
         """Update user premium status"""
         # Check if user exists
+        logger.info(f"Non premium user retriva limit {self.daily_limit}")
         user = await self.get_user(user_id)
         if not user:
             return False, "❌ User not found in database.", None
@@ -290,6 +291,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if not is_premium:
             update_data['daily_retrieval_count'] = 0
         logger.info(f"Updating premium status for user {user_id} with duration {self.premium_duration_days} days")
+
         success = await self.update(user_id, update_data)
         if success:
             # Update user object
@@ -421,6 +423,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 {"$set": {
                     "is_premium": False,
                     "premium_activation_date": None,
+                    "premium_expiry_date": None,
                     "updated_at": datetime.now(UTC)
                 }}
             )
