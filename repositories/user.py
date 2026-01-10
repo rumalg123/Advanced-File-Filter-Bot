@@ -62,7 +62,7 @@ class User:
 class UserRepository(BaseRepository[User], AggregationMixin):
     """Repository for user operations"""
 
-    def __init__(self, db_pool, cache_manager,premium_duration_days=30, daily_limit=10):
+    def __init__(self, db_pool, cache_manager, premium_duration_days=30, daily_limit=10):
         super().__init__(db_pool, cache_manager, "users")
         self.premium_duration_days = premium_duration_days
         self.daily_limit = daily_limit
@@ -314,7 +314,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, None
 
         expiry_date = user.premium_expiry_date
-
+        if expiry_date and expiry_date.tzinfo is None:
+            expiry_date = expiry_date.replace(tzinfo=UTC)
         if datetime.now(UTC) > expiry_date:
             # Premium expired
             await self.update_premium_status(user.id, False)
@@ -379,6 +380,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     activation_date = datetime.fromisoformat(activation_date)
 
                 expiry_date = doc.get("premium_expiry_date")
+                if expiry_date and expiry_date.tzinfo is None:
+                    expiry_date = expiry_date.replace(tzinfo=UTC)
                 if datetime.now(UTC) > expiry_date:
                     result[user_id] = (False, "Premium subscription expired")
                     expired_users.append(user_id)
