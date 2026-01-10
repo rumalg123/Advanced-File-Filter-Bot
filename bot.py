@@ -580,7 +580,23 @@ class MediaSearchBot(Client):
             # Initialize Redis cache
             await self.cache.initialize()
             logger.info("Redis cache initialized")
-
+            self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
+            self.bot_settings_service = BotSettingsService(
+                self.bot_settings_repo,
+                self.cache
+            )
+            # Initialize settings from environment
+            await self.bot_settings_service.initialize_settings()
+            logger.info("Bot settings initialized")
+            # CRITICAL: Load settings from database and update config
+            db_settings = await self.bot_settings_service.get_all_settings()
+            for key, setting_data in db_settings.items():
+                if hasattr(self.config, key):
+                    # Store original value for critical settings
+                    if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
+                        setattr(self.config, f'_original_{key}', getattr(self.config, key))
+                    setattr(self.config, key, setting_data['value'])
+            logger.info("Loaded settings from database")
             # Initialize repositories
             self.user_repo = UserRepository(
                 self.db_pool,
@@ -597,7 +613,7 @@ class MediaSearchBot(Client):
             self.connection_repo = ConnectionRepository(self.db_pool, self.cache)
             self.filter_repo = FilterRepository(self.db_pool, self.cache, collection_name=self.config.COLLECTION_NAME)
             self.batch_link_repo = BatchLinkRepository(self.db_pool, self.cache)
-            self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
+
 
             # Create basic indexes (existing)
             await self.media_repo.create_indexes()
@@ -620,25 +636,6 @@ class MediaSearchBot(Client):
             await self.batch_link_repo.create_indexes()  # Create all batch link indexes
             await self.bot_settings_repo.create_index([('key', 1)])
             logger.info("Database indexes created")
-
-            self.bot_settings_service = BotSettingsService(
-                self.bot_settings_repo,
-                self.cache
-            )
-
-            # Initialize settings from environment
-            await self.bot_settings_service.initialize_settings()
-            logger.info("Bot settings initialized")
-
-            # CRITICAL: Load settings from database and update config
-            db_settings = await self.bot_settings_service.get_all_settings()
-            for key, setting_data in db_settings.items():
-                if hasattr(self.config, key):
-                    # Store original value for critical settings
-                    if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
-                        setattr(self.config, f'_original_{key}', getattr(self.config, key))
-                    setattr(self.config, key, setting_data['value'])
-            logger.info("Loaded settings from database")
 
             # Initialize services (not using singletons)
             self.file_service = FileAccessService(
