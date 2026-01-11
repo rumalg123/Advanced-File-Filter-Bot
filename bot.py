@@ -23,7 +23,6 @@ else:
     UVLOOP_AVAILABLE = False
 
 import logging
-import os
 from datetime import datetime, UTC
 from typing import Optional, AsyncGenerator, Union, List
 

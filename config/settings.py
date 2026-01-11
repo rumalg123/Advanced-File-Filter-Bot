@@ -402,12 +402,3 @@ class Settings:
 
 # Global settings instance
 settings = Settings()
-
-
-# Backward compatibility function
-def get_env(key: str, default: Any = None) -> Any:
-    """
-    Backward compatibility function for os.getenv calls
-    Prefer using settings object directly in new code
-    """
-    return os.getenv(key, default)

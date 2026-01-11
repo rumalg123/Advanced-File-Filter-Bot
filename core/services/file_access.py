@@ -1,4 +1,3 @@
-from functools import lru_cache
 from typing import Optional, List, Tuple
 from datetime import date
 
@@ -151,14 +150,3 @@ class FileAccessService:
         )
 
         return files, next_offset, total, True
-
-# Singleton service instances
-@lru_cache(maxsize=1)
-def get_file_access_service(
-        user_repo: UserRepository,
-        media_repo: MediaRepository,
-        cache_manager: CacheManager,
-        rate_limiter: RateLimiter
-) -> FileAccessService:
-    """Get singleton FileAccessService instance"""
-    return FileAccessService(user_repo, media_repo, cache_manager, rate_limiter)

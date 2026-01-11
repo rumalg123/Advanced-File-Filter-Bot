@@ -13,13 +13,12 @@ from .settings import (
     MessageConfig,
     UpdateConfig,
     settings,
-    get_env
 )
 
 __all__ = [
     'Settings',
     'TelegramConfig',
-    'DatabaseConfig', 
+    'DatabaseConfig',
     'RedisConfig',
     'ServerConfig',
     'FeatureConfig',
@@ -27,5 +26,4 @@ __all__ = [
     'MessageConfig',
     'UpdateConfig',
     'settings',
-    'get_env'
 ]

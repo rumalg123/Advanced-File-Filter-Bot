@@ -1,6 +1,4 @@
-
 from datetime import date
-from functools import lru_cache
 from typing import Dict, Any, Optional
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -188,12 +186,3 @@ class MaintenanceService:
             )
         except Exception as e:
             logger.error(f"Error storing counter reset date: {e}")
-
-@lru_cache(maxsize=1)
-def get_maintenance_service(
-        user_repo: UserRepository,
-        media_repo: MediaRepository,
-        cache_manager: CacheManager
-) -> MaintenanceService:
-    """Get singleton MaintenanceService instance"""
-    return MaintenanceService(user_repo, media_repo, cache_manager)
