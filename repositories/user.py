@@ -68,8 +68,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         super().__init__(db_pool, cache_manager, "users")
         self.premium_duration_days = premium_duration_days
         self.daily_limit = daily_limit
-        self.ttl = CacheTTLConfig()  # Add this
-        
+        self.ttl = CacheTTLConfig()
+
+        # Initialize cache invalidator
+        from core.cache.invalidation import CacheInvalidator
+        self.cache_invalidator = CacheInvalidator(cache_manager)
+
         # Initialize batch optimizations
         if BATCH_OPTIMIZATIONS_AVAILABLE:
             self.batch_ops = BatchOptimizations(db_pool, cache_manager)
@@ -971,13 +975,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             )
             
             # Clear all user caches since we've updated all users
-            # We can't efficiently clear individual user caches, so we use cache invalidation
-            if hasattr(self, 'cache_invalidator'):
-                await self.cache_invalidator.invalidate_pattern("user:*")
-            else:
-                # Fallback: try to clear common user cache patterns
-                # This is not ideal but better than stale cache
-                pass
+            await self.cache_invalidator.invalidate_all_users_cache()
             
             updated_count = update_result.modified_count if update_result else 0
             logger.info(f"Reset daily counters for {updated_count} users")

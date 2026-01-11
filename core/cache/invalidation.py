@@ -53,6 +53,16 @@ class CacheInvalidator:
             logger.error(f"Failed to invalidate user cache for {user_id}: {e}")
             return False
 
+    async def invalidate_all_users_cache(self) -> bool:
+        """Invalidate all user caches (for bulk operations like daily reset)"""
+        try:
+            await self.cache.delete_pattern("user:*")
+            await self.cache.delete(CacheKeyGenerator.banned_users())
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate all users cache: {e}")
+            return False
+
     async def invalidate_all_search_results(self) -> bool:
         """
         Invalidate all search result caches using versioning.

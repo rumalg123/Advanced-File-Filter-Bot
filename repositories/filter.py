@@ -4,6 +4,7 @@ from datetime import datetime, UTC
 from typing import Dict, Any, Optional, List, Tuple
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
@@ -39,6 +40,7 @@ class FilterRepository(BaseRepository[Filter]):
         self.cache = cache_manager
         self.collection_prefix = collection_prefix
         self._collections = {}
+        self.cache_invalidator = CacheInvalidator(cache_manager)
 
     async def get_collection(self, group_id: str = None):
         """Get collection for specific group"""
@@ -116,13 +118,10 @@ class FilterRepository(BaseRepository[Filter]):
                 upsert=True
             )
 
-            # Invalidate cache
+            # Invalidate caches
             cache_key = CacheKeyGenerator.filter(group_id, text)
             await self.cache.delete(cache_key)
-
-            # Invalidate list cache
-            list_cache_key = CacheKeyGenerator.filter_list(group_id)
-            await self.cache.delete(list_cache_key)
+            await self.cache_invalidator.invalidate_filter_cache(group_id)
 
             return True
         except Exception as e:
@@ -212,9 +211,7 @@ class FilterRepository(BaseRepository[Filter]):
                 # Invalidate caches
                 cache_key = CacheKeyGenerator.filter(group_id, text)
                 await self.cache.delete(cache_key)
-
-                list_cache_key = CacheKeyGenerator.filter_list(group_id)
-                await self.cache.delete(list_cache_key)
+                await self.cache_invalidator.invalidate_filter_cache(group_id)
 
             return result.deleted_count
         except Exception as e:
@@ -228,8 +225,7 @@ class FilterRepository(BaseRepository[Filter]):
             await self.db_pool.execute_with_retry(collection.drop)
 
             # Clear cache
-            list_cache_key = CacheKeyGenerator.filter_list(group_id)
-            await self.cache.delete(list_cache_key)
+            await self.cache_invalidator.invalidate_filter_cache(group_id)
 
             return True
         except Exception as e:

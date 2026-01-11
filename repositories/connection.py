@@ -216,8 +216,7 @@ class ConnectionRepository(BaseRepository[UserConnection]):
         if success:
             # Invalidate caches
             await self.cache_invalidator.invalidate_connection_cache(user_id)
-            filter_cache_key = CacheKeyGenerator.filter_list(group_id)
-            await self.cache.delete(filter_cache_key)
+            await self.cache_invalidator.invalidate_filter_cache(group_id)
 
             logger.info(f"Deleted connection {group_id} for user {user_id}")
 
