@@ -60,6 +60,11 @@ class RateLimiter:
         # This prevents race conditions where multiple requests pass the check
         new_count = await self.cache.increment(key)
 
+        # Handle Redis unavailability - allow request but log warning
+        if new_count is None:
+            logger.warning(f"Rate limit check failed for user {user_id}, action {action} - Redis unavailable")
+            return True, None
+
         # Set expiration on first request (when count becomes 1)
         if new_count == 1:
             await self.cache.expire(key, config.time_window)
