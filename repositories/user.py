@@ -795,6 +795,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         Track a user request and apply limits
         Returns: (is_allowed, message, should_ban)
         """
+        logger.info(_feature_config.request_only_for_premium)
         user = await self.get_user(user_id)
         if not user:
             # Create user if doesn't exist

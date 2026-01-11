@@ -286,7 +286,7 @@ class BotSettingsService:
         'REQUEST_ONLY_FOR_PREMIUM': {
             'type': 'bool',
             'default': False,
-            'description': 'Can only request for premium users',
+            'description': 'Can request only for premium users',
             'category': 'premium'
         },
         'REQUEST_PER_DAY': {

@@ -68,7 +68,6 @@ logger = get_logger(__name__)
 
 class BotConfig:
     """Configuration adapter for centralized Pydantic settings"""
-    
     def __init__(self):
         # Use centralized settings
         self._settings = settings

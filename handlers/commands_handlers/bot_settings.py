@@ -809,6 +809,13 @@ class BotSettingsHandler(BaseHandler):
             'DATABASE_MAX_FAILURES': 'Circuit Max Failures',
             'DATABASE_RECOVERY_TIMEOUT': 'Circuit Recovery Time',
             'DATABASE_HALF_OPEN_CALLS': 'Circuit Half-Open Calls',
+            'PORT':'Port',
+            'CACHE_TIME':'Cache Time',
+            'ADMINS': 'Admin Users',
+            'CHANNELS': 'Indexing Channels',
+            'AUTH_USERS': 'Authorized Users',
+            'REDIS_URI': 'Redis URI',
+            'REQUEST_ONLY_FOR_PREMIUM': 'Request Only for Premium'
         }
 
         return display_map.get(key, key)
