@@ -1,9 +1,8 @@
-
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Dict, Any, List
 
 from pyrogram import Client, enums
 from pyrogram.errors import UserNotParticipant, ChatAdminRequired
-from pyrogram.types import Message, CallbackQuery, InlineQuery, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardButton
 
 from core.utils.logger import get_logger
 logger = get_logger(__name__)
@@ -125,7 +124,8 @@ class SubscriptionManager:
         user_id: int,
         callback_type: str = "general",
         extra_data: Optional[str] = None,
-        session_key: Optional[str] = None
+        session_key: Optional[str] = None,
+        custom_callback_data: Optional[str] = None
     ) -> List[List[InlineKeyboardButton]]:
         """
         Build subscription button list for force subscribe prompts.
@@ -185,8 +185,10 @@ class SubscriptionManager:
             except Exception as e:
                 logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
 
-        # Build Try Again callback data based on type
-        if callback_type == "deeplink" and session_key:
+        # Build Try Again callback data
+        if custom_callback_data:
+            callback_data = custom_callback_data
+        elif callback_type == "deeplink" and session_key:
             callback_data = f"checksub#dl#{session_key}"
         elif callback_type == "file" and extra_data:
             callback_data = f"checksub#{user_id}#file#{extra_data}"
@@ -297,84 +299,3 @@ class SubscriptionManager:
                     })
 
         return results
-
-# Utility functions for compatibility with existing code
-async def is_subscribed(
-        client: Client,
-        query: Union[Message, CallbackQuery, InlineQuery],
-        auth_channel: Optional[int] = None,
-        auth_groups: Optional[list] = None
-) -> bool:
-    """
-    Compatibility function - checks if user is subscribed
-
-    Args:
-        client: Pyrogram client
-        query: Message, CallbackQuery, or InlineQuery object
-        auth_channel: AUTH_CHANNEL ID
-        auth_groups: List of AUTH_GROUP IDs
-
-    Returns:
-        bool: True if subscribed to all required channels/groups
-    """
-    # If no auth requirements, allow access
-    if not auth_channel and not auth_groups:
-        return True
-
-    # Get user ID from different query types
-    if hasattr(query, 'from_user') and query.from_user:
-        user_id = query.from_user.id
-    else:
-        return False
-
-    # Use SubscriptionManager
-    sub_manager = SubscriptionManager(auth_channel, auth_groups)
-    return await sub_manager.is_subscribed(
-        client,
-        user_id,
-        check_channel=bool(auth_channel),
-        check_groups=bool(auth_groups)
-    )
-
-
-async def get_auth_channel_link(client: Client, auth_channel: int) -> str:
-    """Get AUTH_CHANNEL link for subscription"""
-    sub_manager = SubscriptionManager(auth_channel)
-    return await sub_manager.get_chat_link(client, auth_channel)
-
-
-async def check_user_subscription(
-        client: Client,
-        user_id: int,
-        auth_channel: Optional[int] = None,
-        auth_groups: Optional[list] = None
-) -> tuple[bool, list[str]]:
-    """
-    Check user subscription and return status with links
-
-    Returns:
-        tuple: (is_subscribed, list_of_required_links)
-    """
-    sub_manager = SubscriptionManager(auth_channel, auth_groups)
-
-    # Check if subscribed
-    is_sub = await sub_manager.is_subscribed(client, user_id)
-
-    if is_sub:
-        return True, []
-
-    # Get required links
-    required_links = []
-
-    if auth_channel:
-        link = await sub_manager.get_chat_link(client, auth_channel)
-        required_links.append(link)
-
-    if auth_groups:
-        for group_id in auth_groups:
-            link = await sub_manager.get_chat_link(client, group_id)
-            required_links.append(link)
-
-    return False, required_links
-
-

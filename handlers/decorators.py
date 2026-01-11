@@ -2,7 +2,7 @@ from functools import wraps
 from typing import Union, Optional, Callable
 
 from pyrogram import Client
-from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 
 from core.utils.logger import get_logger
 from core.utils.validators import (
@@ -94,73 +94,26 @@ class SubscriptionRequired:
 
         if not original_user_id:
             return
-        # Build buttons for required subscriptions
-        buttons = []
-        # AUTH_CHANNEL button
-        if bot.config.AUTH_CHANNEL:
-            try:
-                chat_link = await bot.subscription_manager.get_chat_link(
-                    client, bot.config.AUTH_CHANNEL
-                )
 
-                # Get channel name
-                try:
-                    chat = await client.get_chat(bot.config.AUTH_CHANNEL)
-                    channel_name = chat.title or f"Channel {bot.config.AUTH_CHANNEL}"
-                except Exception:
-                    channel_name = "Updates Channel"
-
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"📢 Join {channel_name}",
-                        url=chat_link
-                    )
-                ])
-            except Exception as e:
-                logger.error(f"Error creating AUTH_CHANNEL button: {e}")
-
-        # AUTH_GROUPS buttons
-        if hasattr(bot.config, 'AUTH_GROUPS') and bot.config.AUTH_GROUPS:
-            for group_id in bot.config.AUTH_GROUPS:
-                try:
-                    chat_link = await bot.subscription_manager.get_chat_link(
-                        client, group_id
-                    )
-
-                    # Get group name
-                    try:
-                        chat = await client.get_chat(group_id)
-                        group_name = chat.title or f"Group {group_id}"
-                    except Exception:
-                        group_name = "Required Group"
-
-                    buttons.append([
-                        InlineKeyboardButton(
-                            f"👥 Join {group_name}",
-                            url=chat_link
-                        )
-                    ])
-                except Exception as e:
-                    logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
-
-        # Add "Try Again" button with callback data
+        # Determine callback data based on message type
         callback_data = f"checksub#{original_user_id}#general"
 
         if isinstance(message, Message):
             cmds = getattr(message, "command", []) or []
-            # For start command with parameters
             if len(cmds) > 1:
                 callback_data = f"checksub#{original_user_id}#{cmds[1]}"
             elif message.text and not message.text.startswith("/"):
                 callback_data = f"checksub#{original_user_id}#search"
         elif isinstance(message, CallbackQuery):
-            # For callbacks, extract the original action
             if message.data.startswith('file#'):
                 callback_data = f"checksub#{original_user_id}#{message.data}"
 
-        buttons.append([
-            InlineKeyboardButton("🔄 Try Again", callback_data=callback_data)
-        ])
+        # Build buttons using subscription manager
+        buttons = await bot.subscription_manager.build_subscription_buttons(
+            client=client,
+            user_id=original_user_id,
+            custom_callback_data=callback_data
+        )
 
         # Default subscription message
         if not custom_message:
@@ -183,7 +136,6 @@ class SubscriptionRequired:
                 "🔒 You need to join our channel(s) first!",
                 show_alert=True
             )
-            # Don't edit the message for callbacks, as it might break the UI
 
 
 # Create decorator instance for easy import
@@ -202,28 +154,18 @@ class BanCheck:
         def decorator(func: Callable):
             @wraps(func)
             async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
-                # Get user using validator
                 user_id = extract_user_id(message)
 
-                if isinstance(message, CallbackQuery):
-                    logger.info(f"check_ban decorator: CallbackQuery from user {user_id}, data: {message.data if hasattr(message, 'data') else 'No data'}")
-                else:
-                    logger.info(f"check_ban decorator: Message from user {user_id}")
-
                 if not user_id:
-                    logger.warning("check_ban decorator: No user_id found, returning")
                     return
 
-                # Skip ban check for admins using validator
+                # Skip ban check for admins
                 if is_admin(user_id, self.bot.config.ADMINS):
-                    logger.info(f"check_ban decorator: User {user_id} is admin, skipping ban check")
                     return await func(self, client, message, *args, **kwargs)
 
                 # Check if user is banned
-                logger.info(f"check_ban decorator: Checking ban status for user {user_id}")
                 user = await self.bot.user_repo.get_user(user_id)
                 if user and user.status == UserStatus.BANNED:
-                    logger.info(f"check_ban decorator: User {user_id} is banned, blocking access")
                     ban_text = (
                         "🚫 <b>You are banned from using this bot</b>\n"
                         f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
@@ -237,7 +179,6 @@ class BanCheck:
                         await message.answer(ban_text, show_alert=True)
                     return
 
-                logger.info(f"check_ban decorator: User {user_id} is not banned, proceeding to function {func.__name__}")
                 return await func(self, client, message, *args, **kwargs)
 
             return wrapper

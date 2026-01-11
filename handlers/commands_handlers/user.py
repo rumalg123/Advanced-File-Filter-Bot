@@ -142,7 +142,7 @@ class UserCommandHandler(BaseCommandHandler):
             self, client: Client, message: Message, deeplink_param: str
     ):
         """Send subscription message for deeplink access"""
-        from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from pyrogram.types import InlineKeyboardMarkup
 
         user_id = message.from_user.id
 
@@ -154,53 +154,13 @@ class UserCommandHandler(BaseCommandHandler):
             expire=CacheTTLConfig.USER_DATA
         )
 
-        # Build buttons for required subscriptions
-        buttons = []
-
-        # AUTH_CHANNEL button
-        if self.bot.config.AUTH_CHANNEL:
-            try:
-                chat_link = await self.bot.subscription_manager.get_chat_link(
-                    client, self.bot.config.AUTH_CHANNEL
-                )
-                chat = await client.get_chat(self.bot.config.AUTH_CHANNEL)
-                channel_name = chat.title or "Updates Channel"
-
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"📢 Join {channel_name}",
-                        url=chat_link
-                    )
-                ])
-            except Exception as e:
-                logger.error(f"Error creating AUTH_CHANNEL button: {e}")
-
-        # AUTH_GROUPS buttons
-        if hasattr(self.bot.config, 'AUTH_GROUPS') and self.bot.config.AUTH_GROUPS:
-            for group_id in self.bot.config.AUTH_GROUPS:
-                try:
-                    chat_link = await self.bot.subscription_manager.get_chat_link(
-                        client, group_id
-                    )
-                    chat = await client.get_chat(group_id)
-                    group_name = chat.title or "Required Group"
-
-                    buttons.append([
-                        InlineKeyboardButton(
-                            f"👥 Join {group_name}",
-                            url=chat_link
-                        )
-                    ])
-                except Exception as e:
-                    logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
-
-        # Add "Try Again" button with the short session key
-        buttons.append([
-            InlineKeyboardButton(
-                "🔄 Try Again",
-                callback_data=f"checksub#dl#{session_key}"  # Use short key instead
-            )
-        ])
+        # Build buttons using subscription manager
+        buttons = await self.bot.subscription_manager.build_subscription_buttons(
+            client=client,
+            user_id=user_id,
+            callback_type="deeplink",
+            session_key=session_key
+        )
 
         message_text = (
             "🔒 <b>Subscription Required</b>\n\n"
