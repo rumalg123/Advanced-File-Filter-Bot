@@ -229,6 +229,10 @@ class CacheKeyGenerator:
     def deeplink_session(user_id: int, session_id: str) -> str:
         return f"deeplink_{user_id}_{session_id}"
 
+    @staticmethod
+    def search_cache_version() -> str:
+        return "cache:search:version"
+
 
 # Cache patterns to identify related keys for bulk operations
 class CachePatterns:

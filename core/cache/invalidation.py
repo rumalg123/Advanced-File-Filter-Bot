@@ -16,8 +16,8 @@ logger = get_logger(__name__)
 class CacheInvalidator:
     """Helper class for cache invalidation with smart versioning"""
 
-    # Cache version key - incrementing this invalidates all versioned caches
-    SEARCH_CACHE_VERSION_KEY = "cache:search:version"
+    # Cache version key - use centralized generator
+    SEARCH_CACHE_VERSION_KEY = CacheKeyGenerator.search_cache_version()
 
     # Throttle full invalidation to prevent cache stampedes
     _last_full_invalidation: float = 0
