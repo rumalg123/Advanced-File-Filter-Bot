@@ -323,7 +323,6 @@ class MediaSearchBot(Client):
         self.connection_repo: Optional[ConnectionRepository] = None
         self.filter_repo: Optional[FilterRepository] = None
         self.batch_link_repo: Optional[BatchLinkRepository] = None
-        self.subscription_manager: Optional[SubscriptionManager]
         self.bot_settings_repo: Optional[BotSettingsRepository] = None
 
         # Initialize services
