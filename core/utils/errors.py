@@ -198,29 +198,3 @@ def is_channel_access_error(exception: Exception) -> bool:
         "channel_invalid",
         "peer_id_invalid"
     ])
-
-
-def is_anonymous_admin(message) -> bool:
-    """
-    Check if the message sender is an anonymous admin.
-
-    Args:
-        message: Pyrogram Message or CallbackQuery
-
-    Returns:
-        True if from_user is None (anonymous admin)
-    """
-    return message.from_user is None
-
-
-def get_user_id_or_none(message) -> Optional[int]:
-    """
-    Safely get user ID from message, returning None for anonymous admins.
-
-    Args:
-        message: Pyrogram Message or CallbackQuery
-
-    Returns:
-        User ID or None if anonymous
-    """
-    return message.from_user.id if message.from_user else None
