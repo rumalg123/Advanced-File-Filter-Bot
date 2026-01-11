@@ -819,6 +819,12 @@ class MediaSearchBot(Client):
                 name="maintenance_tasks"
             )
 
+            # Start hourly premium cleanup task (more frequent than daily maintenance)
+            self.handler_manager.create_background_task(
+                self._run_hourly_premium_cleanup(),
+                name="hourly_premium_cleanup"
+            )
+
             # Send startup message
             await self._send_startup_message()
 
@@ -1095,6 +1101,60 @@ class MediaSearchBot(Client):
             except Exception as e:
                 logger.error(f"Error in maintenance task: {e}")
                 await asyncio.sleep(CacheTTLConfig.MAINTENANCE_RETRY_DELAY)
+
+    async def _run_hourly_premium_cleanup(self):
+        """
+        Run hourly premium cleanup to expire premium subscriptions promptly.
+        This runs every hour to ensure premium expiry is detected within 1 hour.
+        """
+        # Wait 5 minutes after startup before first run
+        await asyncio.sleep(300)
+
+        while not self.handler_manager.is_shutting_down():
+            try:
+                if self.handler_manager.is_shutting_down():
+                    logger.info("Hourly premium cleanup detected shutdown, exiting")
+                    break
+
+                # Run premium cleanup
+                cleanup_result = await self.user_repo.cleanup_expired_premium()
+
+                if cleanup_result.get('expired_count', 0) > 0:
+                    logger.info(
+                        f"Hourly premium cleanup: expired {cleanup_result['expired_count']} subscriptions "
+                        f"(checked {cleanup_result['checked_count']}, still active {cleanup_result['still_active_count']})"
+                    )
+
+                    # Log to admin channel if configured
+                    if self.config.LOG_CHANNEL and cleanup_result['expired_count'] > 0:
+                        try:
+                            log_text = (
+                                f"#PremiumCleanup\n"
+                                f"⏰ <b>Hourly Premium Cleanup</b>\n\n"
+                                f"📊 <b>Checked:</b> {cleanup_result['checked_count']} users\n"
+                                f"❌ <b>Expired:</b> {cleanup_result['expired_count']} subscriptions\n"
+                                f"✅ <b>Still Active:</b> {cleanup_result['still_active_count']} users"
+                            )
+                            await telegram_api.call_api(
+                                self.send_message,
+                                chat_id=self.config.LOG_CHANNEL,
+                                text=log_text
+                            )
+                        except Exception as e:
+                            logger.debug(f"Could not send premium cleanup log: {e}")
+
+                # Sleep for 1 hour with periodic shutdown checks
+                for _ in range(60):  # Check every minute (60 * 1min = 1 hour)
+                    if self.handler_manager.is_shutting_down():
+                        break
+                    await asyncio.sleep(60)  # 60 seconds
+
+            except asyncio.CancelledError:
+                logger.info("Hourly premium cleanup task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in hourly premium cleanup: {e}")
+                await asyncio.sleep(300)  # Wait 5 minutes before retry
 
     async def _cleanup_old_cache(self):
         """Clean up old cache entries"""

@@ -7,6 +7,13 @@ from pymongo.errors import DuplicateKeyError
 from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
 
+# Import concurrency control
+try:
+    from core.concurrency.semaphore_manager import semaphore_manager
+    CONCURRENCY_CONTROL_AVAILABLE = True
+except ImportError:
+    CONCURRENCY_CONTROL_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 T = TypeVar('T')
@@ -213,15 +220,23 @@ class BaseRepository(ABC, Generic[T]):
             return 0
 
     async def bulk_write(self, operations: List[Any]) -> bool:
-        """Perform bulk write operations"""
+        """Perform bulk write operations with concurrency control"""
         try:
             if not operations:
                 return True
 
             collection = await self.collection
-            result = await self.db_pool.execute_with_retry(
-                collection.bulk_write, operations
-            )
+
+            # Use semaphore manager for concurrency control if available
+            if CONCURRENCY_CONTROL_AVAILABLE:
+                async with semaphore_manager.acquire('database_write', f'bulk_write_{self.collection_name}'):
+                    result = await self.db_pool.execute_with_retry(
+                        collection.bulk_write, operations
+                    )
+            else:
+                result = await self.db_pool.execute_with_retry(
+                    collection.bulk_write, operations
+                )
 
             logger.info(f"Bulk write completed: {result.bulk_api_result}")
             return True

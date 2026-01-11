@@ -6,9 +6,12 @@ from pyrogram.types import Message
 
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 from repositories.user import UserStatus
+from core.utils import validators
+from core.utils.validators import UserAccessContext
 logger = get_logger(__name__)
 
 
@@ -148,7 +151,9 @@ class DeepLinkHandler(BaseCommandHandler):
 
             logger.info(f"Sending file - ID: {file.file_id}, Name: {file.file_name}")
 
-            sent_msg = await client.send_cached_media(
+            # Use telegram_api for concurrency control
+            sent_msg = await telegram_api.call_api(
+                client.send_cached_media,
                 chat_id=user_id,
                 file_id=file.file_id,
                 caption=caption,
@@ -240,7 +245,6 @@ class DeepLinkHandler(BaseCommandHandler):
             return
 
         files_data = cached_data.get('files', [])
-        search_query = cached_data.get('query', '')
 
         if not files_data:
             await message.reply_text("❌ No files found.")
@@ -262,13 +266,11 @@ class DeepLinkHandler(BaseCommandHandler):
         await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
         user = await self.bot.user_repo.get_user(user_id)
 
-        # Check if user is admin or owner
-        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
-        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        is_owner = user_id == owner_id
+        # Build access context for permission checks
+        access_ctx = UserAccessContext.from_config(user_id, user, self.bot.config)
 
-        # Only check quota for non-premium, non-admin, non-owner users
-        if user and not user.is_premium and not self.bot.config.DISABLE_PREMIUM and not is_admin and not is_owner:
+        # Only check quota for users who should be tracked (non-premium, non-admin, non-owner)
+        if access_ctx.should_track_retrieval:
             remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
             if remaining < len(files_data):
                 await message.reply_text(
@@ -278,13 +280,17 @@ class DeepLinkHandler(BaseCommandHandler):
                 return
 
         # Send files without progress updates (simplified)
-        sending_file_msg =await message.reply_text(f"📤 Sending {len(files_data)} files...")
+        sending_file_msg = await message.reply_text(f"📤 Sending {len(files_data)} files...")
+
+        # Batch fetch all files in one query instead of N individual queries
+        file_unique_ids = [f['file_unique_id'] for f in files_data]
+        files_map = await self.bot.media_repo.find_files_batch(file_unique_ids)
 
         success_count = 0
         for file_data in files_data:
             try:
                 file_unique_id = file_data['file_unique_id']
-                file = await self.bot.media_repo.find_file(file_unique_id)
+                file = files_map.get(file_unique_id)
 
                 if not file:
                     logger.warning(f"File {file_unique_id} not found.")
@@ -299,7 +305,9 @@ class DeepLinkHandler(BaseCommandHandler):
                     auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
-                sent_msg = await client.send_cached_media(
+                # Use telegram_api for concurrency control
+                sent_msg = await telegram_api.call_api(
+                    client.send_cached_media,
                     chat_id=user_id,
                     file_id=file.file_id,
                     caption=caption,
@@ -320,14 +328,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 continue
 
         # Increment retrieval count for all successfully sent files at once (batch operation)
-        # Reuse is_admin, owner_id, is_owner computed earlier (lines 267-269)
-        should_track_retrieval = (
-            user and not user.is_premium and
-            not self.bot.config.DISABLE_PREMIUM and
-            not is_admin and not is_owner
-        )
-
-        if success_count > 0 and should_track_retrieval:
+        if success_count > 0 and access_ctx.should_track_retrieval:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files_data)} files!")
@@ -379,8 +380,8 @@ class DeepLinkHandler(BaseCommandHandler):
         """Send all files of a specific type"""
         user_id = message.from_user.id
 
-        # Reconstruct search query from key
-        search_query = key.replace('_', ' ')
+        # Reconstruct and sanitize search query from key
+        search_query = validators.sanitize_search_query(key.replace('_', ' '))
 
         # Check access
         can_access, reason = await self.bot.user_repo.can_retrieve_file(
@@ -422,16 +423,9 @@ class DeepLinkHandler(BaseCommandHandler):
         # Send files
         await message.reply_text(f"📤 Sending {len(files)} {file_type or 'all'} files...")
 
-        # Pre-compute user info and admin status (avoid repeated lookups in loop)
+        # Pre-compute user info and access context (avoid repeated lookups in loop)
         user = await self.bot.user_repo.get_user(user_id)
-        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
-        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        is_owner = user_id == owner_id
-        should_track_retrieval = (
-            user and not user.is_premium and
-            not self.bot.config.DISABLE_PREMIUM and
-            not is_admin and not is_owner
-        )
+        access_ctx = UserAccessContext.from_config(user_id, user, self.bot.config)
 
         success_count = 0
         for file in files:
@@ -446,7 +440,9 @@ class DeepLinkHandler(BaseCommandHandler):
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
-                sent_msg = await client.send_cached_media(
+                # Use telegram_api for concurrency control
+                sent_msg = await telegram_api.call_api(
+                    client.send_cached_media,
                     chat_id=user_id,
                     file_id=file.file_id,
                     caption=caption,
@@ -465,7 +461,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 continue
 
         # Batch increment retrieval count after loop (more efficient than per-file)
-        if should_track_retrieval and success_count > 0:
+        if access_ctx.should_track_retrieval and success_count > 0:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files)} files!")

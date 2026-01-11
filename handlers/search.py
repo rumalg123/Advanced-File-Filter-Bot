@@ -17,6 +17,7 @@ from core.utils.helpers import format_file_size
 from handlers.decorators import require_subscription, check_ban
 
 from core.utils.logger import get_logger
+from core.utils.validators import sanitize_search_query
 from repositories.user import UserStatus
 from core.utils.pagination import PaginationBuilder
 
@@ -304,14 +305,14 @@ class SearchHandler:
                     )
                     return
 
-        # Get search query
-        search_query = query.query.strip()
+        # Get and sanitize search query
+        search_query = sanitize_search_query(query.query)
 
         # Parse query for file type filter
         file_type = None
         if '|' in search_query:
             parts = search_query.split('|', maxsplit=1)
-            search_query = parts[0].strip()
+            search_query = sanitize_search_query(parts[0])
             # file_type_str = parts[1].strip().lower()
             # Add file type parsing if needed
 

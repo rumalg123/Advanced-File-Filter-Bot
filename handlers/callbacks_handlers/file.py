@@ -8,6 +8,7 @@ from pyrogram.types import CallbackQuery
 
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from core.utils.validators import is_original_requester, is_private_chat, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import check_ban
@@ -159,7 +160,9 @@ class FileCallbackHandler(BaseCommandHandler):
                 auto_delete_message = self.bot.config.AUTO_DELETE_MESSAGE
             )
 
-            sent_msg = await client.send_cached_media(
+            # Use telegram_api for concurrency control
+            sent_msg = await telegram_api.call_api(
+                client.send_cached_media,
                 chat_id=callback_user_id,
                 file_id=file.file_id,
                 caption=caption,
@@ -328,7 +331,8 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Send status message to PM
         try:
-            status_msg = await client.send_message(
+            status_msg = await telegram_api.call_api(
+                client.send_message,
                 chat_id=user_id,
                 text=(
                     f"📤 <b>Sending Files</b>\n"
@@ -375,7 +379,9 @@ class FileCallbackHandler(BaseCommandHandler):
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
-                sent_msg = await client.send_cached_media(
+                # Use telegram_api for concurrency control (handles FloodWait internally)
+                sent_msg = await telegram_api.call_api(
+                    client.send_cached_media,
                     chat_id=user_id,
                     file_id=file.file_id,
                     caption=caption,
@@ -403,36 +409,6 @@ class FileCallbackHandler(BaseCommandHandler):
 
                 # Small delay to avoid flooding
                 await asyncio.sleep(1)
-
-            except FloodWait as e:
-                logger.warning(f"FloodWait: sleeping for {e.value} seconds")
-                await asyncio.sleep(e.value)
-                # Retry the current file (only if file was successfully fetched)
-                if file:
-                    try:
-                        caption = CaptionFormatter.format_file_caption(
-                            file=file,
-                            custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
-                            batch_caption=self.bot.config.BATCH_FILE_CAPTION,
-                            keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
-                            is_batch=False,
-                            auto_delete_minutes=delete_minutes if delete_time > 0 else None,
-                            auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
-                        )
-
-                        sent_msg = await client.send_cached_media(
-                            chat_id=user_id,
-                            file_id=file.file_id,
-                            caption=caption,
-                            parse_mode=CaptionFormatter.get_parse_mode()
-                        )
-                        sent_messages.append(sent_msg)
-                        success_count += 1
-                    except Exception as e:
-                        logger.debug(f"Failed to resend file after FloodWait: {e}")
-                        failed_count += 1
-                else:
-                    failed_count += 1
 
             except Exception as e:
                 logger.error(f"Error sending file: {e}")

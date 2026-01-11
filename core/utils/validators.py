@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from datetime import datetime, UTC
 from functools import wraps
 from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
@@ -372,6 +373,104 @@ class AccessControl:
             return True, callback_user_id, None  # Allow if parsing fails
 
 
+class PremiumValidation:
+    """Premium status validation utilities"""
+
+    @staticmethod
+    def normalize_expiry_date(expiry_date: Optional[datetime]) -> Optional[datetime]:
+        """
+        Normalize expiry date to ensure it has UTC timezone info.
+
+        Args:
+            expiry_date: The expiry date to normalize (may be None or timezone-naive)
+
+        Returns:
+            The expiry date with UTC timezone, or None if input is None
+        """
+        if expiry_date is None:
+            return None
+        if expiry_date.tzinfo is None:
+            return expiry_date.replace(tzinfo=UTC)
+        return expiry_date
+
+    @staticmethod
+    def is_premium_valid(
+        is_premium: bool,
+        premium_expiry_date: Optional[datetime],
+        current_time: Optional[datetime] = None
+    ) -> bool:
+        """
+        Check if premium status is currently valid.
+
+        Args:
+            is_premium: Whether user has premium flag set
+            premium_expiry_date: The premium expiry date (may be timezone-naive)
+            current_time: Optional current time for testing (defaults to now UTC)
+
+        Returns:
+            True if premium is valid and not expired, False otherwise
+        """
+        if not is_premium:
+            return False
+
+        if premium_expiry_date is None:
+            return False
+
+        # Normalize expiry date timezone
+        expiry = PremiumValidation.normalize_expiry_date(premium_expiry_date)
+
+        # Use provided time or current UTC time
+        now = current_time if current_time else datetime.now(UTC)
+
+        return expiry >= now
+
+    @staticmethod
+    def check_user_premium_status(user) -> Tuple[bool, Optional[datetime]]:
+        """
+        Check premium status for a user object.
+
+        Args:
+            user: User object with is_premium and premium_expiry_date attributes
+
+        Returns:
+            Tuple of (is_valid, normalized_expiry_date)
+        """
+        if user is None:
+            return False, None
+
+        expiry = PremiumValidation.normalize_expiry_date(
+            getattr(user, 'premium_expiry_date', None)
+        )
+        is_valid = PremiumValidation.is_premium_valid(
+            getattr(user, 'is_premium', False),
+            expiry
+        )
+
+        return is_valid, expiry
+
+    @staticmethod
+    def get_days_remaining(premium_expiry_date: Optional[datetime]) -> int:
+        """
+        Get the number of days remaining in premium subscription.
+
+        Args:
+            premium_expiry_date: The premium expiry date
+
+        Returns:
+            Number of days remaining (0 if expired or None)
+        """
+        if premium_expiry_date is None:
+            return 0
+
+        expiry = PremiumValidation.normalize_expiry_date(premium_expiry_date)
+        now = datetime.now(UTC)
+
+        if expiry <= now:
+            return 0
+
+        return (expiry - now).days
+
+
 class InputValidation:
     """Input validation and sanitization utilities"""
 
@@ -590,3 +689,9 @@ validate_limit_offset = InputValidation.validate_limit_offset
 validate_message_text = InputValidation.validate_message_text
 extract_command_args = InputValidation.extract_command_args
 validate_callback_data = InputValidation.validate_callback_data
+
+# Premium validation
+normalize_expiry_date = PremiumValidation.normalize_expiry_date
+is_premium_valid = PremiumValidation.is_premium_valid
+check_user_premium_status = PremiumValidation.check_user_premium_status
+get_days_remaining = PremiumValidation.get_days_remaining

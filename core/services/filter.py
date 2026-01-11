@@ -9,6 +9,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from core.cache.redis_cache import CacheManager
 from core.services.connection import ConnectionService
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from repositories.filter import FilterRepository
 
 logger = get_logger(__name__)
@@ -196,16 +197,19 @@ class FilterService:
     async def send_filter_response(self, client: Client, message: Message,
                                    reply_text: str, btn: str, alert: str,
                                    fileid: str) -> None:
-        """Send the filter response"""
+        """Send the filter response with concurrency control"""
         reply_id = message.reply_to_message.id if message.reply_to_message else message.id
+        chat_id = message.chat.id
+
         if message.chat.type == ChatType.PRIVATE:
             try:
                 if fileid == "None":
                     # Text-only response
                     if btn == "[]":
-                        await client.send_message(
-                            message.chat.id,
-                            reply_text,
+                        await telegram_api.call_api(
+                            client.send_message,
+                            chat_id=chat_id,
+                            text=reply_text,
                             disable_web_page_preview=True,
                             protect_content=False,
                             reply_to_message_id=reply_id
@@ -213,9 +217,10 @@ class FilterService:
                     else:
                         # Text with buttons
                         button = json.loads(btn)
-                        await client.send_message(
-                            message.chat.id,
-                            reply_text,
+                        await telegram_api.call_api(
+                            client.send_message,
+                            chat_id=chat_id,
+                            text=reply_text,
                             disable_web_page_preview=True,
                             reply_markup=InlineKeyboardMarkup(button),
                             protect_content=False,
@@ -224,18 +229,20 @@ class FilterService:
                 else:
                     # Media response
                     if btn == "[]":
-                        await client.send_cached_media(
-                            message.chat.id,
-                            fileid,
+                        await telegram_api.call_api(
+                            client.send_cached_media,
+                            chat_id=chat_id,
+                            file_id=fileid,
                             caption=reply_text or "",
                             protect_content=False,
                             reply_to_message_id=reply_id
                         )
                     else:
                         button = json.loads(btn)
-                        await client.send_cached_media(
-                            message.chat.id,
-                            fileid,
+                        await telegram_api.call_api(
+                            client.send_cached_media,
+                            chat_id=chat_id,
+                            file_id=fileid,
                             caption=reply_text or "",
                             reply_markup=InlineKeyboardMarkup(button),
                             protect_content=False,
@@ -249,18 +256,20 @@ class FilterService:
                 if fileid == "None":
                     # Text-only response
                     if btn == "[]":
-                        await client.send_message(
-                            message.chat.id,
-                            reply_text,
+                        await telegram_api.call_api(
+                            client.send_message,
+                            chat_id=chat_id,
+                            text=reply_text,
                             disable_web_page_preview=True,
                             reply_to_message_id=reply_id
                         )
                     else:
                         # Text with buttons
                         button = json.loads(btn)
-                        await client.send_message(
-                            message.chat.id,
-                            reply_text,
+                        await telegram_api.call_api(
+                            client.send_message,
+                            chat_id=chat_id,
+                            text=reply_text,
                             disable_web_page_preview=True,
                             reply_markup=InlineKeyboardMarkup(button),
                             reply_to_message_id=reply_id
@@ -268,17 +277,19 @@ class FilterService:
                 else:
                     # Media response
                     if btn == "[]":
-                        await client.send_cached_media(
-                            message.chat.id,
-                            fileid,
+                        await telegram_api.call_api(
+                            client.send_cached_media,
+                            chat_id=chat_id,
+                            file_id=fileid,
                             caption=reply_text or "",
                             reply_to_message_id=reply_id
                         )
                     else:
                         button = json.loads(btn)
-                        await client.send_cached_media(
-                            message.chat.id,
-                            fileid,
+                        await telegram_api.call_api(
+                            client.send_cached_media,
+                            chat_id=chat_id,
+                            file_id=fileid,
                             caption=reply_text or "",
                             reply_markup=InlineKeyboardMarkup(button),
                             reply_to_message_id=reply_id

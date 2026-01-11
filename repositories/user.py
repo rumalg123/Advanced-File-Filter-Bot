@@ -11,6 +11,8 @@ from core.cache.enhanced_cache import cache_premium_status
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger
+from core.utils.validators import normalize_expiry_date, is_premium_valid, get_days_remaining
+
 logger = get_logger(__name__)
 
 # Feature config reference to avoid circular imports
@@ -312,15 +314,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if not user.premium_activation_date:
             return False, None
 
-        expiry_date = user.premium_expiry_date
-        if expiry_date and expiry_date.tzinfo is None:
-            expiry_date = expiry_date.replace(tzinfo=UTC)
-        if datetime.now(UTC) > expiry_date:
+        # Use validator utility for premium check
+        if not is_premium_valid(user.is_premium, user.premium_expiry_date):
             # Premium expired
             await self.update_premium_status(user.id, False)
             return False, "Premium subscription expired"
 
-        days_remaining = (expiry_date - datetime.now(UTC)).days
+        days_remaining = get_days_remaining(user.premium_expiry_date)
         return True, f"Premium active ({days_remaining} days remaining)"
     
     async def batch_check_premium_status(
@@ -379,13 +379,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     activation_date = datetime.fromisoformat(activation_date)
 
                 expiry_date = doc.get("premium_expiry_date")
-                if expiry_date and expiry_date.tzinfo is None:
-                    expiry_date = expiry_date.replace(tzinfo=UTC)
-                if datetime.now(UTC) > expiry_date:
+                # Parse expiry date if needed
+                if isinstance(expiry_date, str):
+                    expiry_date = datetime.fromisoformat(expiry_date)
+
+                # Use validator utility for premium check
+                if not is_premium_valid(True, expiry_date):
                     result[user_id] = (False, "Premium subscription expired")
                     expired_users.append(user_id)
                 else:
-                    days_remaining = (expiry_date - datetime.now(UTC)).days
+                    days_remaining = get_days_remaining(expiry_date)
                     result[user_id] = (True, f"Premium active ({days_remaining} days remaining)")
 
             # Batch expire users who have expired premium
@@ -761,41 +764,56 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return stats
         return {'total': 0, 'premium': 0, 'banned': 0, 'active_today': 0}
 
-    async def cleanup_expired_premium(self) -> int:
-        """Cleanup expired premium subscriptions"""
-        filter_query = {
-            'is_premium': True,
-            'premium_expiry_date': {'$lte': datetime.now(UTC)}
+    async def cleanup_expired_premium(self) -> dict:
+        """
+        Cleanup expired premium subscriptions.
+        Uses batch_check_premium_status for consistent timezone-aware validation.
+
+        Returns:
+            dict with 'expired_count', 'checked_count', 'still_active_count'
+        """
+        result = {
+            'expired_count': 0,
+            'checked_count': 0,
+            'still_active_count': 0
         }
 
-        users = await self.find_many(filter_query)
+        try:
+            # Get all premium users
+            premium_users = await self.find_many({'is_premium': True})
+            if not premium_users:
+                return result
 
-        if users:
-            operations = []
-            for user in users:
-                operations.append(
-                    UpdateOne(
-                        {'_id': user.id},
-                        {'$set': {
-                            'is_premium': False,
-                            'premium_activation_date': None,
-                            'premium_expiry_date': None,
-                            'updated_at': datetime.now(UTC)
-                        }}
-                    )
-                )
+            user_ids = [u.id for u in premium_users]
+            result['checked_count'] = len(user_ids)
 
-            if operations:
-                await self.bulk_write(operations)
+            # Use batch_check_premium_status for consistent validation
+            # This handles timezone normalization and auto-expires invalid users
+            status_map = await self.batch_check_premium_status(user_ids)
 
-        return len(users)
+            # Count results
+            for user_id, (is_valid, message) in status_map.items():
+                if is_valid:
+                    result['still_active_count'] += 1
+                else:
+                    result['expired_count'] += 1
+
+            logger.info(
+                f"Premium cleanup: checked={result['checked_count']}, "
+                f"expired={result['expired_count']}, active={result['still_active_count']}"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in cleanup_expired_premium: {e}")
+            return result
 
     async def track_request(self, user_id: int, user_name: Optional[str] = "Unknown") -> Tuple[bool, str, bool]:
         """
         Track a user request and apply limits
         Returns: (is_allowed, message, should_ban)
         """
-        logger.info(_feature_config.request_only_for_premium)
         user = await self.get_user(user_id)
         if not user:
             # Create user if doesn't exist
@@ -807,19 +825,14 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
         today = date.today()
-        user_premium_expiry_date = user.premium_expiry_date
-        if user_premium_expiry_date and user_premium_expiry_date.tzinfo is None:
-            user_premium_expiry_date = user_premium_expiry_date.replace(tzinfo=UTC)
-        now = datetime.now(UTC)
-        is_premium_valid = (
-                user.is_premium
-                and user_premium_expiry_date
-                and user_premium_expiry_date >= now
-        )
+
+        # Use validator utility for premium check
+        user_premium_valid = is_premium_valid(user.is_premium, user.premium_expiry_date)
+
         if (
                 _feature_config.request_only_for_premium
                 and not _feature_config.disable_premium
-                and not is_premium_valid
+                and not user_premium_valid
         ):
             return (
                 False,

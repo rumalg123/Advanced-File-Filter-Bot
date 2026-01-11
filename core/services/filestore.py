@@ -19,6 +19,7 @@ from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
 from core.utils.file_reference import FileReferenceExtractor
+from core.concurrency import semaphore_manager
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
 
@@ -524,15 +525,16 @@ class FileStoreService:
         if not file:
             return None
 
-        # Download from telegram using file_id
+        # Download from telegram using file_id with file processing concurrency control
         try:
-            file_path = await client.download_media(file.file_id)
+            async with semaphore_manager.acquire('file_processing', f'download_{batch_identifier}'):
+                file_path = await client.download_media(file.file_id)
 
-            if not file_path:
-                return None
+                if not file_path:
+                    return None
 
-            with open(file_path, 'r', encoding='utf-8') as f:
-                batch_data = json.load(f)
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    batch_data = json.load(f)
 
             # Clean up downloaded file
             os.remove(file_path)
@@ -576,8 +578,9 @@ class FileStoreService:
                 auto_delete_message=self.config.AUTO_DELETE_MESSAGE
             )
 
-            # Use the actual file_id for sending
-            sent_msg = await client.send_cached_media(
+            # Use telegram_api for concurrency control
+            sent_msg = await telegram_api.call_api(
+                client.send_cached_media,
                 chat_id=user_id,
                 file_id=file.file_id,
                 caption=caption,
@@ -590,12 +593,6 @@ class FileStoreService:
                 asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
 
             return True
-
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-            return await self.send_stored_file(
-                client, user_id, file_identifier, protect, caption_func
-            )
         except Exception as e:
             logger.error(f"Error sending file: {e}")
             return False
@@ -655,22 +652,8 @@ class FileStoreService:
                 success_count += 1
                 await asyncio.sleep(1)  # Avoid flooding
 
-            except FloodWait as e:
-                await asyncio.sleep(e.value)
-                # Retry
-                try:
-                    await client.send_cached_media(
-                        chat_id=user_id,
-                        file_id=file_id_to_send,
-                        caption=caption,
-                        protect_content=file_data.get("protect", False),
-                        parse_mode=CaptionFormatter.get_parse_mode()
-                    )
-                    success_count += 1
-                except Exception:
-                    continue
-
             except Exception as e:
+                # telegram_api.call_api already handles FloodWait with retries
                 logger.error(f"Error sending batch file: {e}")
                 continue
 
@@ -749,18 +732,19 @@ class FileStoreService:
                         sent_messages.append(sent_msg)
                         success_count += 1
 
-                    except FloodWait as e:
-                        await asyncio.sleep(e.value)
-                        await message.copy(user_id, caption=caption, protect_content=protect,parse_mode=CaptionFormatter.get_parse_mode())
-                        success_count += 1
                     except Exception as e:
+                        # telegram_api.call_api already handles FloodWait with retries
                         logger.error(f"Error copying message: {e}")
                         continue
 
                 elif not message.empty:
-                    # Non-media message
+                    # Non-media message - use telegram_api for concurrency control
                     try:
-                        await message.copy(user_id, protect_content=protect)
+                        await telegram_api.call_api(
+                            message.copy,
+                            user_id,
+                            protect_content=protect
+                        )
                         success_count += 1
                     except Exception:
                         continue

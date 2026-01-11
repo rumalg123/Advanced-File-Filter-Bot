@@ -13,6 +13,7 @@ from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
+from core.utils.telegram_api import telegram_api
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -103,7 +104,11 @@ class RequestHandler(BaseHandler):
 
                 # Try to send PM notification
                 try:
-                    await client.send_message(user_id, ban_msg)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        chat_id=user_id,
+                        text=ban_msg
+                    )
                 except Exception as e:
                     logger.error(f"error sending ban_msg in request handler: {e}")
                     pass
@@ -118,7 +123,11 @@ class RequestHandler(BaseHandler):
                         f"<b>Warnings:</b> {banned_user.warning_count if banned_user else 'N/A'}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
-                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        chat_id=self.bot.config.LOG_CHANNEL,
+                        text=log_text
+                    )
                 return
 
         if not is_allowed:
@@ -136,7 +145,11 @@ class RequestHandler(BaseHandler):
                     f"⚠️ <b>Message:</b> {limit_message}\n"
                     f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-                await client.send_message(self.bot.config.LOG_CHANNEL, warning_text)
+                await telegram_api.call_api(
+                    client.send_message,
+                    chat_id=self.bot.config.LOG_CHANNEL,
+                    text=warning_text
+                )
             return
 
         # Normal request processing continues here
@@ -349,9 +362,10 @@ class RequestHandler(BaseHandler):
         target_channel = self.bot.config.REQ_CHANNEL or self.bot.config.LOG_CHANNEL
 
         try:
-            await client.send_message(
-                target_channel,
-                request_text,
+            await telegram_api.call_api(
+                client.send_message,
+                chat_id=target_channel,
+                text=request_text,
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
         except Exception as e:
@@ -383,7 +397,11 @@ class RequestHandler(BaseHandler):
         # Try to send PM first
         pm_sent = False
         try:
-            await client.send_message(user_id, response_msg)
+            await telegram_api.call_api(
+                client.send_message,
+                chat_id=user_id,
+                text=response_msg
+            )
             pm_sent = True
         except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid):
             pass
@@ -399,9 +417,10 @@ class RequestHandler(BaseHandler):
                     f"{response_msg}"
                 )
 
-                await client.send_message(
-                    self.bot.config.SUPPORT_GROUP_ID,
-                    mention_msg,
+                await telegram_api.call_api(
+                    client.send_message,
+                    chat_id=self.bot.config.SUPPORT_GROUP_ID,
+                    text=mention_msg,
                     reply_to_message_id=msg_id
                 )
             except Exception as e:

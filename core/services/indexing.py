@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import re
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 from pyrogram import Client, enums
 from pyrogram.errors import ChannelInvalid, UsernameInvalid, UsernameNotModified
@@ -121,11 +121,19 @@ class IndexingService:
             bot,
             chat_id: int,
             last_msg_id: int,
-            progress_callback=None
+            progress_callback=None,
+            batch_size: int = 50
     ) -> Dict[str, int]:
         """
-        Index files from a channel
-        Returns statistics of the indexing process
+        Index files from a channel using batched processing for efficiency.
+        Returns statistics of the indexing process.
+
+        Args:
+            bot: The bot client
+            chat_id: Channel ID to index
+            last_msg_id: Last message ID to index up to
+            progress_callback: Optional callback for progress updates
+            batch_size: Number of messages to process in each batch (default: 50)
         """
         stats = {
             'total_messages': 0,
@@ -141,6 +149,7 @@ class IndexingService:
         async with self._lock:
             self.reset_indexing()
             current = self.current_index
+            message_batch: List[Message] = []
 
             try:
                 async for message in bot.iter_messages(
@@ -150,40 +159,196 @@ class IndexingService:
                 ):
                     if self.cancel_indexing:
                         logger.info("Indexing cancelled by user")
+                        # Process remaining messages in batch before breaking
+                        if message_batch:
+                            batch_stats = await self._process_message_batch(message_batch)
+                            self._merge_stats(stats, batch_stats)
                         break
 
                     current += 1
                     stats['total_messages'] = current
+                    message_batch.append(message)
 
-                    # Progress callback every 20 messages
-                    if current % 20 == 0 and progress_callback:
+                    # Process batch when it reaches batch_size
+                    if len(message_batch) >= batch_size:
+                        batch_stats = await self._process_message_batch(message_batch)
+                        self._merge_stats(stats, batch_stats)
+                        message_batch = []
+
+                        # Progress callback after batch processing
+                        if progress_callback:
+                            await progress_callback(stats)
+                            await asyncio.sleep(1)  # Prevent flooding
+
+                # Process any remaining messages in the final batch
+                if message_batch:
+                    batch_stats = await self._process_message_batch(message_batch)
+                    self._merge_stats(stats, batch_stats)
+
+                    if progress_callback:
                         await progress_callback(stats)
-                        await asyncio.sleep(2)  # Prevent flooding
-
-                    # Process message
-                    result = await self._process_message(message)
-
-                    if result == "saved":
-                        stats['total_files'] += 1
-                    elif result == "duplicate":
-                        stats['duplicate'] += 1
-                    elif result == "duplicate_hash":
-                        stats['duplicate'] += 1
-                        stats['duplicate_by_hash'] += 1
-                    elif result == "deleted":
-                        stats['deleted'] += 1
-                    elif result == "no_media":
-                        stats['no_media'] += 1
-                    elif result == "unsupported":
-                        stats['unsupported'] += 1
-                    elif result == "error":
-                        stats['errors'] += 1
 
             except Exception as e:
                 logger.error(f"Error during indexing: {e}")
                 raise
 
         return stats
+
+    def _merge_stats(self, target: Dict[str, int], source: Dict[str, int]) -> None:
+        """Merge batch stats into target stats"""
+        for key in ['total_files', 'duplicate', 'errors', 'deleted',
+                    'no_media', 'unsupported', 'duplicate_by_hash']:
+            target[key] += source.get(key, 0)
+
+    async def _process_message_batch(self, messages: List[Message]) -> Dict[str, int]:
+        """
+        Process a batch of messages with optimized duplicate checking.
+        Uses batch_check_duplicates to reduce N+1 queries.
+        """
+        batch_stats = {
+            'total_files': 0,
+            'duplicate': 0,
+            'errors': 0,
+            'deleted': 0,
+            'no_media': 0,
+            'unsupported': 0,
+            'duplicate_by_hash': 0
+        }
+
+        # First pass: Extract media files from messages
+        media_files: List[MediaFile] = []
+        message_to_media: Dict[int, MediaFile] = {}  # Map message.id to MediaFile
+
+        for message in messages:
+            if message.empty:
+                batch_stats['deleted'] += 1
+                continue
+
+            if not message.media:
+                batch_stats['no_media'] += 1
+                continue
+
+            if message.media not in [
+                enums.MessageMediaType.VIDEO,
+                enums.MessageMediaType.AUDIO,
+                enums.MessageMediaType.DOCUMENT
+            ]:
+                batch_stats['unsupported'] += 1
+                continue
+
+            media = getattr(message, message.media.value, None)
+            if not media:
+                batch_stats['unsupported'] += 1
+                continue
+
+            try:
+                file_type = self._get_file_type(message.media)
+                media_file = MediaFile(
+                    file_id=media.file_id,
+                    file_unique_id=media.file_unique_id,
+                    file_ref=FileReferenceExtractor.extract_file_ref(media.file_id),
+                    file_name=sanitize_filename(
+                        getattr(media, 'file_name', f'file_{media.file_unique_id}')
+                    ),
+                    file_size=media.file_size,
+                    file_type=file_type,
+                    mime_type=getattr(media, 'mime_type', None),
+                    caption=message.caption.html if message.caption else None
+                )
+                media_files.append(media_file)
+                message_to_media[message.id] = media_file
+            except Exception as e:
+                logger.error(f"Error extracting media from message {message.id}: {e}")
+                batch_stats['errors'] += 1
+
+        if not media_files:
+            return batch_stats
+
+        # Second pass: Batch check for duplicates
+        try:
+            duplicates_map = await self.media_repo.batch_check_duplicates(media_files)
+        except Exception as e:
+            logger.error(f"Batch duplicate check failed: {e}")
+            # Fallback to individual processing
+            for media_file in media_files:
+                result = await self._save_single_file(media_file)
+                if result == "saved":
+                    batch_stats['total_files'] += 1
+                elif result == "duplicate":
+                    batch_stats['duplicate'] += 1
+                elif result == "error":
+                    batch_stats['errors'] += 1
+            return batch_stats
+
+        # Third pass: Save non-duplicates, count duplicates
+        files_to_save: List[MediaFile] = []
+        for media_file in media_files:
+            existing = duplicates_map.get(media_file.file_unique_id)
+            if existing:
+                batch_stats['duplicate'] += 1
+                logger.debug(f"Duplicate file: {media_file.file_name}")
+            else:
+                files_to_save.append(media_file)
+
+        # Bulk save non-duplicate files
+        if files_to_save:
+            saved_count, error_count = await self._bulk_save_files(files_to_save)
+            batch_stats['total_files'] += saved_count
+            batch_stats['errors'] += error_count
+
+        return batch_stats
+
+    async def _save_single_file(self, media_file: MediaFile) -> str:
+        """Save a single file (fallback for when batch fails)"""
+        try:
+            success, status_code, existing = await self.media_repo.save_media(media_file)
+            if status_code == 1:
+                return "saved"
+            elif status_code == 0:
+                return "duplicate"
+            else:
+                return "error"
+        except Exception as e:
+            logger.error(f"Error saving file {media_file.file_name}: {e}")
+            return "error"
+
+    async def _bulk_save_files(self, files: List[MediaFile]) -> Tuple[int, int]:
+        """
+        Bulk save files to database.
+        Returns: (saved_count, error_count)
+        """
+        saved_count = 0
+        error_count = 0
+
+        # Use bulk insert if available, otherwise save individually
+        try:
+            # Try bulk insert
+            if hasattr(self.media_repo, 'bulk_save_media'):
+                result = await self.media_repo.bulk_save_media(files)
+                saved_count = result.get('saved', 0)
+                error_count = result.get('errors', 0)
+            else:
+                # Fallback to individual saves
+                for media_file in files:
+                    try:
+                        success, status_code, _ = await self.media_repo.save_media(media_file)
+                        if status_code == 1:
+                            saved_count += 1
+                            # Invalidate search cache for new files
+                            common_terms = media_file.file_name.lower().split()[:3]
+                            for term in common_terms:
+                                cache_key = CacheKeyGenerator.search_results(term, None, 0, 10, True)
+                                await self.cache.delete(cache_key)
+                        else:
+                            error_count += 1
+                    except Exception as e:
+                        logger.error(f"Error saving file {media_file.file_name}: {e}")
+                        error_count += 1
+        except Exception as e:
+            logger.error(f"Bulk save failed: {e}")
+            error_count = len(files)
+
+        return saved_count, error_count
 
     async def _process_message(self, message: Message) -> str:
         """Process a single message and return status"""

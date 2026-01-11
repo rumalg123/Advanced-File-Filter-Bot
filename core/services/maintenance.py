@@ -29,11 +29,13 @@ class MaintenanceService:
 
         # Cleanup expired premium subscriptions
         try:
-            expired_count = await self.user_repo.cleanup_expired_premium()
-            results['expired_premium'] = expired_count
+            cleanup_result = await self.user_repo.cleanup_expired_premium()
+            results['premium_cleanup'] = cleanup_result
+            if cleanup_result.get('expired_count', 0) > 0:
+                logger.info(f"Daily maintenance: Expired {cleanup_result['expired_count']} premium subscriptions")
         except Exception as e:
             logger.error(f"Error cleaning up expired premium: {e}")
-            results['expired_premium'] = 0
+            results['premium_cleanup'] = {'expired_count': 0, 'checked_count': 0, 'still_active_count': 0}
 
         # Reset daily counters for users (only once per day)
         try:
