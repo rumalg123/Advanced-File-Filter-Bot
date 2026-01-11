@@ -247,10 +247,7 @@ class ValidationDecorators:
         """Decorator to skip execution in special channels"""
         @wraps(func)
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
-            if isinstance(message, CallbackQuery):
-                chat = message.message.chat if message.message else None
-            else:
-                chat = message.chat
+            chat = ValidationUtils.extract_chat(message)
 
             if chat:
                 special_channels = ValidationUtils.get_special_channels(self.bot.config)
