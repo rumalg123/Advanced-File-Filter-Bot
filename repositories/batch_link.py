@@ -81,7 +81,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             if not self._validate_batch_link(batch_link):
                 return False
                 
-            collection = await self.collection
+            collection = await self.collection()
             data = self._entity_to_dict(batch_link)
             
             await self.db_pool.execute_with_retry(
@@ -131,7 +131,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
     async def create_indexes(self) -> bool:
         """Create optimized indexes for batch links"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             
             indexes = [
                 # Query by creator and creation date
@@ -177,7 +177,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
 
         # Try database
         try:
-            collection = await self.collection
+            collection = await self.collection()
             data = await self.db_pool.execute_with_retry(
                 collection.find_one, {"_id": batch_id}
             )
@@ -196,7 +196,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
     async def delete_batch_link(self, batch_id: str) -> bool:
         """Delete a batch link"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             result = await self.db_pool.execute_with_retry(
                 collection.delete_one, {"_id": batch_id}
             )
@@ -215,7 +215,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
     async def cleanup_expired_links(self) -> int:
         """Clean up expired batch links"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             now = datetime.now(UTC)
             
             result = await self.db_pool.execute_with_retry(
@@ -236,7 +236,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
     async def get_user_batch_links(self, user_id: int, limit: int = 10) -> List[BatchLink]:
         """Get batch links created by a user"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             docs = await self.db_pool.execute_with_retry(
                 collection.find({"created_by": user_id}).sort("created_at", -1).limit(limit).to_list,
                 length=limit

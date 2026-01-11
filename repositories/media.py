@@ -137,7 +137,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 return file
         else:
             # Single database mode
-            collection = await self.collection
+            collection = await self.collection()
             data = await self.db_pool.execute_with_retry(
                 collection.find_one, {"file_unique_id": identifier}
             )
@@ -219,7 +219,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                             logger.warning(f"Error processing batch result: {e}")
             else:
                 # Single database mode
-                collection = await self.collection
+                collection = await self.collection()
                 docs = await self.db_pool.execute_with_retry(
                     collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
                     length=len(cache_misses)
@@ -258,7 +258,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             if not file:
                 return False
 
-            collection = await self.collection
+            collection = await self.collection()
 
             result = await self.db_pool.execute_with_retry(
                 collection.delete_one, {"file_unique_id": id}

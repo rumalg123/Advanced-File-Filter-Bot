@@ -127,7 +127,7 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
             )
 
         if operations:
-            collection = await self.collection
+            collection = await self.collection()
             await self.db_pool.execute_with_retry(
                 collection.bulk_write, operations
             )
@@ -162,7 +162,7 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
             if description is not None:
                 update_doc["$set"]["description"] = description
 
-            collection = await self.collection
+            collection = await self.collection()
             result = await self.db_pool.execute_with_retry(
                 collection.update_one, {"_id": key}, update_doc
             )

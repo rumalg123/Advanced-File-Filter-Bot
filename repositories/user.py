@@ -461,7 +461,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
             # Reset count for new day
-            collection = await self.collection
+            collection = await self.collection()
             await self.db_pool.execute_with_retry(
                 collection.update_one,
                 {'_id': user_id},
@@ -477,7 +477,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return 1
 
         # Use atomic increment for same day to prevent race conditions
-        collection = await self.collection
+        collection = await self.collection()
         result = await self.db_pool.execute_with_retry(
             collection.find_one_and_update,
             {'_id': user_id},
@@ -520,7 +520,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
             # Reset count for new day and add the batch count
-            collection = await self.collection
+            collection = await self.collection()
             await self.db_pool.execute_with_retry(
                 collection.update_one,
                 {'_id': user_id},
@@ -536,7 +536,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return count
 
         # Use atomic increment for same day with batch count
-        collection = await self.collection
+        collection = await self.collection()
         result = await self.db_pool.execute_with_retry(
             collection.find_one_and_update,
             {'_id': user_id},
@@ -958,7 +958,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         Returns: Number of users updated
         """
         try:
-            collection = await self.collection
+            collection = await self.collection()
             
             # Update all users to reset daily counters
             # This is typically run once per day via a scheduled task

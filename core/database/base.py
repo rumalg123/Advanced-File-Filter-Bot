@@ -72,7 +72,7 @@ class BaseRepository(ABC, Generic[T]):
 
         # Fetch from database
         try:
-            collection = await self.collection
+            collection = await self.collection()
             data = await self.db_pool.execute_with_retry(
                 collection.find_one, {"_id": id}
             )
@@ -110,7 +110,7 @@ class BaseRepository(ABC, Generic[T]):
     ) -> List[T]:
         """Find multiple entities"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             cursor = collection.find(filter)
 
             if sort:
@@ -132,7 +132,7 @@ class BaseRepository(ABC, Generic[T]):
         """Create new entity"""
         try:
             data = self._entity_to_dict(entity)
-            collection = await self.collection
+            collection = await self.collection()
 
             await self.db_pool.execute_with_retry(
                 collection.insert_one, data
@@ -158,7 +158,7 @@ class BaseRepository(ABC, Generic[T]):
     ) -> bool:
         """Update entity"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
 
             result = await self.db_pool.execute_with_retry(
                 collection.update_one,
@@ -181,7 +181,7 @@ class BaseRepository(ABC, Generic[T]):
         try:
             entity = await self.find_by_id(id, use_cache=False)
 
-            collection = await self.collection
+            collection = await self.collection()
 
             result = await self.db_pool.execute_with_retry(
                 collection.delete_one, {"_id": id}
@@ -209,7 +209,7 @@ class BaseRepository(ABC, Generic[T]):
     async def count(self, filter: Dict[str, Any] = None) -> int:
         """Count entities"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             filter = filter or {}
 
             return await self.db_pool.execute_with_retry(
@@ -225,7 +225,7 @@ class BaseRepository(ABC, Generic[T]):
             if not operations:
                 return True
 
-            collection = await self.collection
+            collection = await self.collection()
 
             # Use semaphore manager for concurrency control if available
             if CONCURRENCY_CONTROL_AVAILABLE:
@@ -247,7 +247,7 @@ class BaseRepository(ABC, Generic[T]):
     async def create_index(self, keys: List[tuple], **kwargs) -> bool:
         """Create index on collection"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             await self.db_pool.execute_with_retry(
                 collection.create_index, keys, **kwargs
             )
@@ -260,17 +260,16 @@ class BaseRepository(ABC, Generic[T]):
 class AggregationMixin:
     """Mixin for aggregation operations"""
 
-    @property
     async def collection(self):
         """Get collection - must be implemented by inheriting class"""
         if hasattr(self, '_collection') and self._collection:
             return self._collection
-        raise NotImplementedError("Collection property must be implemented")
+        raise NotImplementedError("Collection method must be implemented")
 
     async def aggregate(self, pipeline: List[Dict[str, Any]], limit: Optional[int] = 1000) -> List[Dict[str, Any]]:
         """Execute aggregation pipeline with memory protection"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             return await self.db_pool.execute_with_retry(
                 collection.aggregate(pipeline).to_list, length=limit
             )
@@ -281,7 +280,7 @@ class AggregationMixin:
     async def distinct(self, field: str, filter: Dict[str, Any] = None) -> List[Any]:
         """Get distinct values for a field"""
         try:
-            collection = await self.collection
+            collection = await self.collection()
             filter = filter or {}
             return await self.db_pool.execute_with_retry(
                 collection.distinct, field, filter
