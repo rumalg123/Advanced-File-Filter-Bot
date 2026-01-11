@@ -527,7 +527,10 @@ class FileStoreService:
         # Download from telegram using file_id with file processing concurrency control
         try:
             async with semaphore_manager.acquire('file_processing', f'download_{batch_identifier}'):
-                file_path = await client.download_media(file.file_id)
+                file_path = await telegram_api.call_api(
+                    client.download_media,
+                    file.file_id
+                )
 
                 if not file_path:
                     return None

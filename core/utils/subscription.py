@@ -104,7 +104,11 @@ class SubscriptionManager:
         """Get invite link for a chat"""
         try:
             # Try to create invite link
-            invite = await client.create_chat_invite_link(chat_id)
+            invite = await telegram_api.call_api(
+                client.create_chat_invite_link,
+                chat_id,
+                chat_id=chat_id
+            )
             return invite.invite_link
         except ChatAdminRequired:
             logger.error(f"Bot is not admin in chat {chat_id}")

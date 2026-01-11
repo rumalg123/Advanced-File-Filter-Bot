@@ -395,7 +395,11 @@ class IndexRequestService:
             link = f"@{chat_id}"
             if isinstance(chat_id, int):
                 try:
-                    invite = await client.create_chat_invite_link(chat_id)
+                    invite = await telegram_api.call_api(
+                        client.create_chat_invite_link,
+                        chat_id,
+                        chat_id=chat_id
+                    )
                     link = invite.invite_link
                 except Exception:
                     pass
