@@ -3,42 +3,25 @@ Centralized Telegram API wrapper with robust flood handling and rate limiting
 """
 import asyncio
 import random
-from typing import Any, Callable, Dict, Optional
-from functools import wraps
+from typing import Any, Callable, Optional
 
-from pyrogram import Client
 from pyrogram.errors import FloodWait, RPCError
-from core.utils.logger import get_logger
 
-# Import concurrency control
-try:
-    from core.concurrency.semaphore_manager import semaphore_manager
-    CONCURRENCY_CONTROL_AVAILABLE = True
-except ImportError:
-    CONCURRENCY_CONTROL_AVAILABLE = False
+from core.concurrency.semaphore_manager import semaphore_manager
+from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class TelegramAPIWrapper:
     """Wrapper for Telegram API calls with flood control and rate limiting"""
-    
+
     def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
         self.max_retries = max_retries
         self.base_delay = base_delay
-        # Per-chat semaphores to prevent overwhelming specific chats
-        self._chat_semaphores: Dict[int, asyncio.Semaphore] = {}
-        # Global semaphore for overall API rate limiting
-        self._global_semaphore = asyncio.Semaphore(10)  # Max 10 concurrent API calls
-        
-    def get_chat_semaphore(self, chat_id: int) -> asyncio.Semaphore:
-        """Get or create a semaphore for specific chat"""
-        if chat_id not in self._chat_semaphores:
-            self._chat_semaphores[chat_id] = asyncio.Semaphore(3)  # Max 3 concurrent per chat
-        return self._chat_semaphores[chat_id]
-    
+
     async def call_api(
-        self, 
+        self,
         api_func: Callable,
         *args,
         chat_id: Optional[int] = None,
@@ -46,15 +29,12 @@ class TelegramAPIWrapper:
     ) -> Any:
         """
         Execute API call with flood protection and rate limiting
-        
+
         Args:
             api_func: The API function to call
             chat_id: Optional chat ID for per-chat rate limiting
             *args, **kwargs: Arguments passed to the API function
         """
-        retries = 0
-        last_exception = None
-        
         # Determine operation domain for concurrency control
         func_name = getattr(api_func, '__name__', 'unknown')
         if 'send' in func_name.lower():
@@ -63,20 +43,9 @@ class TelegramAPIWrapper:
             domain = 'telegram_fetch'
         else:
             domain = 'telegram_general'
-        
-        # Use global semaphore manager if available, fallback to local semaphores
-        if CONCURRENCY_CONTROL_AVAILABLE:
-            async with semaphore_manager.acquire(domain, f"{func_name}_{chat_id or 'global'}"):
-                return await self._execute_with_retry(api_func, *args, **kwargs)
-        else:
-            # Fallback to original semaphore logic
-            async with self._global_semaphore:
-                if chat_id:
-                    chat_sem = self.get_chat_semaphore(chat_id)
-                    async with chat_sem:
-                        return await self._execute_with_retry(api_func, *args, **kwargs)
-                else:
-                    return await self._execute_with_retry(api_func, *args, **kwargs)
+
+        async with semaphore_manager.acquire(domain, f"{func_name}_{chat_id or 'global'}"):
+            return await self._execute_with_retry(api_func, *args, **kwargs)
     
     async def _execute_with_retry(self, api_func: Callable, *args, **kwargs) -> Any:
         """Execute API call with retry logic"""
@@ -140,26 +109,3 @@ class TelegramAPIWrapper:
 
 # Global instance
 telegram_api = TelegramAPIWrapper()
-
-
-def with_flood_protection(chat_id_param: Optional[str] = None):
-    """
-    Decorator to add flood protection to API calls
-    
-    Args:
-        chat_id_param: Name of the parameter containing chat_id for per-chat limiting
-    """
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Extract chat_id if specified
-            chat_id = None
-            if chat_id_param:
-                if chat_id_param in kwargs:
-                    chat_id = kwargs[chat_id_param]
-                elif len(args) > 0 and hasattr(args[0], chat_id_param):
-                    chat_id = getattr(args[0], chat_id_param)
-            
-            return await telegram_api.call_api(func, *args, chat_id=chat_id, **kwargs)
-        return wrapper
-    return decorator

@@ -1,12 +1,8 @@
-import asyncio
-import time
 from dataclasses import dataclass
-from functools import wraps
 from typing import Dict, Optional, Tuple
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.logger import get_logger
-from core.utils.validators import extract_user_id
 
 logger = get_logger(__name__)
 
@@ -85,61 +81,3 @@ class RateLimiter:
         """Reset rate limit for a user and action"""
         await self.cache_invalidator.invalidate_rate_limit(user_id, action)
 
-    def rate_limit_decorator(self, action: str):
-        """Decorator for rate limiting functions"""
-
-        def decorator(func):
-            @wraps(func)
-            async def wrapper(self, client, message, *args, **kwargs):
-                user_id = extract_user_id(message)
-                if not user_id:
-                    return await func(self, client, message, *args, **kwargs)
-
-                # Check rate limit
-                is_allowed, cooldown = await self.rate_limiter.check_rate_limit(
-                    user_id, action
-                )
-
-                if not is_allowed:
-                    await message.reply_text(
-                        f"⚠️ Rate limit exceeded! Please wait {cooldown} seconds before trying again."
-                    )
-                    return
-
-                return await func(self, client, message, *args, **kwargs)
-
-            return wrapper
-
-        return decorator
-
-
-class CircuitBreaker:
-    """Circuit breaker pattern for external service calls"""
-
-    def __init__(self, failure_threshold: int = 5, timeout: int = 60):
-        self.failure_threshold = failure_threshold
-        self.timeout = timeout
-        self.failures: Dict[str, int] = {}
-        self.last_failure_time: Dict[str, float] = {}
-        self._lock = asyncio.Lock()
-
-    async def call(self, key: str, func, *args, **kwargs):
-        """Execute function with circuit breaker protection"""
-        async with self._lock:
-            # Check if circuit is open
-            if key in self.last_failure_time:
-                if time.time() - self.last_failure_time[key] < self.timeout:
-                    if self.failures.get(key, 0) >= self.failure_threshold:
-                        raise Exception(f"Circuit breaker open for {key}")
-
-        try:
-            result = await func(*args, **kwargs)
-            # Reset failures on success
-            async with self._lock:
-                self.failures[key] = 0
-            return result
-        except Exception as e:
-            async with self._lock:
-                self.failures[key] = self.failures.get(key, 0) + 1
-                self.last_failure_time[key] = time.time()
-            raise
