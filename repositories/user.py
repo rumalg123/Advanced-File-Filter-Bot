@@ -7,11 +7,11 @@ from pymongo import UpdateOne
 
 from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
-from core.cache.enhanced_cache import cache_premium_status
+from core.cache.redis_cache import cache_premium_status
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger
-from core.utils.validators import normalize_expiry_date, is_premium_valid, get_days_remaining
+from core.utils.validators import normalize_expiry_date, is_premium_valid, get_days_remaining, is_admin
 
 logger = get_logger(__name__)
 
@@ -442,12 +442,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         today = date.today()
         today_str = today.isoformat()
 
-        logger.info(f"increment_retrieval_count called for user {user_id}, today={today_str}")
-
         # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
         if not user:
-            logger.error(f"User {user_id} not found in database!")
             # Create the user if they don't exist
             await self.create_user(user_id, "User")
             user = await self.get_user(user_id)
@@ -455,25 +452,21 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 logger.error(f"Failed to create user {user_id}")
                 return 0
 
-        logger.info(f"User {user_id} current count: {user.daily_retrieval_count}, last_date: {user.last_retrieval_date}")
-
         # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
             # Reset count for new day
             collection = await self.collection
-            result = await self.db_pool.execute_with_retry(
+            await self.db_pool.execute_with_retry(
                 collection.update_one,
                 {'_id': user_id},
                 {
                     '$set': {
-                        'daily_retrieval_count': 1,  # Set to 1 since we're incrementing
+                        'daily_retrieval_count': 1,
                         'last_retrieval_date': today_str,
                         'updated_at': datetime.now(UTC)
                     }
                 }
             )
-            logger.info(f"New day - reset count to 1 for user {user_id}, modified: {result.modified_count}")
-            # Clear cache
             await self.cache.delete(CacheKeyGenerator.user(user_id))
             return 1
 
@@ -489,16 +482,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     'updated_at': datetime.now(UTC)
                 }
             },
-            return_document=True  # Return updated document
+            return_document=True
         )
 
-        # Clear cache to ensure next read gets updated value
         await self.cache.delete(CacheKeyGenerator.user(user_id))
 
         if result:
-            new_count = result.get('daily_retrieval_count', 0)
-            logger.info(f"Incremented count for user {user_id} to {new_count}")
-            return new_count
+            return result.get('daily_retrieval_count', 0)
         else:
             logger.error(f"Failed to increment count for user {user_id}")
         return 0
@@ -511,12 +501,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         today = date.today()
         today_str = today.isoformat()
 
-        logger.info(f"increment_retrieval_count_batch called for user {user_id}, count={count}, today={today_str}")
-
         # First check if we need to reset the count (new day)
         user = await self.get_user(user_id)
         if not user:
-            logger.error(f"User {user_id} not found in database!")
             # Create the user if they don't exist
             await self.create_user(user_id, "User")
             user = await self.get_user(user_id)
@@ -524,25 +511,21 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 logger.error(f"Failed to create user {user_id}")
                 return 0
 
-        logger.info(f"User {user_id} current count: {user.daily_retrieval_count}, last_date: {user.last_retrieval_date}")
-
         # If it's a new day, reset the count first
         if user.last_retrieval_date != today:
             # Reset count for new day and add the batch count
             collection = await self.collection
-            result = await self.db_pool.execute_with_retry(
+            await self.db_pool.execute_with_retry(
                 collection.update_one,
                 {'_id': user_id},
                 {
                     '$set': {
-                        'daily_retrieval_count': count,  # Set to the batch count
+                        'daily_retrieval_count': count,
                         'last_retrieval_date': today_str,
                         'updated_at': datetime.now(UTC)
                     }
                 }
             )
-            logger.info(f"New day - set count to {count} for user {user_id}, modified: {result.modified_count}")
-            # Clear cache
             await self.cache.delete(CacheKeyGenerator.user(user_id))
             return count
 
@@ -558,16 +541,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     'updated_at': datetime.now(UTC)
                 }
             },
-            return_document=True  # Return updated document
+            return_document=True
         )
 
-        # Clear cache to ensure next read gets updated value
         await self.cache.delete(CacheKeyGenerator.user(user_id))
 
         if result:
-            new_count = result.get('daily_retrieval_count', 0)
-            logger.info(f"Batch incremented count for user {user_id} by {count} to {new_count}")
-            return new_count
+            return result.get('daily_retrieval_count', 0)
         else:
             logger.error(f"Failed to batch increment count for user {user_id}")
         return 0
@@ -690,17 +670,14 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Check if user is admin
         admin_list = _channel_config.get_admin_list()
-        is_admin = user_id in admin_list if admin_list else False
-        if is_admin:
+        if is_admin(user_id, admin_list or []):
             return True, "Admin access"
 
         # Check if user is owner
-        logger.info(f"owner_id: {owner_id}, user_id: {user_id}")
         if owner_id and user_id == owner_id:
             return True, "Owner access"
 
         user = await self.get_user(user_id)
-        logger.info(f"user:{user}")
         if not user:
             return False, "User not found"
 

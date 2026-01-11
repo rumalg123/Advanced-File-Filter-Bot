@@ -197,21 +197,3 @@ class CachePatterns:
             f"recent_settings_edit:{user_id}"
         ]
 
-    @staticmethod
-    def media_related(file_id: str, file_ref: Optional[str] = None, file_unique_id: Optional[str] = None) -> List[str]:
-        """Get all cache keys related to a media file"""
-        keys = [CacheKeyGenerator.media(file_id)]
-        if file_ref:
-            keys.append(CacheKeyGenerator.media(file_ref))
-        if file_unique_id:
-            keys.append(CacheKeyGenerator.media(file_unique_id))
-        return keys
-
-    @staticmethod
-    def group_related(group_id: str) -> List[str]:
-        """Get all cache keys related to a group"""
-        return [
-            f"filter:{group_id}:*",
-            CacheKeyGenerator.filter_list(group_id)
-        ]
-

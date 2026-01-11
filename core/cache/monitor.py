@@ -185,25 +185,6 @@ class CacheMonitor:
 
         return analysis
 
-    async def get_slow_commands(self) -> List[Dict[str, any]]:
-        """Get slow Redis commands"""
-        try:
-            slow_log = await self.cache.redis.slowlog_get(10)
-
-            slow_commands = []
-            for entry in slow_log:
-                slow_commands.append({
-                    "id": entry['id'],
-                    "timestamp": datetime.fromtimestamp(entry['start_time']).isoformat(),
-                    "duration_microseconds": entry['duration'],
-                    "command": ' '.join(entry['command'][:3]) + ('...' if len(entry['command']) > 3 else ''),
-                })
-
-            return slow_commands
-        except Exception as e:
-            logger.error(f"Error getting slow commands: {e}")
-            return []
-
     async def analyze_serialization_efficiency(self, sample_size: int = 20) -> Dict[str, Any]:
         """Analyze serialization efficiency for cached data"""
         if not self.cache.redis:

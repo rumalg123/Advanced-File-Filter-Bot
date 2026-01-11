@@ -9,7 +9,7 @@ from pymongo.errors import DuplicateKeyError
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
-from core.utils.helpers import normalize_query
+from core.utils.validators import normalize_query
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)

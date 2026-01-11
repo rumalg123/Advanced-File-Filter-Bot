@@ -1,8 +1,11 @@
 # core/utils/helpers.py
 """Common utility functions used across the application"""
-import re
+import base64
+import hashlib
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING
+
+from pyrogram.file_id import FileId
 
 if TYPE_CHECKING:
     from pyrogram.types import User, Chat, Message as PyrogramMessage
@@ -17,17 +20,25 @@ def format_file_size(size: int) -> str:
     return f"{size:.2f} TB"
 
 
-def sanitize_filename(filename: str) -> str:
-    """Sanitize filename for better search"""
-    filename = re.sub(r"([_\-.+])", " ", str(filename))
-    return filename.strip()
+def extract_file_ref(file_id: str) -> str:
+    """
+    Extract file reference from Telegram file_id.
 
+    Args:
+        file_id: Telegram file ID string
 
-def normalize_query(query: str) -> str:
-    """Normalize search query"""
-    query = re.sub(r"[_\-.+]", " ", query)
-    query = re.sub(r"\s+", " ", query).strip().lower()
-    return query
+    Returns:
+        URL-safe base64 encoded file reference or fallback hash
+    """
+    try:
+        decoded = FileId.decode(file_id)
+        file_ref = base64.urlsafe_b64encode(
+            decoded.file_reference
+        ).decode().rstrip("=")
+        return file_ref
+    except Exception:
+        # Generate a fallback ref using hash
+        return hashlib.md5(file_id.encode()).hexdigest()[:20]
 
 
 class MessageProxy:

@@ -5,7 +5,6 @@ from functools import wraps
 from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
 from pyrogram.types import Message, CallbackQuery
-from core.utils.errors import ErrorFactory, ErrorCode
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -474,12 +473,6 @@ class PremiumValidation:
 class InputValidation:
     """Input validation and sanitization utilities"""
 
-    # Common regex patterns
-    FILENAME_SAFE = re.compile(r'^[a-zA-Z0-9._\-\s()[\]{}]+$')
-    SEARCH_QUERY = re.compile(r'^[a-zA-Z0-9._\-\s()[\]{}]+$')
-    CHANNEL_ID = re.compile(r'^-?\d+$')
-    USERNAME = re.compile(r'^@?[a-zA-Z0-9_]{5,32}$')
-    
     @staticmethod
     def sanitize_filename(filename: str) -> str:
         """Sanitize filename for safe usage"""
@@ -504,45 +497,7 @@ class InputValidation:
         sanitized = ' '.join(sanitized.split())
         # Limit length
         return sanitized[:100]
-    
-    @staticmethod
-    def validate_channel_id(channel_id: str) -> Optional[int]:
-        """Validate and convert channel ID"""
-        try:
-            if not InputValidation.CHANNEL_ID.match(str(channel_id)):
-                return None
-            return int(channel_id)
-        except (ValueError, TypeError):
-            return None
-    
-    @staticmethod
-    def validate_username(username: str) -> Optional[str]:
-        """Validate username format"""
-        if not username:
-            return None
-        
-        # Remove @ prefix if present
-        clean_username = username.lstrip('@')
-        
-        if InputValidation.USERNAME.match(clean_username):
-            return clean_username
-        return None
-    
-    @staticmethod
-    def validate_limit_offset(limit: Any, offset: Any, max_limit: int = 50) -> Tuple[int, int]:
-        """Validate and sanitize limit/offset parameters"""
-        try:
-            limit = int(limit) if limit else 10
-            offset = int(offset) if offset else 0
-            
-            # Ensure reasonable bounds
-            limit = max(1, min(limit, max_limit))
-            offset = max(0, offset)
-            
-            return limit, offset
-        except (ValueError, TypeError):
-            return 10, 0
-    
+
     @staticmethod
     def validate_message_text(message: Union[Message, CallbackQuery]) -> Optional[str]:
         """Extract and validate message text"""
@@ -591,11 +546,24 @@ class InputValidation:
         """Sanitize file caption"""
         if not caption:
             return ""
-        
+
         # Remove control characters
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', caption)
         # Limit length
         return sanitized[:1024]
+
+    @staticmethod
+    def normalize_filename_for_search(filename: str) -> str:
+        """Normalize filename for better text search by replacing separators with spaces"""
+        filename = re.sub(r"([_\-.+])", " ", str(filename))
+        return filename.strip()
+
+    @staticmethod
+    def normalize_query(query: str) -> str:
+        """Normalize search query by replacing separators with spaces and lowercasing"""
+        query = re.sub(r"[_\-.+]", " ", query)
+        query = re.sub(r"\s+", " ", query).strip().lower()
+        return query
 
 
 @dataclass
@@ -683,12 +651,11 @@ validate_original_requester = AccessControl.validate_original_requester
 sanitize_filename = InputValidation.sanitize_filename
 sanitize_search_query = InputValidation.sanitize_search_query
 sanitize_caption = InputValidation.sanitize_caption
-validate_channel_id = InputValidation.validate_channel_id
-validate_username = InputValidation.validate_username
-validate_limit_offset = InputValidation.validate_limit_offset
 validate_message_text = InputValidation.validate_message_text
 extract_command_args = InputValidation.extract_command_args
 validate_callback_data = InputValidation.validate_callback_data
+normalize_filename_for_search = InputValidation.normalize_filename_for_search
+normalize_query = InputValidation.normalize_query
 
 # Premium validation
 normalize_expiry_date = PremiumValidation.normalize_expiry_date

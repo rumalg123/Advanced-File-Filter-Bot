@@ -10,9 +10,9 @@ from pyrogram.types import Message
 from config.settings import settings
 from core.cache.config import CacheTTLConfig
 from core.constants import ProcessingConstants
-from core.utils.helpers import sanitize_filename
+from core.utils.validators import normalize_filename_for_search
+from core.utils.helpers import extract_file_ref
 from core.utils.logger import get_logger
-from core.utils.file_reference import FileReferenceExtractor
 from repositories.channel import ChannelRepository
 from repositories.media import MediaFile, FileType
 
@@ -399,8 +399,8 @@ class ChannelHandler:
             media_file = MediaFile(
                 file_id=media.file_id,
                 file_unique_id=media.file_unique_id,
-                file_ref=FileReferenceExtractor.extract_file_ref(media.file_id),
-                file_name=sanitize_filename(
+                file_ref=extract_file_ref(media.file_id),
+                file_name=normalize_filename_for_search(
                     getattr(media, 'file_name', f'{file_type}_{media.file_unique_id}')
                 ),
                 file_size=media.file_size,

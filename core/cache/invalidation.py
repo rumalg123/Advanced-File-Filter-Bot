@@ -53,33 +53,6 @@ class CacheInvalidator:
             logger.error(f"Failed to invalidate user cache for {user_id}: {e}")
             return False
 
-    async def invalidate_media_cache(self, file_id: str, file_ref: str = None, file_unique_id: str = None) -> bool:
-        """Invalidate media-related cache"""
-        try:
-            keys = CachePatterns.media_related(file_id, file_ref, file_unique_id)
-            for key in keys:
-                await self.cache.delete(key)
-            # Use versioning instead of direct deletion for search caches
-            await self.increment_search_cache_version()
-            return True
-        except Exception as e:
-            logger.error(f"Failed to invalidate media cache for {file_id}: {e}")
-            return False
-
-    async def invalidate_group_cache(self, group_id: str) -> bool:
-        """Invalidate group-related cache"""
-        try:
-            patterns = CachePatterns.group_related(group_id)
-            for pattern in patterns:
-                if '*' in pattern:
-                    await self.cache.delete_pattern(pattern)
-                else:
-                    await self.cache.delete(pattern)
-            return True
-        except Exception as e:
-            logger.error(f"Failed to invalidate group cache for {group_id}: {e}")
-            return False
-
     async def invalidate_all_search_results(self) -> bool:
         """
         Invalidate all search result caches using versioning.

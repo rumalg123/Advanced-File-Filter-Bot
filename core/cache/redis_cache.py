@@ -1,6 +1,7 @@
 import asyncio
 import sys
-from typing import Optional, Any, Union, List
+from typing import Optional, Any, Union, List, Callable
+from functools import wraps
 import redis.asyncio as aioredis
 from datetime import timedelta
 
@@ -242,5 +243,52 @@ class CacheManager:
             except Exception as e:
                 logger.error(f"Error getting Redis stats: {e}")
                 stats['redis_info']['error'] = str(e)
-        
+
         return stats
+
+
+def cache_premium_status(ttl: int = 600) -> Callable:
+    """
+    Cache premium status check results using Redis.
+
+    Decorator for repository methods that check premium status.
+    Expects the decorated method to have signature: (self, user) where user has an 'id' attribute.
+    Uses self.cache (CacheManager instance) for caching.
+
+    Args:
+        ttl: Cache time-to-live in seconds (default 10 minutes)
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(self, user, *args, **kwargs) -> Any:
+            # Get user_id for cache key
+            user_id = getattr(user, 'id', None)
+            if user_id is None:
+                # Can't cache without user ID, just call the function
+                return await func(self, user, *args, **kwargs)
+
+            cache_key = f"premium_status:{user_id}"
+
+            # Try to get from cache
+            try:
+                if hasattr(self, 'cache') and self.cache:
+                    cached_result = await self.cache.get(cache_key)
+                    if cached_result is not None:
+                        return cached_result
+            except Exception as e:
+                logger.warning(f"Cache get error for premium status: {e}")
+
+            # Call original function
+            result = await func(self, user, *args, **kwargs)
+
+            # Cache the result
+            try:
+                if hasattr(self, 'cache') and self.cache:
+                    await self.cache.set(cache_key, result, expire=ttl)
+            except Exception as e:
+                logger.warning(f"Cache set error for premium status: {e}")
+
+            return result
+
+        return wrapper
+    return decorator

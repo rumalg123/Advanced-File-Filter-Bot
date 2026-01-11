@@ -14,11 +14,11 @@ from pyrogram.types import Message
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
-from core.utils.helpers import sanitize_filename
+from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
-from core.utils.file_reference import FileReferenceExtractor
+from core.utils.helpers import extract_file_ref
 from core.concurrency import semaphore_manager
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
@@ -149,7 +149,7 @@ class FileStoreService:
 
         if not file:
             # File not in database, create and save it
-            file_ref = FileReferenceExtractor.extract_file_ref(media.file_id)
+            file_ref = extract_file_ref(media.file_id)
             identifier = media_file_unique_id
 
             # Create MediaFile and save to database
@@ -160,9 +160,9 @@ class FileStoreService:
             elif file_type == enums.MessageMediaType.AUDIO:
                 file_type_enum = FileType.AUDIO
 
-            # Sanitize filename
+            # Normalize filename for search
             filename = getattr(media, 'file_name', f'{file_type.value}_{media.file_unique_id}')
-            filename = sanitize_filename(filename)
+            filename = normalize_filename_for_search(filename)
 
             media_file = MediaFile(
                 file_id=media.file_id,

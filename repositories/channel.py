@@ -107,13 +107,10 @@ class ChannelRepository(BaseRepository[Channel]):
     async def remove_channel(self, channel_id: int) -> bool:
         """Remove a channel from automatic indexing"""
         success = await self.delete(channel_id)
-        logger.info(f"channel repo remove channel {success}")
-
 
         if success:
             # Invalidate channels list cache
             await self.cache_invalidator.invalidate_channels_cache()
-
 
         return success
 

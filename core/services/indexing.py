@@ -10,11 +10,11 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.config import CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
-from core.utils.helpers import sanitize_filename
+from core.utils.validators import normalize_filename_for_search
 from core.utils.link_parser import TelegramLinkParser
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
-from core.utils.file_reference import FileReferenceExtractor
+from core.utils.helpers import extract_file_ref
 from repositories.media import MediaRepository, MediaFile, FileType
 
 logger = get_logger(__name__)
@@ -246,8 +246,8 @@ class IndexingService:
                 media_file = MediaFile(
                     file_id=media.file_id,
                     file_unique_id=media.file_unique_id,
-                    file_ref=FileReferenceExtractor.extract_file_ref(media.file_id),
-                    file_name=sanitize_filename(
+                    file_ref=extract_file_ref(media.file_id),
+                    file_name=normalize_filename_for_search(
                         getattr(media, 'file_name', f'file_{media.file_unique_id}')
                     ),
                     file_size=media.file_size,
