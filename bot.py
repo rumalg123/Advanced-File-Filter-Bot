@@ -391,7 +391,7 @@ class MediaSearchBot(Client):
                                 "A broadcast was found to be active from the previous session. "
                                 "It may have been interrupted by a restart.\n\n"
                                 "Use /stop_broadcast to clear the broadcast state if needed.",
-                                parse_mode='HTML',
+                                parse_mode=CaptionFormatter.get_parse_mode(),
                                 chat_id=primary_admin
                             )
                         except Exception as e:
