@@ -30,6 +30,8 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
 
     def __init__(self, db_pool, cache_manager):
         super().__init__(db_pool, cache_manager, "bot_settings")
+        from core.cache.invalidation import CacheInvalidator
+        self.cache_invalidator = CacheInvalidator(cache_manager)
 
     def _entity_to_dict(self, setting: BotSetting) -> Dict[str, Any]:
         """Convert BotSetting entity to dictionary"""
@@ -83,8 +85,7 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
 
         # Clear cache
         if success:
-            cache_key = CacheKeyGenerator.bot_setting(key)
-            await self.cache.delete(cache_key)
+            await self.cache_invalidator.invalidate_bot_setting(key)
 
         return success
 
@@ -134,8 +135,7 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
 
             # Clear all setting caches
             for key in settings:
-                cache_key = CacheKeyGenerator.bot_setting(key)
-                await self.cache.delete(cache_key)
+                await self.cache_invalidator.invalidate_bot_setting(key)
 
         return True
 
@@ -180,7 +180,6 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
 
         if success:
             # Invalidate cache for this key
-            cache_key = CacheKeyGenerator.bot_setting(key)
-            await self.cache.delete(cache_key)
+            await self.cache_invalidator.invalidate_bot_setting(key)
 
         return success

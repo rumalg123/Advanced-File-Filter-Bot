@@ -122,7 +122,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             except (KeyError, TypeError, ValueError) as e:
                 # Cache data is corrupt, delete and fall through to DB lookup
                 logger.warning(f"Corrupt cache data for {identifier}, clearing: {e}")
-                await self.cache.delete(cache_key)
+                await self.cache_invalidator.invalidate_media_entry(identifier)
 
         if self.is_multi_db:
             # Search across all databases
@@ -181,7 +181,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     cache_hits.append(uid)
                 except (KeyError, TypeError, ValueError) as e:
                     logger.warning(f"Corrupt cache data for {uid}, clearing: {e}")
-                    await self.cache.delete(cache_key)
+                    await self.cache_invalidator.invalidate_media_entry(uid)
                     cache_misses.append(uid)
             else:
                 cache_misses.append(uid)

@@ -1167,8 +1167,8 @@ class MediaSearchBot(Client):
         """Clean up old cache entries"""
         try:
             # Clear old search results
-            deleted = await self.cache.delete_pattern("search_results_*")
-            logger.info(f"Cleaned up {deleted} old search result caches")
+            await self.cache_invalidator.invalidate_search_sessions()
+            logger.info("Cleaned up old search result caches")
 
             # Session cleanup is now handled by unified session manager
 

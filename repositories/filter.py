@@ -119,8 +119,7 @@ class FilterRepository(BaseRepository[Filter]):
             )
 
             # Invalidate caches
-            cache_key = CacheKeyGenerator.filter(group_id, text)
-            await self.cache.delete(cache_key)
+            await self.cache_invalidator.invalidate_filter_entry(group_id, text)
             await self.cache_invalidator.invalidate_filter_cache(group_id)
 
             return True
@@ -209,8 +208,7 @@ class FilterRepository(BaseRepository[Filter]):
 
             if result.deleted_count:
                 # Invalidate caches
-                cache_key = CacheKeyGenerator.filter(group_id, text)
-                await self.cache.delete(cache_key)
+                await self.cache_invalidator.invalidate_filter_entry(group_id, text)
                 await self.cache_invalidator.invalidate_filter_cache(group_id)
 
             return result.deleted_count

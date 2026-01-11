@@ -39,8 +39,27 @@ class CacheInvalidator:
             new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
         return new_version
 
+    async def invalidate_user_data(self, user_id: int) -> bool:
+        """Invalidate just the user data cache (lightweight)"""
+        try:
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate user data for {user_id}: {e}")
+            return False
+
+    async def invalidate_user_and_banned(self, user_id: int) -> bool:
+        """Invalidate user data and banned users list (for ban/unban operations)"""
+        try:
+            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache.delete(CacheKeyGenerator.banned_users())
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate user and banned cache for {user_id}: {e}")
+            return False
+
     async def invalidate_user_cache(self, user_id: int) -> bool:
-        """Invalidate all cache entries for a user"""
+        """Invalidate all cache entries for a user (comprehensive)"""
         try:
             patterns = CachePatterns.user_related(user_id)
             for pattern in patterns:
@@ -183,4 +202,53 @@ class CacheInvalidator:
             return True
         except Exception as e:
             logger.error(f"Failed to invalidate filter cache: {e}")
+            return False
+
+    async def invalidate_filter_entry(self, group_id: str, text: str) -> bool:
+        """Invalidate a specific filter entry cache"""
+        try:
+            cache_key = CacheKeyGenerator.filter(group_id, text)
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate filter entry cache: {e}")
+            return False
+
+    async def invalidate_batch_link_cache(self, batch_id: str) -> bool:
+        """Invalidate batch link cache entry"""
+        try:
+            cache_key = CacheKeyGenerator.batch_link(batch_id)
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate batch link cache for {batch_id}: {e}")
+            return False
+
+    async def invalidate_bot_setting(self, setting_key: str) -> bool:
+        """Invalidate a specific bot setting cache"""
+        try:
+            cache_key = CacheKeyGenerator.bot_setting(setting_key)
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate bot setting cache for {setting_key}: {e}")
+            return False
+
+    async def invalidate_media_entry(self, identifier: str) -> bool:
+        """Invalidate a specific media cache entry"""
+        try:
+            cache_key = CacheKeyGenerator.media(identifier)
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate media cache for {identifier}: {e}")
+            return False
+
+    async def invalidate_search_sessions(self) -> bool:
+        """Invalidate all search session caches"""
+        try:
+            await self.cache.delete_pattern("search_results_*")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate search sessions: {e}")
             return False

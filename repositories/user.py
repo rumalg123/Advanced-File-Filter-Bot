@@ -151,7 +151,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             if isinstance(e, DuplicateKeyError):
                 logger.warning(f"User {user_id} already exists. Skipping create.")
                 # Ensure cache is consistent
-                await self.cache.delete(CacheKeyGenerator.user(user_id))
+                await self.cache_invalidator.invalidate_user_data(user_id)
                 return True
             logger.error(f"Error creating user {user_id}: {e}")
             return False
@@ -205,8 +205,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         success = await self.update(user_id, update_data)
 
         if success:
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
-            await self.cache.delete(CacheKeyGenerator.banned_users())
+            await self.cache_invalidator.invalidate_user_and_banned(user_id)
             # Update cache with banned users list
             await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
@@ -238,7 +237,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         success = await self.update(user_id, update_data)
 
         if success:
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_and_banned(user_id)
             await self.refresh_banned_users_cache()
 
             user.status = UserStatus.ACTIVE
@@ -304,7 +303,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.premium_expiry_date = datetime.now(UTC) + timedelta(days=self.premium_duration_days) if is_premium else None
             if not is_premium:
                 user.daily_retrieval_count = 0
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
 
         action = "added" if is_premium else "removed"
         return success, f"✅ Premium status {action} successfully!" if success else f"❌ Failed to {action.replace('ed', '')} premium status.", user
@@ -436,8 +435,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
             # Invalidate cache for all affected users
             for user_id in user_ids:
-                cache_key = self._get_cache_key(user_id)
-                await self.cache.delete(cache_key)
+                await self.cache_invalidator.invalidate_user_data(user_id)
 
             logger.info(f"Batch expired premium for {len(user_ids)} users")
         except Exception as e:
@@ -473,7 +471,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     }
                 }
             )
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
             return 1
 
         # Use atomic increment for same day to prevent race conditions
@@ -491,7 +489,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return_document=True
         )
 
-        await self.cache.delete(CacheKeyGenerator.user(user_id))
+        await self.cache_invalidator.invalidate_user_data(user_id)
 
         if result:
             return result.get('daily_retrieval_count', 0)
@@ -532,7 +530,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                     }
                 }
             )
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
             return count
 
         # Use atomic increment for same day with batch count
@@ -550,7 +548,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return_document=True
         )
 
-        await self.cache.delete(CacheKeyGenerator.user(user_id))
+        await self.cache_invalidator.invalidate_user_data(user_id)
 
         if result:
             return result.get('daily_retrieval_count', 0)
@@ -603,7 +601,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             )
 
             if result:
-                await self.cache.delete(CacheKeyGenerator.user(user_id))
+                await self.cache_invalidator.invalidate_user_data(user_id)
                 return True, requested_count, f"Reserved {requested_count} quota (new day)"
             return False, 0, "Failed to reserve quota"
 
@@ -637,7 +635,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if result:
             new_count = result.get('daily_retrieval_count', 0)
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
             logger.info(f"Reserved {requested_count} quota for user {user_id}, new total: {new_count}")
             return True, requested_count, f"Reserved {requested_count} quota"
 
@@ -661,7 +659,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         )
 
         if result.modified_count > 0:
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
             logger.info(f"Released {count} quota for user {user_id}")
             return True
 
@@ -852,7 +850,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 'updated_at': datetime.now(UTC)
             }
             await self.update(user_id, update_data)
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
 
             remaining_warnings = REQUEST_WARNING_LIMIT - user.warning_count
 
@@ -874,7 +872,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         }
 
         await self.update(user_id, update_data)
-        await self.cache.delete(CacheKeyGenerator.user(user_id))
+        await self.cache_invalidator.invalidate_user_data(user_id)
 
         remaining = REQUEST_PER_DAY - user.daily_request_count
         return True, f"Request recorded ({user.daily_request_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False
@@ -889,7 +887,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         success = await self.update(user_id, update_data)
         if success:
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
         return success
 
     async def get_request_stats(self, user_id: int) -> Dict[str, Any]:
@@ -944,7 +942,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         success = await self.update(user_id, update_data)
 
         if success:
-            await self.cache.delete(CacheKeyGenerator.user(user_id))
+            await self.cache_invalidator.invalidate_user_data(user_id)
             await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
             user.ban_reason = 'Over request warning limit'

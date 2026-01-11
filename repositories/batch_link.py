@@ -41,6 +41,8 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
     def __init__(self, db_pool, cache_manager):
         super().__init__(db_pool, cache_manager, "batch_links")
         self.ttl = CacheTTLConfig()
+        from core.cache.invalidation import CacheInvalidator
+        self.cache_invalidator = CacheInvalidator(cache_manager)
 
     def _entity_to_dict(self, batch_link: BatchLink) -> Dict[str, Any]:
         """Convert BatchLink entity to dictionary"""
@@ -202,8 +204,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             )
             
             if result.deleted_count > 0:
-                cache_key = self._get_cache_key(batch_id)
-                await self.cache.delete(cache_key)
+                await self.cache_invalidator.invalidate_batch_link_cache(batch_id)
                 logger.info(f"Deleted batch link: {batch_id}")
                 return True
                 

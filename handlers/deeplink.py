@@ -251,8 +251,7 @@ class DeepLinkHandler(BaseCommandHandler):
 
         # Check quota for non-premium users
         # Force fresh fetch from DB, not cache, to get accurate count
-        from core.cache.config import CacheKeyGenerator
-        await self.bot.user_repo.cache.delete(CacheKeyGenerator.user(user_id))
+        await self.bot.user_repo.cache_invalidator.invalidate_user_data(user_id)
         user = await self.bot.user_repo.get_user(user_id)
 
         # Build access context for permission checks
