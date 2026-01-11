@@ -951,9 +951,10 @@ class MediaSearchBot(Client):
                 try:
                     await telegram_api.call_api(
                         self.edit_message_text,
-                        chat_id=chat_id,
-                        message_id=msg_id,
-                        text=success_msg
+                        chat_id,
+                        msg_id,
+                        success_msg,
+                        chat_id=chat_id
                     )
                 except Exception as e:
                     logger.error(f"Failed to edit restart message: {e}")
@@ -1006,8 +1007,9 @@ class MediaSearchBot(Client):
         try:
             await telegram_api.call_api(
                 self.send_message,
-                chat_id=self.config.LOG_CHANNEL,
-                text=startup_text
+                self.config.LOG_CHANNEL,
+                startup_text,
+                chat_id=self.config.LOG_CHANNEL
             )
         except Exception as e:
             logger.error(f"Failed to send startup message: {e}")
