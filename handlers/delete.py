@@ -6,6 +6,7 @@ from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.config import CacheKeyGenerator
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
@@ -339,13 +340,15 @@ class DeleteHandler(BaseHandler):
     async def _delete_file(self, file_unique_id: str) -> bool:
         """Delete a single file from database"""
         try:
-            # Repository handles finding, deleting, and cache invalidation
-            deleted = await self.bot.media_repo.delete(file_unique_id)
-            if deleted:
-                logger.info(f"Deleted file: {file_unique_id}")
-            else:
-                logger.debug(f"File not found: {file_unique_id}")
-            return deleted
+            # Use semaphore to control concurrent database write operations
+            async with semaphore_manager.acquire('database_write'):
+                # Repository handles finding, deleting, and cache invalidation
+                deleted = await self.bot.media_repo.delete(file_unique_id)
+                if deleted:
+                    logger.info(f"Deleted file: {file_unique_id}")
+                else:
+                    logger.debug(f"File not found: {file_unique_id}")
+                return deleted
         except Exception as e:
             logger.error(f"Error deleting file {file_unique_id}: {e}", exc_info=True)
             return False

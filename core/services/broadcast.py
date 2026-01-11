@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict
 
 from core.cache.redis_cache import CacheManager
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
@@ -81,39 +82,41 @@ class BroadcastService:
                 processed_users += 1
 
                 try:
-                    if hasattr(message, 'copy'):
-                        # Check if it's a text message or media with caption
-                        if message.text:
-                            # For text messages, send with HTML parse mode
-                            await telegram_api.call_api(
-                                client.send_message, 
-                                user_id, message.text, 
-                                parse_mode=CaptionFormatter.get_parse_mode(),
-                                chat_id=user_id
-                            )
-                        elif message.caption:
-                            # For media with caption, copy and set parse mode for caption
-                            await telegram_api.call_api(
-                                message.copy, 
-                                user_id, 
-                                parse_mode=CaptionFormatter.get_parse_mode(),
-                                chat_id=user_id
-                            )
+                    # Use semaphore to control concurrent broadcast operations
+                    async with semaphore_manager.acquire('broadcast'):
+                        if hasattr(message, 'copy'):
+                            # Check if it's a text message or media with caption
+                            if message.text:
+                                # For text messages, send with HTML parse mode
+                                await telegram_api.call_api(
+                                    client.send_message,
+                                    user_id, message.text,
+                                    parse_mode=CaptionFormatter.get_parse_mode(),
+                                    chat_id=user_id
+                                )
+                            elif message.caption:
+                                # For media with caption, copy and set parse mode for caption
+                                await telegram_api.call_api(
+                                    message.copy,
+                                    user_id,
+                                    parse_mode=CaptionFormatter.get_parse_mode(),
+                                    chat_id=user_id
+                                )
+                            else:
+                                # For media without caption, just copy
+                                await telegram_api.call_api(
+                                    message.copy,
+                                    user_id,
+                                    chat_id=user_id
+                                )
                         else:
-                            # For media without caption, just copy
+                            # Fallback: send as text message with HTML parse mode
                             await telegram_api.call_api(
-                                message.copy, 
-                                user_id,
+                                client.send_message,
+                                user_id, str(message),
+                                parse_mode=CaptionFormatter.get_parse_mode(),
                                 chat_id=user_id
                             )
-                    else:
-                        # Fallback: send as text message with HTML parse mode
-                        await telegram_api.call_api(
-                            client.send_message, 
-                            user_id, str(message), 
-                            parse_mode=CaptionFormatter.get_parse_mode(),
-                            chat_id=user_id
-                        )
 
                     stats['success'] += 1
 

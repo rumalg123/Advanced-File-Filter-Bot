@@ -9,6 +9,7 @@ from pyrogram.file_id import FileId
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.redis_cache import CacheManager
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.validators import normalize_filename_for_search
 from core.utils.link_parser import TelegramLinkParser
 from core.utils.logger import get_logger
@@ -309,13 +310,15 @@ class IndexingService:
     async def _save_single_file(self, media_file: MediaFile) -> str:
         """Save a single file (fallback for when batch fails)"""
         try:
-            success, status_code, existing = await self.media_repo.save_media(media_file)
-            if status_code == 1:
-                return "saved"
-            elif status_code == 0:
-                return "duplicate"
-            else:
-                return "error"
+            # Use semaphore to control concurrent database write operations
+            async with semaphore_manager.acquire('database_write'):
+                success, status_code, existing = await self.media_repo.save_media(media_file)
+                if status_code == 1:
+                    return "saved"
+                elif status_code == 0:
+                    return "duplicate"
+                else:
+                    return "error"
         except Exception as e:
             logger.error(f"Error saving file {media_file.file_name}: {e}")
             return "error"
@@ -328,29 +331,31 @@ class IndexingService:
         saved_count = 0
         error_count = 0
 
-        # Use bulk insert if available, otherwise save individually
-        try:
-            # Try bulk insert
-            if hasattr(self.media_repo, 'bulk_save_media'):
-                result = await self.media_repo.bulk_save_media(files)
-                saved_count = result.get('saved', 0)
-                error_count = result.get('errors', 0)
-            else:
-                # Fallback to individual saves
-                for media_file in files:
-                    try:
-                        success, status_code, _ = await self.media_repo.save_media(media_file)
-                        if status_code == 1:
-                            saved_count += 1
-                            # Cache invalidation handled by repository
-                        else:
+        # Use semaphore to control concurrent database write operations
+        async with semaphore_manager.acquire('database_write'):
+            # Use bulk insert if available, otherwise save individually
+            try:
+                # Try bulk insert
+                if hasattr(self.media_repo, 'bulk_save_media'):
+                    result = await self.media_repo.bulk_save_media(files)
+                    saved_count = result.get('saved', 0)
+                    error_count = result.get('errors', 0)
+                else:
+                    # Fallback to individual saves
+                    for media_file in files:
+                        try:
+                            success, status_code, _ = await self.media_repo.save_media(media_file)
+                            if status_code == 1:
+                                saved_count += 1
+                                # Cache invalidation handled by repository
+                            else:
+                                error_count += 1
+                        except Exception as e:
+                            logger.error(f"Error saving file {media_file.file_name}: {e}")
                             error_count += 1
-                    except Exception as e:
-                        logger.error(f"Error saving file {media_file.file_name}: {e}")
-                        error_count += 1
-        except Exception as e:
-            logger.error(f"Bulk save failed: {e}")
-            error_count = len(files)
+            except Exception as e:
+                logger.error(f"Bulk save failed: {e}")
+                error_count = len(files)
 
         return saved_count, error_count
 

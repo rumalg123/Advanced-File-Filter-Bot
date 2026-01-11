@@ -639,15 +639,17 @@ class FileStoreService:
                     auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                 )
 
-                sent_msg = await telegram_api.call_api(
-                    client.send_cached_media,
-                    user_id,
-                    file_id_to_send,
-                    caption=caption,
-                    protect_content=file_data.get("protect", False),
-                    parse_mode=CaptionFormatter.get_parse_mode(),
-                    chat_id=user_id
-                )
+                # Use semaphore to control concurrent telegram sends
+                async with semaphore_manager.acquire('telegram_send'):
+                    sent_msg = await telegram_api.call_api(
+                        client.send_cached_media,
+                        user_id,
+                        file_id_to_send,
+                        caption=caption,
+                        protect_content=file_data.get("protect", False),
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                        chat_id=user_id
+                    )
 
                 # Schedule auto-deletion if enabled
                 if self.config.MESSAGE_DELETE_SECONDS > 0:
@@ -720,14 +722,16 @@ class FileStoreService:
                             auto_delete_message=self.config.AUTO_DELETE_MESSAGE
                         )
 
-                                # Copy message with flood protection
-                        sent_msg = await telegram_api.call_api(
-                            message.copy,
-                            user_id,
-                            caption=caption,
-                            protect_content=protect,
-                            parse_mode=CaptionFormatter.get_parse_mode()
-                        )
+                        # Use semaphore to control concurrent telegram sends
+                        async with semaphore_manager.acquire('telegram_send'):
+                            # Copy message with flood protection
+                            sent_msg = await telegram_api.call_api(
+                                message.copy,
+                                user_id,
+                                caption=caption,
+                                protect_content=protect,
+                                parse_mode=CaptionFormatter.get_parse_mode()
+                            )
 
                         # Schedule auto-deletion if enabled
                         if self.config.MESSAGE_DELETE_SECONDS > 0:
@@ -744,11 +748,12 @@ class FileStoreService:
                 elif not message.empty:
                     # Non-media message - use telegram_api for concurrency control
                     try:
-                        await telegram_api.call_api(
-                            message.copy,
-                            user_id,
-                            protect_content=protect
-                        )
+                        async with semaphore_manager.acquire('telegram_send'):
+                            await telegram_api.call_api(
+                                message.copy,
+                                user_id,
+                                protect_content=protect
+                            )
                         success_count += 1
                     except Exception:
                         continue

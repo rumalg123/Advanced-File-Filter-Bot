@@ -9,6 +9,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
@@ -366,13 +367,15 @@ class RequestHandler(BaseHandler):
         target_channel = self.bot.config.REQ_CHANNEL or self.bot.config.LOG_CHANNEL
 
         try:
-            await telegram_api.call_api(
-                client.send_message,
-                target_channel,
-                request_text,
-                reply_markup=InlineKeyboardMarkup(buttons),
-                chat_id=target_channel
-            )
+            # Use semaphore to control concurrent telegram sends
+            async with semaphore_manager.acquire('telegram_send'):
+                await telegram_api.call_api(
+                    client.send_message,
+                    target_channel,
+                    request_text,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    chat_id=target_channel
+                )
         except Exception as e:
             logger.error(f"Failed to forward request: {e}")
 
