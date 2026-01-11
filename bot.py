@@ -51,6 +51,7 @@ from core.services.indexing import IndexingService, IndexRequestService
 from core.services.maintenance import MaintenanceService
 from core.utils.rate_limiter import RateLimiter
 from core.utils.subscription import SubscriptionManager
+from core.utils.telegram_api import telegram_api
 from handlers.request import RequestHandler
 from repositories.bot_settings import BotSettingsRepository
 from repositories.batch_link import BatchLinkRepository
@@ -383,13 +384,15 @@ class MediaSearchBot(Client):
                     if self.config.ADMINS:
                         primary_admin = self.config.ADMINS[0]
                         try:
-                            await self.send_message(
+                            await telegram_api.call_api(
+                                self.send_message,
                                 primary_admin,
                                 "⚠️ <b>Broadcast State Recovery</b>\n\n"
                                 "A broadcast was found to be active from the previous session. "
                                 "It may have been interrupted by a restart.\n\n"
                                 "Use /stop_broadcast to clear the broadcast state if needed.",
-                                parse_mode='HTML'
+                                parse_mode='HTML',
+                                chat_id=primary_admin
                             )
                         except Exception as e:
                             logger.error(f"Failed to notify admin about broadcast state: {e}")
@@ -800,7 +803,7 @@ class MediaSearchBot(Client):
             await super().start()
 
             # Get bot info
-            me = await self.get_me()
+            me = await telegram_api.call_api(self.get_me)
             self.bot_id = me.id
             self.bot_username = me.username
             self.bot_name = me.first_name
@@ -947,7 +950,8 @@ class MediaSearchBot(Client):
 
                 # Try to edit the restart message
                 try:
-                    await self.edit_message_text(
+                    await telegram_api.call_api(
+                        self.edit_message_text,
                         chat_id=chat_id,
                         message_id=msg_id,
                         text=success_msg
@@ -991,12 +995,18 @@ class MediaSearchBot(Client):
                             error_msg += f"  Error: {error['error']}\n\n"
                         error_msg += "Please add the bot to these channels/groups and make it an admin."
 
-                        await self.send_message(admin_id, error_msg)
+                        await telegram_api.call_api(
+                            self.send_message,
+                            admin_id,
+                            error_msg,
+                            chat_id=admin_id
+                        )
                     except Exception as e:
                         logger.error(f"Failed to notify admin {admin_id}: {e}")
 
         try:
-            await self.send_message(
+            await telegram_api.call_api(
+                self.send_message,
                 chat_id=self.config.LOG_CHANNEL,
                 text=startup_text
             )
@@ -1070,7 +1080,12 @@ class MediaSearchBot(Client):
         while current <= last_msg_id:
             end = min(current + batch_size - 1, last_msg_id)
             ids = list(range(current, end + 1))
-            messages = await self.get_messages(chat_id, ids)
+            messages = await telegram_api.call_api(
+                self.get_messages,
+                chat_id,
+                ids,
+                chat_id=chat_id
+            )
 
             if not isinstance(messages, list):
                 messages = [messages]
