@@ -7,7 +7,7 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 import core.utils.messages as config_messages
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
-from core.cache.config import CacheTTLConfig
+from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from repositories.media import FileType
 from core.utils.logger import get_logger
 from core.utils.validators import private_only, extract_user_id, skip_subscription_check
@@ -147,7 +147,8 @@ class UserCommandHandler(BaseCommandHandler):
         user_id = message.from_user.id
 
         # Store the deeplink parameter in cache with a short key
-        session_key = f"deeplink_{user_id}_{uuid.uuid4().hex[:8]}"
+        session_id = uuid.uuid4().hex[:8]
+        session_key = CacheKeyGenerator.deeplink_session(user_id, session_id)
         await self.bot.cache.set(
             session_key,
             {'deeplink': deeplink_param, 'user_id': user_id},

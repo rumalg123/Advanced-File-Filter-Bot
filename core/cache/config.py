@@ -225,6 +225,10 @@ class CacheKeyGenerator:
     def subscription_session(session_id: str) -> str:
         return f"checksub_session:{session_id}"
 
+    @staticmethod
+    def deeplink_session(user_id: int, session_id: str) -> str:
+        return f"deeplink_{user_id}_{session_id}"
+
 
 # Cache patterns to identify related keys for bulk operations
 class CachePatterns:
