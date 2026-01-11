@@ -247,23 +247,33 @@ class ChannelConfig(BaseSettings):
         return values
     
     def get_admin_list(self) -> List[int]:
-        """Parse admin IDs"""
+        """Parse admin IDs - handles both string and list input"""
+        if isinstance(self.admins, list):
+            return [int(x) for x in self.admins if str(x).strip().isdigit()]
         return [int(x.strip()) for x in self.admins.split(',') if x.strip().isdigit()]
-    
+
     def get_channel_list(self) -> List[int]:
-        """Parse channel IDs"""
+        """Parse channel IDs - handles both string and list input"""
+        if isinstance(self.channels, list):
+            return [int(x) for x in self.channels if str(x).strip().isdigit()]
         return [int(x.strip()) for x in self.channels.split(',') if x.strip().isdigit()]
-    
+
     def get_pics_list(self) -> List[str]:
-        """Parse picture URLs"""
+        """Parse picture URLs - handles both string and list input"""
+        if isinstance(self.pics, list):
+            return [str(pic).strip() for pic in self.pics if str(pic).strip()]
         return [pic.strip() for pic in self.pics.split(',') if pic.strip()]
-    
+
     def get_auth_groups_list(self) -> List[int]:
-        """Parse auth group IDs"""
+        """Parse auth group IDs - handles both string and list input"""
+        if isinstance(self.auth_groups, list):
+            return [int(x) for x in self.auth_groups if str(x).strip().lstrip('-').isdigit()]
         return [int(x.strip()) for x in self.auth_groups.split(',') if x.strip().lstrip('-').isdigit()]
-    
+
     def get_auth_users_list(self) -> List[int]:
-        """Parse auth user IDs"""
+        """Parse auth user IDs - handles both string and list input"""
+        if isinstance(self.auth_users, list):
+            return [int(x) for x in self.auth_users if str(x).strip().isdigit()]
         return [int(x.strip()) for x in self.auth_users.split(',') if x.strip().isdigit()]
 
 

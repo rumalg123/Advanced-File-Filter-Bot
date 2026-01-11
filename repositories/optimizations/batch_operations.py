@@ -41,8 +41,18 @@ class BatchOptimizations:
         collection = await self.db_pool.get_collection('users')
         
         # Use aggregation pipeline for efficient batch processing
+        # Use $toDate to handle both string and date types for premium_expiry_date
         pipeline = [
             {"$match": {"_id": {"$in": user_ids}}},
+            {"$addFields": {
+                "expiry_date_normalized": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$premium_expiry_date"}, "string"]},
+                        "then": {"$toDate": "$premium_expiry_date"},
+                        "else": "$premium_expiry_date"
+                    }
+                }
+            }},
             {"$project": {
                 "_id": 1,
                 "is_premium": 1,
@@ -54,19 +64,19 @@ class BatchOptimizations:
                         "then": {
                             "is_active": {
                                 "$cond": {
-                                    "if": {"$ne": ["$premium_expiry_date", None]},
+                                    "if": {"$ne": ["$expiry_date_normalized", None]},
                                     "then": {
-                                        "$gt": ["$premium_expiry_date", "$$NOW"]
+                                        "$gt": ["$expiry_date_normalized", "$$NOW"]
                                     },
                                     "else": False
                                 }
                             },
                             "days_remaining": {
                                 "$cond": {
-                                    "if": {"$ne": ["$premium_expiry_date", None]},
+                                    "if": {"$ne": ["$expiry_date_normalized", None]},
                                     "then": {
                                         "$divide": [
-                                            {"$subtract": ["$premium_expiry_date", "$$NOW"]},
+                                            {"$subtract": ["$expiry_date_normalized", "$$NOW"]},
                                             {"$multiply": [24, 60, 60, 1000]}  # Convert ms to days
                                         ]
                                     },
