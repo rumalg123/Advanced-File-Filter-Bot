@@ -107,7 +107,8 @@ class FilterRepository(BaseRepository[Filter]):
         data = self._entity_to_dict(filter_obj)
 
         try:
-            await collection.update_one(
+            await self.db_pool.execute_with_retry(
+                collection.update_one,
                 {'text': text},
                 {"$set": data},
                 upsert=True
@@ -143,7 +144,9 @@ class FilterRepository(BaseRepository[Filter]):
         collection = await self.get_collection(group_id)
 
         try:
-            doc = await collection.find_one({"text": text})
+            doc = await self.db_pool.execute_with_retry(
+                collection.find_one, {"text": text}
+            )
             if not doc:
                 return None, None, None, None
 
@@ -178,8 +181,10 @@ class FilterRepository(BaseRepository[Filter]):
         texts = []
 
         try:
-            cursor = collection.find({})
-            async for doc in cursor:
+            cursor = await self.db_pool.execute_with_retry(
+                collection.find({}).to_list, length=1000
+            )
+            for doc in cursor:
                 text_value = doc.get('text')
                 if text_value:
                     texts.append(text_value)
@@ -197,7 +202,9 @@ class FilterRepository(BaseRepository[Filter]):
         collection = await self.get_collection(group_id)
 
         try:
-            result = await collection.delete_one({'text': text})
+            result = await self.db_pool.execute_with_retry(
+                collection.delete_one, {'text': text}
+            )
 
             if result.deleted_count:
                 # Invalidate caches
@@ -216,7 +223,7 @@ class FilterRepository(BaseRepository[Filter]):
         """Delete all filters for a group"""
         try:
             collection = await self.get_collection(group_id)
-            await collection.drop()
+            await self.db_pool.execute_with_retry(collection.drop)
 
             # Clear cache
             list_cache_key = CacheKeyGenerator.filter_list(group_id)
@@ -232,7 +239,9 @@ class FilterRepository(BaseRepository[Filter]):
         collection = await self.get_collection(group_id)
 
         try:
-            count = await collection.count_documents({})
+            count = await self.db_pool.execute_with_retry(
+                collection.count_documents, {}
+            )
             return count
         except Exception as e:
             logger.error(f"Error counting filters: {e}")

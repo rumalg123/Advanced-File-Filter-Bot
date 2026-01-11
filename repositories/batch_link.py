@@ -237,14 +237,13 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
         """Get batch links created by a user"""
         try:
             collection = await self.collection
-            cursor = collection.find({"created_by": user_id}).sort("created_at", -1).limit(limit)
-            
-            batch_links = []
-            async for doc in cursor:
-                batch_links.append(self._dict_to_entity(doc))
-                
-            return batch_links
-            
+            docs = await self.db_pool.execute_with_retry(
+                collection.find({"created_by": user_id}).sort("created_at", -1).limit(limit).to_list,
+                length=limit
+            )
+
+            return [self._dict_to_entity(doc) for doc in docs]
+
         except Exception as e:
             logger.error(f"Error getting user batch links for {user_id}: {e}")
             return []

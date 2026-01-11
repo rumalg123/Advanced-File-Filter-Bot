@@ -346,11 +346,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             collection = await self.get_collection()
 
             # Single batch query using $in operator
-            cursor = collection.find(
-                {"_id": {"$in": user_ids}},
-                {"_id": 1, "is_premium": 1, "premium_activation_date": 1}
+            user_docs = await self.db_pool.execute_with_retry(
+                collection.find(
+                    {"_id": {"$in": user_ids}},
+                    {"_id": 1, "is_premium": 1, "premium_activation_date": 1}
+                ).to_list,
+                length=len(user_ids)
             )
-            user_docs = await cursor.to_list(length=len(user_ids))
 
             # Build result map from batch query
             result = {}

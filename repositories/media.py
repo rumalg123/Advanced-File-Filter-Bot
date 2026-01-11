@@ -196,10 +196,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 # Search across all databases using $in
                 for db_pool in await self.multi_db_manager.get_all_pools():
                     collection = await db_pool.get_collection(self.collection_name)
-                    cursor = collection.find(
-                        {"file_unique_id": {"$in": cache_misses}}
+                    docs = await db_pool.execute_with_retry(
+                        collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
+                        length=len(cache_misses)
                     )
-                    async for data in cursor:
+                    for data in docs:
                         try:
                             file = self._dict_to_entity(data)
                             uid = file.file_unique_id
@@ -219,10 +220,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             else:
                 # Single database mode
                 collection = await self.collection
-                cursor = collection.find(
-                    {"file_unique_id": {"$in": cache_misses}}
+                docs = await self.db_pool.execute_with_retry(
+                    collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
+                    length=len(cache_misses)
                 )
-                async for data in cursor:
+                for data in docs:
                     try:
                         file = self._dict_to_entity(data)
                         uid = file.file_unique_id
@@ -342,13 +344,15 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             collection = await self.get_collection()
 
             # Single batch query using $in operator
-            cursor = collection.find(
-                {"file_unique_id": {"$in": unique_ids}},
-                {"file_unique_id": 1, "_id": 1, "file_name": 1, "file_size": 1,
-                 "file_type": 1, "file_ref": 1, "mime_type": 1, "caption": 1,
-                 "indexed_at": 1, "updated_at": 1}
+            existing_docs = await self.db_pool.execute_with_retry(
+                collection.find(
+                    {"file_unique_id": {"$in": unique_ids}},
+                    {"file_unique_id": 1, "_id": 1, "file_name": 1, "file_size": 1,
+                     "file_type": 1, "file_ref": 1, "mime_type": 1, "caption": 1,
+                     "indexed_at": 1, "updated_at": 1}
+                ).to_list,
+                length=len(unique_ids)
             )
-            existing_docs = await cursor.to_list(length=len(unique_ids))
 
             # Build result map from batch query results
             result = {}

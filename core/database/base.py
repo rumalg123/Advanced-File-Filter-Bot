@@ -121,7 +121,9 @@ class BaseRepository(ABC, Generic[T]):
             if limit:
                 cursor = cursor.limit(limit)
 
-            results = await cursor.to_list(length=limit)
+            results = await self.db_pool.execute_with_retry(
+                cursor.to_list, length=limit
+            )
             return [self._dict_to_entity(data) for data in results]
         except Exception as e:
             logger.error(f"Error finding entities: {e}")
@@ -177,7 +179,6 @@ class BaseRepository(ABC, Generic[T]):
 
     async def delete(self, id: Any) -> bool:
         """Delete entity"""
-        logger.info("Inside base.py delete")
         try:
             entity = await self.find_by_id(id, use_cache=False)
 
