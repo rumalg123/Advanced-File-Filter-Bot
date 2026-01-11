@@ -83,7 +83,7 @@ class RequestHandler(BaseHandler):
         user_id = message.from_user.id
 
         # Check request limits
-        is_allowed, limit_message, should_ban = await self.bot.user_repo.track_request(user_id)
+        is_allowed, limit_message, should_ban = await self.bot.user_repo.track_request(user_id,message.from_user.first_name)
 
         if should_ban:
             # Auto-ban the user
@@ -104,7 +104,8 @@ class RequestHandler(BaseHandler):
                 # Try to send PM notification
                 try:
                     await client.send_message(user_id, ban_msg)
-                except Exception:
+                except Exception as e:
+                    logger.error(f"error sending ban_msg in request handler: {e}")
                     pass
 
                 # Log to admin channel

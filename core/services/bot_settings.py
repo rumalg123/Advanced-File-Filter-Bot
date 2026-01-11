@@ -283,6 +283,12 @@ class BotSettingsService:
             'description': 'Payment link',
             'category': 'payment'
         },
+        'REQUEST_ONLY_FOR_PREMIUM': {
+            'type': 'bool',
+            'default': False,
+            'description': 'Can only request for premium users',
+            'category': 'premium'
+        },
         'REQUEST_PER_DAY': {
             'type': 'int',
             'default': 3,

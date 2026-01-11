@@ -173,6 +173,7 @@ class FeatureConfig(BaseSettings):
     # Feature toggles
     use_caption_filter: bool = Field(default=True, description="Enable caption filtering")
     disable_premium: bool = Field(default=True, description="Disable premium features")
+    request_only_for_premium: bool = Field(default=False, description="Can request only for premium users")
     disable_filter: bool = Field(default=False, description="Disable filtering entirely")
     public_file_store: bool = Field(default=False, description="Enable public file store")
     keep_original_caption: bool = Field(default=True, description="Keep original file captions")

@@ -790,7 +790,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         return len(users)
 
-    async def track_request(self, user_id: int) -> Tuple[bool, str, bool]:
+    async def track_request(self, user_id: int, user_name: Optional[str] = "Unknown") -> Tuple[bool, str, bool]:
         """
         Track a user request and apply limits
         Returns: (is_allowed, message, should_ban)
@@ -798,7 +798,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         user = await self.get_user(user_id)
         if not user:
             # Create user if doesn't exist
-            await self.create_user(user_id, "Unknown")
+            await self.create_user(user_id, user_name)
             user = await self.get_user(user_id)
 
         # Get settings from config - use settings to avoid circular import
@@ -806,6 +806,25 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
         today = date.today()
+        user_premium_expiry_date = user.premium_expiry_date
+        if user_premium_expiry_date and user_premium_expiry_date.tzinfo is None:
+            user_premium_expiry_date = user_premium_expiry_date.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
+        is_premium_valid = (
+                user.is_premium
+                and user_premium_expiry_date
+                and user_premium_expiry_date >= now
+        )
+        if (
+                _feature_config.request_only_for_premium
+                and not _feature_config.disable_premium
+                and not is_premium_valid
+        ):
+            return (
+                False,
+                "Only premium users can use this feature. Use /plans to see available plans.",
+                True
+            )
 
         # Reset daily count if new day
         if user.last_request_date != today:

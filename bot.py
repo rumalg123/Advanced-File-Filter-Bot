@@ -109,7 +109,8 @@ class BotConfig:
         self.PUBLIC_FILE_STORE = self._settings.features.public_file_store
         self.KEEP_ORIGINAL_CAPTION = self._settings.features.keep_original_caption
         self.USE_ORIGINAL_CAPTION_FOR_BATCH = self._settings.features.use_original_caption_for_batch
-        
+        self.REQUEST_ONLY_FOR_PREMIUM = self._settings.features.request_only_for_premium
+
         # Limits
         self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days
         self.NON_PREMIUM_DAILY_LIMIT = self._settings.features.non_premium_daily_limit
