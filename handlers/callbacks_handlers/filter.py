@@ -3,6 +3,8 @@ from pyrogram.types import CallbackQuery
 
 from handlers.commands_handlers import BaseCommandHandler
 from core.utils.logger import get_logger
+from core.utils.validators import extract_user_id, is_admin, is_group_owner
+
 logger = get_logger(__name__)
 
 class FilterCallBackHandler(BaseCommandHandler):
@@ -46,7 +48,7 @@ class FilterCallBackHandler(BaseCommandHandler):
 
     async def handle_delall_confirm_callback(self, client: Client, query: CallbackQuery):
         """Handle delete all filters confirmation"""
-        user_id = query.from_user.id
+        user_id = extract_user_id(query)
 
         # Parse callback data safely
         try:
@@ -58,16 +60,8 @@ class FilterCallBackHandler(BaseCommandHandler):
             logger.warning(f"Invalid delall callback: {query.data}, error: {e}")
             return await query.answer("Invalid data format", show_alert=True)
 
-        # Check permissions
-        try:
-            member = await client.get_chat_member(group_id, user_id)
-            is_authorized = (
-                    member.status == enums.ChatMemberStatus.OWNER or
-                    user_id in self.bot.config.ADMINS
-            )
-        except Exception as e:
-            logger.debug(f"Could not get chat member for permission check: {e}")
-            is_authorized = user_id in self.bot.config.ADMINS
+        # Check permissions using validators
+        is_authorized = is_admin(user_id, self.bot.config.ADMINS) or await is_group_owner(client, group_id, user_id)
 
         if not is_authorized:
             return await query.answer(

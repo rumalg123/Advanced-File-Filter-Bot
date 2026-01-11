@@ -5,6 +5,10 @@ from pyrogram import Client
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.utils.logger import get_logger
+from core.utils.validators import (
+    extract_user_id, is_admin, is_auth_user, is_bot_user,
+    get_special_channels, is_special_channel
+)
 from repositories.user import UserStatus
 
 logger = get_logger(__name__)
@@ -26,31 +30,22 @@ class SubscriptionRequired:
         def decorator(func: Callable):
             @wraps(func)
             async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
-                # Get chat and user based on message type
+                # Get chat based on message type
                 if isinstance(message, CallbackQuery):
                     chat = message.message.chat if message.message else None
-                    from_user = message.from_user
                 else:
                     chat = message.chat
-                    from_user = message.from_user
 
-                # Check special channels
-                special_channels = [
-                    self.bot.config.LOG_CHANNEL,
-                    self.bot.config.INDEX_REQ_CHANNEL,
-                    self.bot.config.REQ_CHANNEL,
-                    self.bot.config.DELETE_CHANNEL
-                ]
-                special_channels = {ch for ch in special_channels if ch}
-
-                if chat and chat.id in special_channels:
+                # Check special channels using validator
+                special_channels = get_special_channels(self.bot.config)
+                if chat and is_special_channel(chat.id, special_channels):
                     return
 
-                # Also skip if message is from a bot
-                if from_user and from_user.is_bot:
+                # Skip if message is from a bot
+                if is_bot_user(message):
                     return
 
-                user_id = from_user.id if from_user else None
+                user_id = extract_user_id(message)
 
                 if not user_id:
                     if isinstance(message, Message):
@@ -58,11 +53,12 @@ class SubscriptionRequired:
                     return
 
                 # Skip check for admins
-                if skip_for_admins and user_id in self.bot.config.ADMINS:
+                if skip_for_admins and is_admin(user_id, self.bot.config.ADMINS):
                     return await func(self, client, message, *args, **kwargs)
 
                 # Skip check for auth users
-                if skip_for_auth_users and user_id in getattr(self.bot.config, 'AUTH_USERS', []):
+                auth_users = getattr(self.bot.config, 'AUTH_USERS', [])
+                if skip_for_auth_users and is_auth_user(user_id, auth_users):
                     return await func(self, client, message, *args, **kwargs)
 
                 # Check if auth channel/groups are configured
@@ -94,10 +90,7 @@ class SubscriptionRequired:
             custom_message: Optional[str] = None
     ):
         """Send subscription required message with join buttons"""
-        if isinstance(message, CallbackQuery):
-            original_user_id = message.from_user.id if message.from_user else None
-        else:
-            original_user_id = message.from_user.id if message.from_user else None
+        original_user_id = extract_user_id(message)
 
         if not original_user_id:
             return
@@ -209,20 +202,20 @@ class BanCheck:
         def decorator(func: Callable):
             @wraps(func)
             async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
-                # Get user based on message type
+                # Get user using validator
+                user_id = extract_user_id(message)
+
                 if isinstance(message, CallbackQuery):
-                    user_id = message.from_user.id if message.from_user else None
                     logger.info(f"check_ban decorator: CallbackQuery from user {user_id}, data: {message.data if hasattr(message, 'data') else 'No data'}")
                 else:
-                    user_id = message.from_user.id if message.from_user else None
                     logger.info(f"check_ban decorator: Message from user {user_id}")
 
                 if not user_id:
                     logger.warning("check_ban decorator: No user_id found, returning")
                     return
 
-                # Skip ban check for admins
-                if user_id in self.bot.config.ADMINS:
+                # Skip ban check for admins using validator
+                if is_admin(user_id, self.bot.config.ADMINS):
                     logger.info(f"check_ban decorator: User {user_id} is admin, skipping ban check")
                     return await func(self, client, message, *args, **kwargs)
 

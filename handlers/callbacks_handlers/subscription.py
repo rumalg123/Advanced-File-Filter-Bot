@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery
 
 from core.utils.helpers import MessageProxy
 from core.utils.logger import get_logger
+from core.utils.validators import extract_user_id, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 
 logger = get_logger(__name__)
@@ -13,7 +14,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
     async def handle_checksub_callback(self, client: Client, query: CallbackQuery):
         """Handle 'Try Again' subscription check callback"""
-        current_user_id = query.from_user.id
+        current_user_id = extract_user_id(query)
 
         # Parse callback data
         parts = query.data.split('#', 2)
@@ -62,13 +63,14 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
         # Check subscription again
         if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
-            # Skip subscription check for admins and auth users
-            skip_sub_check = (
-                    current_user_id in self.bot.config.ADMINS or
-                    current_user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            # Skip subscription check for admins and auth users using validator
+            skip_sub = skip_subscription_check(
+                current_user_id,
+                self.bot.config.ADMINS,
+                getattr(self.bot.config, 'AUTH_USERS', [])
             )
 
-            if not skip_sub_check:
+            if not skip_sub:
                 is_subscribed = await self.bot.subscription_manager.is_subscribed(
                     client, current_user_id
                 )

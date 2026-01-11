@@ -8,6 +8,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from core.utils.validators import extract_user_id, has_admin_rights, is_owner_or_bot_admin
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -51,7 +52,7 @@ class FilterHandler(BaseHandler):
 
     async def add_filter_command(self, client: Client, message: Message):
         """Handle add filter command"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return await message.reply("You are anonymous admin. Use /connect in PM")
 
@@ -105,7 +106,7 @@ class FilterHandler(BaseHandler):
 
     async def view_filters_command(self, client: Client, message: Message):
         """Handle view filters command"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return await message.reply("You are anonymous admin. Use /connect in PM")
 
@@ -155,7 +156,7 @@ class FilterHandler(BaseHandler):
 
     async def delete_filter_command(self, client: Client, message: Message):
         """Handle delete filter command"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return await message.reply("You are anonymous admin. Use /connect in PM")
 
@@ -202,7 +203,7 @@ class FilterHandler(BaseHandler):
 
     async def delete_all_command(self, client: Client, message: Message):
         """Handle delete all filters command"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return await message.reply("You are anonymous admin. Use /connect in PM")
 
@@ -232,12 +233,10 @@ class FilterHandler(BaseHandler):
 
     async def _check_admin_rights(self, client: Client, group_id: int, user_id: int) -> bool:
         """Check if user has admin rights in the group"""
-        from core.utils.validators import has_admin_rights
         return await has_admin_rights(client, group_id, user_id, self.bot.config.ADMINS)
 
     async def _is_owner_or_bot_admin(self, client: Client, group_id: int, user_id: int) -> bool:
         """Check if user is group owner or bot admin"""
-        from core.utils.validators import is_owner_or_bot_admin
         return await is_owner_or_bot_admin(client, group_id, user_id, self.bot.config.ADMINS)
 
     async def _extract_filter_data(self, message: Message, extracted: List[str], keyword: str):

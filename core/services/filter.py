@@ -10,6 +10,7 @@ from core.cache.redis_cache import CacheManager
 from core.services.connection import ConnectionService
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
+from core.utils.validators import extract_user_id, is_private_chat
 from repositories.filter import FilterRepository
 
 logger = get_logger(__name__)
@@ -35,11 +36,11 @@ class FilterService:
 
     async def get_active_group_id(self, client:Client,message: Message) -> Tuple[Optional[int], Optional[str]]:
         """Get the active group ID based on chat type and connections"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return None, None
 
-        if message.chat.type == ChatType.PRIVATE:
+        if is_private_chat(message):
             # Get active connection in private chat
             group_id = await self.connection_service.get_active_connection(user_id)
             if not group_id:
@@ -149,8 +150,8 @@ class FilterService:
 
         text = message.text
 
-        # Check group-specific filters
-        if message.chat.type != ChatType.PRIVATE:
+        # Check group-specific filters using validator
+        if not is_private_chat(message):
             group_id = str(message.chat.id)
             group_result = await self._check_filter_match(
                 client, message, text, group_id
@@ -159,7 +160,7 @@ class FilterService:
                 return True
         else:
             # In private chat, check filters from active connection
-            user_id = message.from_user.id if message.from_user else None
+            user_id = extract_user_id(message)
             if user_id:
                 active_group = await self.connection_service.get_active_connection(user_id)
                 if active_group:
@@ -201,7 +202,7 @@ class FilterService:
         reply_id = message.reply_to_message.id if message.reply_to_message else message.id
         chat_id = message.chat.id
 
-        if message.chat.type == ChatType.PRIVATE:
+        if is_private_chat(message):
             try:
                 if fileid == "None":
                     # Text-only response

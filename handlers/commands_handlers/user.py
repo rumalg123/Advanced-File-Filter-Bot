@@ -10,7 +10,7 @@ from core.utils.file_emoji import get_file_type_display_name
 from core.cache.config import CacheTTLConfig
 from repositories.media import FileType
 from core.utils.logger import get_logger
-from core.utils.validators import private_only
+from core.utils.validators import private_only, extract_user_id, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription, check_ban
 
@@ -23,7 +23,7 @@ class UserCommandHandler(BaseCommandHandler):
     @check_ban()
     async def start_command(self, client: Client, message: Message):
         """Handle /start command with subscription check for deeplinks"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return
 
@@ -48,14 +48,15 @@ class UserCommandHandler(BaseCommandHandler):
 
         # Handle deep link
         if len(message.command) > 1:
-            # Check subscription for deeplinks (except for admins and auth users)
-            skip_sub_check = (
-                    user_id in self.bot.config.ADMINS or
-                    user_id in getattr(self.bot.config, 'AUTH_USERS', [])
+            # Check subscription for deeplinks using validator
+            skip_sub = skip_subscription_check(
+                user_id,
+                self.bot.config.ADMINS,
+                getattr(self.bot.config, 'AUTH_USERS', [])
             )
 
             # Check if auth channel/groups are configured and user needs to subscribe
-            if not skip_sub_check and (self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', [])):
+            if not skip_sub and (self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', [])):
                 is_subscribed = await self.bot.subscription_manager.is_subscribed(
                     client, user_id
                 )

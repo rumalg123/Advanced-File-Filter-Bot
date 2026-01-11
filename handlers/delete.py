@@ -9,6 +9,7 @@ from core.cache.config import CacheKeyGenerator
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
+from core.utils.validators import is_original_requester, validate_callback_data
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -215,10 +216,9 @@ class DeleteHandler(BaseHandler):
 
     async def handle_deleteall_callback(self, client: Client, callback_query):
         """Handle deleteall confirmation callback"""
-        data = callback_query.data
-        parts = data.split('#')
-
-        if len(parts) < 2:
+        # Validate callback data using validator
+        is_valid, parts = validate_callback_data(callback_query, expected_parts=2)
+        if not is_valid:
             await callback_query.answer("Invalid callback data", show_alert=True)
             return
 
@@ -226,8 +226,8 @@ class DeleteHandler(BaseHandler):
         original_user_id = int(parts[1])
         callback_user_id = callback_query.from_user.id
 
-        # Only the original requester can confirm/cancel
-        if callback_user_id != original_user_id:
+        # Only the original requester can confirm/cancel using validator
+        if not is_original_requester(callback_user_id, original_user_id):
             await callback_query.answer("❌ You cannot interact with this!", show_alert=True)
             return
 

@@ -17,7 +17,10 @@ from core.utils.helpers import format_file_size
 from handlers.decorators import require_subscription, check_ban
 
 from core.utils.logger import get_logger
-from core.utils.validators import sanitize_search_query
+from core.utils.validators import (
+    sanitize_search_query, extract_user_id, is_admin, is_auth_user,
+    is_bot_user, get_special_channels, is_special_channel
+)
 from repositories.user import UserStatus
 from core.utils.pagination import PaginationBuilder
 
@@ -178,24 +181,16 @@ class SearchHandler:
     @check_ban()
     async def handle_text_search(self, client: Client, message: Message):
         """Handle text search in groups and private chats"""
-        # Skip special channels
-        special_channels = [
-            self.bot.config.LOG_CHANNEL,
-            self.bot.config.INDEX_REQ_CHANNEL,
-            self.bot.config.REQ_CHANNEL,
-            self.bot.config.DELETE_CHANNEL
-        ]
-
-        # Remove None values and convert to set
-        special_channels = {ch for ch in special_channels if ch}
-        if message.chat.id in special_channels:
+        # Skip special channels using validators
+        special_channels = get_special_channels(self.bot.config)
+        if is_special_channel(message.chat.id, special_channels):
             return
 
         # Skip if message is from a bot
-        if message.from_user and message.from_user.is_bot:
+        if is_bot_user(message):
             return
 
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return
 
@@ -251,7 +246,7 @@ class SearchHandler:
 
     async def handle_inline_query(self, client: Client, query: InlineQuery):
         """Handle inline search queries - send files directly when clicked"""
-        user_id = query.from_user.id if query.from_user else None
+        user_id = extract_user_id(query)
         if not user_id:
             await query.answer(
                 results=[],
@@ -261,8 +256,8 @@ class SearchHandler:
             )
             return
 
-        # Check if user is banned
-        if user_id not in self.bot.config.ADMINS:
+        # Check if user is banned using validators
+        if not is_admin(user_id, self.bot.config.ADMINS):
             user = await self.bot.user_repo.get_user(user_id)
             if user and user.status == UserStatus.BANNED:
                 await query.answer(
@@ -276,8 +271,7 @@ class SearchHandler:
         # Check if premium mode is enabled - disable inline mode when premium is active
         if not self.bot.config.DISABLE_PREMIUM:
             # Allow admins to use inline mode even when premium is enabled
-            is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
-            if not is_admin:
+            if not is_admin(user_id, self.bot.config.ADMINS):
                 await query.answer(
                     results=[],
                     cache_time=0,
@@ -286,9 +280,9 @@ class SearchHandler:
                 )
                 return
 
-        # Manual subscription check for inline queries
-        if not (user_id in self.bot.config.ADMINS or
-                user_id in getattr(self.bot.config, 'AUTH_USERS', [])):
+        # Manual subscription check for inline queries using validators
+        auth_users = getattr(self.bot.config, 'AUTH_USERS', [])
+        if not (is_admin(user_id, self.bot.config.ADMINS) or is_auth_user(user_id, auth_users)):
 
             # If auth requirements exist, check subscription
             if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):

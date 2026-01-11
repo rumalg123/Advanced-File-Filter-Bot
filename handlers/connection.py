@@ -5,6 +5,7 @@ from core.services.connection import ConnectionService
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
+from core.utils.validators import extract_user_id, is_admin, is_group_admin
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -47,7 +48,7 @@ class ConnectionHandler(BaseHandler):
 
     async def connect_command(self, client: Client, message: Message):
         """Handle /connect command"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return await message.reply(
                 f"You are anonymous admin. Use /connect {message.chat.id} in PM"
@@ -128,7 +129,7 @@ class ConnectionHandler(BaseHandler):
 
     async def disconnect_command(self, client: Client, message: Message):
         """Handle /disconnect command"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return await message.reply(
                 f"You are anonymous admin. Use /connect {message.chat.id} in PM"
@@ -145,16 +146,9 @@ class ConnectionHandler(BaseHandler):
         elif chat_type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
             group_id = message.chat.id
 
-            # Check if user has permission
-            if user_id not in self.bot.config.ADMINS:
-                try:
-                    member = await client.get_chat_member(group_id, user_id)
-                    if member.status not in [
-                        enums.ChatMemberStatus.ADMINISTRATOR,
-                        enums.ChatMemberStatus.OWNER
-                    ]:
-                        return
-                except Exception:
+            # Check if user has permission using validators
+            if not is_admin(user_id, self.bot.config.ADMINS):
+                if not await is_group_admin(client, group_id, user_id):
                     return
 
             success, msg = await self.connection_service.disconnect_from_group(
@@ -197,20 +191,13 @@ class ConnectionHandler(BaseHandler):
 
     async def delete_group_filters_callback(self, client: Client, query: CallbackQuery):
         """Handle delete group filters callback"""
-        user_id = query.from_user.id
+        user_id = extract_user_id(query)
         group_id = query.data.split(":")[1]
 
-        # Check permission
-        if user_id not in self.bot.config.ADMINS:
-            try:
-                member = await client.get_chat_member(int(group_id), user_id)
-                if member.status not in [
-                    enums.ChatMemberStatus.ADMINISTRATOR,
-                    enums.ChatMemberStatus.OWNER
-                ]:
-                    return await query.answer("You need admin rights!", show_alert=True)
-            except Exception:
-                return await query.answer("Error checking permissions", show_alert=True)
+        # Check permission using validators
+        if not is_admin(user_id, self.bot.config.ADMINS):
+            if not await is_group_admin(client, int(group_id), user_id):
+                return await query.answer("You need admin rights!", show_alert=True)
 
         # Delete filters
         if self.bot.filter_service:

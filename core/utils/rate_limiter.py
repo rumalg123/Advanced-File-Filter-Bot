@@ -6,6 +6,7 @@ from typing import Dict, Optional, Tuple
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.logger import get_logger
+from core.utils.validators import extract_user_id
 
 logger = get_logger(__name__)
 
@@ -86,7 +87,7 @@ class RateLimiter:
         def decorator(func):
             @wraps(func)
             async def wrapper(self, client, message, *args, **kwargs):
-                user_id = message.from_user.id if message.from_user else None
+                user_id = extract_user_id(message)
                 if not user_id:
                     return await func(self, client, message, *args, **kwargs)
 

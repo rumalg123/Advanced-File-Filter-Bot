@@ -14,6 +14,7 @@ from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
 from core.utils.telegram_api import telegram_api
+from core.utils.validators import validate_callback_data
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -380,8 +381,10 @@ class RequestHandler(BaseHandler):
         if self._shutdown.is_set():
             await query.answer("Bot is shutting down", show_alert=True)
             return
-        data = query.data.split("#")
-        if len(data) < 4:
+
+        # Validate callback data using validator
+        is_valid, data = validate_callback_data(query, expected_parts=4)
+        if not is_valid:
             return await query.answer("Invalid data", show_alert=True)
 
         _, action, user_id, msg_id = data

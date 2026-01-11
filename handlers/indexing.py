@@ -7,6 +7,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.services.indexing import IndexingService, IndexRequestService
 from core.utils.logger import get_logger
+from core.utils.validators import extract_user_id, is_admin
 
 logger = get_logger(__name__)
 
@@ -114,7 +115,7 @@ class IndexingHandler:
         logger.info("IndexingHandler cleanup complete")
     async def handle_index_request(self, client: Client, message: Message):
         """Handle index request from forwarded message or link"""
-        user_id = message.from_user.id if message.from_user else None
+        user_id = extract_user_id(message)
         if not user_id:
             return
 
@@ -173,8 +174,8 @@ class IndexingHandler:
                         "❌ Error accessing the channel. Make sure I'm an admin in the channel."
                     )
 
-            # Admin can index directly
-            if user_id in self.bot.config.ADMINS:
+            # Admin can index directly using validator
+            if is_admin(user_id, self.bot.config.ADMINS):
                 buttons = [
                     [
                         InlineKeyboardButton(

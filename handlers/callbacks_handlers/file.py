@@ -9,7 +9,10 @@ from pyrogram.types import CallbackQuery
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
-from core.utils.validators import is_original_requester, is_private_chat, skip_subscription_check
+from core.utils.validators import (
+    is_original_requester, is_private_chat, skip_subscription_check,
+    is_admin, extract_user_id
+)
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import check_ban
 
@@ -297,10 +300,10 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(f"❌ {reason}", show_alert=True)
             return
 
-        # Check if user is admin or owner (they bypass quota)
-        is_admin = user_id in self.bot.config.ADMINS if self.bot.config.ADMINS else False
+        # Check if user is admin or owner (they bypass quota) using validators
+        user_is_admin = is_admin(user_id, self.bot.config.ADMINS)
         owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        is_owner = user_id == owner_id
+        user_is_owner = user_id == owner_id
 
         # Get user for premium check
         user = await self.bot.user_repo.get_user(user_id)
@@ -308,8 +311,8 @@ class FileCallbackHandler(BaseCommandHandler):
             user and
             not user.is_premium and
             not self.bot.config.DISABLE_PREMIUM and
-            not is_admin and
-            not is_owner
+            not user_is_admin and
+            not user_is_owner
         )
 
         # Reserve quota atomically BEFORE sending files (prevents race conditions)
