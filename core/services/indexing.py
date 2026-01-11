@@ -8,7 +8,6 @@ from pyrogram.errors import ChannelInvalid, UsernameInvalid, UsernameNotModified
 from pyrogram.file_id import FileId
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from core.cache.config import CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.validators import normalize_filename_for_search
 from core.utils.link_parser import TelegramLinkParser
@@ -334,11 +333,7 @@ class IndexingService:
                         success, status_code, _ = await self.media_repo.save_media(media_file)
                         if status_code == 1:
                             saved_count += 1
-                            # Invalidate search cache for new files
-                            common_terms = media_file.file_name.lower().split()[:3]
-                            for term in common_terms:
-                                cache_key = CacheKeyGenerator.search_results(term, None, 0, 10, True)
-                                await self.cache.delete(cache_key)
+                            # Cache invalidation handled by repository
                         else:
                             error_count += 1
                     except Exception as e:

@@ -115,3 +115,62 @@ class CacheInvalidator:
         except Exception as e:
             logger.error(f"Failed to invalidate file cache: {e}")
             return False
+
+    async def invalidate_settings_cache(self, setting_key: Optional[str] = None) -> bool:
+        """
+        Invalidate cache entries related to bot settings.
+        If setting_key is provided, only invalidate caches related to that setting.
+        """
+        # Mapping of settings to cache patterns they affect
+        setting_cache_map = {
+            'ADMINS': ['user:*', 'banned_users'],
+            'AUTH_CHANNEL': ['subscription:*'],
+            'AUTH_GROUPS': ['subscription:*'],
+            'CHANNELS': ['active_channels_list', 'channel:*'],
+            'MAX_BTN_SIZE': ['search:*'],
+            'USE_CAPTION_FILTER': ['search:*'],
+            'NON_PREMIUM_DAILY_LIMIT': ['user:*'],
+            'PREMIUM_DURATION_DAYS': ['user:*'],
+            'MESSAGE_DELETE_SECONDS': ['search:*'],
+            'DISABLE_FILTER': ['filter:*', 'filters_list:*'],
+            'DISABLE_PREMIUM': ['user:*'],
+            'FILE_STORE_CHANNEL': ['filestore:*'],
+        }
+
+        try:
+            patterns_to_clear = []
+
+            if setting_key:
+                patterns_to_clear = setting_cache_map.get(setting_key, [])
+            else:
+                # Clear all patterns if no specific key
+                for patterns in setting_cache_map.values():
+                    patterns_to_clear.extend(patterns)
+                patterns_to_clear = list(set(patterns_to_clear))  # Remove duplicates
+
+            for pattern in patterns_to_clear:
+                if '*' in pattern:
+                    await self.cache.delete_pattern(pattern)
+                else:
+                    await self.cache.delete(pattern)
+
+            # Always clear the settings cache itself
+            await self.cache.delete(CacheKeyGenerator.all_settings())
+
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate settings cache: {e}")
+            return False
+
+    async def invalidate_filter_cache(self, group_id: Optional[str] = None) -> bool:
+        """Invalidate filter cache entries"""
+        try:
+            if group_id:
+                await self.cache.delete(CacheKeyGenerator.filter_list(group_id))
+            else:
+                await self.cache.delete_pattern("filter:*")
+                await self.cache.delete_pattern("filters_list:*")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate filter cache: {e}")
+            return False

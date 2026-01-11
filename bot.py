@@ -758,7 +758,6 @@ class MediaSearchBot(Client):
             if not self.config.DISABLE_FILTER:
                 self.connection_service = ConnectionService(
                     self.connection_repo,
-                    self.cache,
                     self.config.ADMINS
                 )
 

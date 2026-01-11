@@ -4,7 +4,7 @@ from pyrogram import Client
 from pyrogram import StopPropagation
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
 from handlers.base import BaseHandler
 
@@ -46,29 +46,7 @@ class BotSettingsHandler(BaseHandler):
 
     async def invalidate_related_caches(self, key: str):
         """Invalidate caches related to a specific setting"""
-        # Map settings to their related cache patterns
-        cache_invalidation_map = {
-            'ADMINS': ['user:*', 'banned_users'],
-            'AUTH_CHANNEL': ['subscription:*'],
-            'AUTH_GROUPS': ['subscription:*'],
-            'CHANNELS': ['active_channels_list', 'channel:*'],
-            'MAX_BTN_SIZE': ['search:*'],
-            'USE_CAPTION_FILTER': ['search:*'],
-            'NON_PREMIUM_DAILY_LIMIT': ['user:*'],
-            'PREMIUM_DURATION_DAYS': ['user:*'],
-            'MESSAGE_DELETE_SECONDS': ['search:*'],
-            'DISABLE_FILTER': ['filter:*', 'filters_list:*'],
-            'DISABLE_PREMIUM': ['user:*'],
-            'FILE_STORE_CHANNEL': ['filestore:*'],
-        }
-
-        patterns = cache_invalidation_map.get(key, [])
-        for pattern in patterns:
-            await self.bot.cache.delete_pattern(pattern)
-
-        # Clear general settings cache
-        await self.bot.cache.delete(CacheKeyGenerator.all_settings())
-
+        await self.bot.cache_invalidator.invalidate_settings_cache(key)
         logger.info(f"Invalidated caches for setting: {key}")
 
     async def bsetting_command(self, client: Client, message: Message):

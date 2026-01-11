@@ -2,8 +2,6 @@ from typing import Optional, List, Tuple, Dict, Any
 
 from pyrogram import Client, enums
 
-from core.cache.config import CacheKeyGenerator
-from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
 from repositories.connection import ConnectionRepository
 
@@ -32,11 +30,9 @@ class ConnectionService:
     def __init__(
             self,
             connection_repo: ConnectionRepository,
-            cache_manager: CacheManager,
             admins: List[int]
     ):
         self.connection_repo = connection_repo
-        self.cache = cache_manager
         self.admins = admins
 
     async def connect_to_group(
@@ -102,7 +98,7 @@ class ConnectionService:
         )
 
         if success:
-            await self.cache.delete(CacheKeyGenerator.user_connections(str(user_id)))
+            # Cache invalidation handled by repository
             return True, "Successfully disconnected from this chat"
         else:
             return False, "This chat isn't connected to me!"
