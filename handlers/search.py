@@ -1,7 +1,5 @@
 import asyncio
-import random
 import re
-import uuid
 from weakref import WeakSet
 
 from pyrogram import Client, filters, enums
@@ -23,7 +21,7 @@ from core.utils.validators import (
     is_bot_user, get_special_channels, is_special_channel
 )
 from repositories.user import UserStatus
-from core.utils.pagination import PaginationBuilder
+from core.utils.search_results import SearchResultsBuilder
 
 logger = get_logger(__name__)
 
@@ -37,10 +35,13 @@ class SearchHandler:
         self.auto_delete_tasks = WeakSet()  # Use WeakSet for automatic cleanup
         self._handlers = []  # Track handlers for cleanup
         self._shutdown = asyncio.Event()  # Add shutdown signaling
-        
+
         # Use unified session manager
         self.session_manager = getattr(bot, 'session_manager', None)
-        
+
+        # Search results builder for consistent result display
+        self.results_builder = SearchResultsBuilder(bot.cache, bot.config)
+
         self.register_handlers()
 
     def register_handlers(self):
@@ -491,124 +492,27 @@ class SearchHandler:
             user_id: int,
             is_private: bool
     ) -> bool:
-        """Send search results - returns True if sent successfully"""
-        try:
-            # Generate a unique session for search results
-            session_id = uuid.uuid4().hex[:8]
-            
-            # Store file IDs in cache for "Send All" functionality - optimized
-            search_key = CacheKeyGenerator.search_session(user_id, session_id)
-            # Use list comprehension for better memory efficiency
-            files_data = [
-                {
-                    'file_unique_id': f.file_unique_id,
-                    'file_id': f.file_id,
-                    'file_ref': f.file_ref,
-                    'file_name': f.file_name,
-                    'file_size': f.file_size,
-                    'file_type': f.file_type.value
-                }
-                for f in files
-            ]
+        """Send search results using the shared builder"""
+        success, sent_msg = await self.results_builder.send_search_results(
+            message=message,
+            files=files,
+            query=query,
+            total=total,
+            page_size=page_size,
+            user_id=user_id,
+            is_private=is_private,
+            callback_prefix="search"
+        )
 
-            # Store search results with debug logging
-            search_data = {'files': files_data, 'query': query, 'user_id': user_id}
-            await self.bot.cache.set(
-                search_key,
-                search_data,
-                expire=self.ttl.SEARCH_SESSION  # 1 hour expiry
-            )
-            
-            logger.debug(f"Stored search results for key: {search_key}, TTL: {self.ttl.SEARCH_SESSION}s, files count: {len(files_data)}")
-
-            # Create pagination builder
-            pagination = PaginationBuilder(
-                total_items=total,
-                page_size=page_size,
-                current_offset=0,
-                query=query,
-                user_id=user_id,
-                callback_prefix="search"
-            )
-
-            # Build file buttons
-            buttons = []
-
-            # Add "Send All Files" button
-            if files:
-                if is_private:
-                    buttons.append([
-                        InlineKeyboardButton(
-                            f"📤 Send All Files ({len(files)})",
-                            callback_data=f"sendall#{search_key}"
-                        )
-                    ])
-                else:
-                    buttons.append([
-                        InlineKeyboardButton(
-                            f"📤 Send All Files ({len(files)})",
-                            callback_data=f"sendall#{search_key}#{user_id}"
-                        )
-                    ])
-
-            # Add individual file buttons
-            for file in files:
-                file_identifier = file.file_unique_id if file.file_unique_id else file.file_ref
-                if is_private:
-                    callback_data = f"file#{file_identifier}"
-                else:
-                    callback_data = f"file#{file_identifier}#{user_id}"
-
-                file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
-                file_button = InlineKeyboardButton(
-                    f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
-                    callback_data=callback_data
-                )
-                buttons.append([file_button])
-
-            # Add pagination buttons if needed
-            if total > page_size:
-                pagination_buttons = pagination.build_pagination_buttons()
-                buttons.extend(pagination_buttons)
-
-            # Build caption
+        if success and sent_msg:
+            # Schedule auto-deletion if configured
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-            delete_minutes = delete_time // 60 if delete_time > 0 else 0
-
-            caption = (
-                f"🔍 <b>Search Results for:</b> {query}\n"
-                f"📁 Found {total} files\n"
-                f"📊 Page {pagination.current_page} of {pagination.total_pages}"
-            )
-
             if delete_time > 0:
-                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
-
-                # Send message with or without photo
-            if self.bot.config.PICS:
-                sent_msg = await message.reply_photo(
-                    photo=random.choice(self.bot.config.PICS),
-                    caption=caption,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            else:
-                sent_msg = await message.reply_text(
-                    caption,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            if delete_time > 0:
-                # Schedule deletion of the result message
-                _ = self._schedule_auto_delete(sent_msg, delete_time)
-
-                # Also delete the user's search query message in private
+                self._schedule_auto_delete(sent_msg, delete_time)
                 if is_private:
-                    _ = self._schedule_auto_delete(message, delete_time)
+                    self._schedule_auto_delete(message, delete_time)
 
-            return True
-
-        except Exception as e:
-            logger.error(f"Error sending search results: {e}", exc_info=True)
-            return False
+        return success
 
     async def _check_and_send_filter(
             self,
