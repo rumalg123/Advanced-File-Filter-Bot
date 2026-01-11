@@ -278,7 +278,7 @@ class PaginationHelper:
     """Helper methods for pagination-related operations"""
 
     @staticmethod
-    def parse_callback_data(callback_data: str) -> dict|None:
+    def parse_callback_data(callback_data: str) -> Optional[dict]:
         """
         Parse pagination callback data
 
