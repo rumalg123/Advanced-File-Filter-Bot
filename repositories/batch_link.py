@@ -8,6 +8,7 @@ from pymongo.errors import DuplicateKeyError
 
 from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
@@ -233,11 +234,12 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
 
             expired_ids = [doc["_id"] for doc in expired_docs]
 
-            # Delete expired links
-            result = await self.db_pool.execute_with_retry(
-                collection.delete_many,
-                {"expires_at": {"$lt": now.isoformat()}}
-            )
+            # Delete expired links with semaphore control
+            async with semaphore_manager.acquire('database_write'):
+                result = await self.db_pool.execute_with_retry(
+                    collection.delete_many,
+                    {"expires_at": {"$lt": now.isoformat()}}
+                )
 
             deleted_count = result.deleted_count
             if deleted_count > 0:

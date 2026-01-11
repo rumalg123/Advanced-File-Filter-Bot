@@ -10,6 +10,7 @@ from datetime import datetime, UTC, timedelta
 from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.logger import get_logger
 
 # Use TYPE_CHECKING to avoid circular imports
@@ -292,10 +293,12 @@ class BatchOptimizations:
                     }}
                 ) for user_id in user_ids
             ]
-            
-            result = await self.db_pool.execute_with_retry(
-                collection.bulk_write, operations, ordered=False
-            )
+
+            # Use semaphore to control concurrent database write operations
+            async with semaphore_manager.acquire('database_write'):
+                result = await self.db_pool.execute_with_retry(
+                    collection.bulk_write, operations, ordered=False
+                )
             logger.info(f"Batch expired {result.modified_count} premium users")
             return result.modified_count > 0
             

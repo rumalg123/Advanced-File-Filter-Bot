@@ -8,6 +8,7 @@ from pymongo import UpdateOne
 from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import cache_premium_status
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger
@@ -422,16 +423,18 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         try:
             collection = await self.get_collection()
-            await self.db_pool.execute_with_retry(
-                collection.update_many,
-                {"_id": {"$in": user_ids}},
-                {"$set": {
-                    "is_premium": False,
-                    "premium_activation_date": None,
-                    "premium_expiry_date": None,
-                    "updated_at": datetime.now(UTC)
-                }}
-            )
+            # Use semaphore to control concurrent database write operations
+            async with semaphore_manager.acquire('database_write'):
+                await self.db_pool.execute_with_retry(
+                    collection.update_many,
+                    {"_id": {"$in": user_ids}},
+                    {"$set": {
+                        "is_premium": False,
+                        "premium_activation_date": None,
+                        "premium_expiry_date": None,
+                        "updated_at": datetime.now(UTC)
+                    }}
+                )
 
             # Invalidate cache for all affected users
             for user_id in user_ids:
@@ -957,21 +960,23 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """
         try:
             collection = await self.collection()
-            
+
             # Update all users to reset daily counters
             # This is typically run once per day via a scheduled task
-            update_result = await self.db_pool.execute_with_retry(
-                collection.update_many,
-                {},  # Update all users
-                {
-                    '$set': {
-                        'daily_retrieval_count': 0,
-                        'daily_request_count': 0,
-                        'updated_at': datetime.now(UTC)
+            # Use semaphore to control concurrent database write operations
+            async with semaphore_manager.acquire('database_write'):
+                update_result = await self.db_pool.execute_with_retry(
+                    collection.update_many,
+                    {},  # Update all users
+                    {
+                        '$set': {
+                            'daily_retrieval_count': 0,
+                            'daily_request_count': 0,
+                            'updated_at': datetime.now(UTC)
+                        }
                     }
-                }
-            )
-            
+                )
+
             # Clear all user caches since we've updated all users
             await self.cache_invalidator.invalidate_all_users_cache()
             

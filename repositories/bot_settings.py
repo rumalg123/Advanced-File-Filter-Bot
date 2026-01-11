@@ -4,6 +4,7 @@ from dataclasses import dataclass, asdict
 from pymongo import UpdateOne
 
 from core.cache.config import CacheKeyGenerator
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
@@ -129,9 +130,11 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
 
         if operations:
             collection = await self.collection()
-            await self.db_pool.execute_with_retry(
-                collection.bulk_write, operations
-            )
+            # Use semaphore to control concurrent database write operations
+            async with semaphore_manager.acquire('database_write'):
+                await self.db_pool.execute_with_retry(
+                    collection.bulk_write, operations
+                )
 
             # Clear all setting caches
             for key in settings:
