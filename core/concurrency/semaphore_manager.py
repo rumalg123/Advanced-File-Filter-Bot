@@ -5,7 +5,6 @@ Provides bounded concurrency for different operation domains
 
 import asyncio
 import time
-from functools import wraps
 from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
@@ -45,13 +44,10 @@ class SemaphoreManager:
     # Default concurrency limits by domain
     DEFAULT_LIMITS = {
         'telegram_send': 10,      # Telegram API sends
-        'telegram_fetch': 15,     # Telegram API fetches  
+        'telegram_fetch': 15,     # Telegram API fetches
+        'telegram_general': 10,   # Other Telegram API operations
         'database_write': 20,     # Database writes
-        'database_read': 30,      # Database reads
         'file_processing': 5,     # File processing operations
-        'broadcast': 3,           # Broadcasting operations
-        'indexing': 8,            # Channel indexing
-        'cache_operations': 25,   # Cache operations
     }
     
     def __init__(self, custom_limits: Optional[Dict[str, int]] = None):
@@ -224,65 +220,3 @@ class SemaphoreManager:
 
 # Global semaphore manager instance
 semaphore_manager = SemaphoreManager()
-
-
-# Convenience decorators for common use cases
-def with_concurrency_limit(domain: str, operation_id: Optional[str] = None):
-    """Decorator to add concurrency limiting to async functions"""
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            async with semaphore_manager.acquire(domain, operation_id):
-                return await func(*args, **kwargs)
-        return wrapper
-    return decorator
-
-
-# Domain-specific decorators
-def telegram_send_limit(func):
-    """Decorator for Telegram send operations"""
-    return with_concurrency_limit('telegram_send')(func)
-
-
-def database_write_limit(func):
-    """Decorator for database write operations"""
-    return with_concurrency_limit('database_write')(func)
-
-
-def file_processing_limit(func):
-    """Decorator for file processing operations"""
-    return with_concurrency_limit('file_processing')(func)
-
-
-@asynccontextmanager
-async def bounded_gather(*awaitables, domain: str = 'general', max_concurrent: Optional[int] = None):
-    """
-    Bounded version of asyncio.gather with concurrency control
-    
-    Args:
-        *awaitables: Coroutines to execute
-        domain: Concurrency domain for tracking
-        max_concurrent: Override default domain limit
-    """
-    if max_concurrent:
-        # Temporarily update domain limit
-        original_limit = semaphore_manager.limits.get(domain, 10)
-        await semaphore_manager.update_limit(domain, max_concurrent)
-    
-    try:
-        # Execute all awaitables with concurrency control
-        async def execute_with_limit(awaitable):
-            async with semaphore_manager.acquire(domain):
-                return await awaitable
-        
-        # Use asyncio.gather with semaphore-wrapped coroutines
-        results = await asyncio.gather(*[
-            execute_with_limit(awaitable) for awaitable in awaitables
-        ], return_exceptions=True)
-        
-        yield results
-        
-    finally:
-        if max_concurrent:
-            # Restore original limit
-            await semaphore_manager.update_limit(domain, original_limit)
