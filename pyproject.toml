@@ -17,7 +17,6 @@ dependencies = [
     "redis",
     "aiohttp",
     "python-dotenv",
-    "backoff",
     "uvloop",
     "psutil",
     "msgpack",

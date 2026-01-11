@@ -3,7 +3,6 @@ import sys
 
 from typing import Optional
 
-import backoff
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, DuplicateKeyError
 
@@ -61,15 +60,17 @@ class DatabaseConnectionPool:
                 else:
                     logger.info(f"Database pool initialized with standard asyncio (pool size: {self._pool_size})")
 
-    @backoff.on_exception(
-        backoff.expo,
-        (ConnectionFailure, ServerSelectionTimeoutError),
-        max_tries=3,
-        max_time=30
-    )
-    async def _test_connection(self) -> None:
+    async def _test_connection(self, max_retries: int = 3) -> None:
         """Test database connection with retry logic"""
-        await self._client.admin.command('ping')
+        for attempt in range(max_retries):
+            try:
+                await self._client.admin.command('ping')
+                return
+            except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Database connection test failed after {max_retries} attempts: {e}")
+                    raise
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
 
     @property
     def database(self) -> AsyncIOMotorDatabase:
