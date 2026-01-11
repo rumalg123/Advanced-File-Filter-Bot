@@ -10,7 +10,7 @@ from pyrogram.types import Message
 from config.settings import settings
 from core.cache.config import CacheTTLConfig
 from core.constants import ProcessingConstants
-from core.utils.validators import normalize_filename_for_search
+from core.utils.validators import normalize_filename_for_search, get_special_channels
 from core.utils.helpers import extract_file_ref
 from core.utils.logger import get_logger
 from repositories.channel import ChannelRepository
@@ -270,15 +270,7 @@ class ChannelHandler:
     async def handle_channel_media(self, client: Client, message: Message):
         """Handle media messages in monitored channels with rate limiting"""
         # Skip special channels
-        special_channels = [
-            self.bot.config.LOG_CHANNEL,
-            self.bot.config.INDEX_REQ_CHANNEL,
-            self.bot.config.REQ_CHANNEL,
-            self.bot.config.DELETE_CHANNEL
-        ]
-        special_channels = {ch for ch in special_channels if ch}
-
-        if message.chat.id in special_channels:
+        if message.chat.id in get_special_channels(self.bot.config):
             return
 
         if message.from_user and message.from_user.is_bot:

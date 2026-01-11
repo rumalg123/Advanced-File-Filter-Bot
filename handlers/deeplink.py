@@ -101,9 +101,7 @@ class DeepLinkHandler(BaseCommandHandler):
     async def _send_filestore_file(self, client: Client, message: Message, encoded: str):
         """Send a file from filestore link - subscription already checked by decorator"""
         user_id = message.from_user.id
-
-        logger.info(f"_send_filestore_file called via deeplink for user {user_id}")
-        logger.info(f"Processing filestore request - User: {user_id}, Encoded: {encoded}")
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
 
         # Decode file identifier
         file_identifier, protect = self.bot.filestore_service.decode_file_identifier(encoded)
@@ -112,18 +110,13 @@ class DeepLinkHandler(BaseCommandHandler):
             await self.safe_reply(message, "❌ Invalid link format.")
             return
 
-        logger.info(f"Decoded file_identifier: {file_identifier}, protect: {protect}")
-
         # Check user access using unified lookup
-        logger.info(f"Calling check_and_grant_access from deeplink for user {user_id}, file: {file_identifier}, increment=True")
-        logger.info(f"ADMINS: {self.bot.config.ADMINS}, DISABLE_PREMIUM: {self.bot.config.DISABLE_PREMIUM}")
         can_access, reason, file = await self.bot.file_service.check_and_grant_access(
             user_id,
             file_identifier,
             increment=True,
-            owner_id=self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+            owner_id=owner_id
         )
-        logger.info(f"check_and_grant_access result: can_access={can_access}, reason={reason}, file={'found' if file else 'not found'}")
 
         if not can_access:
             logger.warning(f"Access denied for user {user_id}: {reason}")
@@ -193,16 +186,13 @@ class DeepLinkHandler(BaseCommandHandler):
             protect = parts[3] == "pbatch" if len(parts) > 3 else False
 
         except Exception as e:
-            logger.debug("Triggered in _send_dstore_files")
             logger.error(f"Failed to decode identifier: {encoded} Error: {e}")
             await self.safe_reply(message, "❌ Invalid link format.")
             return
 
         # Check access
-        can_access, reason = await self.bot.user_repo.can_retrieve_file(
-            user_id,
-            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        )
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
             await message.reply_text(f"❌ {reason}")
@@ -252,10 +242,8 @@ class DeepLinkHandler(BaseCommandHandler):
             return
 
         # Check access for bulk send
-        can_access, reason = await self.bot.user_repo.can_retrieve_file(
-            user_id,
-            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        )
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
             await message.reply_text(f"❌ {reason}")
@@ -354,10 +342,8 @@ class DeepLinkHandler(BaseCommandHandler):
             return
 
         # Check access
-        can_access, reason = await self.bot.user_repo.can_retrieve_file(
-            user_id,
-            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        )
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
             await message.reply_text(f"❌ {reason}")
@@ -386,10 +372,8 @@ class DeepLinkHandler(BaseCommandHandler):
         search_query = validators.sanitize_search_query(key.replace('_', ' '))
 
         # Check access
-        can_access, reason = await self.bot.user_repo.can_retrieve_file(
-            user_id,
-            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        )
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
             await message.reply_text(f"❌ {reason}")

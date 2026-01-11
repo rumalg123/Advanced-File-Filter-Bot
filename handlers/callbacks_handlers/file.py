@@ -56,29 +56,20 @@ class FileCallbackHandler(BaseCommandHandler):
     async def handle_file_callback(self, client: Client, query: CallbackQuery):
         """Handle file request callbacks - redirect to PM from groups"""
         callback_user_id = query.from_user.id
-        logger.info(f"handle_file_callback called for user {callback_user_id}, data: {query.data}")
 
         # Extract file identifier and original user_id
         try:
             parts = query.data.split('#', 2)
-            logger.info(f"Callback data parts after split: {parts}")
             if len(parts) < 2:
                 await query.answer("❌ Invalid callback data", show_alert=True)
                 return
 
             file_identifier = parts[1]
-            if len(parts) >= 3:
-                original_user_id = int(parts[2])
-                logger.info(f"Original user_id from callback: {original_user_id}")
-            else:
-                original_user_id = callback_user_id  # Assume current user
-                logger.info(f"No original_user_id in callback, using current user: {callback_user_id}")
+            original_user_id = int(parts[2]) if len(parts) >= 3 else callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid callback data format: {query.data}, error: {e}")
             await query.answer("❌ Invalid request format", show_alert=True)
             return
-
-        logger.info(f"File identifier extracted: {file_identifier}")
 
         # Check if the callback user is the original requester
         if original_user_id and not is_original_requester(callback_user_id, original_user_id):
@@ -97,7 +88,6 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         # We're in PM now, check subscription
-        logger.info(f"In PM, checking subscription for user {callback_user_id}")
         if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Skip subscription check for admins and auth users
             skip_sub_check = skip_subscription_check(
@@ -131,8 +121,6 @@ class FileCallbackHandler(BaseCommandHandler):
             pass
 
         # Check access
-        logger.info(f"Calling check_and_grant_access for user {callback_user_id}, file: {file_identifier}, increment=True")
-        logger.info(f"ADMINS: {self.bot.config.ADMINS}, DISABLE_PREMIUM: {self.bot.config.DISABLE_PREMIUM}")
         can_access, reason, file = await self.bot.file_service.check_and_grant_access(
             callback_user_id,
             file_identifier,
@@ -194,7 +182,6 @@ class FileCallbackHandler(BaseCommandHandler):
     async def handle_sendall_callback(self, client: Client, query: CallbackQuery):
         """Handle send all files callback - redirect to PM from groups"""
         callback_user_id = query.from_user.id
-        logger.info(f"handle_sendall_callback called for user {callback_user_id}, data: {query.data}")
 
         # Extract search key and original user_id
         try:
@@ -267,21 +254,8 @@ class FileCallbackHandler(BaseCommandHandler):
         cached_data = await self.bot.cache.get(search_key)
         
         if not cached_data:
-            logger.warning(f"Search results expired or not found for key: {search_key}")
-            
-            # Check if the key exists at all
-            key_exists = await self.bot.cache.exists(search_key)
-            logger.debug(f"Cache key exists check for {search_key}: {key_exists}")
-            
-            # Check TTL of the key if it exists
-            if key_exists:
-                ttl = await self.bot.cache.ttl(search_key)
-                logger.debug(f"Cache key TTL for {search_key}: {ttl}")
-            
             await query.answer("❌ Search results expired. Please search again.", show_alert=True)
             return
-        
-        logger.debug(f"Retrieved cached search results for key: {search_key}, files count: {len(cached_data.get('files', []))}")
 
         files_data = cached_data.get('files', [])
         search_query = cached_data.get('query', '')
@@ -291,10 +265,8 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         # Check access for bulk send
-        can_access, reason = await self.bot.user_repo.can_retrieve_file(
-            user_id,
-            self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
-        )
+        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
+        can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
             await query.answer(f"❌ {reason}", show_alert=True)
@@ -302,7 +274,6 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Check if user is admin or owner (they bypass quota) using validators
         user_is_admin = is_admin(user_id, self.bot.config.ADMINS)
-        owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
         user_is_owner = user_id == owner_id
 
         # Get user for premium check
