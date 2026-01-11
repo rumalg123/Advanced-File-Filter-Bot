@@ -270,8 +270,9 @@ class AggregationMixin:
         """Execute aggregation pipeline with memory protection"""
         try:
             collection = await self.collection
-            cursor = collection.aggregate(pipeline)
-            return await cursor.to_list(length=limit)
+            return await self.db_pool.execute_with_retry(
+                collection.aggregate(pipeline).to_list, length=limit
+            )
         except Exception as e:
             logger.error(f"Error in aggregation: {e}")
             return []
@@ -281,7 +282,9 @@ class AggregationMixin:
         try:
             collection = await self.collection
             filter = filter or {}
-            return await collection.distinct(field, filter)
+            return await self.db_pool.execute_with_retry(
+                collection.distinct, field, filter
+            )
         except Exception as e:
             logger.error(f"Error getting distinct values: {e}")
             return []

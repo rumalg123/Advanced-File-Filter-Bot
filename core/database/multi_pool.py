@@ -372,8 +372,10 @@ class MultiDatabaseManager:
                 # Use circuit breaker for find operations
                 async def find_operation():
                     collection = await db_info.pool.get_collection(collection_name)
-                    return await collection.find_one(query)
-                
+                    return await db_info.pool.execute_with_retry(
+                        collection.find_one, query
+                    )
+
                 document = await self._execute_with_circuit_breaker(
                     db_info, "find_file", find_operation
                 )
@@ -410,9 +412,9 @@ class MultiDatabaseManager:
         return total_count
 
     async def _count_in_database(
-        self, 
-        db_info: DatabaseInfo, 
-        collection_name: str, 
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
         query: Dict[str, Any]
     ) -> int:
         """Count documents in a specific database with circuit breaker protection"""
@@ -420,8 +422,10 @@ class MultiDatabaseManager:
             # Use circuit breaker for count operations
             async def count_operation():
                 collection = await db_info.pool.get_collection(collection_name)
-                return await collection.count_documents(query)
-            
+                return await db_info.pool.execute_with_retry(
+                    collection.count_documents, query
+                )
+
             return await self._execute_with_circuit_breaker(
                 db_info, "count_documents", count_operation
             )
@@ -476,9 +480,9 @@ class MultiDatabaseManager:
         return all_results[skip:skip + limit]
 
     async def _get_all_matching_from_database(
-        self, 
-        db_info: DatabaseInfo, 
-        collection_name: str, 
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
         query: Dict[str, Any],
         sort: Optional[List[Tuple[str, int]]] = None
     ) -> List[Dict[str, Any]]:
@@ -486,13 +490,15 @@ class MultiDatabaseManager:
         try:
             collection = await db_info.pool.get_collection(collection_name)
             cursor = collection.find(query)
-            
+
             if sort:
                 cursor = cursor.sort(sort)
-                
+
             # Get ALL matching results (no limit) for proper cross-database sorting
             # We'll apply the overall limit after combining all results
-            return await cursor.to_list(length=None)
+            return await db_info.pool.execute_with_retry(
+                cursor.to_list, length=None
+            )
 
         except Exception as e:
             logger.error(f"Error getting all matching from database {db_info.name}: {e}")
@@ -661,9 +667,11 @@ class MultiDatabaseManager:
                 async def get_stats():
                     stats = await db_info.pool.database.command("dbStats")
                     collection = await db_info.pool.get_collection("media_files")
-                    files_count = await collection.count_documents({})
+                    files_count = await db_info.pool.execute_with_retry(
+                        collection.count_documents, {}
+                    )
                     return stats, files_count
-                
+
                 stats, files_count = await self._execute_with_circuit_breaker(
                     db_info, "get_stats", get_stats
                 )

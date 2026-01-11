@@ -91,12 +91,13 @@ class BatchOptimizations:
         ]
         
         try:
-            cursor = collection.aggregate(pipeline)
-            results = await cursor.to_list(length=None)
-            
+            results = await self.db_pool.execute_with_retry(
+                collection.aggregate(pipeline).to_list, length=None
+            )
+
             status_map = {}
             expired_users = []
-            
+
             for result in results:
                 user_id = result["_id"]
                 computed = result["computed_status"]
@@ -156,9 +157,10 @@ class BatchOptimizations:
         ]
         
         try:
-            cursor = collection.aggregate(pipeline)
-            results = await cursor.to_list(length=None)
-            
+            results = await self.db_pool.execute_with_retry(
+                collection.aggregate(pipeline).to_list, length=None
+            )
+
             # Build lookup map
             existing_map = {}
             for result in results:
@@ -247,9 +249,10 @@ class BatchOptimizations:
         ]
         
         try:
-            cursor = collection.aggregate(pipeline)
-            results = await cursor.to_list(length=None)
-            
+            results = await self.db_pool.execute_with_retry(
+                collection.aggregate(pipeline).to_list, length=None
+            )
+
             activity_map = {}
             for result in results:
                 user_id = result["_id"]
@@ -290,7 +293,9 @@ class BatchOptimizations:
                 ) for user_id in user_ids
             ]
             
-            result = await collection.bulk_write(operations, ordered=False)
+            result = await self.db_pool.execute_with_retry(
+                collection.bulk_write, operations, ordered=False
+            )
             logger.info(f"Batch expired {result.modified_count} premium users")
             return result.modified_count > 0
             

@@ -50,7 +50,9 @@ class FilterRepository(BaseRepository[Filter]):
 
             # Create text index
             collection = self._collections[collection_name]
-            await collection.create_index([('text', 'text')])
+            await self.db_pool.execute_with_retry(
+                collection.create_index, [('text', 'text')]
+            )
 
         return self._collections[collection_name]
 
