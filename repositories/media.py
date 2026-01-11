@@ -251,17 +251,21 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         return result
 
     async def delete(self, id: Any) -> bool:
-        """Delete entity"""
+        """Delete entity and invalidate all related caches"""
         try:
+            # Find file first to get all identifiers for cache invalidation
+            file = await self.find_file(id)
+            if not file:
+                return False
+
             collection = await self.collection
 
             result = await self.db_pool.execute_with_retry(
                 collection.delete_one, {"file_unique_id": id}
             )
             if result.deleted_count > 0:
-                # Clear all possible cache entries
-                cache_key = self._get_cache_key(id)
-                await self.cache.delete(cache_key)
+                # Invalidate all file-related caches
+                await self.cache_invalidator.invalidate_file_cache(file)
                 await self.cache_invalidator.invalidate_all_search_results()
                 return True
             return False

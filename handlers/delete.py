@@ -5,7 +5,6 @@ from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from core.cache.config import CacheKeyGenerator
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
@@ -332,41 +331,13 @@ class DeleteHandler(BaseHandler):
     async def _delete_file(self, file_unique_id: str) -> bool:
         """Delete a single file from database"""
         try:
-            # Find file first to get all identifiers
-            file = await self.bot.media_repo.find_file(file_unique_id)
-            if not file:
-                logger.debug(f"File not found: {file_unique_id}")
-                return False
-
-            # Delete from database
-            deleted = await self.bot.media_repo.delete(file.file_unique_id)
-
-            # Clear cache entries if deletion successful
+            # Repository handles finding, deleting, and cache invalidation
+            deleted = await self.bot.media_repo.delete(file_unique_id)
             if deleted:
-                # Clear all related cache entries
-                cache_keys_cleared = 0
-
-                if file.file_id:
-                    await self.bot.cache.delete(CacheKeyGenerator.media(file.file_id))
-                    cache_keys_cleared += 1
-
-                if file.file_ref:
-                    await self.bot.cache.delete(CacheKeyGenerator.media(file.file_ref))
-                    cache_keys_cleared += 1
-
-                if file.file_unique_id:
-                    await self.bot.cache.delete(CacheKeyGenerator.media(file.file_unique_id))
-                    cache_keys_cleared += 1
-
-                # Clear search-related caches
-                await self.bot.cache.delete_pattern("search:*")
-                await self.bot.cache.delete_pattern("search_results_*")
-                await self.bot.cache.delete(CacheKeyGenerator.file_stats())
-
-                logger.info(f"Deleted file {file_unique_id} and cleared {cache_keys_cleared} cache keys")
-
+                logger.info(f"Deleted file: {file_unique_id}")
+            else:
+                logger.debug(f"File not found: {file_unique_id}")
             return deleted
-
         except Exception as e:
             logger.error(f"Error deleting file {file_unique_id}: {e}", exc_info=True)
             return False

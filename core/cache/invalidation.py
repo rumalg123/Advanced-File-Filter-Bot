@@ -106,6 +106,11 @@ class CacheInvalidator:
             if file.file_id:
                 cache_key = CacheKeyGenerator.media(file.file_id)
                 await self.cache.delete(cache_key)
+            if hasattr(file, 'file_ref') and file.file_ref:
+                cache_key = CacheKeyGenerator.media(file.file_ref)
+                await self.cache.delete(cache_key)
+            # Invalidate file stats since file count changed
+            await self.cache.delete(CacheKeyGenerator.file_stats())
             return True
         except Exception as e:
             logger.error(f"Failed to invalidate file cache: {e}")
