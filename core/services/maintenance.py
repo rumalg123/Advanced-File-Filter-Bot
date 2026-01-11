@@ -94,20 +94,22 @@ class MaintenanceService:
         """Get MongoDB database storage statistics"""
         try:
             # Access database through media repository's db_pool
-            db = self.media_repo.db_pool.database
-            
+            db_pool = self.media_repo.db_pool
+            db = db_pool.database
+
             # Get database stats using MongoDB's stats command
-            db_stats = await db.command("dbStats")
-            
+            db_stats = await db_pool.execute_with_retry(db.command, "dbStats")
+
             # Get collection stats for main collections
             collections_stats = {}
             main_collections = ['media_files', 'users', 'indexed_channels', 'connections', 'filters']
-            
+
             for collection_name in main_collections:
                 try:
-                    collection = db[collection_name]
                     # Get collection stats
-                    coll_stats = await db.command("collStats", collection_name)
+                    coll_stats = await db_pool.execute_with_retry(
+                        db.command, "collStats", collection_name
+                    )
                     collections_stats[collection_name] = {
                         'count': coll_stats.get('count', 0),
                         'size': coll_stats.get('size', 0),  # Data size in bytes

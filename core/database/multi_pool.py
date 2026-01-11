@@ -665,7 +665,9 @@ class MultiDatabaseManager:
             try:
                 # Use circuit breaker for stats operations
                 async def get_stats():
-                    stats = await db_info.pool.database.command("dbStats")
+                    stats = await db_info.pool.execute_with_retry(
+                        db_info.pool.database.command, "dbStats"
+                    )
                     collection = await db_info.pool.get_collection("media_files")
                     files_count = await db_info.pool.execute_with_retry(
                         collection.count_documents, {}

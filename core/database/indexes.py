@@ -88,19 +88,21 @@ class IndexOptimizer:
         
         for index in indexes:
             try:
-                await collection.create_index(**index)
+                keys = index.pop('keys')
+                await self.db_pool.execute_with_retry(
+                    collection.create_index, keys, **index
+                )
                 results[f"media_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on media_files")
             except Exception as e:
                 error_msg = str(e)
                 if "Index already exists" in error_msg or "IndexOptionsConflict" in error_msg:
-                    # Index exists with different name - this is OK
                     logger.debug(f"Index {index['name']} already exists with different name - skipping")
-                    results[f"media_{index['name']}"] = True  # Mark as successful since index exists
+                    results[f"media_{index['name']}"] = True
                 else:
                     logger.error(f"Failed to create index {index['name']}: {e}")
                     results[f"media_{index['name']}"] = False
-                
+
         return results
     
     async def _create_user_indexes(self) -> Dict[str, bool]:
@@ -154,7 +156,10 @@ class IndexOptimizer:
         
         for index in indexes:
             try:
-                await collection.create_index(**index)
+                keys = index.pop('keys')
+                await self.db_pool.execute_with_retry(
+                    collection.create_index, keys, **index
+                )
                 results[f"users_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on users")
             except Exception as e:
@@ -165,9 +170,9 @@ class IndexOptimizer:
                 else:
                     logger.error(f"Failed to create index {index['name']}: {e}")
                     results[f"users_{index['name']}"] = False
-                
+
         return results
-    
+
     async def _create_connection_indexes(self) -> Dict[str, bool]:
         """Create indexes for connections collection"""
         results = {}
@@ -198,7 +203,10 @@ class IndexOptimizer:
         
         for index in indexes:
             try:
-                await collection.create_index(**index)
+                keys = index.pop('keys')
+                await self.db_pool.execute_with_retry(
+                    collection.create_index, keys, **index
+                )
                 results[f"connections_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on connections")
             except Exception as e:
@@ -209,9 +217,9 @@ class IndexOptimizer:
                 else:
                     logger.error(f"Failed to create index {index['name']}: {e}")
                     results[f"connections_{index['name']}"] = False
-                
+
         return results
-    
+
     async def _create_filter_indexes(self) -> Dict[str, bool]:
         """Create indexes for filters collection"""
         results = {}
@@ -235,7 +243,10 @@ class IndexOptimizer:
         
         for index in indexes:
             try:
-                await collection.create_index(**index)
+                keys = index.pop('keys')
+                await self.db_pool.execute_with_retry(
+                    collection.create_index, keys, **index
+                )
                 results[f"filters_{index['name']}"] = True
                 logger.info(f"Created index: {index['name']} on filters")
             except Exception as e:

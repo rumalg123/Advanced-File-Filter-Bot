@@ -249,7 +249,9 @@ class BaseRepository(ABC, Generic[T]):
         """Create index on collection"""
         try:
             collection = await self.collection
-            await collection.create_index(keys, **kwargs)
+            await self.db_pool.execute_with_retry(
+                collection.create_index, keys, **kwargs
+            )
             return True
         except Exception as e:
             logger.error(f"Error creating index: {e}")
