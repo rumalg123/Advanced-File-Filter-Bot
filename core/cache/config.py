@@ -117,6 +117,13 @@ class CacheKeyGenerator:
         return CacheKeyGenerator._get_cached_key('search', normalized_query, file_type, offset, limit, use_caption)
 
     @staticmethod
+    def search_results_versioned(query: str, file_type: Optional[str], offset: int,
+                                  limit: int, use_caption: bool, cache_version: int) -> str:
+        """Generate versioned search results cache key"""
+        base_key = CacheKeyGenerator.search_results(query, file_type, offset, limit, use_caption)
+        return f"{base_key}:v{cache_version}"
+
+    @staticmethod
     def file_stats() -> str:
         return "file_stats"
 
@@ -138,6 +145,11 @@ class CacheKeyGenerator:
     @staticmethod
     def filter(group_id: str, text: str) -> str:
         return f"filter:{group_id}:{text}"
+
+    @staticmethod
+    def filter_generic(identifier: str) -> str:
+        """Generic filter key for non-standard identifiers"""
+        return f"filter:{identifier}"
 
     @staticmethod
     def filter_list(group_id: str) -> str:
@@ -181,10 +193,68 @@ class CacheKeyGenerator:
     def batch_link(batch_id: str) -> str:
         return f"batch_link:{batch_id}"
 
+    # Delete operation keys
+    @staticmethod
+    def deleteall_pending(user_id: int) -> str:
+        return f"deleteall_pending:{user_id}"
+
+    # Premium status keys
+    @staticmethod
+    def premium_status(user_id: int) -> str:
+        return f"premium_status:{user_id}"
+
+    # Broadcast keys
+    @staticmethod
+    def broadcast_state() -> str:
+        return "broadcast:state"
+
+    # Session keys
+    @staticmethod
+    def session(session_type: str, user_id: int, session_id: str = None) -> str:
+        if session_id:
+            return f"session:{session_type}:{user_id}:{session_id}"
+        return f"session:{session_type}:{user_id}"
+
+    # Token bucket keys (for distributed rate limiting)
+    @staticmethod
+    def token_bucket(key: str) -> str:
+        return f"token_bucket:{key}"
+
+    # Subscription session keys
+    @staticmethod
+    def subscription_session(session_id: str) -> str:
+        return f"checksub_session:{session_id}"
+
 
 # Cache patterns to identify related keys for bulk operations
 class CachePatterns:
     """Patterns for bulk cache operations"""
+
+    # Pattern constants
+    ALL_SESSIONS = "session:*"
+    ALL_RATE_LIMITS = "rate_limit:*"
+    ALL_SEARCH_RESULTS = "search_results_*"
+    ALL_FILTERS = "filter:*"
+    ALL_FILTER_LISTS = "filters_list:*"
+    ALL_USERS = "user:*"
+    ALL_CHANNELS = "channel:*"
+    ALL_SUBSCRIPTIONS = "subscription:*"
+    ALL_FILESTORE = "filestore:*"
+    ALL_SEARCH_CACHE = "search:*"
+    ALL_MEDIA = "media:*"
+    ALL_CONNECTIONS = "connections:*"
+    ALL_BOT_SETTINGS = "bot_setting:*"
+    ANY_SESSION = "*session*"
+
+    @staticmethod
+    def rate_limit_pattern(user_id: int) -> str:
+        """Pattern for all rate limits for a user"""
+        return f"rate_limit:{user_id}:*"
+
+    @staticmethod
+    def search_results_pattern(user_id: int) -> str:
+        """Pattern for all search results for a user"""
+        return f"search_results_{user_id}_*"
 
     @staticmethod
     def user_related(user_id: int) -> List[str]:
@@ -192,8 +262,8 @@ class CachePatterns:
         return [
             CacheKeyGenerator.user(user_id),
             CacheKeyGenerator.user_connections(str(user_id)),
-            f"rate_limit:{user_id}:*",
-            f"search_results_{user_id}_*",
-            f"recent_settings_edit:{user_id}"
+            CachePatterns.rate_limit_pattern(user_id),
+            CachePatterns.search_results_pattern(user_id),
+            CacheKeyGenerator.recent_settings_edit(user_id)
         ]
 

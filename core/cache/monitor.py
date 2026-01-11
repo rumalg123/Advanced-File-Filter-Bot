@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Any
 
+from core.cache.config import CacheKeyGenerator, CachePatterns
 from core.cache.redis_cache import CacheManager
 from core.cache.serialization import get_serialization_stats, estimate_memory_usage
 from core.utils.logger import get_logger
@@ -72,16 +73,16 @@ class CacheMonitor:
     async def _count_keys_by_pattern(self) -> Dict[str, int]:
         """Count keys by pattern"""
         patterns = {
-            "media_files": "media:*",
-            "users": "user:*",
-            "connections": "connections:*",
-            "active_channels": "active_channels_list",
-            "filters": "filter:*",
-            "filter_lists": "filters_list:*",
-            "search_results": "search:*",
-            "rate_limits": "rate_limit:*",
-            "bot_settings": "bot_setting:*",
-            "sessions": "*session*"
+            "media_files": CachePatterns.ALL_MEDIA,
+            "users": CachePatterns.ALL_USERS,
+            "connections": CachePatterns.ALL_CONNECTIONS,
+            "active_channels": CacheKeyGenerator.active_channels(),
+            "filters": CachePatterns.ALL_FILTERS,
+            "filter_lists": CachePatterns.ALL_FILTER_LISTS,
+            "search_results": CachePatterns.ALL_SEARCH_CACHE,
+            "rate_limits": CachePatterns.ALL_RATE_LIMITS,
+            "bot_settings": CachePatterns.ALL_BOT_SETTINGS,
+            "sessions": CachePatterns.ANY_SESSION
         }
 
         counts = {}
@@ -99,14 +100,15 @@ class CacheMonitor:
 
         # Check for media files with multiple cache entries
         media_keys = []
-        async for key in self.cache.redis.scan_iter(match="media:*"):
+        async for key in self.cache.redis.scan_iter(match=CachePatterns.ALL_MEDIA):
             media_keys.append(key.decode())
 
         # Group by potential duplicates
         file_cache_map = {}  # file_id -> list of cache keys
+        media_prefix = "media:"
 
         for key in media_keys:
-            data = await self.cache.get(key.replace("media:", ""))
+            data = await self.cache.get(key.replace(media_prefix, ""))
             if data and isinstance(data, dict):
                 file_id = data.get('file_id') or data.get('_id')
                 if file_id:

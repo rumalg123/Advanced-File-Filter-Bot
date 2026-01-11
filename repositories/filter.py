@@ -92,7 +92,7 @@ class FilterRepository(BaseRepository[Filter]):
         if isinstance(identifier, tuple) and len(identifier) == 2:
             group_id, text = identifier
             return CacheKeyGenerator.filter(group_id, text)
-        return f"filter:{identifier}"
+        return CacheKeyGenerator.filter_generic(str(identifier))
 
     async def add_filter(self, group_id: str, text: str, reply: str,
                          btn: str, file: str, alert: str = None) -> bool:

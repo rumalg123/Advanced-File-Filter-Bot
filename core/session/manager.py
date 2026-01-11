@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Optional, Dict, Any, List
 
-from core.cache.config import CacheTTLConfig
+from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -115,10 +115,7 @@ class UnifiedSessionManager:
     
     def _generate_cache_key(self, session_type: SessionType, user_id: int, session_id: Optional[str] = None) -> str:
         """Generate cache key for session"""
-        if session_id:
-            return f"session:{session_type.value}:{user_id}:{session_id}"
-        else:
-            return f"session:{session_type.value}:{user_id}"
+        return CacheKeyGenerator.session(session_type.value, user_id, session_id)
     
     async def create_session(
         self,

@@ -267,7 +267,7 @@ def cache_premium_status(ttl: int = 600) -> Callable:
                 # Can't cache without user ID, just call the function
                 return await func(self, user, *args, **kwargs)
 
-            cache_key = f"premium_status:{user_id}"
+            cache_key = CacheKeyGenerator.premium_status(user_id)
 
             # Try to get from cache
             try:

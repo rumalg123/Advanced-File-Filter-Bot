@@ -369,7 +369,7 @@ class MediaSearchBot(Client):
             command_handler = self.handler_manager.handler_instances.get('command')
             if command_handler and hasattr(command_handler, 'admin_handler'):
                 admin_handler = command_handler.admin_handler
-                broadcast_state_key = "broadcast:state"
+                broadcast_state_key = CacheKeyGenerator.broadcast_state()
                 
                 # Check if there's a persistent broadcast state
                 state = await self.cache.get(broadcast_state_key)

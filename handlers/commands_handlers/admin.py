@@ -12,6 +12,7 @@ from pyrogram import Client, filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
+from core.cache.config import CacheKeyGenerator
 from core.cache.monitor import CacheMonitor
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
@@ -31,7 +32,7 @@ class AdminCommandHandler(BaseCommandHandler):
         super().__init__(*args, **kwargs)
         self.broadcasting_in_progress = False
         self.broadcast_task = None
-        self.broadcast_state_key = "broadcast:state"
+        self.broadcast_state_key = CacheKeyGenerator.broadcast_state()
         
     async def _get_broadcast_state(self):
         """Get broadcast state from Redis"""

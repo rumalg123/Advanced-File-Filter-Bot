@@ -126,7 +126,7 @@ class DistributedRateLimiter:
         now = time.time()
 
         # Get current bucket state
-        bucket_key = f"token_bucket:{key}"
+        bucket_key = CacheKeyGenerator.token_bucket(key)
         bucket_data = await self.cache.get(bucket_key)
 
         if bucket_data:

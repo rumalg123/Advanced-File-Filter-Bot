@@ -5,6 +5,7 @@ from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
+from core.cache.config import CacheKeyGenerator
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
@@ -197,7 +198,7 @@ class DeleteHandler(BaseHandler):
         user_id = message.from_user.id
 
         # Store pending deletion in cache for callback handler
-        cache_key = f"deleteall_pending:{user_id}"
+        cache_key = CacheKeyGenerator.deleteall_pending(user_id)
         await self.bot.cache.set(cache_key, keyword, expire=60)  # 60 second TTL
 
         # Confirmation message with buttons
@@ -230,7 +231,7 @@ class DeleteHandler(BaseHandler):
             await callback_query.answer("❌ You cannot interact with this!", show_alert=True)
             return
 
-        cache_key = f"deleteall_pending:{original_user_id}"
+        cache_key = CacheKeyGenerator.deleteall_pending(original_user_id)
         keyword = await self.bot.cache.get(cache_key)
 
         if action == "deleteall_cancel":

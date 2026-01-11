@@ -398,15 +398,15 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
         # Generate versioned cache key
         normalized_query = normalize_query(query)
-        base_cache_key = CacheKeyGenerator.search_results(
+        # Include version in cache key - when version changes, old keys become stale
+        cache_key = CacheKeyGenerator.search_results_versioned(
             query,
             file_type.value if file_type else None,
             offset,
             limit,
-            use_caption
+            use_caption,
+            cache_version
         )
-        # Include version in cache key - when version changes, old keys become stale
-        cache_key = f"{base_cache_key}:v{cache_version}"
 
         cached = await self.cache.get(cache_key)
         if cached:

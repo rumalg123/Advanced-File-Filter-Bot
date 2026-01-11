@@ -75,7 +75,7 @@ class CacheInvalidator:
     async def invalidate_all_users_cache(self) -> bool:
         """Invalidate all user caches (for bulk operations like daily reset)"""
         try:
-            await self.cache.delete_pattern("user:*")
+            await self.cache.delete_pattern(CachePatterns.ALL_USERS)
             await self.cache.delete(CacheKeyGenerator.banned_users())
             return True
         except Exception as e:
@@ -109,7 +109,7 @@ class CacheInvalidator:
     async def invalidate_channels_cache(self) -> bool:
         """Invalidate channels list cache"""
         try:
-            await self.cache.delete("active_channels_list")
+            await self.cache.delete(CacheKeyGenerator.active_channels())
             return True
         except Exception as e:
             logger.error(f"Failed to invalidate channels cache: {e}")
@@ -152,18 +152,18 @@ class CacheInvalidator:
         """
         # Mapping of settings to cache patterns they affect
         setting_cache_map = {
-            'ADMINS': ['user:*', 'banned_users'],
-            'AUTH_CHANNEL': ['subscription:*'],
-            'AUTH_GROUPS': ['subscription:*'],
-            'CHANNELS': ['active_channels_list', 'channel:*'],
-            'MAX_BTN_SIZE': ['search:*'],
-            'USE_CAPTION_FILTER': ['search:*'],
-            'NON_PREMIUM_DAILY_LIMIT': ['user:*'],
-            'PREMIUM_DURATION_DAYS': ['user:*'],
-            'MESSAGE_DELETE_SECONDS': ['search:*'],
-            'DISABLE_FILTER': ['filter:*', 'filters_list:*'],
-            'DISABLE_PREMIUM': ['user:*'],
-            'FILE_STORE_CHANNEL': ['filestore:*'],
+            'ADMINS': [CachePatterns.ALL_USERS, CacheKeyGenerator.banned_users()],
+            'AUTH_CHANNEL': [CachePatterns.ALL_SUBSCRIPTIONS],
+            'AUTH_GROUPS': [CachePatterns.ALL_SUBSCRIPTIONS],
+            'CHANNELS': [CacheKeyGenerator.active_channels(), CachePatterns.ALL_CHANNELS],
+            'MAX_BTN_SIZE': [CachePatterns.ALL_SEARCH_CACHE],
+            'USE_CAPTION_FILTER': [CachePatterns.ALL_SEARCH_CACHE],
+            'NON_PREMIUM_DAILY_LIMIT': [CachePatterns.ALL_USERS],
+            'PREMIUM_DURATION_DAYS': [CachePatterns.ALL_USERS],
+            'MESSAGE_DELETE_SECONDS': [CachePatterns.ALL_SEARCH_CACHE],
+            'DISABLE_FILTER': [CachePatterns.ALL_FILTERS, CachePatterns.ALL_FILTER_LISTS],
+            'DISABLE_PREMIUM': [CachePatterns.ALL_USERS],
+            'FILE_STORE_CHANNEL': [CachePatterns.ALL_FILESTORE],
         }
 
         try:
@@ -197,8 +197,8 @@ class CacheInvalidator:
             if group_id:
                 await self.cache.delete(CacheKeyGenerator.filter_list(group_id))
             else:
-                await self.cache.delete_pattern("filter:*")
-                await self.cache.delete_pattern("filters_list:*")
+                await self.cache.delete_pattern(CachePatterns.ALL_FILTERS)
+                await self.cache.delete_pattern(CachePatterns.ALL_FILTER_LISTS)
             return True
         except Exception as e:
             logger.error(f"Failed to invalidate filter cache: {e}")
@@ -247,7 +247,7 @@ class CacheInvalidator:
     async def invalidate_search_sessions(self) -> bool:
         """Invalidate all search session caches"""
         try:
-            await self.cache.delete_pattern("search_results_*")
+            await self.cache.delete_pattern(CachePatterns.ALL_SEARCH_RESULTS)
             return True
         except Exception as e:
             logger.error(f"Failed to invalidate search sessions: {e}")
@@ -266,7 +266,7 @@ class CacheInvalidator:
     async def invalidate_all_sessions(self) -> bool:
         """Invalidate all session caches"""
         try:
-            await self.cache.delete_pattern("session:*")
+            await self.cache.delete_pattern(CachePatterns.ALL_SESSIONS)
             return True
         except Exception as e:
             logger.error(f"Failed to invalidate all sessions: {e}")
@@ -299,7 +299,7 @@ class CacheInvalidator:
     async def invalidate_deleteall_pending(self, user_id: int) -> bool:
         """Invalidate deleteall pending cache for a user"""
         try:
-            cache_key = f"deleteall_pending:{user_id}"
+            cache_key = CacheKeyGenerator.deleteall_pending(user_id)
             await self.cache.delete(cache_key)
             return True
         except Exception as e:
