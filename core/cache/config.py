@@ -215,11 +215,6 @@ class CacheKeyGenerator:
             return f"session:{session_type}:{user_id}:{session_id}"
         return f"session:{session_type}:{user_id}"
 
-    # Token bucket keys (for distributed rate limiting)
-    @staticmethod
-    def token_bucket(key: str) -> str:
-        return f"token_bucket:{key}"
-
     # Subscription session keys
     @staticmethod
     def subscription_session(session_id: str) -> str:

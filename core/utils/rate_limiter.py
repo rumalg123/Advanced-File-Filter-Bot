@@ -51,10 +51,10 @@ class RateLimiter:
         key = CacheKeyGenerator.rate_limit(user_id, action)
         cooldown_key = CacheKeyGenerator.rate_limit_cooldown(user_id, action)
 
-        # Check if user is in cooldown
-        cooldown = await self.cache.get(cooldown_key)
-        if cooldown:
-            return False, int(cooldown)
+        # Check if user is in cooldown - use TTL to get remaining time
+        cooldown_ttl = await self.cache.ttl(cooldown_key)
+        if cooldown_ttl and cooldown_ttl > 0:
+            return False, cooldown_ttl
 
         # ATOMIC: Increment first, then check value
         # This prevents race conditions where multiple requests pass the check
@@ -111,50 +111,6 @@ class RateLimiter:
             return wrapper
 
         return decorator
-
-
-class DistributedRateLimiter:
-    """Distributed rate limiter using Redis for multi-instance deployments"""
-
-    def __init__(self, cache_manager):
-        self.cache = cache_manager
-
-    async def acquire_token(
-            self,
-            key: str,
-            refill_rate: float,
-            capacity: int
-    ) -> bool:
-        """
-        Token bucket algorithm implementation
-        """
-        now = time.time()
-
-        # Get current bucket state
-        bucket_key = CacheKeyGenerator.token_bucket(key)
-        bucket_data = await self.cache.get(bucket_key)
-
-        if bucket_data:
-            tokens, last_refill = bucket_data['tokens'], bucket_data['last_refill']
-        else:
-            tokens, last_refill = capacity, now
-
-        # Calculate tokens to add
-        time_passed = now - last_refill
-        tokens_to_add = time_passed * refill_rate
-        tokens = min(capacity, tokens + tokens_to_add)
-
-        if tokens >= 1:
-            # Consume a token
-            tokens -= 1
-            await self.cache.set(
-                bucket_key,
-                {'tokens': tokens, 'last_refill': now},
-                expire=CacheTTLConfig.RATE_LIMIT_COOLDOWN
-            )
-            return True
-
-        return False
 
 
 class CircuitBreaker:
