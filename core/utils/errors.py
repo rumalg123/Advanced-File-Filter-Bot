@@ -174,27 +174,3 @@ ERRORS = {
         "An internal error occurred. Please try again."
     )
 }
-
-
-def is_channel_access_error(exception: Exception) -> bool:
-    """
-    Check if an exception indicates channel access issues.
-
-    Use this utility function instead of inline string checking
-    to standardize error detection across handlers.
-
-    Args:
-        exception: The exception to check
-
-    Returns:
-        True if the exception indicates channel is private or not accessible
-    """
-    error_msg = str(exception).lower()
-    return any(pattern in error_msg for pattern in [
-        "channel_private",
-        "chat not found",
-        "chat_admin_required",
-        "user_not_participant",
-        "channel_invalid",
-        "peer_id_invalid"
-    ])

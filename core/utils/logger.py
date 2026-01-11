@@ -152,7 +152,7 @@ class CentralizedLogger:
 _logger_instance = CentralizedLogger()
 
 
-# Convenience functions for easy usage
+# Convenience function for easy usage
 def get_logger(name: str = None) -> logging.Logger:
     """Get a logger instance"""
     if name is None:
@@ -163,26 +163,6 @@ def get_logger(name: str = None) -> logging.Logger:
         name = module.__name__ if module else __name__
 
     return _logger_instance.get_logger(name)
-
-
-def setup_logging():
-    """Setup centralized logging - called once at startup"""
-    return _logger_instance
-
-
-def set_log_level(level: str):
-    """Set global logging level"""
-    _logger_instance.set_level(level)
-
-
-def log_system_info():
-    """Log system information"""
-    _logger_instance.log_system_info()
-
-
-def log_config_info(config):
-    """Log configuration information"""
-    _logger_instance.log_config_info(config)
 
 
 # Module-level logger for this file

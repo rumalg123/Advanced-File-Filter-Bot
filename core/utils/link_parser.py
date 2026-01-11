@@ -166,61 +166,10 @@ class TelegramLinkParser:
         """Validate username format according to Telegram rules"""
         if not username or len(username) < 5 or len(username) > 32:
             return False
-        
+
         # Username must start with letter
         if not username[0].isalpha():
             return False
-        
+
         # Username can contain letters, digits, and underscores
         return all(c.isalnum() or c == '_' for c in username)
-    
-    @classmethod
-    def normalize_link(cls, link: str) -> str:
-        """Normalize a Telegram link to standard format"""
-        parsed = cls.parse_link(link)
-        if not parsed:
-            return link
-        
-        if parsed.is_private_channel:
-            return f"https://t.me/c/{parsed.chat_identifier}/{parsed.message_id}"
-        else:
-            return f"https://t.me/{parsed.chat_identifier}/{parsed.message_id}"
-
-
-# Validation decorator for command handlers
-def validate_batch_links(first_link_param: str = "first_link", second_link_param: str = "second_link"):
-    """
-    Decorator to validate batch link parameters in command handlers
-    
-    Args:
-        first_link_param: Name of first link parameter
-        second_link_param: Name of second link parameter
-    """
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            # Extract links from kwargs or positional args
-            first_link = kwargs.get(first_link_param)
-            second_link = kwargs.get(second_link_param)
-            
-            # Try to get from message if not in kwargs
-            if not first_link or not second_link:
-                if len(args) >= 3 and hasattr(args[2], 'text'):  # Assume message is 3rd arg
-                    parts = args[2].text.strip().split()
-                    if len(parts) >= 3:
-                        first_link = parts[1]
-                        second_link = parts[2]
-            
-            if not first_link or not second_link:
-                return await func(*args, **kwargs)
-            
-            # Parse and validate
-            parsed_links = TelegramLinkParser.parse_link_pair(first_link, second_link)
-            if not parsed_links:
-                # Invalid links - let the handler decide how to respond
-                return await func(*args, **kwargs)
-            
-            # Add parsed links to kwargs
-            kwargs['_parsed_links'] = parsed_links
-            return await func(*args, **kwargs)
-        return wrapper
-    return decorator

@@ -30,25 +30,6 @@ def normalize_query(query: str) -> str:
     return query
 
 
-def parse_datetime_fields(data: Dict[str, Any], *fields: str) -> None:
-    """
-    Parse datetime fields from ISO format strings in-place.
-
-    This is a reusable utility to eliminate duplicate datetime parsing code
-    across repositories.
-
-    Args:
-        data: Dictionary containing the data
-        *fields: Field names to parse as datetime
-
-    Example:
-        parse_datetime_fields(data, 'created_at', 'updated_at', 'expires_at')
-    """
-    for field in fields:
-        if data.get(field) and isinstance(data[field], str):
-            data[field] = datetime.fromisoformat(data[field])
-
-
 class MessageProxy:
     """
     A proxy class for creating message-like objects from callback queries.
