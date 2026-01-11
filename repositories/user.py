@@ -824,7 +824,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return (
                 False,
                 "Only premium users can use this feature. Use /plans to see available plans.",
-                True
+                False
             )
 
         # Reset daily count if new day
