@@ -29,6 +29,8 @@ class BaseRepository(ABC, Generic[T]):
         self._collection = None
         self._collection_lock = asyncio.Lock()
         self.ttl = CacheTTLConfig()
+        from core.cache.invalidation import CacheInvalidator
+        self._base_cache_invalidator = CacheInvalidator(cache_manager)
 
     async def get_collection(self):
         """Get collection with lazy initialization (thread-safe)"""
@@ -140,7 +142,7 @@ class BaseRepository(ABC, Generic[T]):
 
             # Invalidate cache
             cache_key = self._get_cache_key(data.get('_id'))
-            await self.cache.delete(cache_key)
+            await self._base_cache_invalidator.invalidate_cache_key(cache_key)
 
             return True
         except DuplicateKeyError as e:
@@ -169,7 +171,7 @@ class BaseRepository(ABC, Generic[T]):
 
             # Invalidate cache
             cache_key = self._get_cache_key(id)
-            await self.cache.delete(cache_key)
+            await self._base_cache_invalidator.invalidate_cache_key(cache_key)
 
             return result.modified_count > 0 or (upsert and result.upserted_id)
         except Exception as e:
@@ -191,15 +193,15 @@ class BaseRepository(ABC, Generic[T]):
             if result.deleted_count > 0:
                 # Clear all possible cache entries
                 cache_key = self._get_cache_key(id)
-                await self.cache.delete(cache_key)
+                await self._base_cache_invalidator.invalidate_cache_key(cache_key)
 
                 # For MediaRepository, also clear file_ref cache
                 if hasattr(entity, 'file_ref') and entity.file_ref:
                     ref_cache_key = self._get_cache_key(entity.file_ref)
-                    await self.cache.delete(ref_cache_key)
+                    await self._base_cache_invalidator.invalidate_cache_key(ref_cache_key)
                 if hasattr(entity, 'file_unique_id') and entity.file_unique_id:
                     unique_id = self._get_cache_key(entity.file_unique_id)
-                    await self.cache.delete(unique_id)
+                    await self._base_cache_invalidator.invalidate_cache_key(unique_id)
                 return True
             return False
         except Exception as e:

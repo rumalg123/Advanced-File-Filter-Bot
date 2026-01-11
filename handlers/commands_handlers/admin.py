@@ -53,7 +53,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 await self.bot.cache.set(self.broadcast_state_key, "active", expire=3600)  # 1 hour TTL
                 logger.info("Broadcast state set to ACTIVE")
             else:
-                await self.bot.cache.delete(self.broadcast_state_key)
+                await self.bot.cache_invalidator.invalidate_broadcast_state(self.broadcast_state_key)
                 logger.info("Broadcast state cleared")
             self.broadcasting_in_progress = active
         except Exception as e:

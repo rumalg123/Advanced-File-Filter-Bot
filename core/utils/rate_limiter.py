@@ -25,6 +25,8 @@ class RateLimiter:
     def __init__(self, cache_manager):
         self.cache = cache_manager
         self.ttl = CacheTTLConfig()
+        from core.cache.invalidation import CacheInvalidator
+        self.cache_invalidator = CacheInvalidator(cache_manager)
         self.configs: Dict[str, RateLimitConfig] = {
             'search': RateLimitConfig(max_requests=30, time_window=self.ttl.RATE_LIMIT_WINDOW),
             'file_request': RateLimitConfig(max_requests=10, time_window=60),
@@ -76,10 +78,7 @@ class RateLimiter:
 
     async def reset_rate_limit(self, user_id: int, action: str) -> None:
         """Reset rate limit for a user and action"""
-        key = CacheKeyGenerator.rate_limit(user_id, action)
-        cooldown_key = CacheKeyGenerator.rate_limit_cooldown(user_id, action)
-        await self.cache.delete(key)
-        await self.cache.delete(cooldown_key)
+        await self.cache_invalidator.invalidate_rate_limit(user_id, action)
 
     def rate_limit_decorator(self, action: str):
         """Decorator for rate limiting functions"""

@@ -252,3 +252,74 @@ class CacheInvalidator:
         except Exception as e:
             logger.error(f"Failed to invalidate search sessions: {e}")
             return False
+
+    # Session management methods
+    async def invalidate_session(self, session_key: str) -> bool:
+        """Invalidate a specific session cache entry"""
+        try:
+            await self.cache.delete(session_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate session {session_key}: {e}")
+            return False
+
+    async def invalidate_all_sessions(self) -> bool:
+        """Invalidate all session caches"""
+        try:
+            await self.cache.delete_pattern("session:*")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate all sessions: {e}")
+            return False
+
+    # Rate limiting methods
+    async def invalidate_rate_limit(self, user_id: int, action: str) -> bool:
+        """Invalidate rate limit cache for a user and action"""
+        try:
+            key = CacheKeyGenerator.rate_limit(user_id, action)
+            cooldown_key = CacheKeyGenerator.rate_limit_cooldown(user_id, action)
+            await self.cache.delete(key)
+            await self.cache.delete(cooldown_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate rate limit for user {user_id}, action {action}: {e}")
+            return False
+
+    # Generic cache key invalidation (for base repository)
+    async def invalidate_cache_key(self, cache_key: str) -> bool:
+        """Invalidate a specific cache key (generic method for base operations)"""
+        try:
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate cache key {cache_key}: {e}")
+            return False
+
+    # Transient operation state methods
+    async def invalidate_deleteall_pending(self, user_id: int) -> bool:
+        """Invalidate deleteall pending cache for a user"""
+        try:
+            cache_key = f"deleteall_pending:{user_id}"
+            await self.cache.delete(cache_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate deleteall pending for user {user_id}: {e}")
+            return False
+
+    async def invalidate_broadcast_state(self, state_key: str) -> bool:
+        """Invalidate broadcast state cache"""
+        try:
+            await self.cache.delete(state_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate broadcast state {state_key}: {e}")
+            return False
+
+    async def invalidate_subscription_session(self, session_key: str) -> bool:
+        """Invalidate subscription session cache"""
+        try:
+            await self.cache.delete(session_key)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to invalidate subscription session {session_key}: {e}")
+            return False

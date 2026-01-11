@@ -234,7 +234,7 @@ class DeleteHandler(BaseHandler):
         keyword = await self.bot.cache.get(cache_key)
 
         if action == "deleteall_cancel":
-            await self.bot.cache.delete(cache_key)
+            await self.bot.cache_invalidator.invalidate_deleteall_pending(original_user_id)
             await callback_query.message.edit_text("❌ Deletion cancelled.")
             await callback_query.answer()
             return
@@ -246,7 +246,7 @@ class DeleteHandler(BaseHandler):
                 return
 
             # Delete from cache
-            await self.bot.cache.delete(cache_key)
+            await self.bot.cache_invalidator.invalidate_deleteall_pending(original_user_id)
 
             # Update message to show progress
             await callback_query.message.edit_text("🗑 Deleting files...")

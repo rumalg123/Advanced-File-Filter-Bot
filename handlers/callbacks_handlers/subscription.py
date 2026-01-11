@@ -34,7 +34,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             param = cached_data.get('deeplink', 'start')
 
             # Clear the cache
-            await self.bot.cache.delete(session_key)
+            await self.bot.cache_invalidator.invalidate_subscription_session(session_key)
 
         elif len(parts) == 2:
             # Old format: checksub#param

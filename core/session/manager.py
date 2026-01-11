@@ -93,6 +93,8 @@ class UnifiedSessionManager:
         self.ttl_config = CacheTTLConfig()
         self._cleanup_task = None
         self._shutdown_event = asyncio.Event()
+        from core.cache.invalidation import CacheInvalidator
+        self.cache_invalidator = CacheInvalidator(cache_manager)
         
     async def start_cleanup_task(self):
         """Start the background cleanup task"""
@@ -279,15 +281,15 @@ class UnifiedSessionManager:
                 if not session_id:
                     return True  # Already gone
                 # Delete user cache key
-                await self.cache.delete(user_cache_key)
-            
+                await self.cache_invalidator.invalidate_session(user_cache_key)
+
             # Delete full session data
             cache_key = self._generate_cache_key(session_type, user_id, session_id)
-            await self.cache.delete(cache_key)
-            
+            await self.cache_invalidator.invalidate_session(cache_key)
+
             # Also delete user cache key if not done already
             user_cache_key = self._generate_cache_key(session_type, user_id)
-            await self.cache.delete(user_cache_key)
+            await self.cache_invalidator.invalidate_session(user_cache_key)
             
             logger.debug(f"Cancelled {session_type.value} session {session_id} for user {user_id}")
             return True
@@ -361,9 +363,8 @@ class UnifiedSessionManager:
                 # Time to cleanup
                 try:
                     # Use pattern deletion to clean up expired sessions
-                    deleted = await self.cache.delete_pattern("session:*")
-                    if deleted > 0:
-                        logger.info(f"Cleaned up {deleted} expired session cache entries")
+                    await self.cache_invalidator.invalidate_all_sessions()
+                    logger.debug("Cleaned up expired session cache entries")
                 except Exception as e:
                     logger.error(f"Error during session cleanup: {e}")
     
