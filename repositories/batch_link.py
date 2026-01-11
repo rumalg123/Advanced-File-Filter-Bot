@@ -218,18 +218,36 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
         try:
             collection = await self.collection()
             now = datetime.now(UTC)
-            
+
+            # First, get the IDs of expired links for cache invalidation
+            expired_docs = await self.db_pool.execute_with_retry(
+                collection.find(
+                    {"expires_at": {"$lt": now.isoformat()}},
+                    {"_id": 1}
+                ).to_list,
+                length=1000
+            )
+
+            if not expired_docs:
+                return 0
+
+            expired_ids = [doc["_id"] for doc in expired_docs]
+
+            # Delete expired links
             result = await self.db_pool.execute_with_retry(
-                collection.delete_many, 
+                collection.delete_many,
                 {"expires_at": {"$lt": now.isoformat()}}
             )
-            
+
             deleted_count = result.deleted_count
             if deleted_count > 0:
+                # Invalidate cache for each deleted batch link
+                for batch_id in expired_ids:
+                    await self.cache_invalidator.invalidate_batch_link_cache(batch_id)
                 logger.info(f"Cleaned up {deleted_count} expired batch links")
-                
+
             return deleted_count
-            
+
         except Exception as e:
             logger.error(f"Error cleaning up expired batch links: {e}")
             return 0
