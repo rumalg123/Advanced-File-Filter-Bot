@@ -68,6 +68,57 @@ logger = get_logger(__name__)
 
 class BotConfig:
     """Configuration adapter for centralized Pydantic settings"""
+
+    # Mapping from database keys to (settings_object_name, attribute_name)
+    # This is used to sync database values back to the original settings objects
+    DB_TO_SETTINGS_MAP = {
+        # Features
+        'USE_CAPTION_FILTER': ('features', 'use_caption_filter'),
+        'DISABLE_PREMIUM': ('features', 'disable_premium'),
+        'REQUEST_ONLY_FOR_PREMIUM': ('features', 'request_only_for_premium'),
+        'DISABLE_FILTER': ('features', 'disable_filter'),
+        'PUBLIC_FILE_STORE': ('features', 'public_file_store'),
+        'KEEP_ORIGINAL_CAPTION': ('features', 'keep_original_caption'),
+        'USE_ORIGINAL_CAPTION_FOR_BATCH': ('features', 'use_original_caption_for_batch'),
+        'PREMIUM_DURATION_DAYS': ('features', 'premium_duration_days'),
+        'NON_PREMIUM_DAILY_LIMIT': ('features', 'non_premium_daily_limit'),
+        'PREMIUM_PRICE': ('features', 'premium_price'),
+        'MESSAGE_DELETE_SECONDS': ('features', 'message_delete_seconds'),
+        'MAX_BTN_SIZE': ('features', 'max_btn_size'),
+        'REQUEST_PER_DAY': ('features', 'request_per_day'),
+        'REQUEST_WARNING_LIMIT': ('features', 'request_warning_limit'),
+        # Channels
+        'LOG_CHANNEL': ('channels', 'log_channel'),
+        'INDEX_REQ_CHANNEL': ('channels', 'index_req_channel'),
+        'FILE_STORE_CHANNEL': ('channels', 'file_store_channel'),
+        'DELETE_CHANNEL': ('channels', 'delete_channel'),
+        'REQ_CHANNEL': ('channels', 'req_channel'),
+        'SUPPORT_GROUP_ID': ('channels', 'support_group_id'),
+        'AUTH_CHANNEL': ('channels', 'auth_channel'),
+        'AUTH_GROUPS': ('channels', 'auth_groups'),
+        'AUTH_USERS': ('channels', 'auth_users'),
+        'ADMINS': ('channels', 'admins'),
+        'CHANNELS': ('channels', 'channels'),
+        'PICS': ('channels', 'pics'),
+        # Messages
+        'CUSTOM_FILE_CAPTION': ('messages', 'custom_file_caption'),
+        'BATCH_FILE_CAPTION': ('messages', 'batch_file_caption'),
+        'AUTO_DELETE_MESSAGE': ('messages', 'auto_delete_message'),
+        'START_MESSAGE': ('messages', 'start_message'),
+        'SUPPORT_GROUP_URL': ('messages', 'support_group_url'),
+        'SUPPORT_GROUP_NAME': ('messages', 'support_group_name'),
+        'PAYMENT_LINK': ('messages', 'payment_link'),
+        # Server
+        'PORT': ('server', 'port'),
+        'WORKERS': ('server', 'workers'),
+        # Database (excluding critical connection settings)
+        'DATABASE_SIZE_LIMIT_GB': ('database', 'size_limit_gb'),
+        'DATABASE_AUTO_SWITCH': ('database', 'auto_switch'),
+        'DATABASE_MAX_FAILURES': ('database', 'max_failures'),
+        'DATABASE_RECOVERY_TIMEOUT': ('database', 'recovery_timeout'),
+        'DATABASE_HALF_OPEN_CALLS': ('database', 'half_open_calls'),
+    }
+
     def __init__(self):
         # Use centralized settings
         self._settings = settings
@@ -203,14 +254,44 @@ class BotConfig:
                 for error in errors:
                     logger.error(f"Config validation error: {error}")
                 return False
-            
+
             if not self.ADMINS:
                 logger.warning("No ADMINS configured - admin commands will be disabled")
-            
+
             return True
         except Exception as e:
             logger.error(f"Configuration validation failed: {e}")
             return False
+
+    def sync_settings_from_db(self, db_settings: dict) -> None:
+        """
+        Sync database settings to both BotConfig and the original settings objects.
+        This ensures that module-level references like `_feature_config = settings.features`
+        get the updated values from the database.
+        """
+        for key, setting_data in db_settings.items():
+            value = setting_data['value']
+
+            # Update BotConfig attribute
+            if hasattr(self, key):
+                # Store original value for critical settings
+                if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
+                    setattr(self, f'_original_{key}', getattr(self, key))
+                setattr(self, key, value)
+
+            # Update the original settings object using the mapping
+            if key in self.DB_TO_SETTINGS_MAP:
+                settings_obj_name, attr_name = self.DB_TO_SETTINGS_MAP[key]
+                settings_obj = getattr(self._settings, settings_obj_name, None)
+                if settings_obj is not None:
+                    try:
+                        # For Pydantic models, we need to use object.__setattr__
+                        # because they may have frozen fields
+                        object.__setattr__(settings_obj, attr_name, value)
+                    except Exception as e:
+                        logger.warning(f"Failed to sync setting {key} to {settings_obj_name}.{attr_name}: {e}")
+
+        logger.info(f"Synced {len(db_settings)} settings from database to config objects")
 
 
 class MediaSearchBot(Client):
@@ -223,6 +304,7 @@ class MediaSearchBot(Client):
             cache_manager: CacheManager,
             rate_limiter: RateLimiter
     ):
+        self.subscription_manager = None
         self.background_tasks = None
         self.config = config
         self.db_pool = db_pool
@@ -588,15 +670,13 @@ class MediaSearchBot(Client):
             # Initialize settings from environment
             await self.bot_settings_service.initialize_settings()
             logger.info("Bot settings initialized")
-            # CRITICAL: Load settings from database and update config
+
+            # CRITICAL: Load settings from database and sync to all config objects
+            # This updates both BotConfig and the original settings objects (e.g., settings.features)
+            # so that module-level references like `_feature_config = settings.features` get updated values
             db_settings = await self.bot_settings_service.get_all_settings()
-            for key, setting_data in db_settings.items():
-                if hasattr(self.config, key):
-                    # Store original value for critical settings
-                    if key in ['DATABASE_URI', 'DATABASE_NAME', 'REDIS_URI']:
-                        setattr(self.config, f'_original_{key}', getattr(self.config, key))
-                    setattr(self.config, key, setting_data['value'])
-            logger.info("Loaded settings from database")
+            self.config.sync_settings_from_db(db_settings)
+            logger.info("Loaded and synced settings from database")
             # Initialize repositories
             self.user_repo = UserRepository(
                 self.db_pool,
