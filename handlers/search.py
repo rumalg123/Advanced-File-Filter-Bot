@@ -12,7 +12,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.session.manager import SessionType
 from core.utils.caption import CaptionFormatter
-from core.utils.file_emoji import get_file_emoji
+from core.utils.file_emoji import get_file_emoji, get_file_type_display_name
 from core.utils.helpers import format_file_size
 from handlers.decorators import require_subscription, check_ban
 
@@ -377,7 +377,7 @@ class SearchHandler:
                     id=unique_id,
                     title=f"{file_emoji} {file.file_name}",
                     document_file_id=file.file_id,
-                    description=f"📊 {format_file_size(file.file_size)} • {file.file_type.value.title()}",
+                    description=f"📊 {format_file_size(file.file_size)} • {get_file_type_display_name(file.file_type)}",
                     caption=caption,
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )

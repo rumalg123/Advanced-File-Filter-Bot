@@ -54,12 +54,7 @@ class CacheTTLConfig:
     FILE_OPERATION_DELAY: int = 1  # File operation delay
     MAINTENANCE_CHECK_INTERVAL: int = 360  # 6 minutes
     MAINTENANCE_RETRY_DELAY: int = 3600  # 1 hour on error
-    MAINTENANCE_RESET_DAILY_COUNTERS: int = 90000 #25 hours
-
-    @classmethod
-    def get_ttl(cls, key_type: str) -> int:
-        """Get TTL for a specific key type"""
-        return getattr(cls, key_type.upper(), cls.USER_DATA)
+    MAINTENANCE_RESET_DAILY_COUNTERS: int = 90000  # 25 hours
 
 
 class CacheKeyGenerator:
@@ -130,10 +125,6 @@ class CacheKeyGenerator:
     def user_connections(user_id: str) -> str:
         return f"connections:{user_id}"
 
-    @staticmethod
-    def connection_stats() -> str:
-        return "connection_stats"
-
     # Channel keys
     @staticmethod
     def active_channels() -> str:
@@ -142,10 +133,6 @@ class CacheKeyGenerator:
     @staticmethod
     def channel(channel_id: int) -> str:
         return f"channel:{channel_id}"
-
-    @staticmethod
-    def channel_stats() -> str:
-        return "channel_stats"
 
     # Filter keys
     @staticmethod
@@ -225,15 +212,6 @@ class CachePatterns:
         """Get all cache keys related to a group"""
         return [
             f"filter:{group_id}:*",
-            CacheKeyGenerator.filter_list(group_id),
-            f"group_settings:{group_id}"
+            CacheKeyGenerator.filter_list(group_id)
         ]
-
-    @staticmethod
-    def file_ref(file_ref: str) -> str:
-        return f"file_ref:{file_ref}"
-
-    @staticmethod
-    def group_settings(group_id: str) -> str:
-        return f"group_settings:{group_id}"
 

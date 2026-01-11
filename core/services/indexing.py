@@ -350,71 +350,6 @@ class IndexingService:
 
         return saved_count, error_count
 
-    async def _process_message(self, message: Message) -> str:
-        """Process a single message and return status"""
-        if message.empty:
-            return "deleted"
-
-        if not message.media:
-            return "no_media"
-
-        # Check supported media types
-        if message.media not in [
-            enums.MessageMediaType.VIDEO,
-            enums.MessageMediaType.AUDIO,
-            enums.MessageMediaType.DOCUMENT
-        ]:
-            return "unsupported"
-
-        # Get media object
-        media = getattr(message, message.media.value, None)
-        if not media:
-            return "unsupported"
-
-        # Extract file info
-        try:
-            file_type = self._get_file_type(message.media)
-
-            # Create MediaFile object
-            media_file = MediaFile(
-                file_id=media.file_id,
-                file_unique_id=media.file_unique_id,
-                file_ref=FileReferenceExtractor.extract_file_ref(media.file_id),
-                file_name=sanitize_filename(
-                    getattr(media, 'file_name', f'file_{media.file_unique_id}')
-                ),
-                file_size=media.file_size,
-                file_type=file_type,
-                mime_type=getattr(media, 'mime_type', None),
-                caption=message.caption.html if message.caption else None
-            )
-
-            # Save to database with improved duplicate handling
-            success, status_code, existing_file = await self.media_repo.save_media(media_file)
-
-            if status_code == 1:
-                logger.debug(f"Successfully indexed: {media_file.file_name}")
-                common_terms = media_file.file_name.lower().split()[:3]
-                for term in common_terms:
-                    pattern = f"search:{term}*"
-                    cache_key = CacheKeyGenerator.search_results(term, None, 0, 10, True)
-                    await self.cache.delete(cache_key)
-                return "saved"
-            elif status_code == 0:
-                if existing_file and existing_file.file_unique_id == media_file.file_unique_id:
-                    logger.debug(f"Duplicate file (same content): {media_file.file_name}")
-                    return "duplicate"
-                else:
-                    logger.debug(f"Duplicate file (different content): {media_file.file_name}")
-                    return "duplicate"
-            else:
-                logger.error(f"Failed to index file: {media_file.file_name}")
-                return "error"
-
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            return "error"
-
     def _get_file_type(self, media_type: enums.MessageMediaType) -> FileType:
         """Convert Pyrogram media type to FileType enum"""
         mapping = {
@@ -425,24 +360,6 @@ class IndexingService:
             enums.MessageMediaType.ANIMATION: FileType.ANIMATION
         }
         return mapping.get(media_type, FileType.DOCUMENT)
-
-
-
-    def _encode_file_id(self, s: bytes) -> str:
-        """Encode file ID to URL-safe base64"""
-        r = b""
-        n = 0
-
-        for i in s + bytes([22]) + bytes([4]):
-            if i == 0:
-                n += 1
-            else:
-                if n:
-                    r += b"\x00" + bytes([n])
-                    n = 0
-                r += bytes([i])
-
-        return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
 class IndexRequestService:

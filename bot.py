@@ -36,6 +36,7 @@ from core.utils.caption import CaptionFormatter
 from pyrogram.types import Message
 
 from core.cache.redis_cache import CacheManager
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.pool import DatabaseConnectionPool
 from core.database.multi_pool import MultiDatabaseManager
 from core.database.indexes import IndexOptimizer
@@ -677,6 +678,12 @@ class MediaSearchBot(Client):
             db_settings = await self.bot_settings_service.get_all_settings()
             self.config.sync_settings_from_db(db_settings)
             logger.info("Loaded and synced settings from database")
+
+            # Initialize concurrency limits from settings
+            concurrency_limits = settings.get_concurrency_limits()
+            for domain, limit in concurrency_limits.items():
+                await semaphore_manager.update_limit(domain, limit)
+            logger.info(f"Initialized concurrency limits: {concurrency_limits}")
             # Initialize repositories
             self.user_repo = UserRepository(
                 self.db_pool,

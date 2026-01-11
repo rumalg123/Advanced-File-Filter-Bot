@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from core.cache.redis_cache import CacheManager
+from core.cache.serialization import get_serialization_stats, estimate_memory_usage
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -34,6 +35,9 @@ class CacheMonitor:
             total_ops = hits + misses
             hit_rate = (hits / total_ops * 100) if total_ops > 0 else 0
 
+            # Get serialization stats
+            serialization_stats = get_serialization_stats()
+
             return {
                 "status": "connected",
                 "memory": {
@@ -58,7 +62,8 @@ class CacheMonitor:
                     "redis_version": info.get('redis_version', 'N/A'),
                     "uptime_in_days": info.get('uptime_in_days', 0),
                     "connected_clients": info.get('connected_clients', 0),
-                }
+                },
+                "serialization": serialization_stats
             }
         except Exception as e:
             logger.error(f"Error getting cache stats: {e}")
@@ -198,6 +203,85 @@ class CacheMonitor:
         except Exception as e:
             logger.error(f"Error getting slow commands: {e}")
             return []
+
+    async def analyze_serialization_efficiency(self, sample_size: int = 20) -> Dict[str, Any]:
+        """Analyze serialization efficiency for cached data"""
+        if not self.cache.redis:
+            return {"error": "Redis not connected"}
+
+        analysis = {
+            "samples_analyzed": 0,
+            "total_current_size": 0,
+            "potential_savings": {},
+            "method_comparison": [],
+            "recommendations": []
+        }
+
+        try:
+            sampled = 0
+            async for key in self.cache.redis.scan_iter(count=sample_size * 2):
+                if sampled >= sample_size:
+                    break
+
+                try:
+                    # Get the cached value
+                    value = await self.cache.get(key.decode())
+                    if value is None or not isinstance(value, (dict, list)):
+                        continue
+
+                    # Get current stored size
+                    raw_value = await self.cache.redis.get(key)
+                    current_size = len(raw_value) if raw_value else 0
+
+                    # Estimate sizes with different methods
+                    estimates = estimate_memory_usage(value)
+
+                    if estimates and current_size > 0:
+                        analysis["samples_analyzed"] += 1
+                        analysis["total_current_size"] += current_size
+
+                        # Find best method
+                        best_method = min(estimates, key=estimates.get)
+                        best_size = estimates[best_method]
+
+                        if best_size < current_size:
+                            analysis["method_comparison"].append({
+                                "key": key.decode()[:40],
+                                "current_size": current_size,
+                                "best_method": best_method,
+                                "best_size": best_size,
+                                "savings_percent": round((1 - best_size / current_size) * 100, 1)
+                            })
+
+                    sampled += 1
+
+                except Exception as e:
+                    logger.debug(f"Error analyzing key serialization: {e}")
+
+            # Calculate potential savings by method
+            if analysis["method_comparison"]:
+                total_savings = sum(
+                    item["current_size"] - item["best_size"]
+                    for item in analysis["method_comparison"]
+                )
+                analysis["potential_savings"] = {
+                    "bytes": total_savings,
+                    "human": self._format_bytes(total_savings),
+                    "percent": round(total_savings / analysis["total_current_size"] * 100, 1)
+                    if analysis["total_current_size"] > 0 else 0
+                }
+
+                # Add recommendations
+                if analysis["potential_savings"]["percent"] > 10:
+                    analysis["recommendations"].append(
+                        "Consider enabling compressed serialization for large values"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error analyzing serialization efficiency: {e}")
+            analysis["error"] = str(e)
+
+        return analysis
 
     @staticmethod
     def _format_bytes(bytes_val: int) -> str:

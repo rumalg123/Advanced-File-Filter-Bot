@@ -13,6 +13,7 @@ from pyrogram.errors import FloodWait
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.monitor import CacheMonitor
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
@@ -634,6 +635,19 @@ class AdminCommandHandler(BaseCommandHandler):
                 f"⏱ <b>Uptime:</b> {uptime_str}"
             )
 
+            # Add concurrency metrics
+            concurrency_metrics = await semaphore_manager.get_metrics()
+            if concurrency_metrics:
+                text += "\n\n🔄 <b>Concurrency:</b>\n"
+                for domain, stats in concurrency_metrics.items():
+                    if stats['total_requests'] > 0:
+                        text += (
+                            f"├ <b>{domain}:</b> "
+                            f"{stats['current_active']}/{stats['max_concurrent']} "
+                            f"(peak: {stats['peak_concurrent']}, "
+                            f"total: {stats['total_requests']:,})\n"
+                        )
+
             await message.reply_text(text)
 
         except Exception as e:
@@ -677,6 +691,18 @@ class AdminCommandHandler(BaseCommandHandler):
             text += f"\n<b>Total Keys:</b> {stats['keys']['total_keys']:,}"
             text += f"\n<b>Keys with TTL:</b> {stats['keys']['expires']:,}"
 
+            # Add serialization stats if available
+            if 'serialization' in stats and stats['serialization']:
+                ser_stats = stats['serialization']
+                text += "\n\n<b>Serialization:</b>\n"
+                text += f"├ Total ops: {ser_stats.get('serializations', 0):,}\n"
+                text += f"├ Compressions: {ser_stats.get('compressions', 0):,}\n"
+                bytes_saved = ser_stats.get('bytes_saved', 0)
+                if bytes_saved > 1024:
+                    text += f"└ Bytes saved: {bytes_saved / 1024:.1f} KB\n"
+                else:
+                    text += f"└ Bytes saved: {bytes_saved} B\n"
+
             await status_msg.edit_text(text)
 
         except Exception as e:
@@ -718,6 +744,17 @@ class AdminCommandHandler(BaseCommandHandler):
             text += "<b>📊 Key Size Distribution:</b>\n"
             for category, count in sorted(analysis['key_size_distribution'].items()):
                 text += f"├ {category}: {count}\n"
+
+            # Analyze serialization efficiency
+            ser_analysis = await monitor.analyze_serialization_efficiency(sample_size=15)
+            if ser_analysis.get('samples_analyzed', 0) > 0:
+                text += "\n\n<b>📦 Serialization Efficiency:</b>\n"
+                text += f"├ Samples analyzed: {ser_analysis['samples_analyzed']}\n"
+                if ser_analysis.get('potential_savings'):
+                    savings = ser_analysis['potential_savings']
+                    text += f"├ Potential savings: {savings.get('human', 'N/A')} ({savings.get('percent', 0)}%)\n"
+                if ser_analysis.get('recommendations'):
+                    text += f"└ Tip: {ser_analysis['recommendations'][0]}\n"
 
             await status_msg.edit_text(text)
 

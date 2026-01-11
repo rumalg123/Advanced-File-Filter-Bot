@@ -2,7 +2,9 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.utils.helpers import format_file_size
+from core.utils.file_emoji import get_file_type_display_name
 import core.utils.messages as config_messages
+from repositories.media import FileType
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 
@@ -76,8 +78,12 @@ class UserCallbackHandler(BaseCommandHandler):
         # Add file type breakdown
         if stats['files']['by_type']:
             text += "\n<b>📊 By Type:</b>\n"
-            for file_type, data in stats['files']['by_type'].items():
-                text += f"├ {file_type.title()}: {data['count']:,} ({format_file_size(data['size'])})\n"
+            for file_type_str, data in stats['files']['by_type'].items():
+                try:
+                    display_name = get_file_type_display_name(FileType(file_type_str))
+                except ValueError:
+                    display_name = file_type_str.title()
+                text += f"├ {display_name}: {data['count']:,} ({format_file_size(data['size'])})\n"
 
         back_button = InlineKeyboardMarkup([
             [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]

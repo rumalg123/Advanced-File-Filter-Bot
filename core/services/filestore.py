@@ -107,18 +107,6 @@ class FileStoreService:
             logger.error(f"Error decoding file identifier '{encoded}': {e}")
             return None, False
 
-    # Backward compatibility methods
-    def encode_file_id(self, file_id: str, protect: bool = False) -> str:
-        """Backward compatibility - converts file_id to file_ref then encodes"""
-        return self.encode_file_identifier(file_id, protect)
-
-    def decode_file_id(self, encoded: str) -> Tuple[str, bool]:
-        """Backward compatibility - same as decode_file_identifier"""
-        return self.decode_file_identifier(encoded)
-
-
-
-
     async def _cleanup_batch_cache(self):
         """Remove oldest entries if cache is too large"""
         async with self._batch_cache_lock:

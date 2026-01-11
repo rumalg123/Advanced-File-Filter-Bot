@@ -6,7 +6,9 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 import core.utils.messages as config_messages
 from core.utils.helpers import format_file_size
+from core.utils.file_emoji import get_file_type_display_name
 from core.cache.config import CacheTTLConfig
+from repositories.media import FileType
 from core.utils.logger import get_logger
 from core.utils.validators import private_only
 from handlers.commands_handlers.base import BaseCommandHandler
@@ -277,8 +279,12 @@ class UserCommandHandler(BaseCommandHandler):
         # Add file type breakdown
         if stats['files']['by_type']:
             text += "\n<b>📊 By Type:</b>\n"
-            for file_type, data in stats['files']['by_type'].items():
-                text += f"├ {file_type.title()}: {data['count']:,} ({format_file_size(data['size'])})\n"
+            for file_type_str, data in stats['files']['by_type'].items():
+                try:
+                    display_name = get_file_type_display_name(FileType(file_type_str))
+                except ValueError:
+                    display_name = file_type_str.title()
+                text += f"├ {display_name}: {data['count']:,} ({format_file_size(data['size'])})\n"
 
         # Add collection breakdown (top 3 by size)
         if stats.get('storage', {}).get('collections'):
