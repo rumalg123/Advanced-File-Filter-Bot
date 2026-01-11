@@ -75,7 +75,7 @@ class ConnectionRepository(BaseRepository[UserConnection]):
             user_conn.updated_at = datetime.now(UTC)
 
             # Update
-            return await self.update(
+            success = await self.update(
                 user_id,
                 {
                     "group_details": user_conn.group_details,
@@ -83,6 +83,9 @@ class ConnectionRepository(BaseRepository[UserConnection]):
                     "updated_at": user_conn.updated_at
                 }
             )
+            if success:
+                await self.cache_invalidator.invalidate_connection_cache(user_id)
+            return success
         else:
             # Create new connection
             user_conn = UserConnection(
@@ -91,6 +94,8 @@ class ConnectionRepository(BaseRepository[UserConnection]):
                 active_group=group_id
             )
             success = await self.create(user_conn)
+            if success:
+                await self.cache_invalidator.invalidate_connection_cache(user_id)
             return success
 
     async def get_active_connection(self, user_id: str) -> Optional[str]:

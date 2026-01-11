@@ -78,7 +78,7 @@ class ChannelRepository(BaseRepository[Channel]):
         existing = await self.find_by_id(channel_id)
         if existing:
             # Update existing channel
-            return await self.update(
+            success = await self.update(
                 channel_id,
                 {
                     'enabled': True,
@@ -87,6 +87,9 @@ class ChannelRepository(BaseRepository[Channel]):
                     'updated_at': datetime.now(UTC)
                 }
             )
+            if success:
+                await self.cache_invalidator.invalidate_channels_cache()
+            return success
 
         # Create new channel
         channel = Channel(
