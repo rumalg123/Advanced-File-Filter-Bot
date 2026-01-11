@@ -6,7 +6,6 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait, UserIsBlocked
 from pyrogram.types import CallbackQuery
 
-from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
@@ -362,17 +361,15 @@ class FileCallbackHandler(BaseCommandHandler):
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
-                # Use semaphore to control concurrent telegram sends
-                async with semaphore_manager.acquire('telegram_send'):
-                    # Use telegram_api for concurrency control (handles FloodWait internally)
-                    sent_msg = await telegram_api.call_api(
-                        client.send_cached_media,
-                        user_id,  # positional arg for send_cached_media
-                        file.file_id,
-                        caption=caption,
-                        parse_mode=CaptionFormatter.get_parse_mode(),
-                        chat_id=user_id  # for call_api rate limiting
-                    )
+                # telegram_api.call_api already uses semaphore_manager internally
+                sent_msg = await telegram_api.call_api(
+                    client.send_cached_media,
+                    user_id,  # positional arg for send_cached_media
+                    file.file_id,
+                    caption=caption,
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=user_id  # for call_api rate limiting
+                )
 
                 sent_messages.append(sent_msg)
                 success_count += 1
