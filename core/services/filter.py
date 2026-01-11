@@ -208,45 +208,49 @@ class FilterService:
                     if btn == "[]":
                         await telegram_api.call_api(
                             client.send_message,
-                            chat_id=chat_id,
-                            text=reply_text,
+                            chat_id,
+                            reply_text,
                             disable_web_page_preview=True,
                             protect_content=False,
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
                     else:
                         # Text with buttons
                         button = json.loads(btn)
                         await telegram_api.call_api(
                             client.send_message,
-                            chat_id=chat_id,
-                            text=reply_text,
+                            chat_id,
+                            reply_text,
                             disable_web_page_preview=True,
                             reply_markup=InlineKeyboardMarkup(button),
                             protect_content=False,
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
                 else:
                     # Media response
                     if btn == "[]":
                         await telegram_api.call_api(
                             client.send_cached_media,
-                            chat_id=chat_id,
-                            file_id=fileid,
+                            chat_id,
+                            fileid,
                             caption=reply_text or "",
                             protect_content=False,
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
                     else:
                         button = json.loads(btn)
                         await telegram_api.call_api(
                             client.send_cached_media,
-                            chat_id=chat_id,
-                            file_id=fileid,
+                            chat_id,
+                            fileid,
                             caption=reply_text or "",
                             reply_markup=InlineKeyboardMarkup(button),
                             protect_content=False,
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
             except Exception as e:
                 logger.error(f"Error sending filter response in private chat: {e}")
@@ -258,41 +262,45 @@ class FilterService:
                     if btn == "[]":
                         await telegram_api.call_api(
                             client.send_message,
-                            chat_id=chat_id,
-                            text=reply_text,
+                            chat_id,
+                            reply_text,
                             disable_web_page_preview=True,
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
                     else:
                         # Text with buttons
                         button = json.loads(btn)
                         await telegram_api.call_api(
                             client.send_message,
-                            chat_id=chat_id,
-                            text=reply_text,
+                            chat_id,
+                            reply_text,
                             disable_web_page_preview=True,
                             reply_markup=InlineKeyboardMarkup(button),
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
                 else:
                     # Media response
                     if btn == "[]":
                         await telegram_api.call_api(
                             client.send_cached_media,
-                            chat_id=chat_id,
-                            file_id=fileid,
+                            chat_id,
+                            fileid,
                             caption=reply_text or "",
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
                     else:
                         button = json.loads(btn)
                         await telegram_api.call_api(
                             client.send_cached_media,
-                            chat_id=chat_id,
-                            file_id=fileid,
+                            chat_id,
+                            fileid,
                             caption=reply_text or "",
                             reply_markup=InlineKeyboardMarkup(button),
-                            reply_to_message_id=reply_id
+                            reply_to_message_id=reply_id,
+                            chat_id=chat_id
                         )
             except Exception as e:
                 logger.error(f"Error sending filter response in group chat: {e}")

@@ -569,11 +569,12 @@ class FileStoreService:
             # Use telegram_api for concurrency control
             sent_msg = await telegram_api.call_api(
                 client.send_cached_media,
-                chat_id=user_id,
-                file_id=file.file_id,
+                user_id,
+                file.file_id,
                 caption=caption,
                 protect_content=protect,
-                parse_mode=CaptionFormatter.get_parse_mode()
+                parse_mode=CaptionFormatter.get_parse_mode(),
+                chat_id=user_id
             )
 
             # Schedule auto-deletion if enabled
@@ -626,11 +627,12 @@ class FileStoreService:
 
                 sent_msg = await telegram_api.call_api(
                     client.send_cached_media,
-                    chat_id=user_id,
-                    file_id=file_id_to_send,
+                    user_id,
+                    file_id_to_send,
                     caption=caption,
                     protect_content=file_data.get("protect", False),
-                    parse_mode=CaptionFormatter.get_parse_mode()
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=user_id
                 )
 
                 # Schedule auto-deletion if enabled

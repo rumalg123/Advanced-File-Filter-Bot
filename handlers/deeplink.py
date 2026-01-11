@@ -154,11 +154,12 @@ class DeepLinkHandler(BaseCommandHandler):
             # Use telegram_api for concurrency control
             sent_msg = await telegram_api.call_api(
                 client.send_cached_media,
-                chat_id=user_id,
-                file_id=file.file_id,
+                user_id,
+                file.file_id,
                 caption=caption,
                 protect_content=protect,
-                parse_mode=CaptionFormatter.get_parse_mode()
+                parse_mode=CaptionFormatter.get_parse_mode(),
+                chat_id=user_id
             )
 
             logger.info(f"File sent successfully to user {user_id}")
@@ -308,10 +309,11 @@ class DeepLinkHandler(BaseCommandHandler):
                 # Use telegram_api for concurrency control
                 sent_msg = await telegram_api.call_api(
                     client.send_cached_media,
-                    chat_id=user_id,
-                    file_id=file.file_id,
+                    user_id,
+                    file.file_id,
                     caption=caption,
-                    parse_mode=CaptionFormatter.get_parse_mode()
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=user_id
                 )
 
                 # Schedule auto-deletion if enabled
@@ -443,10 +445,11 @@ class DeepLinkHandler(BaseCommandHandler):
                 # Use telegram_api for concurrency control
                 sent_msg = await telegram_api.call_api(
                     client.send_cached_media,
-                    chat_id=user_id,
-                    file_id=file.file_id,
+                    user_id,
+                    file.file_id,
                     caption=caption,
-                    parse_mode=CaptionFormatter.get_parse_mode()
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=user_id
                 )
 
                 # Schedule auto-deletion if enabled

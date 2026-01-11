@@ -106,8 +106,9 @@ class RequestHandler(BaseHandler):
                 try:
                     await telegram_api.call_api(
                         client.send_message,
-                        chat_id=user_id,
-                        text=ban_msg
+                        user_id,
+                        ban_msg,
+                        chat_id=user_id
                     )
                 except Exception as e:
                     logger.error(f"error sending ban_msg in request handler: {e}")
@@ -125,8 +126,9 @@ class RequestHandler(BaseHandler):
                     )
                     await telegram_api.call_api(
                         client.send_message,
-                        chat_id=self.bot.config.LOG_CHANNEL,
-                        text=log_text
+                        self.bot.config.LOG_CHANNEL,
+                        log_text,
+                        chat_id=self.bot.config.LOG_CHANNEL
                     )
                 return
 
@@ -147,8 +149,9 @@ class RequestHandler(BaseHandler):
                 )
                 await telegram_api.call_api(
                     client.send_message,
-                    chat_id=self.bot.config.LOG_CHANNEL,
-                    text=warning_text
+                    self.bot.config.LOG_CHANNEL,
+                    warning_text,
+                    chat_id=self.bot.config.LOG_CHANNEL
                 )
             return
 
@@ -364,9 +367,10 @@ class RequestHandler(BaseHandler):
         try:
             await telegram_api.call_api(
                 client.send_message,
-                chat_id=target_channel,
-                text=request_text,
-                reply_markup=InlineKeyboardMarkup(buttons)
+                target_channel,
+                request_text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                chat_id=target_channel
             )
         except Exception as e:
             logger.error(f"Failed to forward request: {e}")
@@ -399,8 +403,9 @@ class RequestHandler(BaseHandler):
         try:
             await telegram_api.call_api(
                 client.send_message,
-                chat_id=user_id,
-                text=response_msg
+                user_id,
+                response_msg,
+                chat_id=user_id
             )
             pm_sent = True
         except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid):
@@ -419,9 +424,10 @@ class RequestHandler(BaseHandler):
 
                 await telegram_api.call_api(
                     client.send_message,
-                    chat_id=self.bot.config.SUPPORT_GROUP_ID,
-                    text=mention_msg,
-                    reply_to_message_id=msg_id
+                    self.bot.config.SUPPORT_GROUP_ID,
+                    mention_msg,
+                    reply_to_message_id=msg_id,
+                    chat_id=self.bot.config.SUPPORT_GROUP_ID
                 )
             except Exception as e:
                 logger.error(f"Failed to send to group: {e}")

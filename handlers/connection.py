@@ -99,9 +99,10 @@ class ConnectionHandler(BaseHandler):
                     try:
                         await telegram_api.call_api(
                             client.send_message,
-                            chat_id=user_id,
-                            text=f"Connected to <b>{title}</b>!",
-                            parse_mode=CaptionFormatter.get_parse_mode()
+                            user_id,
+                            f"Connected to <b>{title}</b>!",
+                            parse_mode=CaptionFormatter.get_parse_mode(),
+                            chat_id=user_id
                         )
                     except Exception:
                         pass

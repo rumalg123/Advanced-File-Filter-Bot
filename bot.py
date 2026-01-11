@@ -1144,8 +1144,9 @@ class MediaSearchBot(Client):
                             )
                             await telegram_api.call_api(
                                 self.send_message,
-                                chat_id=self.config.LOG_CHANNEL,
-                                text=log_text
+                                self.config.LOG_CHANNEL,
+                                log_text,
+                                chat_id=self.config.LOG_CHANNEL
                             )
                         except Exception as e:
                             logger.debug(f"Could not send premium cleanup log: {e}")

@@ -163,10 +163,11 @@ class FileCallbackHandler(BaseCommandHandler):
             # Use telegram_api for concurrency control
             sent_msg = await telegram_api.call_api(
                 client.send_cached_media,
-                chat_id=callback_user_id,
-                file_id=file.file_id,
+                callback_user_id,  # positional arg for send_cached_media
+                file.file_id,
                 caption=caption,
-                parse_mode=CaptionFormatter.get_parse_mode()
+                parse_mode=CaptionFormatter.get_parse_mode(),
+                chat_id=callback_user_id  # for call_api rate limiting
             )
 
             await query.answer("✅ File sent!", show_alert=False)
@@ -333,13 +334,12 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             status_msg = await telegram_api.call_api(
                 client.send_message,
-                chat_id=user_id,
-                text=(
-                    f"📤 <b>Sending Files</b>\n"
-                    f"Query: {search_query}\n"
-                    f"Total Files: {len(files_data)}\n"
-                    f"Progress: 0/{len(files_data)}"
-                )
+                user_id,  # positional arg for send_message
+                f"📤 <b>Sending Files</b>\n"
+                f"Query: {search_query}\n"
+                f"Total Files: {len(files_data)}\n"
+                f"Progress: 0/{len(files_data)}",
+                chat_id=user_id  # for call_api rate limiting
             )
         except UserIsBlocked:
             await query.answer(
@@ -382,10 +382,11 @@ class FileCallbackHandler(BaseCommandHandler):
                 # Use telegram_api for concurrency control (handles FloodWait internally)
                 sent_msg = await telegram_api.call_api(
                     client.send_cached_media,
-                    chat_id=user_id,
-                    file_id=file.file_id,
+                    user_id,  # positional arg for send_cached_media
+                    file.file_id,
                     caption=caption,
-                    parse_mode=CaptionFormatter.get_parse_mode()
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=user_id  # for call_api rate limiting
                 )
 
                 sent_messages.append(sent_msg)
