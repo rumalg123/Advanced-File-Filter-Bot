@@ -41,7 +41,6 @@ class BaseRepository(ABC, Generic[T]):
                 self._collection = await self.db_pool.get_collection(self.collection_name)
         return self._collection
 
-    @property
     async def collection(self):
         """Lazy load collection - deprecated, use get_collection() instead"""
         return await self.get_collection()

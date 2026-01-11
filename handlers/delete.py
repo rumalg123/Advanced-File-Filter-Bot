@@ -142,8 +142,8 @@ class DeleteHandler(BaseHandler):
                         self.bot.config.LOG_CHANNEL,
                         "⚠️ Delete queue is full! Consider increasing queue size or processing rate."
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to send queue full alert: {e}")
 
     async def handle_delete_command(self, client: Client, message: Message):
         """Handle manual delete command"""
