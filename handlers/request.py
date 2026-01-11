@@ -85,7 +85,7 @@ class RequestHandler(BaseHandler):
         user_id = message.from_user.id
 
         # Check request limits
-        is_allowed, limit_message, should_ban = await self.bot.user_repo.track_request(user_id,message.from_user.first_name)
+        is_allowed, limit_message, should_ban, should_log_warning = await self.bot.user_repo.track_request(user_id,message.from_user.first_name)
 
         if should_ban:
             # Auto-ban the user
@@ -134,11 +134,11 @@ class RequestHandler(BaseHandler):
                 return
 
         if not is_allowed:
-            # Send warning message
+            # Send message to user
             await message.reply_text(limit_message)
 
-            # Log warning to admin channel
-            if self.bot.config.LOG_CHANNEL:
+            # Only log warning to admin channel for actual abuse (not premium denial)
+            if should_log_warning and self.bot.config.LOG_CHANNEL:
                 user = message.from_user
                 warning_text = (
                     f"#RequestWarning\n"

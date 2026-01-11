@@ -793,10 +793,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             logger.error(f"Error in cleanup_expired_premium: {e}")
             return result
 
-    async def track_request(self, user_id: int, user_name: Optional[str] = "Unknown") -> Tuple[bool, str, bool]:
+    async def track_request(self, user_id: int, user_name: Optional[str] = "Unknown") -> Tuple[bool, str, bool, bool]:
         """
         Track a user request and apply limits
-        Returns: (is_allowed, message, should_ban)
+        Returns: (is_allowed, message, should_ban, should_log_warning)
         """
         user = await self.get_user(user_id)
         if not user:
@@ -821,7 +821,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return (
                 False,
                 "Only premium users can use this feature. Use /plans to see available plans.",
-                False
+                False,
+                False  # Don't log as warning - this is not abuse
             )
 
         # Reset daily count if new day
@@ -839,7 +840,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Check warning limit first
         if user.warning_count >= REQUEST_WARNING_LIMIT:
-            return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True
+            return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
 
         # Check daily limit
         if user.daily_request_count >= REQUEST_PER_DAY:
@@ -859,9 +860,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
             if user.warning_count >= REQUEST_WARNING_LIMIT:
                 # Auto-ban the user
-                return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True
+                return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
             else:
-                return False, f"⚠️ Daily request limit ({REQUEST_PER_DAY}) exceeded! Warning {user.warning_count}/{REQUEST_WARNING_LIMIT}. You have {remaining_warnings} warnings left before ban.", False
+                return False, f"⚠️ Daily request limit ({REQUEST_PER_DAY}) exceeded! Warning {user.warning_count}/{REQUEST_WARNING_LIMIT}. You have {remaining_warnings} warnings left before ban.", False, True  # Log this as warning - actual abuse
 
         # Allow the request and increment counters
         user.daily_request_count += 1
@@ -878,7 +879,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         await self.cache_invalidator.invalidate_user_data(user_id)
 
         remaining = REQUEST_PER_DAY - user.daily_request_count
-        return True, f"Request recorded ({user.daily_request_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False
+        return True, f"Request recorded ({user.daily_request_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False, False
 
     async def reset_warnings(self, user_id: int) -> bool:
         """Reset warnings for a user"""
