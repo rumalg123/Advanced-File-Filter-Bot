@@ -24,7 +24,6 @@ class CacheManager:
 
     async def initialize(self) -> None:
         """Initialize Redis connection"""
-        import sys
         async with self._lock:
             if self.redis is None:
                 self.redis = aioredis.from_url(

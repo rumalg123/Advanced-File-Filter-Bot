@@ -1,11 +1,9 @@
 import asyncio
-import base64
 import re
 from typing import Dict, Optional, Tuple, List
 
 from pyrogram import Client, enums
 from pyrogram.errors import ChannelInvalid, UsernameInvalid, UsernameNotModified
-from pyrogram.file_id import FileId
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.redis_cache import CacheManager

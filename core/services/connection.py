@@ -190,28 +190,6 @@ class ConnectionService:
         """Clear active connection for user"""
         return await self.connection_repo.make_inactive(str(user_id))
 
-    async def get_or_private_chat_id(
-            self,
-            user_id: int,
-            chat_id: int,
-            chat_type: enums.ChatType
-    ) -> Tuple[Optional[int], Optional[str]]:
-        """
-        Get appropriate chat ID based on context
-        Returns: (chat_id, chat_title)
-        """
-        if chat_type == enums.ChatType.PRIVATE:
-            # Get active connection in private chat
-            active_connection = await self.get_active_connection(user_id)
-            if active_connection:
-                return active_connection, None
-            else:
-                return None, None
-        else:
-            # Use current chat in groups
-            return chat_id, None
-
-
     async def cleanup_invalid_connections(
             self,
             client: Client,
