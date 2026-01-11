@@ -5,6 +5,7 @@ from pathlib import Path
 import aiohttp_cors
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.constants import MaintenanceConstants
 from core.utils.performance import performance_monitor
 from handlers.manager import HandlerManager
 
@@ -1111,7 +1112,7 @@ class MediaSearchBot(Client):
                 await self._cleanup_old_cache()
 
                 # Sleep for 24 hours with periodic shutdown checks
-                for _ in range(240):  # Check every 6 minutes (240 * 6min = 24 hours)
+                for _ in range(MaintenanceConstants.DAILY_CHECK_ITERATIONS):
                     if self.handler_manager.is_shutting_down():
                         break
                     await asyncio.sleep(CacheTTLConfig.MAINTENANCE_CHECK_INTERVAL)
@@ -1128,8 +1129,8 @@ class MediaSearchBot(Client):
         Run hourly premium cleanup to expire premium subscriptions promptly.
         This runs every hour to ensure premium expiry is detected within 1 hour.
         """
-        # Wait 5 minutes after startup before first run
-        await asyncio.sleep(300)
+        # Wait before first run
+        await asyncio.sleep(MaintenanceConstants.STARTUP_DELAY)
 
         while not self.handler_manager.is_shutting_down():
             try:
@@ -1166,17 +1167,17 @@ class MediaSearchBot(Client):
                             logger.debug(f"Could not send premium cleanup log: {e}")
 
                 # Sleep for 1 hour with periodic shutdown checks
-                for _ in range(60):  # Check every minute (60 * 1min = 1 hour)
+                for _ in range(MaintenanceConstants.HOURLY_CHECK_ITERATIONS):
                     if self.handler_manager.is_shutting_down():
                         break
-                    await asyncio.sleep(60)  # 60 seconds
+                    await asyncio.sleep(MaintenanceConstants.HOURLY_CHECK_INTERVAL)
 
             except asyncio.CancelledError:
                 logger.info("Hourly premium cleanup task cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in hourly premium cleanup: {e}")
-                await asyncio.sleep(300)  # Wait 5 minutes before retry
+                await asyncio.sleep(MaintenanceConstants.RETRY_DELAY)
 
     async def _cleanup_old_cache(self):
         """Clean up old cache entries"""

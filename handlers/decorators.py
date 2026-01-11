@@ -6,7 +6,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 
 from core.utils.logger import get_logger
 from core.utils.validators import (
-    extract_user_id, is_admin, is_auth_user, is_bot_user,
+    extract_chat, extract_user_id, is_admin, is_auth_user, is_bot_user,
     get_special_channels, is_special_channel
 )
 from repositories.user import UserStatus
@@ -31,10 +31,7 @@ class SubscriptionRequired:
             @wraps(func)
             async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
                 # Get chat based on message type
-                if isinstance(message, CallbackQuery):
-                    chat = message.message.chat if message.message else None
-                else:
-                    chat = message.chat
+                chat = extract_chat(message)
 
                 # Check special channels using validator
                 special_channels = get_special_channels(self.bot.config)

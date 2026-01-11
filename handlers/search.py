@@ -10,6 +10,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
     InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.constants import SearchConstants
 from core.session.manager import SessionType
 from core.utils.caption import CaptionFormatter
 from core.utils.file_emoji import get_file_emoji, get_file_type_display_name
@@ -44,23 +45,10 @@ class SearchHandler:
 
     def register_handlers(self):
         """Register search handlers"""
-        # Text message search in groups and private chats
-        excluded_commands = [
-            'start', 'help', 'about', 'stats', 'plans',
-            'broadcast', 'users', 'ban', 'unban', 'addpremium', 'removepremium',
-            'add_channel', 'remove_channel', 'list_channels', 'toggle_channel',
-            'connect', 'disconnect', 'connections', 'setskip',
-            'delete', 'deleteall', 'link', 'plink', 'batch', 'pbatch',
-            'viewfilters', 'filters', 'del', 'delall', 'delallf', 'deleteallf',
-            'delf', 'deletef', 'add', 'filter', 'bsetting', 'restart', 'shell',
-            'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance', 'cancel', 'dbstats',
-            'dbinfo', 'dbswitch'
-        ]
-
         # Register text search handler
         text_handler = MessageHandler(
             self.handle_text_search,
-            filters.text & filters.incoming & ~filters.command(excluded_commands)
+            filters.text & filters.incoming & ~filters.command(SearchConstants.EXCLUDED_COMMANDS)
         )
 
         # Use handler_manager if available - register with lower priority (higher group number)

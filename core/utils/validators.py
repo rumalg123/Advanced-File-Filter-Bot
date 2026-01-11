@@ -15,12 +15,18 @@ class ValidationUtils:
     """Centralized validation utilities"""
 
     @staticmethod
+    def extract_chat(message: Union[Message, CallbackQuery]):
+        """Extract chat object from Message or CallbackQuery"""
+        if isinstance(message, CallbackQuery):
+            return message.message.chat if message.message else None
+        return message.chat
+
+    @staticmethod
     def extract_user_id(message: Union[Message, CallbackQuery]) -> Optional[int]:
         """Extract user ID from Message or CallbackQuery"""
         if isinstance(message, CallbackQuery):
             return message.from_user.id if message.from_user else None
-        else:
-            return message.from_user.id if message.from_user else None
+        return message.from_user.id if message.from_user else None
 
     @staticmethod
     def is_admin(user_id: int, admins: list) -> bool:
@@ -35,21 +41,13 @@ class ValidationUtils:
     @staticmethod
     def is_private_chat(message: Union[Message, CallbackQuery]) -> bool:
         """Check if message is from private chat"""
-        if isinstance(message, CallbackQuery):
-            chat = message.message.chat if message.message else None
-        else:
-            chat = message.chat
-        
+        chat = ValidationUtils.extract_chat(message)
         return chat and chat.type == enums.ChatType.PRIVATE
 
     @staticmethod
     def is_group_chat(message: Union[Message, CallbackQuery]) -> bool:
         """Check if message is from group or supergroup"""
-        if isinstance(message, CallbackQuery):
-            chat = message.message.chat if message.message else None
-        else:
-            chat = message.chat
-        
+        chat = ValidationUtils.extract_chat(message)
         return chat and chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
 
     @staticmethod
@@ -629,6 +627,7 @@ class UserAccessContext:
 
 
 # Convenience exports for easy importing
+extract_chat = ValidationUtils.extract_chat
 extract_user_id = ValidationUtils.extract_user_id
 is_admin = ValidationUtils.is_admin
 is_auth_user = ValidationUtils.is_auth_user
