@@ -432,7 +432,12 @@ class BotSettingsHandler(BaseHandler):
         try:
             if 'message_id' in session.data:
                 editing_msg_id = session.data['message_id']
-                await client.delete_messages(message.chat.id, editing_msg_id)
+                await telegram_api.call_api(
+                    client.delete_messages,
+                    message.chat.id,
+                    editing_msg_id,
+                    chat_id=message.chat.id
+                )
         except Exception as e:
             logger.warning(f"Could not delete editing message: {e}")
             
@@ -487,7 +492,12 @@ class BotSettingsHandler(BaseHandler):
             try:
                 if 'message_id' in session.data:
                     editing_msg_id = session.data['message_id']
-                    await client.delete_messages(message.chat.id, editing_msg_id)
+                    await telegram_api.call_api(
+                        client.delete_messages,
+                        message.chat.id,
+                        editing_msg_id,
+                        chat_id=message.chat.id
+                    )
             except Exception as e:
                 logger.warning(f"Could not delete editing message: {e}")
                 
@@ -533,7 +543,12 @@ class BotSettingsHandler(BaseHandler):
                 try:
                     if 'message_id' in session.data:
                         editing_msg_id = session.data['message_id']
-                        await client.delete_messages(message.chat.id, editing_msg_id)
+                        await telegram_api.call_api(
+                            client.delete_messages,
+                            message.chat.id,
+                            editing_msg_id,
+                            chat_id=message.chat.id
+                        )
                 except Exception as e:
                     logger.warning(f"Could not delete editing message: {e}")
 
