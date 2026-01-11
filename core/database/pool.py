@@ -126,7 +126,12 @@ class DatabaseConnectionPool:
                 logger.warning("Duplicate key detected. Skipping.")
                 raise
             except Exception as e:
-                logger.error(f"Unexpected database error: {e}")
+                error_str = str(e)
+                # Index conflicts are normal when index already exists with same keys
+                if "IndexOptionsConflict" in error_str or "Index already exists" in error_str:
+                    logger.debug(f"Index conflict (already exists): {e}")
+                else:
+                    logger.error(f"Unexpected database error: {e}")
                 raise
 
         # This should never be reached, but satisfy static analysis
