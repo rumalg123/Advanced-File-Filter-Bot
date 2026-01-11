@@ -5,6 +5,8 @@ from pyrogram.errors import UserNotParticipant, ChatAdminRequired
 from pyrogram.types import InlineKeyboardButton
 
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
+
 logger = get_logger(__name__)
 
 
@@ -38,7 +40,12 @@ class SubscriptionManager:
             # Check AUTH_CHANNEL
             if check_channel and self.auth_channel:
                 try:
-                    member = await client.get_chat_member(self.auth_channel, user_id)
+                    member = await telegram_api.call_api(
+                        client.get_chat_member,
+                        self.auth_channel,
+                        user_id,
+                        chat_id=self.auth_channel
+                    )
                     if member.status == enums.ChatMemberStatus.BANNED:
                         return False
                     # If user is left/kicked, they're not subscribed
@@ -64,7 +71,12 @@ class SubscriptionManager:
             if check_groups and self.auth_groups:
                 for group_id in self.auth_groups:
                     try:
-                        member = await client.get_chat_member(group_id, user_id)
+                        member = await telegram_api.call_api(
+                            client.get_chat_member,
+                            group_id,
+                            user_id,
+                            chat_id=group_id
+                        )
                         if member.status in [
                             enums.ChatMemberStatus.BANNED,
                             enums.ChatMemberStatus.LEFT,
@@ -104,7 +116,11 @@ class SubscriptionManager:
     async def get_chat_link(self, client: Client, chat_id: int) -> str:
         """Get chat link (invite link or @username)"""
         try:
-            chat = await client.get_chat(chat_id)
+            chat = await telegram_api.call_api(
+                client.get_chat,
+                chat_id,
+                chat_id=chat_id
+            )
 
             # If chat has username, return t.me link
             if chat.username:
@@ -152,7 +168,11 @@ class SubscriptionManager:
             try:
                 chat_link = await self.get_chat_link(client, self.auth_channel)
                 try:
-                    chat = await client.get_chat(self.auth_channel)
+                    chat = await telegram_api.call_api(
+                        client.get_chat,
+                        self.auth_channel,
+                        chat_id=self.auth_channel
+                    )
                     channel_name = chat.title or "Updates Channel"
                 except Exception:
                     channel_name = "Updates Channel"
@@ -171,7 +191,11 @@ class SubscriptionManager:
             try:
                 chat_link = await self.get_chat_link(client, group_id)
                 try:
-                    chat = await client.get_chat(group_id)
+                    chat = await telegram_api.call_api(
+                        client.get_chat,
+                        group_id,
+                        chat_id=group_id
+                    )
                     group_name = chat.title or "Required Group"
                 except Exception:
                     group_name = "Required Group"
@@ -215,10 +239,19 @@ class SubscriptionManager:
         # Check AUTH_CHANNEL
         if self.auth_channel:
             try:
-                chat = await client.get_chat(self.auth_channel)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    self.auth_channel,
+                    chat_id=self.auth_channel
+                )
                 # Try to get bot's member status
                 try:
-                    member = await client.get_chat_member(self.auth_channel, "me")
+                    member = await telegram_api.call_api(
+                        client.get_chat_member,
+                        self.auth_channel,
+                        "me",
+                        chat_id=self.auth_channel
+                    )
                     if member.status not in [
                         enums.ChatMemberStatus.ADMINISTRATOR,
                         enums.ChatMemberStatus.MEMBER
@@ -258,10 +291,19 @@ class SubscriptionManager:
         # Check AUTH_GROUPS
         for group_id in self.auth_groups:
             try:
-                chat = await client.get_chat(group_id)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    group_id,
+                    chat_id=group_id
+                )
                 # Try to get bot's member status
                 try:
-                    member = await client.get_chat_member(group_id, "me")
+                    member = await telegram_api.call_api(
+                        client.get_chat_member,
+                        group_id,
+                        "me",
+                        chat_id=group_id
+                    )
                     if member.status not in [
                         enums.ChatMemberStatus.ADMINISTRATOR,
                         enums.ChatMemberStatus.MEMBER

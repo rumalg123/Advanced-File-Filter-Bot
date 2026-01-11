@@ -109,7 +109,11 @@ class FileCallbackHandler(BaseCommandHandler):
         # Check if user has started the bot
         try:
             # Try to get user info to check if bot is started
-            await client.get_chat(callback_user_id)
+            await telegram_api.call_api(
+                client.get_chat,
+                callback_user_id,
+                chat_id=callback_user_id
+            )
         except UserIsBlocked:
             await query.answer(
                 "❌ Please start the bot first!\n"
@@ -239,7 +243,11 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Check if user has started the bot
         try:
-            await client.get_chat(user_id)
+            await telegram_api.call_api(
+                client.get_chat,
+                user_id,
+                chat_id=user_id
+            )
         except UserIsBlocked:
             await query.answer(
                 "❌ Please start the bot first!\n"

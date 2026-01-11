@@ -79,12 +79,21 @@ class IndexingService:
                 chat_id = channel_input
 
             # Verify bot has access
-            chat = await client.get_chat(chat_id)
+            chat = await telegram_api.call_api(
+                client.get_chat,
+                chat_id,
+                chat_id=chat_id if isinstance(chat_id, int) else None
+            )
 
             # Check if bot is admin for private channels
             if chat.type == enums.ChatType.CHANNEL:
                 try:
-                    member = await client.get_chat_member(chat_id, "me")
+                    member = await telegram_api.call_api(
+                        client.get_chat_member,
+                        chat_id,
+                        "me",
+                        chat_id=chat.id
+                    )
                     if member.status not in [
                         enums.ChatMemberStatus.ADMINISTRATOR,
                         enums.ChatMemberStatus.OWNER

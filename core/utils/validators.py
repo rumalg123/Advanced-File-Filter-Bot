@@ -6,6 +6,7 @@ from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
 from pyrogram.types import Message, CallbackQuery
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 
 logger = get_logger(__name__)
 
@@ -270,7 +271,12 @@ class PermissionUtils:
     async def is_group_admin(client: Client, group_id: int, user_id: int) -> bool:
         """Check if user is group admin or owner"""
         try:
-            member = await client.get_chat_member(group_id, user_id)
+            member = await telegram_api.call_api(
+                client.get_chat_member,
+                group_id,
+                user_id,
+                chat_id=group_id
+            )
             return member.status in [
                 enums.ChatMemberStatus.ADMINISTRATOR,
                 enums.ChatMemberStatus.OWNER
@@ -283,7 +289,12 @@ class PermissionUtils:
     async def is_group_owner(client: Client, group_id: int, user_id: int) -> bool:
         """Check if user is group owner"""
         try:
-            member = await client.get_chat_member(group_id, user_id)
+            member = await telegram_api.call_api(
+                client.get_chat_member,
+                group_id,
+                user_id,
+                chat_id=group_id
+            )
             return member.status == enums.ChatMemberStatus.OWNER
         except Exception as e:
             logger.debug(f"Error checking owner status for user {user_id} in group {group_id}: {e}")

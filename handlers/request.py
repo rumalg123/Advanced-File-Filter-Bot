@@ -419,7 +419,10 @@ class RequestHandler(BaseHandler):
         # If PM failed and we have support group, try there
         if not pm_sent and self.bot.config.SUPPORT_GROUP_ID:
             try:
-                user = await client.get_users(user_id)
+                user = await telegram_api.call_api(
+                    client.get_users,
+                    user_id
+                )
                 mention_msg = (
                     f"{user.mention}, due to bot being blocked, here's your request update:\n"
                     f"{response_msg}"

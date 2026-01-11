@@ -48,7 +48,11 @@ class FilterService:
 
             # Get group title
             try:
-                chat = await client.get_chat(group_id)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    group_id,
+                    chat_id=group_id
+                )
                 return int(group_id), chat.title
             except Exception:
                 return int(group_id), f"Group {group_id}"

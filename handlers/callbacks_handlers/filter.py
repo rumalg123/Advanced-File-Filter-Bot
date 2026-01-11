@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery
 
 from handlers.commands_handlers import BaseCommandHandler
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin, is_group_owner
 
 logger = get_logger(__name__)
@@ -74,7 +75,11 @@ class FilterCallBackHandler(BaseCommandHandler):
 
         if success:
             try:
-                chat = await client.get_chat(group_id)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    group_id,
+                    chat_id=group_id
+                )
                 title = chat.title
             except Exception:
                 title = f"Group {group_id}"

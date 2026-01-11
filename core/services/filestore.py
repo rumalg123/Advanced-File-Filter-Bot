@@ -198,7 +198,8 @@ class FileStoreService:
 
         # Generate link
         encoded = self.encode_file_identifier(identifier, protect)
-        bot_username = (await client.get_me()).username
+        me = await telegram_api.call_api(client.get_me)
+        bot_username = me.username
 
         # Ensure the encoded string isn't too long for Telegram
         if len(encoded) > 64:
@@ -255,7 +256,11 @@ class FileStoreService:
         else:
             # It's a username, try to get channel info
             try:
-                chat = await client.get_chat(f_chat_id)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    f_chat_id,
+                    chat_id=None  # Username, not numeric ID
+                )
                 f_chat_id = chat.id
             except Exception as e:
                 logger.error(f"Error resolving chat {f_chat_id}: {e}")
@@ -278,7 +283,11 @@ class FileStoreService:
                 l_chat_id = int(l_chat_id)
         else:
             try:
-                chat = await client.get_chat(l_chat_id)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    l_chat_id,
+                    chat_id=None  # Username, not numeric ID
+                )
                 l_chat_id = chat.id
             except Exception as e:
                 logger.error(f"Error resolving chat {l_chat_id}: {e}")
@@ -291,7 +300,8 @@ class FileStoreService:
         # Create batch data
         string = f"{f_msg_id}_{l_msg_id}_{f_chat_id}_{'pbatch' if protect else 'batch'}"
         b_64 = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
-        bot_username = (await client.get_me()).username
+        me = await telegram_api.call_api(client.get_me)
+        bot_username = me.username
         return f"https://t.me/{bot_username}?start=DSTORE-{b_64}"
 
     async def create_premium_batch_link(
@@ -354,7 +364,8 @@ class FileStoreService:
                 existing.protected == protect and
                 existing.premium_only == premium_only):
                 logger.info(f"Returning existing duplicate batch link: {existing.id}")
-                bot_username = (await client.get_me()).username
+                me = await telegram_api.call_api(client.get_me)
+                bot_username = me.username
                 return f"https://t.me/{bot_username}?start=PBLINK-{existing.id}"
 
         # Generate unique batch link ID

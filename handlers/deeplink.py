@@ -321,9 +321,11 @@ class DeepLinkHandler(BaseCommandHandler):
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
         await message.reply_text(f"✅ Sent {success_count}/{len(files_data)} files!")
-        await client.delete_messages(
-            chat_id=sending_file_msg.chat.id,
-            message_ids=sending_file_msg.id
+        await telegram_api.call_api(
+            client.delete_messages,
+            sending_file_msg.chat.id,
+            sending_file_msg.id,
+            chat_id=sending_file_msg.chat.id
         )
 
         # Delete the command message

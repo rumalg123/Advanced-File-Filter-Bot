@@ -85,7 +85,11 @@ class ConnectionHandler(BaseHandler):
         # Try to connect
         try:
             # Get chat info
-            chat = await client.get_chat(group_id)
+            chat = await telegram_api.call_api(
+                client.get_chat,
+                group_id,
+                chat_id=group_id if isinstance(group_id, int) else None
+            )
             group_id = chat.id  # Get numeric ID
 
             success, msg, title = await self.connection_service.connect_to_group(
@@ -299,7 +303,11 @@ class ConnectionHandler(BaseHandler):
         ])
 
         try:
-            chat = await client.get_chat(int(group_id))
+            chat = await telegram_api.call_api(
+                client.get_chat,
+                int(group_id),
+                chat_id=int(group_id)
+            )
             title = chat.title
             members_count = chat.members_count
 

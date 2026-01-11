@@ -3,6 +3,7 @@ from typing import Optional, List, Tuple, Dict, Any
 from pyrogram import Client, enums
 
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from repositories.connection import ConnectionRepository
 
 logger = get_logger(__name__)
@@ -15,7 +16,12 @@ async def verify_user_in_group(
 ) -> bool:
     """Verify if user is still in the group"""
     try:
-        member = await client.get_chat_member(group_id, user_id)
+        member = await telegram_api.call_api(
+            client.get_chat_member,
+            group_id,
+            user_id,
+            chat_id=group_id
+        )
         return member.status not in [
             enums.ChatMemberStatus.LEFT,
             enums.ChatMemberStatus.BANNED
@@ -48,7 +54,12 @@ class ConnectionService:
         # Verify user is admin in the group or is bot admin
         if user_id not in self.admins:
             try:
-                member = await client.get_chat_member(group_id, user_id)
+                member = await telegram_api.call_api(
+                    client.get_chat_member,
+                    group_id,
+                    user_id,
+                    chat_id=group_id
+                )
                 if member.status not in [
                     enums.ChatMemberStatus.ADMINISTRATOR,
                     enums.ChatMemberStatus.OWNER
@@ -60,7 +71,12 @@ class ConnectionService:
 
         # Verify bot is in the group
         try:
-            bot_member = await client.get_chat_member(group_id, "me")
+            bot_member = await telegram_api.call_api(
+                client.get_chat_member,
+                group_id,
+                "me",
+                chat_id=group_id
+            )
             if bot_member.status != enums.ChatMemberStatus.ADMINISTRATOR:
                 return False, "I need to be an admin in the group!", None
         except Exception:
@@ -68,7 +84,11 @@ class ConnectionService:
 
         # Get group info
         try:
-            chat = await client.get_chat(group_id)
+            chat = await telegram_api.call_api(
+                client.get_chat,
+                group_id,
+                chat_id=group_id
+            )
             title = chat.title
         except Exception:
             title = f"Group {group_id}"
@@ -124,7 +144,11 @@ class ConnectionService:
 
         for group_id in group_ids:
             try:
-                chat = await client.get_chat(int(group_id))
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    int(group_id),
+                    chat_id=int(group_id)
+                )
                 is_active = group_id == active_group
 
                 connections.append({
