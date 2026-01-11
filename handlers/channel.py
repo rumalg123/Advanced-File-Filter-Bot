@@ -13,6 +13,7 @@ from core.constants import ProcessingConstants
 from core.utils.validators import normalize_filename_for_search, get_special_channels
 from core.utils.helpers import extract_file_ref
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from repositories.channel import ChannelRepository
 from repositories.media import MediaFile, FileType
 
@@ -307,13 +308,15 @@ class ChannelHandler:
                     # Send alert to log channel if too many warnings
                     if self.queue_full_warnings % 10 == 0 and self.bot.config.LOG_CHANNEL:
                         try:
-                            await self.bot.send_message(
+                            await telegram_api.call_api(
+                                self.bot.send_message,
                                 self.bot.config.LOG_CHANNEL,
                                 f"⚠️ <b>Queue Overflow Alert</b>\n"
                                 f"The message queue has overflowed {self.queue_full_warnings} times.\n"
                                 f"Current queue size: {self.message_queue.qsize()}/{self.message_queue.maxsize}\n"
                                 f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
-                                f"Consider reducing the indexing rate or increasing queue size."
+                                f"Consider reducing the indexing rate or increasing queue size.",
+                                chat_id=self.bot.config.LOG_CHANNEL
                             )
                         except Exception:
                             pass
@@ -364,9 +367,11 @@ class ChannelHandler:
                     f"📦 Total Processed: {len(batch)}"
                 )
 
-                await self.bot.send_message(
+                await telegram_api.call_api(
+                    self.bot.send_message,
                     self.bot.config.LOG_CHANNEL,
-                    summary
+                    summary,
+                    chat_id=self.bot.config.LOG_CHANNEL
                 )
             except Exception:
                 pass

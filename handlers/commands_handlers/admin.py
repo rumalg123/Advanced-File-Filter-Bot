@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Dict, List
 
 from pyrogram import Client, filters
-from pyrogram.errors import FloodWait
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator
+from core.utils.telegram_api import telegram_api
 from core.cache.monitor import CacheMonitor
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
@@ -72,7 +72,12 @@ class AdminCommandHandler(BaseCommandHandler):
     async def _notify_user(self, client: Client, user_id: int, message: str) -> bool:
         """Send notification to user, return True if successful"""
         try:
-            await client.send_message(user_id, message)
+            await telegram_api.call_api(
+                client.send_message,
+                user_id,
+                message,
+                chat_id=user_id
+            )
             return True
         except Exception as e:
             logger.warning(f"Failed to notify user {user_id}: {e}")
@@ -195,7 +200,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     if stats['total'] > 0:
                         processed = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
                         progress_percent = (processed / stats['total']) * 100
-                        
+
                         text = (
                             f"📡 <b>Broadcast Progress</b>\n\n"
                             f"👥 Total Users: {stats['total']:,}\n"
@@ -207,10 +212,11 @@ class AdminCommandHandler(BaseCommandHandler):
                             f"⏳ Progress: {progress_percent:.1f}%"
                         )
 
-                        try:
-                            await callback_query.message.edit_text(text, parse_mode=CaptionFormatter.get_parse_mode())
-                        except FloodWait as e:
-                            await asyncio.sleep(e.value)
+                        await telegram_api.call_api(
+                            callback_query.message.edit_text,
+                            text,
+                            parse_mode=CaptionFormatter.get_parse_mode()
+                        )
                 except Exception as e:
                     logger.error(f"Progress update error: {e}")
 
@@ -247,13 +253,15 @@ class AdminCommandHandler(BaseCommandHandler):
 
                 # Log broadcast
                 if self.bot.config.LOG_CHANNEL:
-                    await client.send_message(
+                    await telegram_api.call_api(
+                        client.send_message,
                         self.bot.config.LOG_CHANNEL,
                         f"#Broadcast\n"
                         f"Admin: {callback_query.from_user.mention}\n"
                         f"Total: {final_stats['total']:,}\n"
                         f"Success: {final_stats['success']:,}",
-                        parse_mode=CaptionFormatter.get_parse_mode()
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                        chat_id=self.bot.config.LOG_CHANNEL
                     )
 
             except asyncio.CancelledError:
@@ -417,7 +425,12 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
-                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        self.bot.config.LOG_CHANNEL,
+                        log_text,
+                        chat_id=self.bot.config.LOG_CHANNEL
+                    )
                 except Exception as e:
                     logger.error(f"Failed to log ban action: {e}")
 
@@ -461,7 +474,12 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
-                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        self.bot.config.LOG_CHANNEL,
+                        log_text,
+                        chat_id=self.bot.config.LOG_CHANNEL
+                    )
                 except Exception as e:
                     logger.error(f"Failed to log unban action: {e}")
 
@@ -510,7 +528,12 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
-                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        self.bot.config.LOG_CHANNEL,
+                        log_text,
+                        chat_id=self.bot.config.LOG_CHANNEL
+                    )
                 except Exception as e:
                     logger.error(f"Failed to log premium addition: {e}")
 
@@ -556,7 +579,12 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
-                    await client.send_message(self.bot.config.LOG_CHANNEL, log_text)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        self.bot.config.LOG_CHANNEL,
+                        log_text,
+                        chat_id=self.bot.config.LOG_CHANNEL
+                    )
                 except Exception as e:
                     logger.error(f"Failed to log premium removal: {e}")
 

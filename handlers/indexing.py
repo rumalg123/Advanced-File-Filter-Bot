@@ -7,6 +7,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.services.indexing import IndexingService, IndexRequestService
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin
 
 logger = get_logger(__name__)
@@ -155,7 +156,12 @@ class IndexingHandler:
 
             # Check if last message exists
             try:
-                last_msg = await client.get_messages(chat_id_int, last_msg_id)
+                last_msg = await telegram_api.call_api(
+                    client.get_messages,
+                    chat_id_int,
+                    last_msg_id,
+                    chat_id=chat_id_int
+                )
                 if last_msg.empty:
                     return await message.reply("❌ The specified message doesn't exist")
             except Exception as e:
@@ -252,10 +258,12 @@ class IndexingHandler:
                 await query.message.delete()
 
                 try:
-                    await client.send_message(
+                    await telegram_api.call_api(
+                        client.send_message,
                         int(from_user),
                         f"❌ Your request to index <code>{chat_id}</code> has been declined by moderators.",
-                        reply_to_message_id=int(param)
+                        reply_to_message_id=int(param),
+                        chat_id=int(from_user)
                     )
                 except Exception:
                     pass
@@ -291,11 +299,13 @@ class IndexingHandler:
         # Notify requester if not admin
         if int(requested_by) not in self.bot.config.ADMINS:
             try:
-                await client.send_message(
+                await telegram_api.call_api(
+                    client.send_message,
                     int(requested_by),
                     f"✅ Your request to index <code>{chat_id}</code> has been accepted!\n"
                     "Indexing will begin shortly.",
-                    reply_to_message_id=last_msg_id
+                    reply_to_message_id=last_msg_id,
+                    chat_id=int(requested_by)
                 )
             except Exception:
                 pass

@@ -2,6 +2,7 @@ from pyrogram import Client, enums
 from pyrogram.types import Message
 
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from core.utils.validators import admin_only
 from handlers.commands_handlers.base import BaseCommandHandler
 
@@ -32,7 +33,11 @@ class ChannelCommandHandler(BaseCommandHandler):
         except ValueError:
             # It's a username, try to get channel info
             try:
-                chat = await client.get_chat(channel_input)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    channel_input,
+                    chat_id=channel_input
+                )
                 channel_id = chat.id
                 channel_username = chat.username
                 channel_title = chat.title
@@ -56,7 +61,11 @@ class ChannelCommandHandler(BaseCommandHandler):
         else:
             # It's a numeric ID, try to get channel info
             try:
-                chat = await client.get_chat(channel_id)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    channel_id,
+                    chat_id=channel_id
+                )
                 channel_username = chat.username
                 channel_title = chat.title
             except Exception as e:
@@ -77,7 +86,12 @@ class ChannelCommandHandler(BaseCommandHandler):
 
         # Verify bot is in the channel
         try:
-            member = await client.get_chat_member(channel_id, "me")
+            member = await telegram_api.call_api(
+                client.get_chat_member,
+                channel_id,
+                "me",
+                chat_id=channel_id
+            )
             if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.MEMBER]:
                 await message.reply_text(
                     "❌ I need to be a member/admin of the channel to index files.\n"
@@ -127,12 +141,14 @@ class ChannelCommandHandler(BaseCommandHandler):
 
             # Log action
             if self.bot.config.LOG_CHANNEL:
-                await client.send_message(
+                await telegram_api.call_api(
+                    client.send_message,
                     self.bot.config.LOG_CHANNEL,
                     f"#ChannelAdded\n"
                     f"Channel: {channel_title or channel_id}\n"
                     f"ID: <code>{channel_id}</code>\n"
-                    f"Added by: {message.from_user.mention}"
+                    f"Added by: {message.from_user.mention}",
+                    chat_id=self.bot.config.LOG_CHANNEL
                 )
         else:
             await message.reply_text("❌ Failed to add channel. Please try again.")
@@ -157,7 +173,11 @@ class ChannelCommandHandler(BaseCommandHandler):
         except ValueError:
             # It's a username, try to get channel info
             try:
-                chat = await client.get_chat(channel_input)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    channel_input,
+                    chat_id=channel_input
+                )
                 channel_id = chat.id
             except Exception:
                 await message.reply_text("❌ Error: Could not find channel.")
@@ -191,13 +211,15 @@ class ChannelCommandHandler(BaseCommandHandler):
 
             # Log action
             if self.bot.config.LOG_CHANNEL:
-                await client.send_message(
+                await telegram_api.call_api(
+                    client.send_message,
                     self.bot.config.LOG_CHANNEL,
                     f"#ChannelRemoved\n"
                     f"Channel: {channel.channel_title or channel_id}\n"
                     f"ID: <code>{channel_id}</code>\n"
                     f"Files indexed: {channel.indexed_count}\n"
-                    f"Removed by: {message.from_user.mention}"
+                    f"Removed by: {message.from_user.mention}",
+                    chat_id=self.bot.config.LOG_CHANNEL
                 )
         else:
             await message.reply_text("❌ Failed to remove channel. Please try again.")
@@ -274,7 +296,11 @@ class ChannelCommandHandler(BaseCommandHandler):
         except ValueError:
             # It's a username, try to get channel info
             try:
-                chat = await client.get_chat(channel_input)
+                chat = await telegram_api.call_api(
+                    client.get_chat,
+                    channel_input,
+                    chat_id=channel_input
+                )
                 channel_id = chat.id
             except Exception:
                 await message.reply_text("❌ Error: Could not find channel.")

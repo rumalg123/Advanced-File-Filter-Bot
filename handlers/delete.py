@@ -9,6 +9,7 @@ from core.cache.config import CacheKeyGenerator
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from core.utils.validators import is_original_requester, validate_callback_data
 from handlers.base import BaseHandler
 
@@ -139,9 +140,11 @@ class DeleteHandler(BaseHandler):
             # Optionally, send alert to log channel
             if self.bot.config.LOG_CHANNEL:
                 try:
-                    await self.bot.send_message(
+                    await telegram_api.call_api(
+                        self.bot.send_message,
                         self.bot.config.LOG_CHANNEL,
-                        "⚠️ Delete queue is full! Consider increasing queue size or processing rate."
+                        "⚠️ Delete queue is full! Consider increasing queue size or processing rate.",
+                        chat_id=self.bot.config.LOG_CHANNEL
                     )
                 except Exception as e:
                     logger.warning(f"Failed to send queue full alert: {e}")
@@ -262,12 +265,14 @@ class DeleteHandler(BaseHandler):
             # Log the bulk deletion
             if self.bot.config.LOG_CHANNEL:
                 try:
-                    await self.bot.send_message(
+                    await telegram_api.call_api(
+                        self.bot.send_message,
                         self.bot.config.LOG_CHANNEL,
                         f"#BulkDelete\n"
                         f"Admin: {callback_query.from_user.mention}\n"
                         f"Keyword: {keyword}\n"
-                        f"Files deleted: {deleted_count}"
+                        f"Files deleted: {deleted_count}",
+                        chat_id=self.bot.config.LOG_CHANNEL
                     )
                 except Exception as e:
                     logger.error(f"Failed to log bulk deletion: {e}")
@@ -322,9 +327,11 @@ class DeleteHandler(BaseHandler):
                     f"📊 Total Processed: {len(batch)}"
                 )
 
-                await self.bot.send_message(
+                await telegram_api.call_api(
+                    self.bot.send_message,
                     self.bot.config.LOG_CHANNEL,
-                    summary
+                    summary,
+                    chat_id=self.bot.config.LOG_CHANNEL
                 )
             except Exception as e:
                 logger.error(f"Failed to send deletion summary: {e}")
