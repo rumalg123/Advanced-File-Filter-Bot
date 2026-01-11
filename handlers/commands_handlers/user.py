@@ -10,6 +10,7 @@ from core.utils.file_emoji import get_file_type_display_name
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from repositories.media import FileType
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from core.utils.validators import private_only, extract_user_id, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription, check_ban
@@ -37,11 +38,13 @@ class UserCommandHandler(BaseCommandHandler):
             # Log new user
             if self.bot.config.LOG_CHANNEL:
                 try:
-                    await client.send_message(
+                    await telegram_api.call_api(
+                        client.send_message,
                         self.bot.config.LOG_CHANNEL,
                         f"#NewUser\n"
                         f"ID: <code>{user_id}</code>\n"
-                        f"Name: {message.from_user.mention}"
+                        f"Name: {message.from_user.mention}",
+                        chat_id=self.bot.config.LOG_CHANNEL
                     )
                 except Exception as e:
                     logger.error(f"Failed to log new user: {e}")

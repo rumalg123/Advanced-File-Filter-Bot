@@ -6,6 +6,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
+from core.utils.telegram_api import telegram_api
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -537,11 +538,13 @@ class BotSettingsHandler(BaseHandler):
                     logger.warning(f"Could not delete editing message: {e}")
 
                 # Send success message with restart reminder
-                success_msg = await client.send_message(
+                success_msg = await telegram_api.call_api(
+                    client.send_message,
                     message.chat.id,
                     f"✅ Setting <b>{self._get_display_name(key)}</b> updated successfully!\n\n"
                     f"⚠️ <b>Important:</b> You must restart the bot for changes to take effect.\n\n"
-                    f"Use `/restart` command now to apply changes."
+                    f"Use `/restart` command now to apply changes.",
+                    chat_id=message.chat.id
                 )
 
                 # Clean up session immediately to prevent search triggers
