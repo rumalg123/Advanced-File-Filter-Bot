@@ -10,6 +10,7 @@ from core.concurrency.semaphore_manager import semaphore_manager
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import is_original_requester, validate_callback_data
 from handlers.base import BaseHandler
@@ -160,7 +161,7 @@ class DeleteHandler(BaseHandler):
             if deleted:
                 await message.reply_text("✅ File deleted from database!")
             else:
-                await message.reply_text("❌ File not found in database.")
+                await message.reply_text(ErrorMessages.FILE_NOT_IN_DB)
             return
 
         if not message.reply_to_message:
@@ -174,7 +175,7 @@ class DeleteHandler(BaseHandler):
         file_info = extract_file_info(message.reply_to_message)
 
         if not file_info:
-            await message.reply_text("❌ No supported media found in the message.")
+            await message.reply_text(ErrorMessages.NO_MEDIA_FOUND)
             return
 
         # Delete from database
@@ -186,7 +187,7 @@ class DeleteHandler(BaseHandler):
                 f"📁 Name: {file_info['file_name']}"
             )
         else:
-            await message.reply_text("❌ File not found in database.")
+            await message.reply_text(ErrorMessages.FILE_NOT_IN_DB)
 
     async def handle_deleteall_command(self, client: Client, message: Message):
         """Handle delete all files by keyword"""
@@ -223,7 +224,7 @@ class DeleteHandler(BaseHandler):
         # Validate callback data using validator
         is_valid, parts = validate_callback_data(callback_query, expected_parts=2)
         if not is_valid:
-            await callback_query.answer("Invalid callback data", show_alert=True)
+            await callback_query.answer(ErrorMessages.INVALID_CALLBACK, show_alert=True)
             return
 
         action = parts[0]
@@ -232,7 +233,7 @@ class DeleteHandler(BaseHandler):
 
         # Only the original requester can confirm/cancel using validator
         if not is_original_requester(callback_user_id, original_user_id):
-            await callback_query.answer("❌ You cannot interact with this!", show_alert=True)
+            await callback_query.answer(ErrorMessages.NOT_YOUR_MESSAGE, show_alert=True)
             return
 
         cache_key = CacheKeyGenerator.deleteall_pending(original_user_id)

@@ -7,6 +7,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.search_results import SearchResultsBuilder
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import validate_callback_data
@@ -290,7 +291,7 @@ class RequestHandler(BaseHandler):
         # Validate callback data using validator
         is_valid, data = validate_callback_data(query, expected_parts=4)
         if not is_valid:
-            return await query.answer("Invalid data", show_alert=True)
+            return await query.answer(ErrorMessages.INVALID_DATA, show_alert=True)
 
         _, action, user_id, msg_id = data
         user_id = int(user_id)

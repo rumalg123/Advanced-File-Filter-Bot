@@ -7,6 +7,7 @@ from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.pagination import PaginationBuilder, PaginationHelper
 from handlers.commands_handlers.base import BaseCommandHandler
 
@@ -24,7 +25,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         parsed_data = PaginationHelper.parse_callback_data(query.data)
 
         if not parsed_data:
-            return await query.answer("Invalid data", show_alert=True)
+            return await query.answer(ErrorMessages.INVALID_DATA, show_alert=True)
 
         # Extract parsed values (action is in callback data but offset is pre-calculated by PaginationBuilder)
         search_query = parsed_data['query']
@@ -34,7 +35,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
-            await query.answer("❌ You cannot interact with this message!", show_alert=True)
+            await query.answer(ErrorMessages.NOT_YOUR_MESSAGE, show_alert=True)
             return
 
         page_size = self.bot.config.MAX_BTN_SIZE
@@ -51,7 +52,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         )
 
         if not has_access:
-            return await query.answer("❌ Access denied", show_alert=True)
+            return await query.answer(ErrorMessages.ACCESS_DENIED, show_alert=True)
 
         if not files:
             return await query.answer("No more results", show_alert=True)

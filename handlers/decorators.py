@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.validators import (
     extract_chat, extract_user_id, is_admin, is_auth_user, is_bot_user,
     get_special_channels, is_special_channel
@@ -46,7 +47,7 @@ class SubscriptionRequired:
 
                 if not user_id:
                     if isinstance(message, Message):
-                        await message.reply_text("❌ Anonymous users cannot use this bot.")
+                        await message.reply_text(ErrorMessages.ANONYMOUS_USER)
                     return
 
                 # Skip check for admins

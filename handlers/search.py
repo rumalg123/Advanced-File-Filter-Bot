@@ -16,6 +16,7 @@ from core.utils.helpers import format_file_size
 from handlers.decorators import require_subscription, check_ban
 
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.validators import (
     sanitize_search_query, extract_user_id, is_admin, is_auth_user,
     is_bot_user, get_special_channels, is_special_channel
@@ -240,7 +241,7 @@ class SearchHandler:
             await query.answer(
                 results=[],
                 cache_time=0,
-                switch_pm_text="❌ Authentication Error",
+                switch_pm_text=ErrorMessages.INLINE_AUTH_ERROR,
                 switch_pm_parameter="start"
             )
             return
@@ -324,7 +325,7 @@ class SearchHandler:
                 await query.answer(
                     results=[],
                     cache_time=0,
-                    switch_pm_text="❌ Access Denied",
+                    switch_pm_text=ErrorMessages.INLINE_ACCESS_DENIED,
                     switch_pm_parameter="premium"
                 )
                 return
@@ -333,7 +334,7 @@ class SearchHandler:
                 await query.answer(
                     results=[],
                     cache_time=10,
-                    switch_pm_text="❌ No results found",
+                    switch_pm_text=ErrorMessages.INLINE_NO_RESULTS,
                     switch_pm_parameter="start"
                 )
                 return
@@ -381,7 +382,7 @@ class SearchHandler:
             await query.answer(
                 results=[],
                 cache_time=0,
-                switch_pm_text="❌ Search Error",
+                switch_pm_text=ErrorMessages.INLINE_SEARCH_ERROR,
                 switch_pm_parameter="start"
             )
 
@@ -442,7 +443,7 @@ class SearchHandler:
         except Exception as e:
             logger.error(f"Error in private search: {e}", exc_info=True)
             if not search_sent and not filter_sent:
-                await message.reply_text("❌ An error occurred while searching. Please try again.")
+                await message.reply_text(ErrorMessages.SEARCH_ERROR)
 
     async def _handle_group_search(
             self,

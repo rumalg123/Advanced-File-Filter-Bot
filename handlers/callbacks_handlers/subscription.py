@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery
 
 from core.utils.helpers import MessageProxy
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.validators import extract_user_id, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 
@@ -27,7 +28,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             # Retrieve the cached deeplink
             cached_data = await self.bot.cache.get(session_key)
             if not cached_data:
-                await query.answer("❌ Session expired. Please try again.", show_alert=True)
+                await query.answer(ErrorMessages.SESSION_EXPIRED, show_alert=True)
                 return
 
             original_user_id = cached_data.get('user_id', current_user_id)
@@ -55,10 +56,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
         # Check if current user matches original user
         if current_user_id != original_user_id:
-            await query.answer(
-                "❌ This subscription check is for another user. Please use your own command.",
-                show_alert=True
-            )
+            await query.answer(ErrorMessages.NOT_YOUR_SUBSCRIPTION, show_alert=True)
             return
 
         # Check subscription again
@@ -76,10 +74,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
                 )
 
                 if not is_subscribed:
-                    await query.answer(
-                        "❌ You still need to join the required channel(s)!",
-                        show_alert=True
-                    )
+                    await query.answer(ErrorMessages.JOIN_CHANNELS, show_alert=True)
                     return
 
         # User is now subscribed, handle the original request

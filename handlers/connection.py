@@ -4,6 +4,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from core.services.connection import ConnectionService
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin, is_group_admin
 from handlers.base import BaseHandler
@@ -201,7 +202,7 @@ class ConnectionHandler(BaseHandler):
         # Check permission using validators
         if not is_admin(user_id, self.bot.config.ADMINS):
             if not await is_group_admin(client, int(group_id), user_id):
-                return await query.answer("You need admin rights!", show_alert=True)
+                return await query.answer(ErrorMessages.ADMIN_RIGHTS_REQUIRED, show_alert=True)
 
         # Delete filters
         if self.bot.filter_service:
@@ -338,7 +339,7 @@ class ConnectionHandler(BaseHandler):
         data = query.data.split(":")
 
         if len(data) != 2:
-            return await query.answer("Invalid data", show_alert=True)
+            return await query.answer(ErrorMessages.INVALID_DATA, show_alert=True)
 
         action, group_id = data
 

@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery
 
 from handlers.commands_handlers import BaseCommandHandler
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin, is_group_owner
 
@@ -15,13 +16,13 @@ class FilterCallBackHandler(BaseCommandHandler):
         try:
             data = query.data.split(":")
             if len(data) < 3:
-                return await query.answer("Invalid data", show_alert=True)
+                return await query.answer(ErrorMessages.INVALID_DATA, show_alert=True)
 
             _, alert_index, keyword = data[0], data[1], ":".join(data[2:])  # Handle keywords with colons
             alert_index = int(alert_index)
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid filter alert callback: {query.data}, error: {e}")
-            return await query.answer("Invalid data format", show_alert=True)
+            return await query.answer(ErrorMessages.INVALID_FORMAT, show_alert=True)
 
         # Get the filter to find alerts
         if not query.message:
@@ -45,7 +46,7 @@ class FilterCallBackHandler(BaseCommandHandler):
                 logger.warning(f"Failed to parse alerts data: {e}")
                 await query.answer("Error parsing alert data", show_alert=True)
         else:
-            await query.answer("Alert not found", show_alert=True)
+            await query.answer(ErrorMessages.ALERT_NOT_FOUND, show_alert=True)
 
     async def handle_delall_confirm_callback(self, client: Client, query: CallbackQuery):
         """Handle delete all filters confirmation"""
@@ -55,11 +56,11 @@ class FilterCallBackHandler(BaseCommandHandler):
         try:
             parts = query.data.split("#", 1)
             if len(parts) < 2:
-                return await query.answer("Invalid callback data", show_alert=True)
+                return await query.answer(ErrorMessages.INVALID_CALLBACK, show_alert=True)
             group_id = int(parts[1])
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid delall callback: {query.data}, error: {e}")
-            return await query.answer("Invalid data format", show_alert=True)
+            return await query.answer(ErrorMessages.INVALID_FORMAT, show_alert=True)
 
         # Check permissions using validators
         is_authorized = is_admin(user_id, self.bot.config.ADMINS) or await is_group_owner(client, group_id, user_id)
