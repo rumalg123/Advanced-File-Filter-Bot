@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, UTC
 from typing import Dict, Any, Optional, List
 
-from core.cache.config import CacheKeyGenerator
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
@@ -35,7 +35,7 @@ class ChannelRepository(BaseRepository[Channel]):
 
     def __init__(self, db_pool, cache_manager):
         super().__init__(db_pool, cache_manager, "indexed_channels")
-        self.channels_cache_ttl = 600  # 10 minutes
+        self.channels_cache_ttl = CacheTTLConfig.ACTIVE_CHANNELS
         self.cache_invalidator = CacheInvalidator(cache_manager)
 
     def _entity_to_dict(self, channel: Channel) -> Dict[str, Any]:

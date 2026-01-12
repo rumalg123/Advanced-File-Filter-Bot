@@ -8,6 +8,7 @@ from pymongo.errors import DuplicateKeyError
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
+from core.constants import DatabaseConstants
 from core.database.base import BaseRepository, AggregationMixin
 from core.utils.validators import normalize_query
 from core.utils.logger import get_logger
@@ -386,7 +387,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             query: str,
             file_type: Optional[FileType] = None,
             offset: int = 0,
-            limit: int = 10,
+            limit: int = DatabaseConstants.DEFAULT_SEARCH_LIMIT,
             use_caption: bool = True
     ) -> Tuple[List[MediaFile], int, int]:
         """

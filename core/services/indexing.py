@@ -8,6 +8,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.redis_cache import CacheManager
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.constants import ProcessingConstants
 from core.utils.validators import normalize_filename_for_search
 from core.utils.link_parser import TelegramLinkParser
 from core.utils.logger import get_logger
@@ -129,7 +130,7 @@ class IndexingService:
             chat_id: int,
             last_msg_id: int,
             progress_callback=None,
-            batch_size: int = 50
+            batch_size: int = ProcessingConstants.INDEXING_BATCH_SIZE
     ) -> Dict[str, int]:
         """
         Index files from a channel using batched processing for efficiency.
@@ -140,7 +141,7 @@ class IndexingService:
             chat_id: Channel ID to index
             last_msg_id: Last message ID to index up to
             progress_callback: Optional callback for progress updates
-            batch_size: Number of messages to process in each batch (default: 50)
+            batch_size: Number of messages to process in each batch
         """
         stats = {
             'total_messages': 0,
@@ -185,7 +186,7 @@ class IndexingService:
                         # Progress callback after batch processing
                         if progress_callback:
                             await progress_callback(stats)
-                            await asyncio.sleep(1)  # Prevent flooding
+                            await asyncio.sleep(ProcessingConstants.FLOOD_CONTROL_DELAY)
 
                 # Process any remaining messages in the final batch
                 if message_batch:

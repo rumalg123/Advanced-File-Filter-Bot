@@ -5,7 +5,10 @@ from pathlib import Path
 import aiohttp_cors
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
-from core.constants import MaintenanceConstants
+from core.constants import (
+    MaintenanceConstants, TelegramConstants, DisplayConstants,
+    ProcessingConstants, SystemConstants
+)
 from core.utils.performance import performance_monitor
 from handlers.manager import HandlerManager
 
@@ -356,7 +359,7 @@ class MediaSearchBot(Client):
             api_hash=config.API_HASH,
             bot_token=config.BOT_TOKEN,
             workers=config.WORKERS,
-            sleep_threshold=5,
+            sleep_threshold=TelegramConstants.SLEEP_THRESHOLD,
             parse_mode=CaptionFormatter.get_parse_mode(),
         )
         self.handler_manager = HandlerManager(self)
@@ -845,7 +848,7 @@ class MediaSearchBot(Client):
 
     async def stop(self, *args):
         """Stop the bot and cleanup resources"""
-        logger.info("=" * 60)
+        logger.info("=" * DisplayConstants.LOG_SEPARATOR_LENGTH)
         logger.info("Starting bot shutdown sequence...")
 
         # Stop session manager cleanup task
@@ -871,7 +874,7 @@ class MediaSearchBot(Client):
         await self.cache.close()
 
         logger.info("Bot stopped successfully")
-        logger.info("=" * 60)
+        logger.info("=" * DisplayConstants.LOG_SEPARATOR_LENGTH)
 
     def _get_git_info(self):
         """Get current git information"""
@@ -880,7 +883,7 @@ class MediaSearchBot(Client):
             # Get current commit hash
             hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
                                        capture_output=True, text=True, check=True)
-            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
+            commit_hash = hash_result.stdout.strip()[:DisplayConstants.SHORT_HASH_LENGTH]
             
             # Get commit date and message
             commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
@@ -986,7 +989,7 @@ class MediaSearchBot(Client):
                 for error in check_results['errors']:
                     startup_text += f"• {error['type']} ({error['id']}): {error['error']}\n"
 
-                for admin_id in self.config.ADMINS[:3]:  # Notify first 3 admins
+                for admin_id in self.config.ADMINS[:DisplayConstants.MAX_ADMINS_NOTIFY]:
                     try:
                         error_msg = "⚠️ <b>Bot Configuration Issue</b>\n\n"
                         error_msg += "The bot cannot access some force subscription channels:\n\n"
@@ -1069,7 +1072,7 @@ class MediaSearchBot(Client):
             chat_id: Union[int, str],
             last_msg_id: int,
             first_msg_id: int = 0,
-            batch_size: int = 200
+            batch_size: int = ProcessingConstants.MESSAGE_ITERATION_BATCH_SIZE
     ) -> AsyncGenerator[Message, None]:
         """Iterate messages from ``first_msg_id`` to ``last_msg_id``.
 
@@ -1239,7 +1242,7 @@ def run():
         import resource
         # Increase file descriptor limit
         try:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (100000, 100000))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (SystemConstants.FILE_DESCRIPTOR_LIMIT, SystemConstants.FILE_DESCRIPTOR_LIMIT))
         except (ValueError, OSError) as e:
             logger.debug(f"Could not set resource limit: {e}")
             pass

@@ -11,6 +11,7 @@ from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.constants import TimeConstants, ActivityConstants
 from core.utils.logger import get_logger
 
 # Use TYPE_CHECKING to avoid circular imports
@@ -78,7 +79,13 @@ class BatchOptimizations:
                                     "then": {
                                         "$divide": [
                                             {"$subtract": ["$expiry_date_normalized", "$$NOW"]},
-                                            {"$multiply": [24, 60, 60, 1000]}  # Convert ms to days
+                                            # Convert ms to days: hours * minutes * seconds * milliseconds
+                                            {"$multiply": [
+                                                TimeConstants.HOURS_PER_DAY,
+                                                TimeConstants.SECONDS_PER_MINUTE,
+                                                TimeConstants.SECONDS_PER_MINUTE,
+                                                TimeConstants.MILLISECONDS_PER_SECOND
+                                            ]}
                                         ]
                                     },
                                     "else": 0
@@ -193,9 +200,9 @@ class BatchOptimizations:
             return {media.file_unique_id: None for media in media_files}
     
     async def batch_user_activity_aggregation(
-        self, 
-        user_ids: List[int], 
-        days_back: int = 30
+        self,
+        user_ids: List[int],
+        days_back: int = ActivityConstants.DEFAULT_ACTIVITY_DAYS
     ) -> Dict[int, Dict[str, Any]]:
         """
         Batch user activity aggregation using pipeline joins

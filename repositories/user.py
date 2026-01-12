@@ -9,6 +9,7 @@ from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import cache_premium_status
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.constants import UserConstants
 from core.database.base import BaseRepository, AggregationMixin
 
 from core.utils.logger import get_logger
@@ -309,7 +310,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         action = "added" if is_premium else "removed"
         return success, f"✅ Premium status {action} successfully!" if success else f"❌ Failed to {action.replace('ed', '')} premium status.", user
 
-    @cache_premium_status(ttl=600)  # Cache for 10 minutes
+    @cache_premium_status(ttl=CacheTTLConfig.PREMIUM_STATUS)
     async def check_and_update_premium_status(self, user: User) -> Tuple[bool, Optional[str]]:
         """Check and update premium status if expired"""
         if not user.is_premium:
@@ -830,10 +831,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.daily_request_count = 0
             user.last_request_date = today
 
-        # Check if user has warnings that should be reset (30 days old)
+        # Check if user has warnings that should be reset
         if user.warning_count > 0 and user.last_warning_date:
             days_since_warning = (datetime.now(UTC) - user.last_warning_date).days
-            if days_since_warning >= 30:
+            if days_since_warning >= UserConstants.WARNING_RESET_DAYS:
                 await self.reset_warnings(user_id)
                 user.warning_count = 0
                 user.last_warning_date = None
@@ -913,7 +914,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         warning_reset_in = None
         if user.warning_count > 0 and user.last_warning_date:
             days_since_warning = (datetime.now(UTC) - user.last_warning_date).days
-            warning_reset_in = max(0, 30 - days_since_warning)
+            warning_reset_in = max(0, UserConstants.WARNING_RESET_DAYS - days_since_warning)
 
         return {
             'exists': True,

@@ -6,6 +6,7 @@ import gc
 from typing import Dict, List, Set, Optional, Any
 from weakref import WeakSet, WeakValueDictionary
 
+from core.constants import ManagerConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -176,7 +177,7 @@ class HandlerManager:
     async def cleanup(self):
         """Comprehensive cleanup of all resources"""
         async with self._cleanup_lock:
-            logger.info("=" * 50)
+            logger.info("=" * ManagerConstants.LOG_SEPARATOR_WIDTH)
             logger.info("Starting HandlerManager cleanup...")
             logger.info(f"Current state: {self.get_stats()}")
 
@@ -202,7 +203,7 @@ class HandlerManager:
                 logger.info(f"Waiting for {len(background_tasks)} background tasks...")
                 done, pending = await asyncio.wait(
                     background_tasks,
-                    timeout=5.0,
+                    timeout=ManagerConstants.CLEANUP_TIMEOUT,
                     return_when=asyncio.ALL_COMPLETED
                 )
                 if pending:
@@ -244,7 +245,7 @@ class HandlerManager:
 
             logger.info(f"Final stats: {self.get_stats()}")
             logger.info("HandlerManager cleanup complete")
-            logger.info("=" * 50)
+            logger.info("=" * ManagerConstants.LOG_SEPARATOR_WIDTH)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get manager statistics"""

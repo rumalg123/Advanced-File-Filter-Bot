@@ -8,7 +8,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
     InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
-from core.constants import SearchConstants
+from core.constants import SearchConstants, HandlerPriorityConstants
 from core.session.manager import SessionType
 from core.utils.caption import CaptionFormatter
 from core.utils.file_emoji import get_file_emoji, get_file_type_display_name
@@ -57,7 +57,7 @@ class SearchHandler:
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             self.bot.handler_manager.add_handler(text_handler)  # Handler manager doesn't support group parameter
         else:
-            self.bot.add_handler(text_handler, group=10)  # Lower priority than command handlers
+            self.bot.add_handler(text_handler, group=HandlerPriorityConstants.SEARCH_HANDLER)
         self._handlers.append(text_handler)
 
         # Register inline query handler
@@ -199,7 +199,7 @@ class SearchHandler:
 
         # Get search query
         query = message.text.strip()
-        if not query or len(query) < 2:
+        if not query or len(query) < SearchConstants.MIN_QUERY_LENGTH:
             return
 
         # Route to appropriate handler based on chat type
@@ -300,7 +300,7 @@ class SearchHandler:
             # file_type_str = parts[1].strip().lower()
             # Add file type parsing if needed
 
-        if not search_query or len(search_query) < 2:
+        if not search_query or len(search_query) < SearchConstants.MIN_QUERY_LENGTH:
             await query.answer(
                 results=[],
                 cache_time=0,
@@ -318,7 +318,7 @@ class SearchHandler:
                 chat_id=user_id,  # Use user_id for private context
                 file_type=file_type,
                 offset=offset,
-                limit=10  # Limit to 10 for inline results
+                limit=SearchConstants.INLINE_RESULTS_LIMIT
             )
 
             if not has_access:
@@ -333,7 +333,7 @@ class SearchHandler:
             if not files:
                 await query.answer(
                     results=[],
-                    cache_time=10,
+                    cache_time=CacheTTLConfig.INLINE_NO_RESULTS,
                     switch_pm_text=ErrorMessages.INLINE_NO_RESULTS,
                     switch_pm_parameter="start"
                 )
@@ -370,7 +370,7 @@ class SearchHandler:
             # Answer the inline query
             await query.answer(
                 results=results,
-                cache_time=30,
+                cache_time=CacheTTLConfig.INLINE_RESULTS,
                 is_personal=True,
                 next_offset=str(next_offset) if next_offset else "",
                 switch_pm_text=f"📁 Found {total} files" if total > 0 else "🔍 Search Files",

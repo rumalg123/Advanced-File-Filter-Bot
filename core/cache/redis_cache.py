@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.serialization import serialize, deserialize, get_serialization_stats
+from core.constants import DatabaseConstants, CacheConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -18,7 +19,10 @@ class CacheManager:
         self.redis_url = redis_url
         self.redis: Optional[aioredis.Redis] = None
         self._lock = asyncio.Lock()
-        self._max_connections = 40 if 'uvloop' in sys.modules else 20
+        self._max_connections = (
+            CacheConstants.REDIS_MAX_CONNECTIONS_UVLOOP if 'uvloop' in sys.modules
+            else CacheConstants.REDIS_MAX_CONNECTIONS_DEFAULT
+        )
         self.ttl_config = CacheTTLConfig()  # Add this
         self.key_gen = CacheKeyGenerator()  # Add this
 
@@ -30,8 +34,8 @@ class CacheManager:
                     self.redis_url,
                     decode_responses=False,
                     max_connections=self._max_connections,
-                    socket_timeout=30.0,  # Timeout for socket operations
-                    socket_connect_timeout=10.0,  # Timeout for initial connection
+                    socket_timeout=CacheConstants.REDIS_SOCKET_TIMEOUT,
+                    socket_connect_timeout=CacheConstants.REDIS_CONNECT_TIMEOUT,
                 )
 
                 # Test connection
@@ -189,7 +193,7 @@ class CacheManager:
                 keys_to_delete.append(key)
             
             # Delete in batches for better performance
-            batch_size = 100
+            batch_size = DatabaseConstants.REDIS_BATCH_DELETE_SIZE
             for i in range(0, len(keys_to_delete), batch_size):
                 batch = keys_to_delete[i:i + batch_size]
                 try:

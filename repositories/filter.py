@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
+from core.constants import DatabaseConstants
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
@@ -182,7 +183,7 @@ class FilterRepository(BaseRepository[Filter]):
 
         try:
             cursor = await self.db_pool.execute_with_retry(
-                collection.find({}).to_list, length=1000
+                collection.find({}).to_list, length=DatabaseConstants.AGGREGATE_DEFAULT_LIMIT
             )
             for doc in cursor:
                 text_value = doc.get('text')

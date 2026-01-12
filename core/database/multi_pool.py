@@ -10,6 +10,7 @@ from enum import Enum
 
 from motor.motor_asyncio import AsyncIOMotorCollection
 
+from core.constants import DatabaseConstants, DatabaseScoringWeights
 from core.database.pool import DatabaseConnectionPool
 from core.utils.logger import get_logger
 
@@ -67,7 +68,7 @@ class MultiDatabaseManager:
             self._initialized = True
             self.databases: List[DatabaseInfo] = []
             self.current_write_db_index: int = 0
-            self.size_limit_gb: float = 0.5
+            self.size_limit_gb: float = DatabaseConstants.DEFAULT_SIZE_LIMIT_GB
             self.auto_switch: bool = True
             self._stats_cache: Dict[str, Any] = {}
             self._stats_cache_time: float = 0
@@ -78,15 +79,15 @@ class MultiDatabaseManager:
 
             # Circuit breaker configuration from environment variables
             import os
-            self.max_failures: int = int(os.environ.get('DATABASE_MAX_FAILURES', '5'))
-            self.timeout_duration: timedelta = timedelta(seconds=int(os.environ.get('DATABASE_RECOVERY_TIMEOUT', '300')))
-            self.half_open_max_calls: int = int(os.environ.get('DATABASE_HALF_OPEN_CALLS', '3'))
+            self.max_failures: int = int(os.environ.get('DATABASE_MAX_FAILURES', str(DatabaseConstants.CIRCUIT_BREAKER_MAX_FAILURES)))
+            self.timeout_duration: timedelta = timedelta(seconds=int(os.environ.get('DATABASE_RECOVERY_TIMEOUT', str(DatabaseConstants.CIRCUIT_BREAKER_RECOVERY_TIMEOUT))))
+            self.half_open_max_calls: int = int(os.environ.get('DATABASE_HALF_OPEN_CALLS', str(DatabaseConstants.CIRCUIT_BREAKER_HALF_OPEN_CALLS)))
 
     async def initialize(
         self,
         uris: List[str],
         names: List[str],
-        size_limit_gb: float = 0.5,
+        size_limit_gb: float = DatabaseConstants.DEFAULT_SIZE_LIMIT_GB,
         auto_switch: bool = True
     ) -> None:
         """Initialize multiple database connections"""
@@ -265,31 +266,31 @@ class MultiDatabaseManager:
         # Factor 1: Storage usage ratio (40% weight) - Lower usage is better
         usage_ratio = min(db_info.size_gb / self.size_limit_gb, 1.0)
         storage_score = max(0.0, 1.0 - usage_ratio)  # Invert: lower usage = higher score
-        
-        # Apply penalty for databases near capacity (>90%)
-        if usage_ratio > 0.9:
-            storage_score *= 0.3  # Heavy penalty for near-full databases
-        elif usage_ratio > 0.8:
-            storage_score *= 0.7  # Moderate penalty for mostly-full databases
+
+        # Apply penalty for databases near capacity
+        if usage_ratio > DatabaseScoringWeights.CRITICAL_USAGE_THRESHOLD:
+            storage_score *= DatabaseScoringWeights.CRITICAL_USAGE_PENALTY
+        elif usage_ratio > DatabaseScoringWeights.HIGH_USAGE_THRESHOLD:
+            storage_score *= DatabaseScoringWeights.HIGH_USAGE_PENALTY
             
         # Factor 2: Circuit breaker health (30% weight)
         if circuit.state == CircuitBreakerState.CLOSED:
             # Healthy database - score based on failure history
             if circuit.failure_count == 0:
-                health_score = 1.0  # Perfect health
+                health_score = DatabaseScoringWeights.HIGH_STABILITY  # Perfect health
             else:
                 # Gradual decrease based on recent failures
-                health_score = max(0.3, 1.0 - (circuit.failure_count / self.max_failures) * 0.7)
+                health_score = max(DatabaseScoringWeights.MIN_HEALTH_SCORE, 1.0 - (circuit.failure_count / self.max_failures) * DatabaseScoringWeights.HEALTH_PENALTY_FACTOR)
         elif circuit.state == CircuitBreakerState.HALF_OPEN:
-            health_score = 0.5  # Testing recovery - moderate score
+            health_score = DatabaseScoringWeights.HALF_OPEN_HEALTH_SCORE  # Testing recovery - moderate score
         else:  # OPEN
-            health_score = 0.0  # Circuit open - unusable
-            
+            health_score = DatabaseScoringWeights.OPEN_HEALTH_SCORE  # Circuit open - unusable
+
         # Factor 3: Current database bonus (15% weight) - Avoid unnecessary switching
-        current_bonus = 0.15 if is_current else 0.0
-        
+        current_bonus = DatabaseScoringWeights.CURRENT_DB_BONUS if is_current else 0.0
+
         # Factor 4: Connection stability (15% weight) - Based on success/failure ratio
-        stability_score = 0.8  # Default decent stability
+        stability_score = DatabaseScoringWeights.DEFAULT_STABILITY  # Default decent stability
         
         if circuit.last_success_time and circuit.last_failure_time:
             # Recent activity - calculate stability based on time since last events
@@ -301,30 +302,30 @@ class MultiDatabaseManager:
             
             if time_since_failure < time_since_success:
                 # More recent failure than success - lower stability
-                stability_score = max(0.2, stability_score - 0.4)
+                stability_score = max(0.2, stability_score - DatabaseScoringWeights.STABILITY_PENALTY)
             else:
                 # More recent success - higher stability
-                stability_score = min(1.0, stability_score + 0.2)
+                stability_score = min(1.0, stability_score + DatabaseScoringWeights.STABILITY_BONUS)
         elif circuit.last_success_time:
             # Only successes recorded - high stability
-            stability_score = 1.0
+            stability_score = DatabaseScoringWeights.HIGH_STABILITY
         elif circuit.last_failure_time:
-            # Only failures recorded - low stability  
-            stability_score = 0.3
+            # Only failures recorded - low stability
+            stability_score = DatabaseScoringWeights.LOW_STABILITY
             
         # Calculate weighted composite score
         composite_score = (
-            storage_score * 0.40 +      # 40% weight on storage usage
-            health_score * 0.30 +       # 30% weight on circuit breaker health
-            stability_score * 0.15 +    # 15% weight on connection stability  
-            current_bonus               # 15% weight on current database preference
+            storage_score * DatabaseScoringWeights.STORAGE_WEIGHT +
+            health_score * DatabaseScoringWeights.HEALTH_WEIGHT +
+            stability_score * DatabaseScoringWeights.STABILITY_WEIGHT +
+            current_bonus  # Already uses CURRENT_DB_BONUS
         )
-        
+
         # Apply additional modifiers
-        
-        # Boost score for databases with very low usage (<25%)
-        if usage_ratio < 0.25:
-            composite_score = min(1.0, composite_score + 0.1)
+
+        # Boost score for databases with very low usage
+        if usage_ratio < DatabaseScoringWeights.LOW_USAGE_THRESHOLD:
+            composite_score = min(1.0, composite_score + DatabaseScoringWeights.LOW_USAGE_BONUS)
             
         # Penalize databases that are unusable due to circuit breaker
         if circuit.state == CircuitBreakerState.OPEN:
@@ -435,10 +436,10 @@ class MultiDatabaseManager:
             return 0
 
     async def search_across_all_databases(
-        self, 
-        collection_name: str, 
-        query: Dict[str, Any], 
-        limit: int = 10, 
+        self,
+        collection_name: str,
+        query: Dict[str, Any],
+        limit: int = DatabaseConstants.DEFAULT_SEARCH_LIMIT,
         skip: int = 0,
         sort: Optional[List[Tuple[str, int]]] = None
     ) -> List[Dict[str, Any]]:
@@ -652,8 +653,8 @@ class MultiDatabaseManager:
         current_time = asyncio.get_event_loop().time()
         
         # For write operations, always use fresh stats (force=True)
-        # For read operations, use shorter cache (30 seconds vs 5 minutes)
-        cache_duration = 0 if force else 30
+        # For read operations, use shorter cache
+        cache_duration = 0 if force else DatabaseConstants.STATS_CACHE_DURATION
         
         if not force and current_time - self._stats_cache_time < cache_duration:
             return

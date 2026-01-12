@@ -6,6 +6,7 @@ from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, DuplicateKeyError
 
+from core.constants import DatabaseConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,11 +29,11 @@ class DatabaseConnectionPool:
             self._client: Optional[AsyncIOMotorClient] = None
             self._database: Optional[AsyncIOMotorDatabase] = None
             if 'uvloop' in sys.modules:
-                self._pool_size = 200  # Can handle more with uvloop
-                self._max_idle_time = 600000  # 10 minutes
+                self._pool_size = DatabaseConstants.POOL_SIZE_UVLOOP
+                self._max_idle_time = DatabaseConstants.MAX_IDLE_TIME_UVLOOP
             else:
-                self._pool_size = 100
-                self._max_idle_time = 300000  # 5 minutes
+                self._pool_size = DatabaseConstants.POOL_SIZE_DEFAULT
+                self._max_idle_time = DatabaseConstants.MAX_IDLE_TIME_DEFAULT
 
     async def initialize(self, uri: str, database_name: str) -> None:
         """Initialize the connection pool"""
@@ -41,15 +42,15 @@ class DatabaseConnectionPool:
                 self._client = AsyncIOMotorClient(
                     uri,
                     maxPoolSize=self._pool_size,
-                    minPoolSize=20 if 'uvloop' in sys.modules else 10,
+                    minPoolSize=DatabaseConstants.MIN_POOL_SIZE_UVLOOP if 'uvloop' in sys.modules else DatabaseConstants.MIN_POOL_SIZE_DEFAULT,
                     maxIdleTimeMS=self._max_idle_time,
-                    serverSelectionTimeoutMS=15000,
-                    connectTimeoutMS=20000,
-                    socketTimeoutMS=20000,
+                    serverSelectionTimeoutMS=DatabaseConstants.SERVER_SELECTION_TIMEOUT,
+                    connectTimeoutMS=DatabaseConstants.CONNECT_TIMEOUT,
+                    socketTimeoutMS=DatabaseConstants.SOCKET_TIMEOUT,
                     retryWrites=True,
                     retryReads=True,
-                    waitQueueTimeoutMS=10000 if 'uvloop' in sys.modules else 5000,
-                    waitQueueMultiple=4 if 'uvloop' in sys.modules else 2,
+                    waitQueueTimeoutMS=DatabaseConstants.WAIT_QUEUE_TIMEOUT_UVLOOP if 'uvloop' in sys.modules else DatabaseConstants.WAIT_QUEUE_TIMEOUT_DEFAULT,
+                    waitQueueMultiple=DatabaseConstants.WAIT_QUEUE_MULTIPLE_UVLOOP if 'uvloop' in sys.modules else DatabaseConstants.WAIT_QUEUE_MULTIPLE_DEFAULT,
                 )
                 self._database = self._client[database_name]
 
@@ -60,7 +61,7 @@ class DatabaseConnectionPool:
                 else:
                     logger.info(f"Database pool initialized with standard asyncio (pool size: {self._pool_size})")
 
-    async def _test_connection(self, max_retries: int = 3) -> None:
+    async def _test_connection(self, max_retries: int = DatabaseConstants.MAX_RETRIES) -> None:
         """Test database connection with retry logic"""
         for attempt in range(max_retries):
             try:
@@ -94,7 +95,7 @@ class DatabaseConnectionPool:
                 self._client.close()
 
                 # Wait for pending operations to complete
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(DatabaseConstants.CLOSE_SLEEP_DELAY)
 
                 self._client = None
                 self._database = None
@@ -108,7 +109,7 @@ class DatabaseConnectionPool:
         """Get a collection from the database"""
         return self.database[name]
 
-    async def execute_with_retry(self, operation, *args, max_retries=3, **kwargs):
+    async def execute_with_retry(self, operation, *args, max_retries=DatabaseConstants.MAX_RETRIES, **kwargs):
         """Execute database operation with retry logic"""
         last_exception = None
 

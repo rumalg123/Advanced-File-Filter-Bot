@@ -8,6 +8,8 @@ from typing import List, Optional, Any
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from core.constants import ConcurrencyDefaults
+
 # Import moved to avoid circular dependency
 # from core.utils import default_messages
 
@@ -369,13 +371,13 @@ class Settings:
     def get_concurrency_limits(self) -> dict:
         """Get concurrency limits from environment or defaults"""
         return {
-            'telegram_send': int(os.getenv('CONCURRENCY_TELEGRAM_SEND', '10')),
-            'telegram_fetch': int(os.getenv('CONCURRENCY_TELEGRAM_FETCH', '15')),
-            'database_write': int(os.getenv('CONCURRENCY_DATABASE_WRITE', '20')),
-            'database_read': int(os.getenv('CONCURRENCY_DATABASE_READ', '30')),
-            'file_processing': int(os.getenv('CONCURRENCY_FILE_PROCESSING', '5')),
-            'broadcast': int(os.getenv('CONCURRENCY_BROADCAST', '3')),
-            'indexing': int(os.getenv('CONCURRENCY_INDEXING', '8')),
+            'telegram_send': int(os.getenv('CONCURRENCY_TELEGRAM_SEND', str(ConcurrencyDefaults.TELEGRAM_SEND))),
+            'telegram_fetch': int(os.getenv('CONCURRENCY_TELEGRAM_FETCH', str(ConcurrencyDefaults.TELEGRAM_FETCH))),
+            'database_write': int(os.getenv('CONCURRENCY_DATABASE_WRITE', str(ConcurrencyDefaults.DATABASE_WRITE))),
+            'database_read': int(os.getenv('CONCURRENCY_DATABASE_READ', str(ConcurrencyDefaults.DATABASE_READ))),
+            'file_processing': int(os.getenv('CONCURRENCY_FILE_PROCESSING', str(ConcurrencyDefaults.FILE_PROCESSING))),
+            'broadcast': int(os.getenv('CONCURRENCY_BROADCAST', str(ConcurrencyDefaults.BROADCAST))),
+            'indexing': int(os.getenv('CONCURRENCY_INDEXING', str(ConcurrencyDefaults.INDEXING))),
         }
     
     def validate_all(self) -> List[str]:

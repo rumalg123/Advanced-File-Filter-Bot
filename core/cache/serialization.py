@@ -12,6 +12,7 @@ from typing import Any, Optional, Dict
 
 import msgpack
 
+from core.constants import CacheConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -29,9 +30,9 @@ class SerializationMethod(Enum):
 
 class OptimizedSerializer:
     """Optimized serializer with compression and method selection"""
-    
+
     # Size thresholds for compression (bytes)
-    COMPRESSION_THRESHOLD = 1024  # 1KB
+    COMPRESSION_THRESHOLD = CacheConstants.COMPRESSION_THRESHOLD
     
     # Method preferences based on data type
     # Note: Avoid pickle for security - use JSON/msgpack only
@@ -48,7 +49,7 @@ class OptimizedSerializer:
     # SECURITY: Disable pickle for new serializations
     PICKLE_DISABLED = True
     
-    def __init__(self, compression_level: int = 6):
+    def __init__(self, compression_level: int = CacheConstants.DEFAULT_COMPRESSION_LEVEL):
         """
         Initialize serializer
         compression_level: 1-9, higher = better compression but slower
@@ -129,7 +130,7 @@ class OptimizedSerializer:
                 compressed = zlib.compress(serialized, self.compression_level)
                 
                 # Only use compression if it actually saves space
-                if len(compressed) < original_size * 0.9:  # At least 10% savings
+                if len(compressed) < original_size * CacheConstants.COMPRESSION_MIN_SAVINGS:
                     method_prefix = f"c{method.value[:1]}".encode('ascii')  # 'cj', 'cp', 'cm'
                     result = method_prefix + compressed
                     self._stats['compressions'] += 1

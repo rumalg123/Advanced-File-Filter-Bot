@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict
 
 from core.cache.redis_cache import CacheManager
+from core.constants import ProcessingConstants
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
@@ -23,8 +24,8 @@ class BroadcastService:
         self.user_repo = user_repo
         self.cache = cache_manager
         self.rate_limiter = rate_limiter
-        self.batch_size = 50
-        self.delay_between_batches = 2  # seconds
+        self.batch_size = ProcessingConstants.BROADCAST_BATCH_SIZE
+        self.delay_between_batches = ProcessingConstants.BROADCAST_DELAY_BETWEEN_BATCHES
 
         # Add these improvements to the BroadcastService class:
 
@@ -132,14 +133,15 @@ class BroadcastService:
 
             # Progress callback - update more frequently
             processed_count = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
-            if progress_callback and (processed_count - last_progress_update) >= 10:  # Update every 10 users
+            if progress_callback and (processed_count - last_progress_update) >= ProcessingConstants.BROADCAST_PROGRESS_UPDATE_INTERVAL:
                 await progress_callback(stats)
                 last_progress_update = processed_count
 
             # Adaptive delay
             if stats['total'] > 0:
                 success_rate = stats['success'] / stats['total']
-                await asyncio.sleep(self.delay_between_batches * (2 if success_rate < 0.5 else 1))
+                multiplier = ProcessingConstants.BROADCAST_ADAPTIVE_DELAY_MULTIPLIER if success_rate < ProcessingConstants.BROADCAST_ADAPTIVE_DELAY_THRESHOLD else 1
+                await asyncio.sleep(self.delay_between_batches * multiplier)
             else:
                 await asyncio.sleep(self.delay_between_batches)
 

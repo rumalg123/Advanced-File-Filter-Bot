@@ -6,6 +6,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
+from core.constants import TelegramConstants
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
 from core.utils.search_results import SearchResultsBuilder
@@ -253,7 +254,7 @@ class RequestHandler(BaseHandler):
         )
 
         # Build buttons
-        message_link = f"https://t.me/c/{str(self.bot.config.SUPPORT_GROUP_ID)[4:]}/{message.id}"
+        message_link = f"https://t.me/c/{str(self.bot.config.SUPPORT_GROUP_ID)[len(TelegramConstants.CHANNEL_ID_PREFIX):]}/{message.id}"
 
         buttons = [
             [InlineKeyboardButton("📩 View Message", url=message_link)],

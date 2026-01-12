@@ -6,6 +6,7 @@ from pyrogram import Client
 from pyrogram.errors import FloodWait, UserIsBlocked
 from pyrogram.types import CallbackQuery
 
+from core.constants import ProcessingConstants, TimeConstants
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
@@ -143,7 +144,7 @@ class FileCallbackHandler(BaseCommandHandler):
         # Send file to PM
         try:
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-            delete_minutes = delete_time // 60
+            delete_minutes = delete_time // TimeConstants.SECONDS_PER_MINUTE
 
             caption = CaptionFormatter.format_file_caption(
                 file=file,
@@ -334,7 +335,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Initialize these variables outside the loop to avoid uninitialized variable warnings
         delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-        delete_minutes = delete_time // 60
+        delete_minutes = delete_time // TimeConstants.SECONDS_PER_MINUTE
         file = None
 
         for idx, file_data in enumerate(files_data):
@@ -373,8 +374,8 @@ class FileCallbackHandler(BaseCommandHandler):
 
                 # Note: We'll increment all at once after the loop to avoid race conditions
 
-                # Update progress every 5 files
-                if (idx + 1) % 5 == 0 or (idx + 1) == len(files_data):
+                # Update progress every N files
+                if (idx + 1) % ProcessingConstants.FILE_SEND_PROGRESS_INTERVAL == 0 or (idx + 1) == len(files_data):
                     try:
                         await status_msg.edit_text(
                             f"📤 <b>Sending Files</b>\n"
@@ -388,7 +389,7 @@ class FileCallbackHandler(BaseCommandHandler):
                         pass  # Status message update is non-critical
 
                 # Small delay to avoid flooding
-                await asyncio.sleep(1)
+                await asyncio.sleep(ProcessingConstants.FLOOD_CONTROL_DELAY)
 
             except Exception as e:
                 logger.error(f"Error sending file: {e}")
@@ -415,7 +416,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Add auto-delete notice if enabled
         if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
-            delete_minutes = self.bot.config.MESSAGE_DELETE_SECONDS // 60
+            delete_minutes = self.bot.config.MESSAGE_DELETE_SECONDS // TimeConstants.SECONDS_PER_MINUTE
             final_text += f"\n⏱ Files will be auto-deleted after {delete_minutes} minutes"
 
         await status_msg.edit_text(final_text)

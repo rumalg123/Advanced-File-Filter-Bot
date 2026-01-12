@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from core.cache.config import CachePatterns, CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
+from core.constants import CacheConstants
 from core.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ class CacheInvalidator:
 
     # Throttle full invalidation to prevent cache stampedes
     _last_full_invalidation: float = 0
-    FULL_INVALIDATION_COOLDOWN = 5.0  # seconds
+    FULL_INVALIDATION_COOLDOWN = CacheConstants.FULL_INVALIDATION_COOLDOWN
 
     def __init__(self, cache_manager: CacheManager):
         self.cache = cache_manager

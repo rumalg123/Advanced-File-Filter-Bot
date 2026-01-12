@@ -12,6 +12,10 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator
+from core.constants import (
+    ProcessingConstants, DisplayConstants, TimeConstants,
+    ByteConstants, LoggingConstants, ShellConstants, TelegramConstants
+)
 from core.utils.telegram_api import telegram_api
 from core.cache.monitor import CacheMonitor
 from core.concurrency.semaphore_manager import semaphore_manager
@@ -52,7 +56,7 @@ class AdminCommandHandler(BaseCommandHandler):
         """Set broadcast state in Redis"""
         try:
             if active:
-                await self.bot.cache.set(self.broadcast_state_key, "active", expire=3600)  # 1 hour TTL
+                await self.bot.cache.set(self.broadcast_state_key, "active", expire=ProcessingConstants.BROADCAST_CACHE_EXPIRE)
                 logger.info("Broadcast state set to ACTIVE")
             else:
                 await self.bot.cache_invalidator.invalidate_broadcast_state(self.broadcast_state_key)
@@ -125,12 +129,12 @@ class AdminCommandHandler(BaseCommandHandler):
         preview_text += f"📄 <b>Message Preview:</b>\n"
         
         if broadcast_msg.text:
-            # Show text preview (limit to 200 chars)
-            text_preview = broadcast_msg.text[:200] + ("..." if len(broadcast_msg.text) > 200 else "")
+            # Show text preview
+            text_preview = broadcast_msg.text[:DisplayConstants.TEXT_PREVIEW_LENGTH] + ("..." if len(broadcast_msg.text) > DisplayConstants.TEXT_PREVIEW_LENGTH else "")
             preview_text += f"<i>{text_preview}</i>"
         elif broadcast_msg.caption:
             # Show caption preview for media
-            caption_preview = broadcast_msg.caption[:200] + ("..." if len(broadcast_msg.caption) > 200 else "")
+            caption_preview = broadcast_msg.caption[:DisplayConstants.TEXT_PREVIEW_LENGTH] + ("..." if len(broadcast_msg.caption) > DisplayConstants.TEXT_PREVIEW_LENGTH else "")
             preview_text += f"<i>{caption_preview}</i>"
         elif broadcast_msg.document:
             preview_text += f"📄 <i>Document: {broadcast_msg.document.file_name}</i>"
@@ -602,7 +606,7 @@ class AdminCommandHandler(BaseCommandHandler):
             # Check file size
             file_size = log_path.stat().st_size
 
-            if file_size > 50 * 1024 * 1024:  # 50MB limit
+            if file_size > LoggingConstants.MAX_LOG_DOWNLOAD_SIZE:
                 await message.reply_text(
                     f"❌ Log file too large ({format_file_size(file_size)}). "
                     "Please check logs directly on the server."
@@ -629,10 +633,10 @@ class AdminCommandHandler(BaseCommandHandler):
 
             # Format uptime
             uptime_seconds = metrics['uptime_seconds']
-            days = int(uptime_seconds // 86400)
-            hours = int((uptime_seconds % 86400) // 3600)
-            minutes = int((uptime_seconds % 3600) // 60)
-            seconds = int(uptime_seconds % 60)
+            days = int(uptime_seconds // TimeConstants.SECONDS_PER_DAY)
+            hours = int((uptime_seconds % TimeConstants.SECONDS_PER_DAY) // TimeConstants.SECONDS_PER_HOUR)
+            minutes = int((uptime_seconds % TimeConstants.SECONDS_PER_HOUR) // TimeConstants.SECONDS_PER_MINUTE)
+            seconds = int(uptime_seconds % TimeConstants.SECONDS_PER_MINUTE)
 
             uptime_str = ""
             if days > 0:
@@ -728,8 +732,8 @@ class AdminCommandHandler(BaseCommandHandler):
                 text += f"├ Total ops: {ser_stats.get('serializations', 0):,}\n"
                 text += f"├ Compressions: {ser_stats.get('compressions', 0):,}\n"
                 bytes_saved = ser_stats.get('bytes_saved', 0)
-                if bytes_saved > 1024:
-                    text += f"└ Bytes saved: {bytes_saved / 1024:.1f} KB\n"
+                if bytes_saved > ByteConstants.KB:
+                    text += f"└ Bytes saved: {bytes_saved / ByteConstants.KB:.1f} KB\n"
                 else:
                     text += f"└ Bytes saved: {bytes_saved} B\n"
 
@@ -756,15 +760,15 @@ class AdminCommandHandler(BaseCommandHandler):
 
             if duplicates:
                 text += f"<b>⚠️ Found {len(duplicates)} duplicate entries:</b>\n"
-                for dup in duplicates[:5]:  # Show first 5
+                for dup in duplicates[:DisplayConstants.MAX_DUPLICATES_DISPLAY]:
                     text += f"├ File {dup['file_id'][:10]}... has {dup['count']} cache entries\n"
-                if len(duplicates) > 5:
-                    text += f"└ ... and {len(duplicates) - 5} more\n"
+                if len(duplicates) > DisplayConstants.MAX_DUPLICATES_DISPLAY:
+                    text += f"└ ... and {len(duplicates) - DisplayConstants.MAX_DUPLICATES_DISPLAY} more\n"
                 text += "\n"
 
             if analysis['large_values']:
                 text += f"<b>📦 Large Cache Values ({len(analysis['large_values'])}):</b>\n"
-                for item in analysis['large_values'][:3]:
+                for item in analysis['large_values'][:DisplayConstants.MAX_LARGE_VALUES_DISPLAY]:
                     text += f"├ {item['key'][:30]}... - {item['size_human']}\n"
                 text += "\n"
 
@@ -776,7 +780,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 text += f"├ {category}: {count}\n"
 
             # Analyze serialization efficiency
-            ser_analysis = await monitor.analyze_serialization_efficiency(sample_size=15)
+            ser_analysis = await monitor.analyze_serialization_efficiency(sample_size=ShellConstants.CACHE_ANALYSIS_SAMPLE_SIZE)
             if ser_analysis.get('samples_analyzed', 0) > 0:
                 text += "\n\n<b>📦 Serialization Efficiency:</b>\n"
                 text += f"├ Samples analyzed: {ser_analysis['samples_analyzed']}\n"
@@ -908,7 +912,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 
                 # Wait for completion with timeout (max 5 minutes)
                 try:
-                    stdout, stderr = process.communicate(timeout=300)
+                    stdout, stderr = process.communicate(timeout=ShellConstants.COMMAND_TIMEOUT)
                     return_code = process.returncode
                     execution_time = (datetime.now() - start_time).total_seconds()
                     
@@ -916,8 +920,8 @@ class AdminCommandHandler(BaseCommandHandler):
                     process.kill()
                     stdout, stderr = process.communicate()
                     return_code = -1
-                    execution_time = 300
-                    stderr += "\n⚠️ Command timed out after 5 minutes"
+                    execution_time = ShellConstants.COMMAND_TIMEOUT
+                    stderr += f"\n⚠️ Command timed out after {ShellConstants.COMMAND_TIMEOUT // TimeConstants.SECONDS_PER_MINUTE} minutes"
                 
             except Exception as e:
                 await status_msg.edit_text(
@@ -956,7 +960,7 @@ class AdminCommandHandler(BaseCommandHandler):
 {output_text}"""
             
             # Handle long outputs
-            if len(result_message) > 4096:  # Telegram message limit
+            if len(result_message) > TelegramConstants.MAX_MESSAGE_LENGTH:
                 # Send basic info first
                 basic_info = f"""🐚 <b>Shell Command Executed</b>
 
@@ -975,7 +979,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 full_output += f"Executed at: {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
                 full_output += f"Return Code: {return_code}\n"
                 full_output += f"Execution Time: {execution_time:.2f}s\n"
-                full_output += "=" * 50 + "\n\n"
+                full_output += "=" * DisplayConstants.LOG_SEPARATOR_LENGTH + "\n\n"
                 
                 if stdout.strip():
                     full_output += "STDOUT:\n" + stdout + "\n\n"

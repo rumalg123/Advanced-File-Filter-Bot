@@ -79,13 +79,13 @@ class SessionData:
 
 class UnifiedSessionManager:
     """Unified session management system"""
-    
-    # Default TTL values for different session types
+
+    # Default TTL values for different session types (using CacheTTLConfig)
     DEFAULT_TTL = {
-        SessionType.EDIT: 300,      # 5 minutes
-        SessionType.SEARCH: 3600,   # 1 hour
-        SessionType.INDEX: 1800,    # 30 minutes
-        SessionType.BATCH: 7200,    # 2 hours
+        SessionType.EDIT: CacheTTLConfig.EDIT_SESSION,
+        SessionType.SEARCH: CacheTTLConfig.SEARCH_SESSION,
+        SessionType.INDEX: CacheTTLConfig.INDEX_SESSION,
+        SessionType.BATCH: CacheTTLConfig.BATCH_SESSION,
     }
     
     def __init__(self, cache_manager):
@@ -103,10 +103,11 @@ class UnifiedSessionManager:
     
     async def stop_cleanup_task(self):
         """Stop the background cleanup task"""
+        from core.constants import ProcessingConstants
         if self._cleanup_task:
             self._shutdown_event.set()
             try:
-                await asyncio.wait_for(self._cleanup_task, timeout=5.0)
+                await asyncio.wait_for(self._cleanup_task, timeout=ProcessingConstants.TASK_STOP_TIMEOUT)
             except asyncio.TimeoutError:
                 logger.warning("Session cleanup task did not stop gracefully")
                 self._cleanup_task.cancel()
@@ -136,7 +137,7 @@ class UnifiedSessionManager:
         await self.cancel_session(user_id, session_type)
         
         # Calculate expiration time
-        ttl = ttl_override or self.DEFAULT_TTL.get(session_type, 300)
+        ttl = ttl_override or self.DEFAULT_TTL.get(session_type, CacheTTLConfig.EDIT_SESSION)
         now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=ttl)
         
@@ -346,13 +347,13 @@ class UnifiedSessionManager:
     
     async def _cleanup_expired_sessions(self):
         """Background task to cleanup expired sessions"""
+        from core.constants import ProcessingConstants
         while not self._shutdown_event.is_set():
             try:
                 # Wait for either shutdown or cleanup interval
-                cleanup_interval = 300  # 5 minutes
                 await asyncio.wait_for(
                     self._shutdown_event.wait(),
-                    timeout=cleanup_interval
+                    timeout=ProcessingConstants.SESSION_CLEANUP_INTERVAL
                 )
                 break  # Shutdown requested
                 

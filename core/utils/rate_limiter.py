@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.constants import RateLimitConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -12,7 +13,7 @@ class RateLimitConfig:
     """Configuration for rate limiting"""
     max_requests: int
     time_window: int  # seconds
-    cooldown_time: int = 60  # seconds
+    cooldown_time: int = RateLimitConstants.DEFAULT_COOLDOWN  # seconds
 
 
 class RateLimiter:
@@ -24,11 +25,11 @@ class RateLimiter:
         from core.cache.invalidation import CacheInvalidator
         self.cache_invalidator = CacheInvalidator(cache_manager)
         self.configs: Dict[str, RateLimitConfig] = {
-            'search': RateLimitConfig(max_requests=30, time_window=self.ttl.RATE_LIMIT_WINDOW),
-            'file_request': RateLimitConfig(max_requests=10, time_window=60),
-            'broadcast': RateLimitConfig(max_requests=1, time_window=3600),
-            'inline_query': RateLimitConfig(max_requests=50, time_window=60),
-            'premium_check': RateLimitConfig(max_requests=100, time_window=60),
+            'search': RateLimitConfig(max_requests=RateLimitConstants.SEARCH_MAX_REQUESTS, time_window=self.ttl.RATE_LIMIT_WINDOW),
+            'file_request': RateLimitConfig(max_requests=RateLimitConstants.FILE_REQUEST_MAX, time_window=RateLimitConstants.FILE_REQUEST_WINDOW),
+            'broadcast': RateLimitConfig(max_requests=RateLimitConstants.BROADCAST_MAX_REQUESTS, time_window=RateLimitConstants.BROADCAST_TIME_WINDOW),
+            'inline_query': RateLimitConfig(max_requests=RateLimitConstants.INLINE_QUERY_MAX, time_window=RateLimitConstants.INLINE_QUERY_WINDOW),
+            'premium_check': RateLimitConfig(max_requests=RateLimitConstants.PREMIUM_CHECK_MAX, time_window=RateLimitConstants.PREMIUM_CHECK_WINDOW),
         }
 
     async def check_rate_limit(

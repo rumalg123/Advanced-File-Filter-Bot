@@ -4,6 +4,7 @@ import base64
 from pyrogram import Client
 from pyrogram.types import Message
 
+from core.constants import ProcessingConstants, TimeConstants
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
@@ -132,7 +133,7 @@ class DeepLinkHandler(BaseCommandHandler):
         # Send file directly using file_id
         try:
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-            delete_minutes = delete_time // 60
+            delete_minutes = delete_time // TimeConstants.SECONDS_PER_MINUTE
             caption = CaptionFormatter.format_file_caption(
                 file=file,
                 custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
@@ -291,7 +292,7 @@ class DeepLinkHandler(BaseCommandHandler):
                     batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                     keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                     is_batch=False,  # These are NOT batch files, they're from search
-                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
+                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // TimeConstants.SECONDS_PER_MINUTE if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
                 # Use telegram_api for concurrency control
@@ -311,7 +312,7 @@ class DeepLinkHandler(BaseCommandHandler):
 
                 # Note: We'll increment all at once after the loop to avoid race conditions
 
-                await asyncio.sleep(1)  # Avoid flooding
+                await asyncio.sleep(ProcessingConstants.FLOOD_CONTROL_DELAY)
 
             except Exception as e:
                 logger.error(f"Error sending file: {e}")
@@ -397,7 +398,7 @@ class DeepLinkHandler(BaseCommandHandler):
             chat_id=user_id,
             file_type=file_type.lower() if file_type else None,
             offset=0,
-            limit=100  # Adjust based on your needs
+            limit=ProcessingConstants.SEND_ALL_FILES_LIMIT
         )
 
         if not has_access:
@@ -424,7 +425,7 @@ class DeepLinkHandler(BaseCommandHandler):
                     batch_caption=self.bot.config.BATCH_FILE_CAPTION,
                     keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
                     is_batch=False,
-                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
+                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // TimeConstants.SECONDS_PER_MINUTE if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
                     auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
                 )
 
@@ -443,7 +444,7 @@ class DeepLinkHandler(BaseCommandHandler):
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
-                await asyncio.sleep(1)  # Avoid flooding
+                await asyncio.sleep(ProcessingConstants.FLOOD_CONTROL_DELAY)
 
             except Exception as e:
                 logger.error(f"Error sending file: {e}")

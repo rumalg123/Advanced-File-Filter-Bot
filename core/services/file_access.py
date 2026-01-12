@@ -7,6 +7,7 @@ from core.utils.rate_limiter import RateLimiter
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.user import UserRepository
 from core.cache.config import CacheTTLConfig
+from core.constants import DatabaseConstants
 
 logger = get_logger(__name__)
 
@@ -113,7 +114,7 @@ class FileAccessService:
             chat_id: int,
             file_type: Optional[str] = None,
             offset: int = 0,
-            limit: int = 10
+            limit: int = DatabaseConstants.DEFAULT_SEARCH_LIMIT
     ) -> Tuple[List[MediaFile], int, int, bool]:
         """
         Search files with access check

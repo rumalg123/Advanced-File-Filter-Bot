@@ -3,6 +3,8 @@
 import logging
 from typing import Dict
 
+from core.constants import HealthCheckConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -153,8 +155,7 @@ class AlignmentVerifier:
                 stats['named_tasks']  # This is already an integer!
         )
 
-        expected_max_tasks = 50  # Adjust based on your needs
-        if active_tasks > expected_max_tasks:
+        if active_tasks > HealthCheckConstants.EXPECTED_MAX_ACTIVE_TASKS:
             self.warnings.append(f"High number of active tasks: {active_tasks}")
 
     async def check_shutdown_signals(self):
@@ -172,18 +173,16 @@ class AlignmentVerifier:
         """Calculate overall health score (0-100)"""
         total_checks = len(self.issues) + len(self.warnings) + len(self.successes)
         if total_checks == 0:
-            return 0
+            return HealthCheckConstants.MIN_HEALTH_SCORE
 
-        # Issues are critical (-10 points each)
-        # Warnings are minor (-3 points each)
-        # Successes are +5 points each
-        score = 50  # Base score
-        score -= len(self.issues) * 10
-        score -= len(self.warnings) * 3
-        score += len(self.successes) * 5
+        # Issues are critical, warnings are minor, successes add points
+        score = HealthCheckConstants.BASE_HEALTH_SCORE
+        score -= len(self.issues) * HealthCheckConstants.ISSUE_PENALTY
+        score -= len(self.warnings) * HealthCheckConstants.WARNING_PENALTY
+        score += len(self.successes) * HealthCheckConstants.SUCCESS_BONUS
 
         # Normalize to 0-100
-        return max(0, min(100, score))
+        return max(HealthCheckConstants.MIN_HEALTH_SCORE, min(HealthCheckConstants.MAX_HEALTH_SCORE, score))
 
 
 # Fixed command to properly handle stats
@@ -201,28 +200,28 @@ async def verify_alignment_command(client, message):
         # Format results
         text = "<b>🔧 Bot-Manager Alignment Report</b>\n\n"
 
-        text += f"<b>Health Score:</b> {results['health_score']}/100 "
-        if results['health_score'] >= 80:
+        text += f"<b>Health Score:</b> {results['health_score']}/{HealthCheckConstants.MAX_HEALTH_SCORE} "
+        if results['health_score'] >= HealthCheckConstants.GOOD_HEALTH_THRESHOLD:
             text += "✅\n\n"
-        elif results['health_score'] >= 60:
+        elif results['health_score'] >= HealthCheckConstants.WARNING_HEALTH_THRESHOLD:
             text += "⚠️\n\n"
         else:
             text += "❌\n\n"
 
         if results['successes']:
             text += f"<b>✅ Successes ({len(results['successes'])}):</b>\n"
-            for success in results['successes'][:10]:  # Limit to 10
+            for success in results['successes'][:HealthCheckConstants.MAX_SUCCESSES_DISPLAY]:
                 text += f"  {success}\n"
-            if len(results['successes']) > 10:
-                text += f"  ... and {len(results['successes']) - 10} more\n"
+            if len(results['successes']) > HealthCheckConstants.MAX_SUCCESSES_DISPLAY:
+                text += f"  ... and {len(results['successes']) - HealthCheckConstants.MAX_SUCCESSES_DISPLAY} more\n"
             text += "\n"
 
         if results['warnings']:
             text += f"<b>⚠️ Warnings ({len(results['warnings'])}):</b>\n"
-            for warning in results['warnings'][:5]:
+            for warning in results['warnings'][:HealthCheckConstants.MAX_WARNINGS_DISPLAY]:
                 text += f"  • {warning}\n"
-            if len(results['warnings']) > 5:
-                text += f"  ... and {len(results['warnings']) - 5} more\n"
+            if len(results['warnings']) > HealthCheckConstants.MAX_WARNINGS_DISPLAY:
+                text += f"  ... and {len(results['warnings']) - HealthCheckConstants.MAX_WARNINGS_DISPLAY} more\n"
             text += "\n"
 
         if results['issues']:

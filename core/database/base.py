@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, TypeVar, Generic
 from pymongo.errors import DuplicateKeyError
 
 from core.cache.config import CacheTTLConfig
+from core.constants import DatabaseConstants
 from core.utils.logger import get_logger
 
 # Import concurrency control
@@ -100,7 +101,7 @@ class BaseRepository(ABC, Generic[T]):
             'indexed_channels': self.ttl.ACTIVE_CHANNELS,
             'bot_settings': self.ttl.BOT_SETTINGS,
         }
-        return collection_ttl_map.get(self.collection_name, 300)  # Default 5 minutes
+        return collection_ttl_map.get(self.collection_name, DatabaseConstants.DEFAULT_TTL_FALLBACK)
 
 
     async def find_many(
@@ -268,7 +269,7 @@ class AggregationMixin:
             return self._collection
         raise NotImplementedError("Collection method must be implemented")
 
-    async def aggregate(self, pipeline: List[Dict[str, Any]], limit: Optional[int] = 1000) -> List[Dict[str, Any]]:
+    async def aggregate(self, pipeline: List[Dict[str, Any]], limit: Optional[int] = DatabaseConstants.AGGREGATE_DEFAULT_LIMIT) -> List[Dict[str, Any]]:
         """Execute aggregation pipeline with memory protection"""
         try:
             collection = await self.collection()

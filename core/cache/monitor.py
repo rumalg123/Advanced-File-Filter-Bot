@@ -4,6 +4,7 @@ from typing import Dict, List, Any
 from core.cache.config import CacheKeyGenerator, CachePatterns
 from core.cache.redis_cache import CacheManager
 from core.cache.serialization import get_serialization_stats, estimate_memory_usage
+from core.constants import CacheConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -128,7 +129,7 @@ class CacheMonitor:
 
         return duplicates
 
-    async def analyze_cache_usage(self, sample_size: int = 100) -> Dict[str, any]:
+    async def analyze_cache_usage(self, sample_size: int = CacheConstants.DEFAULT_SAMPLE_SIZE) -> Dict[str, any]:
         """Analyze cache usage patterns"""
         analysis = {
             "large_values": [],
@@ -159,7 +160,7 @@ class CacheMonitor:
 
                 # Categorize by size
                 if value_size:
-                    if value_size > 10240:  # > 10KB
+                    if value_size > CacheConstants.LARGE_VALUE_THRESHOLD:
                         analysis["large_values"].append({
                             "key": key_str,
                             "size_bytes": value_size,
@@ -174,7 +175,7 @@ class CacheMonitor:
                 # Check TTL
                 if ttl == -1:  # No expiration
                     analysis["no_ttl"].append(key_str)
-                elif 0 < ttl < 60:  # Expires in less than 1 minute
+                elif 0 < ttl < CacheConstants.EXPIRING_SOON_THRESHOLD:
                     analysis["expired_soon"].append({
                         "key": key_str,
                         "ttl_seconds": ttl
@@ -187,7 +188,7 @@ class CacheMonitor:
 
         return analysis
 
-    async def analyze_serialization_efficiency(self, sample_size: int = 20) -> Dict[str, Any]:
+    async def analyze_serialization_efficiency(self, sample_size: int = CacheConstants.SERIALIZATION_SAMPLE_SIZE) -> Dict[str, Any]:
         """Analyze serialization efficiency for cached data"""
         if not self.cache.redis:
             return {"error": "Redis not connected"}
@@ -278,13 +279,13 @@ class CacheMonitor:
     @staticmethod
     def _get_size_category(size: int) -> str:
         """Categorize key size"""
-        if size < 1024:
+        if size < CacheConstants.SIZE_1KB:
             return "< 1KB"
-        elif size < 10240:
+        elif size < CacheConstants.SIZE_10KB:
             return "1KB - 10KB"
-        elif size < 102400:
+        elif size < CacheConstants.SIZE_100KB:
             return "10KB - 100KB"
-        elif size < 1048576:
+        elif size < CacheConstants.SIZE_1MB:
             return "100KB - 1MB"
         else:
             return "> 1MB"

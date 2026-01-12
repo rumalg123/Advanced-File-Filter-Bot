@@ -141,7 +141,7 @@ class ChannelHandler:
                 # Clean up entries older than 1 hour
                 users_to_clean = [
                     user_id for user_id, data in self.user_message_counts.items()
-                    if current_time - data['reset_time'] > 3600
+                    if current_time - data['reset_time'] > ProcessingConstants.USER_COUNT_CLEANUP_INTERVAL
                 ]
 
                 for user_id in users_to_clean:
@@ -169,7 +169,7 @@ class ChannelHandler:
         while not self._shutdown.is_set():
             try:
                 batch = []
-                deadline = asyncio.get_event_loop().time() + 5
+                deadline = asyncio.get_event_loop().time() + ProcessingConstants.QUEUE_DEADLINE_SECONDS
 
                 # Dynamic batch sizing using config values
                 queue_size = self.message_queue.qsize()
@@ -220,14 +220,14 @@ class ChannelHandler:
         """Process overflow queue when main queue has space"""
         while not self._shutdown.is_set():
             try:
-                # Wait for 5 seconds or shutdown
-                await asyncio.wait_for(self._shutdown.wait(), timeout=5)
+                # Wait for overflow queue interval or shutdown
+                await asyncio.wait_for(self._shutdown.wait(), timeout=ProcessingConstants.OVERFLOW_QUEUE_WAIT_INTERVAL)
                 break  # Shutdown requested
             except asyncio.TimeoutError:
                 # Continue processing
-                if self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 10:
+                if self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - ProcessingConstants.QUEUE_HEADROOM_THRESHOLD:
                     moved = 0
-                    while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 5:
+                    while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - ProcessingConstants.QUEUE_MARGIN_THRESHOLD:
                         item = self.overflow_queue.pop(0)
                         try:
                             self.message_queue.put_nowait(item)
@@ -251,8 +251,8 @@ class ChannelHandler:
         """Periodically update handlers to catch channel changes"""
         while not self._shutdown.is_set():
             try:
-                # Wait for 60 seconds or shutdown
-                await asyncio.wait_for(self._shutdown.wait(), timeout=60)
+                # Wait for handler update interval or shutdown
+                await asyncio.wait_for(self._shutdown.wait(), timeout=ProcessingConstants.PERIODIC_HANDLER_UPDATE_INTERVAL)
                 break  # Shutdown requested
             except asyncio.TimeoutError:
                 # Update handlers
@@ -300,13 +300,13 @@ class ChannelHandler:
 
                 # Rate limit warnings
                 current_time = time.time()
-                if current_time - self.last_warning_time > 60:  # One warning per minute
+                if current_time - self.last_warning_time > ProcessingConstants.WARNING_INTERVAL_SECONDS:
                     logger.warning(f"Message queue overflow! Dropped message from {dropped['timestamp']}")
                     self.last_warning_time = current_time
                     self.queue_full_warnings += 1
 
                     # Send alert to log channel if too many warnings
-                    if self.queue_full_warnings % 10 == 0 and self.bot.config.LOG_CHANNEL:
+                    if self.queue_full_warnings % ProcessingConstants.ALERT_THRESHOLD_COUNT == 0 and self.bot.config.LOG_CHANNEL:
                         try:
                             await telegram_api.call_api(
                                 self.bot.send_message,
@@ -350,7 +350,7 @@ class ChannelHandler:
                     stats['errors'] += 1
 
                 # Small delay between messages
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(ProcessingConstants.BATCH_PROCESSING_DELAY)
 
             except Exception as e:
                 logger.error(f"Error processing message: {e}")

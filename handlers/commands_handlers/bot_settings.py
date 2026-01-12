@@ -5,6 +5,7 @@ from pyrogram import StopPropagation
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheTTLConfig
+from core.constants import DisplayConstants, SettingsConstants
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
@@ -62,7 +63,7 @@ class BotSettingsHandler(BaseHandler):
         # Get all setting keys
         all_keys = list(settings.keys())
         total_settings = len(all_keys)
-        settings_per_page = 8
+        settings_per_page = SettingsConstants.SETTINGS_PER_PAGE
         total_pages = (total_settings + settings_per_page - 1) // settings_per_page
 
         # Get settings for current page
@@ -72,9 +73,9 @@ class BotSettingsHandler(BaseHandler):
 
         # Build setting buttons (2 settings per row)
         buttons = []
-        for i in range(0, len(page_keys), 2):
+        for i in range(0, len(page_keys), SettingsConstants.SETTINGS_PER_ROW):
             row = []
-            for j in range(2):
+            for j in range(SettingsConstants.SETTINGS_PER_ROW):
                 if i + j < len(page_keys):
                     key = page_keys[i + j]
                     # Shorten key for button display
@@ -87,9 +88,9 @@ class BotSettingsHandler(BaseHandler):
 
         # Add page navigation buttons
         if total_pages > 1:
-            MAX_PAGE_BUTTONS = 11  # Maximum number of page buttons to show
+            max_page_buttons = SettingsConstants.MAX_PAGE_BUTTONS
 
-            if total_pages <= MAX_PAGE_BUTTONS:
+            if total_pages <= max_page_buttons:
                 # Show all page numbers
                 page_row = []
                 for p in range(total_pages):
@@ -106,8 +107,8 @@ class BotSettingsHandler(BaseHandler):
                         ))
 
                 # Split into multiple rows if needed (5 buttons per row for better display)
-                for i in range(0, len(page_row), 5):
-                    buttons.append(page_row[i:i + 5])
+                for i in range(0, len(page_row), SettingsConstants.BUTTONS_PER_NAV_ROW):
+                    buttons.append(page_row[i:i + SettingsConstants.BUTTONS_PER_NAV_ROW])
             else:
                 # Too many pages, show a subset with prev/next
                 page_buttons = []
@@ -117,22 +118,22 @@ class BotSettingsHandler(BaseHandler):
                     page_buttons.append(InlineKeyboardButton("◀️", callback_data=f"bset_page_{page - 1}"))
 
                 # Calculate which pages to show
-                if page < 4:
+                if page < SettingsConstants.NEAR_BEGINNING_PAGES:
                     # Near the beginning
-                    for p in range(min(7, total_pages)):
+                    for p in range(min(SettingsConstants.VISIBLE_PAGES_RANGE, total_pages)):
                         if p == page:
                             page_buttons.append(InlineKeyboardButton(f"• {p + 1} •", callback_data="bset_noop"))
                         else:
                             page_buttons.append(InlineKeyboardButton(str(p + 1), callback_data=f"bset_page_{p}"))
-                    if total_pages > 7:
+                    if total_pages > SettingsConstants.VISIBLE_PAGES_RANGE:
                         page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
                         page_buttons.append(
                             InlineKeyboardButton(str(total_pages), callback_data=f"bset_page_{total_pages - 1}"))
-                elif page >= total_pages - 4:
+                elif page >= total_pages - SettingsConstants.NEAR_END_PAGES:
                     # Near the end
                     page_buttons.append(InlineKeyboardButton("1", callback_data="bset_page_0"))
                     page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
-                    for p in range(max(0, total_pages - 7), total_pages):
+                    for p in range(max(0, total_pages - SettingsConstants.VISIBLE_PAGES_RANGE), total_pages):
                         if p == page:
                             page_buttons.append(InlineKeyboardButton(f"• {p + 1} •", callback_data="bset_noop"))
                         else:
@@ -141,7 +142,7 @@ class BotSettingsHandler(BaseHandler):
                     # In the middle
                     page_buttons.append(InlineKeyboardButton("1", callback_data="bset_page_0"))
                     page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
-                    for p in range(page - 2, page + 3):
+                    for p in range(page - SettingsConstants.MIDDLE_RANGE_OFFSET, page + SettingsConstants.MIDDLE_RANGE_OFFSET + 1):
                         if p == page:
                             page_buttons.append(InlineKeyboardButton(f"• {p + 1} •", callback_data="bset_noop"))
                         else:
@@ -567,7 +568,7 @@ class BotSettingsHandler(BaseHandler):
                 await self.session_manager.cancel_edit_session(user_id)
                 
                 # Schedule auto-delete of success message
-                asyncio.create_task(self._auto_delete_message(success_msg, 10))
+                asyncio.create_task(self._auto_delete_message(success_msg, DisplayConstants.SUCCESS_MESSAGE_DELETE_DELAY))
                 
                 # Prevent any other handlers from processing this message
                 raise StopPropagation
@@ -639,7 +640,7 @@ class BotSettingsHandler(BaseHandler):
             # Get current commit hash
             hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
                                        capture_output=True, text=True, check=True)
-            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
+            commit_hash = hash_result.stdout.strip()[:DisplayConstants.SHORT_HASH_LENGTH]  # Short hash
             
             # Get commit date and message
             commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 

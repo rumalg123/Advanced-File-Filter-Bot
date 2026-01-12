@@ -5,6 +5,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
+from core.constants import TelegramConstants
 from core.services.indexing import IndexingService, IndexRequestService
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
@@ -137,7 +138,7 @@ class IndexingHandler:
             last_msg_id = int(match.group(5))
 
             if chat_id.isnumeric():
-                chat_id = int("-100" + chat_id)
+                chat_id = int(TelegramConstants.CHANNEL_ID_PREFIX + chat_id)
 
         elif message.forward_from_chat:
             # Forwarded message

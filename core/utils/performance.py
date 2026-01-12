@@ -4,6 +4,8 @@ import time
 from typing import Dict, Any
 import sys
 
+from core.constants import ByteConstants
+
 
 class PerformanceMonitor:
     """Monitor performance metrics with uvloop awareness"""
@@ -33,7 +35,7 @@ class PerformanceMonitor:
         metrics = {
             'event_loop': event_loop_type,
             'uptime_seconds': time.time() - self.start_time,
-            'memory_mb': process.memory_info().rss / 1024 / 1024,
+            'memory_mb': process.memory_info().rss / ByteConstants.MB,
             'cpu_percent': process.cpu_percent(),
             'num_threads': process.num_threads(),
             'num_fds': process.num_fds() if hasattr(process, 'num_fds') else 0,

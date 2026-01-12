@@ -4,6 +4,8 @@ File emoji utilities for displaying appropriate emojis based on file types
 
 import os
 from typing import Optional
+
+from core.constants import DisplayConstants
 from repositories.media import FileType
 
 
@@ -29,7 +31,7 @@ def get_file_emoji(file_type: FileType, file_name: str, mime_type: Optional[str]
         if words:
             last_word = words[-1]
             # Check if last word looks like a file extension (3-4 characters)
-            if len(last_word) in [2, 3, 4, 5] and last_word.isalnum():
+            if len(last_word) in DisplayConstants.VALID_EXTENSION_LENGTHS and last_word.isalnum():
                 file_extension = '.' + last_word
     
     # PRIORITY 1: Check by file extension first (most reliable)

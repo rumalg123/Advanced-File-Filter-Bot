@@ -9,6 +9,7 @@ from pymongo.errors import DuplicateKeyError
 from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.constants import DatabaseConstants
 from core.database.base import BaseRepository
 from core.utils.logger import get_logger
 
@@ -226,7 +227,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
                     {"expires_at": {"$lt": now.isoformat()}},
                     {"_id": 1}
                 ).to_list,
-                length=1000
+                length=DatabaseConstants.AGGREGATE_DEFAULT_LIMIT
             )
 
             if not expired_docs:
@@ -254,7 +255,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             logger.error(f"Error cleaning up expired batch links: {e}")
             return 0
 
-    async def get_user_batch_links(self, user_id: int, limit: int = 10) -> List[BatchLink]:
+    async def get_user_batch_links(self, user_id: int, limit: int = DatabaseConstants.DEFAULT_USER_BATCH_LINKS_LIMIT) -> List[BatchLink]:
         """Get batch links created by a user"""
         try:
             collection = await self.collection()

@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from core.constants import ByteConstants, LoggingConstants, DisplayConstants
+
 
 class CentralizedLogger:
     """Centralized logging system with file rotation and console output"""
@@ -22,8 +24,8 @@ class CentralizedLogger:
             self._initialized = True
             self.log_dir = Path("logs")
             self.log_file = self.log_dir / "bot.txt"
-            self.max_bytes = 5 * 1024 * 1024  # 5MB
-            self.backup_count = 5  # Keep 5 backup files
+            self.max_bytes = LoggingConstants.MAX_FILE_SIZE
+            self.backup_count = LoggingConstants.BACKUP_COUNT
             self.setup_logging()
 
     def setup_logging(self):
@@ -69,7 +71,7 @@ class CentralizedLogger:
         # Log startup message
         logging.info("Centralized logging system initialized")
         logging.info(f"Log file: {self.log_file}")
-        logging.info(f"Max file size: {self.max_bytes / 1024 / 1024:.1f}MB")
+        logging.info(f"Max file size: {self.max_bytes / ByteConstants.MB:.1f}MB")
         logging.info(f"Backup count: {self.backup_count}")
 
     def _configure_logger_levels(self):
@@ -114,21 +116,23 @@ class CentralizedLogger:
         import platform
         import psutil
 
-        logging.info("=" * 50)
+        separator = "=" * DisplayConstants.LOG_SEPARATOR_LENGTH
+        logging.info(separator)
         logging.info("SYSTEM INFORMATION")
-        logging.info("=" * 50)
+        logging.info(separator)
         logging.info(f"Platform: {platform.platform()}")
         logging.info(f"Python Version: {platform.python_version()}")
         logging.info(f"CPU Count: {psutil.cpu_count()}")
-        logging.info(f"Memory: {psutil.virtual_memory().total / 1024 ** 3:.1f}GB")
+        logging.info(f"Memory: {psutil.virtual_memory().total / ByteConstants.GB:.1f}GB")
         logging.info(f"Working Directory: {os.getcwd()}")
-        logging.info("=" * 50)
+        logging.info(separator)
 
     def log_config_info(self, config):
         """Log configuration information (without sensitive data)"""
-        logging.info("=" * 50)
+        separator = "=" * DisplayConstants.LOG_SEPARATOR_LENGTH
+        logging.info(separator)
         logging.info("BOT CONFIGURATION")
-        logging.info("=" * 50)
+        logging.info(separator)
         logging.info(f"Bot Session: {config.SESSION}")
         logging.info(f"Database Name: {config.DATABASE_NAME}")
         logging.info(f"Collection Name: {config.COLLECTION_NAME}")
@@ -145,7 +149,7 @@ class CentralizedLogger:
         logging.info(f"Auth Groups: {len(config.AUTH_GROUPS)}")
         logging.info(f"Log Channel: {'Set' if config.LOG_CHANNEL else 'Not set'}")
         logging.info(f"Delete Channel: {'Set' if config.DELETE_CHANNEL else 'Not set'}")
-        logging.info("=" * 50)
+        logging.info(separator)
 
 
 # Global instance

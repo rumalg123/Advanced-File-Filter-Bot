@@ -13,6 +13,7 @@ from pyrogram.types import Message
 
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
+from core.constants import ProcessingConstants, DatabaseConstants, TelegramConstants
 from core.utils.caption import CaptionFormatter
 from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
@@ -43,7 +44,7 @@ class FileStoreService:
         self.batch_link_repo = batch_link_repo
         self.batch_cache = {}  # In-memory cache for batch files
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
-        self.max_batch_cache_size = 100
+        self.max_batch_cache_size = DatabaseConstants.MAX_BATCH_CACHE_SIZE
         self.batch_cache_access_time = {}
         self._batch_cache_lock = asyncio.Lock()  # Protect concurrent cache access
 
@@ -202,10 +203,10 @@ class FileStoreService:
         bot_username = me.username
 
         # Ensure the encoded string isn't too long for Telegram
-        if len(encoded) > 64:
+        if len(encoded) > TelegramConstants.START_PARAM_MAX_LENGTH:
             logger.error(f"Encoded identifier too long: {len(encoded)} characters")
             # Try using a shorter identifier
-            short_ref = hashlib.md5(identifier.encode()).hexdigest()[:16]
+            short_ref = hashlib.md5(identifier.encode()).hexdigest()[:ProcessingConstants.BATCH_LINK_HASH_LENGTH]
 
             # Update the file with short ref
             if file:
@@ -356,7 +357,7 @@ class FileStoreService:
             return None
 
         # Check for duplicate batch links to prevent spam
-        existing_links = await self.batch_link_repo.get_user_batch_links(created_by, limit=5)
+        existing_links = await self.batch_link_repo.get_user_batch_links(created_by, limit=ProcessingConstants.DUPLICATE_BATCH_CHECK_LIMIT)
         for existing in existing_links:
             if (existing.source_chat_id == chat_id and 
                 existing.from_msg_id == first_parsed.message_id and
@@ -369,7 +370,7 @@ class FileStoreService:
                 return f"https://t.me/{bot_username}?start=PBLINK-{existing.id}"
 
         # Generate unique batch link ID
-        batch_id = f"BL-{uuid.uuid4().hex[:12]}"
+        batch_id = f"BL-{uuid.uuid4().hex[:ProcessingConstants.BATCH_ID_UUID_LENGTH]}"
         
         # Create BatchLink entity with validated data
         batch_link = BatchLink(
@@ -655,7 +656,7 @@ class FileStoreService:
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
 
                 success_count += 1
-                await asyncio.sleep(1)  # Avoid flooding
+                await asyncio.sleep(ProcessingConstants.FLOOD_CONTROL_DELAY)
 
             except Exception as e:
                 # telegram_api.call_api already handles FloodWait with retries
@@ -754,7 +755,7 @@ class FileStoreService:
                     except Exception:
                         continue
 
-                await asyncio.sleep(1)  # Avoid flooding
+                await asyncio.sleep(ProcessingConstants.FLOOD_CONTROL_DELAY)
 
         except Exception as e:
             logger.error(f"Error sending channel files: {e}")

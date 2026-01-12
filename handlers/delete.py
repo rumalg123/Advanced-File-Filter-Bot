@@ -5,7 +5,7 @@ from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-from core.cache.config import CacheKeyGenerator
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.constants import ProcessingConstants
 from core.utils.helpers import extract_file_info
@@ -23,7 +23,7 @@ class DeleteHandler(BaseHandler):
 
     def __init__(self, bot):
         super().__init__(bot)
-        self.delete_queue = asyncio.Queue(maxsize=1000)
+        self.delete_queue = asyncio.Queue(maxsize=ProcessingConstants.DELETE_QUEUE_MAX_SIZE)
         self._register_queue(self.delete_queue)
 
         # Register handlers
@@ -80,7 +80,7 @@ class DeleteHandler(BaseHandler):
                         if remaining <= 0:
                             break  # Deadline passed, process what we have
 
-                        timeout = min(remaining, 5.0)  # Cap at 5 seconds
+                        timeout = min(remaining, ProcessingConstants.QUEUE_WAIT_TIMEOUT_CAP)
 
                         item = await asyncio.wait_for(
                             self.delete_queue.get(),
@@ -96,7 +96,7 @@ class DeleteHandler(BaseHandler):
                 elif not batch:
                     # No items to process, wait a bit before checking again
                     try:
-                        await asyncio.wait_for(self._shutdown.wait(), timeout=1.0)
+                        await asyncio.wait_for(self._shutdown.wait(), timeout=ProcessingConstants.SHUTDOWN_WAIT_TIMEOUT)
                         break  # Shutdown requested
                     except asyncio.TimeoutError:
                         pass  # Continue checking for items
@@ -108,7 +108,7 @@ class DeleteHandler(BaseHandler):
                 logger.error(f"Error processing delete queue: {e}", exc_info=True)
                 # Wait before retrying to avoid tight error loop
                 try:
-                    await asyncio.wait_for(self._shutdown.wait(), timeout=5.0)
+                    await asyncio.wait_for(self._shutdown.wait(), timeout=ProcessingConstants.ERROR_RETRY_WAIT)
                     break  # Shutdown requested
                 except asyncio.TimeoutError:
                     pass  # Continue after wait
@@ -204,7 +204,7 @@ class DeleteHandler(BaseHandler):
 
         # Store pending deletion in cache for callback handler
         cache_key = CacheKeyGenerator.deleteall_pending(user_id)
-        await self.bot.cache.set(cache_key, keyword, expire=60)  # 60 second TTL
+        await self.bot.cache.set(cache_key, keyword, expire=CacheTTLConfig.DELETEALL_PENDING)
 
         # Confirmation message with buttons
         await message.reply_text(
@@ -310,7 +310,7 @@ class DeleteHandler(BaseHandler):
                     logger.debug(f"File not found: {file_name} ({file_unique_id})")
 
                 # Small delay to avoid overwhelming the database
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(ProcessingConstants.SMALL_PROCESSING_DELAY)
 
             except Exception as e:
                 logger.error(f"Error deleting file {item.get('file_name', 'Unknown')}: {e}")

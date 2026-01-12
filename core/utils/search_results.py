@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.constants import DisplayConstants, TimeConstants
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
@@ -62,7 +63,7 @@ class SearchResultsBuilder:
         """
         try:
             # Generate unique session ID and store in cache
-            session_id = uuid.uuid4().hex[:8]
+            session_id = uuid.uuid4().hex[:DisplayConstants.SESSION_ID_LENGTH]
             search_key = CacheKeyGenerator.search_session(user_id, session_id)
 
             # Store files data in cache for "Send All" functionality
@@ -136,7 +137,7 @@ class SearchResultsBuilder:
             callback_data = f"file#{file_identifier}" if is_private else f"file#{file_identifier}#{user_id}"
 
             file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
-            file_name_display = file.file_name[:50] + ('...' if len(file.file_name) > 50 else '')
+            file_name_display = file.file_name[:DisplayConstants.FILE_NAME_DISPLAY_LENGTH] + ('...' if len(file.file_name) > DisplayConstants.FILE_NAME_DISPLAY_LENGTH else '')
 
             buttons.append([
                 InlineKeyboardButton(
@@ -171,7 +172,7 @@ class SearchResultsBuilder:
 
         delete_time = getattr(self.config, 'MESSAGE_DELETE_SECONDS', 0)
         if delete_time > 0:
-            delete_minutes = delete_time // 60
+            delete_minutes = delete_time // TimeConstants.SECONDS_PER_MINUTE
             caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
 
         return caption

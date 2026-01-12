@@ -6,6 +6,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
+from core.constants import DisplayConstants
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
@@ -84,9 +85,9 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 text += f"   📈 Usage: <code>{stat['usage_percentage']}%</code>\n"
                 text += f"   📄 Files: <code>{stat['files_count']:,}</code>\n"
                 
-                if stat['usage_percentage'] >= 90:
+                if stat['usage_percentage'] >= DisplayConstants.DB_CRITICAL_USAGE_PERCENT:
                     text += "   ⚠️ <b>Near capacity!</b>\n"
-                elif stat['usage_percentage'] >= 75:
+                elif stat['usage_percentage'] >= DisplayConstants.DB_HIGH_USAGE_PERCENT:
                     text += "   🔶 <b>High usage</b>\n"
                     
                 text += "\n"
@@ -170,7 +171,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 if hasattr(self.bot, 'config') and not self.bot.config.is_multi_database_enabled:
                     text = "📊 <b>Database Information</b>\n"
                     text += "<b>Mode:</b> Single Database\n"
-                    text += f"<b>URI:</b> <code>{self.bot.config.DATABASE_URI[:50]}...</code>\n"
+                    text += f"<b>URI:</b> <code>{self.bot.config.DATABASE_URI[:DisplayConstants.URI_DISPLAY_LENGTH]}...</code>\n"
                     text += f"<b>Name:</b> <code>{self.bot.config.DATABASE_NAME}</code>\n"
                     text += f"<b>Collection:</b> <code>{self.bot.config.COLLECTION_NAME}</code>\n"
                     text += "💡 <b>Multi-database mode is not enabled.</b>\n"
@@ -200,17 +201,17 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 text += f"   📊 Usage: `{stat['usage_percentage']:.1f}%`\n"
                 text += f"   📄 Files: <code>{stat['files_count']:,}</code>\n"
                 
-                if stat['usage_percentage'] >= 90:
+                if stat['usage_percentage'] >= DisplayConstants.DB_CRITICAL_USAGE_PERCENT:
                     text += "   ⚠️ <b>Critical: Near capacity!</b>\n"
-                elif stat['usage_percentage'] >= 75:
+                elif stat['usage_percentage'] >= DisplayConstants.DB_HIGH_USAGE_PERCENT:
                     text += "   🔶 <b>Warning: High usage</b>\n"
-                elif stat['usage_percentage'] < 25:
+                elif stat['usage_percentage'] < DisplayConstants.DB_LOW_USAGE_PERCENT:
                     text += "   🔵 <b>Info: Low usage</b>\n"
                     
                 text += "\n"
 
             # Add usage recommendations
-            if any(stat['usage_percentage'] >= 80 for stat in stats):
+            if any(stat['usage_percentage'] >= DisplayConstants.DB_WARNING_USAGE_PERCENT for stat in stats):
                 text += "💡 <b>Recommendations:</b>\n"
                 text += "• Consider adding more databases to `DATABASE_URIS`\n"
                 text += "• Monitor storage usage regularly\n"

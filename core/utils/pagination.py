@@ -2,6 +2,8 @@
 from typing import List, Optional, Tuple
 from pyrogram.types import InlineKeyboardButton
 
+from core.constants import TelegramConstants, PaginationConstants
+
 
 class PaginationBuilder:
     """Smart pagination builder with dynamic page range display"""
@@ -13,7 +15,7 @@ class PaginationBuilder:
                  query: str,
                  user_id: int,
                  callback_prefix: str = "search",
-                 max_visible_pages: int = 8,
+                 max_visible_pages: int = TelegramConstants.MAX_BUTTONS_PER_ROW,
                  boundary_pages: int = 1,
                  surrounding_pages: int = 1):
         """
@@ -65,19 +67,19 @@ class PaginationBuilder:
         pages.append(1)
 
         # Determine range around current page
-        if self.current_page <= 3:
+        if self.current_page <= PaginationConstants.NEAR_BEGINNING_THRESHOLD:
             # Near beginning: show pages 1-5, then ellipsis, then last page
-            for i in range(2, min(6, self.total_pages)):
+            for i in range(2, min(PaginationConstants.MAX_BEGINNING_PAGES, self.total_pages)):
                 pages.append(i)
-            if self.total_pages > 6:
+            if self.total_pages > PaginationConstants.MAX_BEGINNING_PAGES:
                 pages.append(None)  # ellipsis
                 pages.append(self.total_pages)
 
-        elif self.current_page >= self.total_pages - 2:
+        elif self.current_page >= self.total_pages - PaginationConstants.NEAR_END_OFFSET:
             # Near end: show first page, ellipsis, then last 5 pages
-            if self.total_pages > 6:
+            if self.total_pages > PaginationConstants.MAX_BEGINNING_PAGES:
                 pages.append(None)  # ellipsis
-            for i in range(max(2, self.total_pages - 4), self.total_pages + 1):
+            for i in range(max(2, self.total_pages - PaginationConstants.PAGES_FROM_END), self.total_pages + 1):
                 pages.append(i)
 
         else:

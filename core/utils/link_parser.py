@@ -5,6 +5,7 @@ import re
 from typing import Optional, Tuple, Dict, Any
 from dataclasses import dataclass
 
+from core.constants import TelegramConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -62,7 +63,7 @@ class TelegramLinkParser:
             
             try:
                 # Private channels need -100 prefix
-                chat_id = int("-100" + chat_id_str)
+                chat_id = int(TelegramConstants.CHANNEL_ID_PREFIX + chat_id_str)
                 message_id = int(message_id_str)
                 
                 if message_id <= 0:
@@ -102,7 +103,7 @@ class TelegramLinkParser:
                 parsed_id = int(chat_identifier)
                 # Check if it's a reasonable chat ID
                 if parsed_id > 0:
-                    chat_id = parsed_id if parsed_id < 1000000000 else -parsed_id
+                    chat_id = parsed_id if parsed_id < TelegramConstants.CHAT_ID_THRESHOLD else -parsed_id
                 else:
                     logger.warning(f"Invalid numeric chat ID: {parsed_id}")
                     return None
@@ -154,7 +155,7 @@ class TelegramLinkParser:
         
         # Check for reasonable batch size
         message_count = second_parsed.message_id - first_parsed.message_id + 1
-        if message_count > 10000:  # Reasonable limit
+        if message_count > TelegramConstants.MAX_BATCH_MESSAGE_COUNT:
             logger.warning(f"Batch size too large: {message_count} messages")
             return None
         
@@ -164,7 +165,7 @@ class TelegramLinkParser:
     @staticmethod
     def _is_valid_username(username: str) -> bool:
         """Validate username format according to Telegram rules"""
-        if not username or len(username) < 5 or len(username) > 32:
+        if not username or len(username) < TelegramConstants.USERNAME_MIN_LENGTH or len(username) > TelegramConstants.USERNAME_MAX_LENGTH:
             return False
 
         # Username must start with letter

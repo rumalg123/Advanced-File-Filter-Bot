@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import os
 
 from core.cache.redis_cache import CacheManager
+from core.constants import DatabaseConstants
 from repositories.bot_settings import BotSettingsRepository
 from core.utils.logger import get_logger
 
@@ -99,7 +100,7 @@ class BotSettingsService:
         },
         'DATABASE_SIZE_LIMIT_GB': {
             'type': 'float',
-            'default': 0.5,
+            'default': DatabaseConstants.DEFAULT_SIZE_LIMIT_GB,
             'description': 'Database size limit in GB for auto-switching',
             'category': 'database'
         },
@@ -111,19 +112,19 @@ class BotSettingsService:
         },
         'DATABASE_MAX_FAILURES': {
             'type': 'int',
-            'default': 5,
+            'default': DatabaseConstants.CIRCUIT_BREAKER_MAX_FAILURES,
             'description': 'Max failures before circuit breaker opens',
             'category': 'database'
         },
         'DATABASE_RECOVERY_TIMEOUT': {
             'type': 'int',
-            'default': 300,
+            'default': DatabaseConstants.CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
             'description': 'Circuit breaker recovery timeout in seconds',
             'category': 'database'
         },
         'DATABASE_HALF_OPEN_CALLS': {
             'type': 'int',
-            'default': 3,
+            'default': DatabaseConstants.CIRCUIT_BREAKER_HALF_OPEN_CALLS,
             'description': 'Max calls in circuit breaker half-open state',
             'category': 'database'
         },

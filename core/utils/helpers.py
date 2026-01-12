@@ -7,6 +7,8 @@ from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING
 
 from pyrogram.file_id import FileId
 
+from core.constants import ByteConstants, DisplayConstants
+
 if TYPE_CHECKING:
     from pyrogram.types import User, Chat, Message as PyrogramMessage
 
@@ -14,9 +16,9 @@ if TYPE_CHECKING:
 def format_file_size(size: int) -> str:
     """Format file size in human readable format"""
     for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024:
+        if size < ByteConstants.KB:
             return f"{size:.2f} {unit}"
-        size /= 1024
+        size /= ByteConstants.KB
     return f"{size:.2f} TB"
 
 
@@ -38,7 +40,7 @@ def extract_file_ref(file_id: str) -> str:
         return file_ref
     except Exception:
         # Generate a fallback ref using hash
-        return hashlib.md5(file_id.encode()).hexdigest()[:20]
+        return hashlib.md5(file_id.encode()).hexdigest()[:DisplayConstants.FALLBACK_HASH_LENGTH]
 
 
 class MessageProxy:
@@ -179,7 +181,7 @@ def extract_file_info(message: 'PyrogramMessage') -> Optional[Dict[str, Any]]:
             file_name = getattr(media, 'file_name', None)
             if not file_name:
                 # Generate a descriptive name
-                file_name = f"{media_type.title()}_{media.file_unique_id[:10]}"
+                file_name = f"{media_type.title()}_{media.file_unique_id[:DisplayConstants.FILE_UNIQUE_ID_DISPLAY_LENGTH]}"
 
             return {
                 'file_unique_id': media.file_unique_id,

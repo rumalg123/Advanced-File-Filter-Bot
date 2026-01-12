@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional, List
 
+from core.constants import CacheConstants
+
 
 @dataclass
 class CacheTTLConfig:
@@ -10,6 +12,7 @@ class CacheTTLConfig:
     USER_DATA: int = 300  # 5 minutes
     BANNED_USERS_LIST: int = 3600  # 1 hour
     USER_STATS: int = 600  # 10 minutes
+    PREMIUM_STATUS: int = 600  # 10 minutes for premium status check
 
     # Media related
     MEDIA_FILE: int = 300  # 5 minutes
@@ -35,8 +38,17 @@ class CacheTTLConfig:
     RATE_LIMIT_WINDOW: int = 60  # 1 minute
 
     # Session data
-    EDIT_SESSION: int = 60  # 1 minute
+    EDIT_SESSION: int = 300  # 5 minutes
     SEARCH_SESSION: int = 3600  # 1 hour
+    INDEX_SESSION: int = 1800  # 30 minutes
+    BATCH_SESSION: int = 7200  # 2 hours
+
+    # Pending operations
+    DELETEALL_PENDING: int = 60  # 1 minute for deleteall confirmation
+
+    # Inline query cache times
+    INLINE_NO_RESULTS: int = 10  # Cache time when no results found
+    INLINE_RESULTS: int = 30  # Cache time for search results
 
     # Temporary flags
     RECENT_EDIT_FLAG: int = 2  # 2 seconds
@@ -62,7 +74,7 @@ class CacheKeyGenerator:
     
     # Cache for frequently used keys to reduce string operations
     _key_cache = {}
-    _max_cache_size = 1000
+    _max_cache_size = CacheConstants.KEY_CACHE_MAX_SIZE
     
     @classmethod
     def _get_cached_key(cls, key_type: str, *args) -> str:

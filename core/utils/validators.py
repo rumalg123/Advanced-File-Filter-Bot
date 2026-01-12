@@ -5,6 +5,7 @@ from functools import wraps
 from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
 from pyrogram.types import Message, CallbackQuery
+from core.constants import ValidationLimits
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 
@@ -124,11 +125,11 @@ class ValidationUtils:
             page_int = int(page) if isinstance(page, str) else page
             per_page_int = int(per_page) if isinstance(per_page, str) else per_page
             
-            if page_int < 1:
-                return False, 0, 0, "Page number must be >= 1"
-            
-            if per_page_int < 1 or per_page_int > 100:
-                return False, 0, 0, "Items per page must be between 1 and 100"
+            if page_int < ValidationLimits.MIN_PAGE_NUMBER:
+                return False, 0, 0, f"Page number must be >= {ValidationLimits.MIN_PAGE_NUMBER}"
+
+            if per_page_int < ValidationLimits.MIN_ITEMS_PER_PAGE or per_page_int > ValidationLimits.MAX_ITEMS_PER_PAGE:
+                return False, 0, 0, f"Items per page must be between {ValidationLimits.MIN_ITEMS_PER_PAGE} and {ValidationLimits.MAX_ITEMS_PER_PAGE}"
             
             return True, page_int, per_page_int, None
             
@@ -362,7 +363,7 @@ class AccessControl:
         try:
             # Parse callback data to get original user ID
             parts = query.data.split('#')
-            if len(parts) >= 3:
+            if len(parts) >= ValidationLimits.CALLBACK_PARTS_WITH_USER:
                 original_user_id = int(parts[2])
             else:
                 return True, callback_user_id, None  # No original user restriction
@@ -490,7 +491,7 @@ class InputValidation:
         # Remove control characters
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', sanitized)
         # Limit length
-        return sanitized[:255]
+        return sanitized[:ValidationLimits.MAX_FILENAME_LENGTH]
     
     @staticmethod
     def sanitize_search_query(query: str) -> str:
@@ -502,7 +503,7 @@ class InputValidation:
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', query)
         sanitized = ' '.join(sanitized.split())
         # Limit length
-        return sanitized[:100]
+        return sanitized[:ValidationLimits.MAX_SEARCH_QUERY_LENGTH]
 
     @staticmethod
     def validate_message_text(message: Union[Message, CallbackQuery]) -> Optional[str]:
@@ -517,7 +518,7 @@ class InputValidation:
         return text if text else None
     
     @staticmethod
-    def extract_command_args(message: Message, min_args: int = 0, max_args: int = 10) -> Tuple[bool, list]:
+    def extract_command_args(message: Message, min_args: int = ValidationLimits.DEFAULT_MIN_ARGS, max_args: int = ValidationLimits.DEFAULT_MAX_ARGS) -> Tuple[bool, list]:
         """Extract and validate command arguments"""
         if not message.text:
             return False, []
@@ -535,7 +536,7 @@ class InputValidation:
         return True, sanitized_args
     
     @staticmethod
-    def validate_callback_data(query: CallbackQuery, expected_parts: int = 2) -> Tuple[bool, list]:
+    def validate_callback_data(query: CallbackQuery, expected_parts: int = ValidationLimits.MIN_CALLBACK_PARTS) -> Tuple[bool, list]:
         """Validate callback query data format"""
         if not query.data:
             return False, []
@@ -556,7 +557,7 @@ class InputValidation:
         # Remove control characters
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', caption)
         # Limit length
-        return sanitized[:1024]
+        return sanitized[:ValidationLimits.MAX_CAPTION_LENGTH]
 
     @staticmethod
     def normalize_filename_for_search(filename: str) -> str:

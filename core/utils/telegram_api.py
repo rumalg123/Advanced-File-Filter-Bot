@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 from pyrogram.errors import FloodWait, RPCError
 
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.constants import APIRetryConstants
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,7 +17,7 @@ logger = get_logger(__name__)
 class TelegramAPIWrapper:
     """Wrapper for Telegram API calls with flood control and rate limiting"""
 
-    def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
+    def __init__(self, max_retries: int = APIRetryConstants.DEFAULT_MAX_RETRIES, base_delay: float = APIRetryConstants.DEFAULT_BASE_DELAY):
         self.max_retries = max_retries
         self.base_delay = base_delay
 
@@ -62,7 +63,7 @@ class TelegramAPIWrapper:
             except FloodWait as e:
                 # Honor Telegram's retry_after with jitter
                 retry_after = e.value
-                jitter = random.uniform(0.1, 0.5)  # Add small random delay
+                jitter = random.uniform(APIRetryConstants.JITTER_MIN, APIRetryConstants.JITTER_MAX)
                 wait_time = retry_after + jitter
                 
                 logger.warning(
@@ -90,7 +91,7 @@ class TelegramAPIWrapper:
                 
                 # Retry for server errors (5xx) with exponential backoff
                 if retries < self.max_retries - 1:
-                    delay = self.base_delay * (2 ** retries) + random.uniform(0.1, 0.5)
+                    delay = self.base_delay * (APIRetryConstants.BACKOFF_BASE ** retries) + random.uniform(APIRetryConstants.JITTER_MIN, APIRetryConstants.JITTER_MAX)
                     logger.warning(f"Server error in {api_func.__name__}: {e}, retrying in {delay:.2f}s")
                     await asyncio.sleep(delay)
                     retries += 1
@@ -104,7 +105,7 @@ class TelegramAPIWrapper:
         
         # If we get here, all retries were flood waits
         logger.error(f"All retries exhausted due to flood waits for {api_func.__name__}")
-        raise FloodWait(value=60)  # Give up with a 60-second flood wait
+        raise FloodWait(value=APIRetryConstants.FALLBACK_FLOOD_WAIT)
 
 
 # Global instance

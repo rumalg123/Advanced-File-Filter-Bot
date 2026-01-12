@@ -4,6 +4,7 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.constants import DisplayConstants
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
@@ -58,7 +59,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
             return await query.answer("No more results", show_alert=True)
 
         # Generate a unique key for this search result set
-        session_id = uuid.uuid4().hex[:8]
+        session_id = uuid.uuid4().hex[:DisplayConstants.SESSION_ID_LENGTH]
         search_key = CacheKeyGenerator.search_session(user_id, session_id)
 
         # Store file IDs in cache for "Send All" functionality - optimized
@@ -107,7 +108,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
             file_identifier = file.file_unique_id if file.file_unique_id else file.file_id
             file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
             file_button = InlineKeyboardButton(
-                f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
+                f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:DisplayConstants.FILE_NAME_DISPLAY_LENGTH]}{'...' if len(file.file_name) > DisplayConstants.FILE_NAME_DISPLAY_LENGTH else ''}",
                 callback_data=f"file#{file_identifier}#{callback_user_id}"
             )
             buttons.append([file_button])

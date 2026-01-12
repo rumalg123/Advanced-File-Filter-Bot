@@ -9,6 +9,7 @@ from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
 
+from core.constants import ConcurrencyDefaults
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -43,11 +44,11 @@ class SemaphoreManager:
     
     # Default concurrency limits by domain
     DEFAULT_LIMITS = {
-        'telegram_send': 10,      # Telegram API sends
-        'telegram_fetch': 15,     # Telegram API fetches
-        'telegram_general': 10,   # Other Telegram API operations
-        'database_write': 20,     # Database writes
-        'file_processing': 5,     # File processing operations
+        'telegram_send': ConcurrencyDefaults.TELEGRAM_SEND,
+        'telegram_fetch': ConcurrencyDefaults.TELEGRAM_FETCH,
+        'telegram_general': ConcurrencyDefaults.TELEGRAM_GENERAL,
+        'database_write': ConcurrencyDefaults.DATABASE_WRITE,
+        'file_processing': ConcurrencyDefaults.FILE_PROCESSING,
     }
     
     def __init__(self, custom_limits: Optional[Dict[str, int]] = None):
@@ -76,7 +77,7 @@ class SemaphoreManager:
     def get_semaphore(self, domain: str) -> asyncio.Semaphore:
         """Get semaphore for domain, create if doesn't exist"""
         if domain not in self._semaphores:
-            limit = self.limits.get(domain, 10)  # Default limit
+            limit = self.limits.get(domain, ConcurrencyDefaults.DEFAULT_FALLBACK)
             self._semaphores[domain] = asyncio.Semaphore(limit)
             self._metrics[domain] = ConcurrencyMetrics(
                 domain=domain,

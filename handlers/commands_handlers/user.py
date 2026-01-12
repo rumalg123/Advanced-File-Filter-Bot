@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 import core.utils.messages as config_messages
+from core.constants import DisplayConstants
 from core.utils.messages import ErrorMessages
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
@@ -151,7 +152,7 @@ class UserCommandHandler(BaseCommandHandler):
         user_id = message.from_user.id
 
         # Store the deeplink parameter in cache with a short key
-        session_id = uuid.uuid4().hex[:8]
+        session_id = uuid.uuid4().hex[:DisplayConstants.SESSION_ID_LENGTH]
         session_key = CacheKeyGenerator.deeplink_session(user_id, session_id)
         await self.bot.cache.set(
             session_key,

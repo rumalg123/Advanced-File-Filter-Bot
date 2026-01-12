@@ -6,6 +6,7 @@ from typing import List
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
+from core.constants import TelegramConstants
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
@@ -133,7 +134,7 @@ class FilterHandler(BaseHandler):
             keywords = "\n".join(f"{idx + 1}.  <code>{text}</code>" for idx, text in enumerate(sorted(filters)))
             filterlist += keywords
 
-            if len(filterlist) > 4096:
+            if len(filterlist) > TelegramConstants.MAX_MESSAGE_LENGTH:
                 # Send as file if too long
                 doc_keywords = "\n".join(f"{idx + 1}.  {text}" for idx, text in enumerate(sorted(filters)))
                 doc_filterlist = f"Total number of filters in {title}: {count}\n{doc_keywords}"

@@ -1,6 +1,7 @@
 from pyrogram import filters
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
+from core.constants import HandlerPriorityConstants
 from core.utils.logger import get_logger
 from core.utils.verify_alignment import verify_alignment_command
 from handlers.callbacks_handlers import UserCallbackHandler
@@ -105,20 +106,20 @@ class CommandHandler:
             self.bot.add_handler(
                 MessageHandler(
                     self.bot_settings_handler.handle_edit_input,
-                    filters.text & filters.private & filters.user(self.bot.config.ADMINS[0]) & 
+                    filters.text & filters.private & filters.user(self.bot.config.ADMINS[0]) &
                     (filters.regex(r"^[^/]") | filters.command("cancel"))
                 ),
-                group=-5  # Higher priority than search
+                group=HandlerPriorityConstants.EDIT_INPUT_HANDLER
             )
 
-        # Add standalone cancel handler for better reliability 
+        # Add standalone cancel handler for better reliability
         if self.bot.config.ADMINS:
             self.bot.add_handler(
                 MessageHandler(
                     self.bot_settings_handler.handle_cancel,
                     filters.command("cancel") & filters.private & filters.user(self.bot.config.ADMINS[0])
                 ),
-                group=-10  # Very high priority
+                group=HandlerPriorityConstants.CANCEL_HANDLER
             )
 
         # Callback handlers
