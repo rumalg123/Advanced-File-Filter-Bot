@@ -7,6 +7,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.services.indexing import IndexingService, IndexRequestService
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin
 
@@ -130,7 +131,7 @@ class IndexingHandler:
             match = regex.match(message.text)
             if not match:
                 logger.debug("Triggered in handle_index_request")
-                return await message.reply("❌ Invalid link format.")
+                return await message.reply(ErrorMessages.INVALID_LINK)
 
             chat_id = match.group(4)
             last_msg_id = int(match.group(5))
@@ -237,7 +238,7 @@ class IndexingHandler:
         data = query.data.split("#")
 
         if len(data) < 2:
-            return await query.answer("Invalid callback data")
+            return await query.answer(ErrorMessages.INVALID_CALLBACK)
 
         action = data[1]
 
@@ -249,7 +250,7 @@ class IndexingHandler:
         elif action in ["accept", "reject"]:
             # Handle admin decision on index request
             if len(data) < 5:
-                return await query.answer("Invalid callback data")
+                return await query.answer(ErrorMessages.INVALID_CALLBACK)
 
             _, action, chat_id, param, from_user = data
 

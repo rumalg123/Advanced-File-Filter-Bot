@@ -465,13 +465,13 @@ class DeepLinkHandler(BaseCommandHandler):
         # Get batch link details
         batch_link = await self.bot.filestore_service.get_premium_batch_link(batch_id)
         if not batch_link:
-            await message.reply_text("❌ Batch link not found or expired.")
+            await message.reply_text(ErrorMessages.BATCH_NOT_FOUND)
             return
 
         # Get user details
         user = await self.bot.user_repo.get_user(user_id)
         if not user:
-            await message.reply_text("❌ User not found. Please start the bot again.")
+            await message.reply_text(ErrorMessages.USER_NOT_FOUND)
             return
 
         # Check premium access with precedence rules
@@ -490,7 +490,7 @@ class DeepLinkHandler(BaseCommandHandler):
         # Check general user status (banned, etc.) but bypass premium checks for premium batch links
         # Premium batch links have their own access control logic above
         if user.status == UserStatus.BANNED:
-            await message.reply_text(f"❌ Access denied: {user.ban_reason or 'User banned'}")
+            await message.reply_text(ErrorMessages.file_error(f"Access denied: {user.ban_reason or 'User banned'}"))
             return
 
         sts = await message.reply("📦 <b>Processing premium batch files...</b>")
@@ -516,7 +516,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 f"💎 Premium access verified"
             )
         else:
-            await message.reply_text("❌ Failed to send batch files. Please try again.")
+            await message.reply_text(ErrorMessages.SEND_BATCH_FAILED)
 
         # Delete the command message
         await self.safe_delete(message)

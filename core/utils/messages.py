@@ -36,10 +36,16 @@ class ErrorMessages:
     SEND_FAILED = "❌ Failed to send file. Please try again."
     SEND_FILES_FAILED = "❌ Failed to send files."
     SEND_BATCH_FAILED = "❌ Failed to send batch files."
+    SEND_ERROR = "❌ Error sending file. Try again."
     DELETE_FAILED = "Failed to delete"
+    INVALID_LINK = "❌ Invalid link format."
+    USER_NOT_FOUND = "❌ User not found. Please start the bot again."
 
     # Subscription errors
     JOIN_CHANNELS = "❌ You still need to join the required channel(s)!"
+
+    # Bot interaction
+    START_BOT_FIRST = "❌ Please start the bot first!"
 
     # Inline search messages
     INLINE_AUTH_ERROR = "❌ Authentication Error"

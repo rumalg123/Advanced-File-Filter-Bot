@@ -8,6 +8,7 @@ from pyrogram.types import CallbackQuery
 
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import (
     is_original_requester, is_private_chat, skip_subscription_check,
@@ -61,19 +62,19 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             parts = query.data.split('#', 2)
             if len(parts) < 2:
-                await query.answer("❌ Invalid callback data", show_alert=True)
+                await query.answer(ErrorMessages.INVALID_CALLBACK, show_alert=True)
                 return
 
             file_identifier = parts[1]
             original_user_id = int(parts[2]) if len(parts) >= 3 else callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid callback data format: {query.data}, error: {e}")
-            await query.answer("❌ Invalid request format", show_alert=True)
+            await query.answer(ErrorMessages.INVALID_FORMAT, show_alert=True)
             return
 
         # Check if the callback user is the original requester
         if original_user_id and not is_original_requester(callback_user_id, original_user_id):
-            await query.answer("❌ You cannot interact with this message!", show_alert=True)
+            await query.answer(ErrorMessages.NOT_YOUR_MESSAGE, show_alert=True)
             return
 
         # If in group, redirect to PM
@@ -116,8 +117,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
-                f"Click here: @{self.bot.bot_username}",
+                f"{ErrorMessages.START_BOT_FIRST}\nClick here: @{self.bot.bot_username}",
                 show_alert=True
             )
             return
@@ -137,7 +137,7 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         if not file:
-            await query.answer("❌ File not found.", show_alert=True)
+            await query.answer(ErrorMessages.FILE_NOT_FOUND, show_alert=True)
             return
 
         # Send file to PM
@@ -174,13 +174,12 @@ class FileCallbackHandler(BaseCommandHandler):
 
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
-                f"Click here: @{self.bot.bot_username}",
+                f"{ErrorMessages.START_BOT_FIRST}\nClick here: @{self.bot.bot_username}",
                 show_alert=True
             )
         except Exception as e:
             logger.error(f"Error sending file via callback: {e}")
-            await query.answer("❌ Error sending file. Try again.", show_alert=True)
+            await query.answer(ErrorMessages.SEND_ERROR, show_alert=True)
 
     @check_ban()
     async def handle_sendall_callback(self, client: Client, query: CallbackQuery):
@@ -191,7 +190,7 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             parts = query.data.split('#', 2)
             if len(parts) < 2:
-                await query.answer("❌ Invalid callback data", show_alert=True)
+                await query.answer(ErrorMessages.INVALID_CALLBACK, show_alert=True)
                 return
 
             search_key = parts[1]
@@ -201,12 +200,12 @@ class FileCallbackHandler(BaseCommandHandler):
                 original_user_id = callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid sendall callback data: {query.data}, error: {e}")
-            await query.answer("❌ Invalid request format", show_alert=True)
+            await query.answer(ErrorMessages.INVALID_FORMAT, show_alert=True)
             return
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
-            await query.answer("❌ You cannot interact with this message!", show_alert=True)
+            await query.answer(ErrorMessages.NOT_YOUR_MESSAGE, show_alert=True)
             return
 
         # If in group, redirect to PM
@@ -250,8 +249,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
-                f"Click here: @{self.bot.bot_username}",
+                f"{ErrorMessages.START_BOT_FIRST}\nClick here: @{self.bot.bot_username}",
                 show_alert=True
             )
             return
@@ -260,16 +258,16 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Get cached search results with debug logging
         cached_data = await self.bot.cache.get(search_key)
-        
+
         if not cached_data:
-            await query.answer("❌ Search results expired. Please search again.", show_alert=True)
+            await query.answer(ErrorMessages.SEARCH_EXPIRED, show_alert=True)
             return
 
         files_data = cached_data.get('files', [])
         search_query = cached_data.get('query', '')
 
         if not files_data:
-            await query.answer("❌ No files found.", show_alert=True)
+            await query.answer(ErrorMessages.NO_FILES_FOUND, show_alert=True)
             return
 
         # Check access for bulk send
@@ -277,7 +275,7 @@ class FileCallbackHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await query.answer(f"❌ {reason}", show_alert=True)
+            await query.answer(ErrorMessages.file_error(reason), show_alert=True)
             return
 
         # Check if user is admin or owner (they bypass quota) using validators
@@ -304,7 +302,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
             if not success:
                 await query.answer(
-                    f"❌ {message}. Upgrade to premium for unlimited access!",
+                    f"{ErrorMessages.file_error(message)} Upgrade to premium for unlimited access!",
                     show_alert=True
                 )
                 return
@@ -325,8 +323,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
-                f"Click here: @{self.bot.bot_username}",
+                f"{ErrorMessages.START_BOT_FIRST}\nClick here: @{self.bot.bot_username}",
                 show_alert=True
             )
             return
