@@ -288,7 +288,7 @@ class BatchOptimizations:
                     {"$set": {
                         "is_premium": False,
                         "premium_activation_date": None,
-                        "premium_expiration_date": None,
+                        "premium_expiry_date": None,
                         "updated_at": datetime.now(UTC)
                     }}
                 ) for user_id in user_ids
