@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 import time
-import uuid
 from typing import Dict, Any, Optional, List, Tuple
 
 from pyrogram import Client, enums
@@ -19,7 +18,7 @@ from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
-from core.utils.helpers import extract_file_ref
+from core.utils.helpers import extract_file_ref, generate_session_id
 from core.concurrency import semaphore_manager
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
@@ -370,7 +369,7 @@ class FileStoreService:
                 return f"https://t.me/{bot_username}?start=PBLINK-{existing.id}"
 
         # Generate unique batch link ID
-        batch_id = f"BL-{uuid.uuid4().hex[:ProcessingConstants.BATCH_ID_UUID_LENGTH]}"
+        batch_id = f"BL-{generate_session_id(ProcessingConstants.BATCH_ID_UUID_LENGTH)}"
         
         # Create BatchLink entity with validated data
         batch_link = BatchLink(

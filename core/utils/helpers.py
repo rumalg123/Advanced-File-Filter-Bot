@@ -2,6 +2,7 @@
 """Common utility functions used across the application"""
 import base64
 import hashlib
+import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING
 
@@ -20,6 +21,19 @@ def format_file_size(size: int) -> str:
             return f"{size:.2f} {unit}"
         size /= ByteConstants.KB
     return f"{size:.2f} TB"
+
+
+def generate_session_id(length: int = DisplayConstants.SESSION_ID_LENGTH) -> str:
+    """
+    Generate a unique session ID using UUID.
+
+    Args:
+        length: Length of the session ID (default: SESSION_ID_LENGTH from constants)
+
+    Returns:
+        Truncated hex UUID string
+    """
+    return uuid.uuid4().hex[:length]
 
 
 def extract_file_ref(file_id: str) -> str:

@@ -1,15 +1,11 @@
-import uuid
+from pyrogram import Client, enums
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
-from pyrogram import Client
-from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-
-from core.cache.config import CacheKeyGenerator, CacheTTLConfig
-from core.constants import DisplayConstants
-from core.utils.file_emoji import get_file_emoji
-from core.utils.helpers import format_file_size
+from core.cache.config import SearchSessionCache
 from core.utils.logger import get_logger
 from core.utils.messages import ErrorMessages
-from core.utils.pagination import PaginationBuilder, PaginationHelper
+from core.utils.pagination import PaginationHelper
+from core.utils.search_results import SearchResultsBuilder
 from handlers.commands_handlers.base import BaseCommandHandler
 
 logger = get_logger(__name__)
@@ -17,6 +13,11 @@ logger = get_logger(__name__)
 
 class PaginationCallbackHandler(BaseCommandHandler):
     """Handler for search pagination callbacks"""
+
+    def __init__(self, bot):
+        super().__init__(bot)
+        self.session_cache = SearchSessionCache(bot.cache)
+        self.results_builder = SearchResultsBuilder(bot.cache, bot.config)
 
     async def handle_search_pagination(self, client: Client, query: CallbackQuery):
         """Handle search pagination callbacks"""
@@ -42,13 +43,12 @@ class PaginationCallbackHandler(BaseCommandHandler):
         page_size = self.bot.config.MAX_BTN_SIZE
         user_id = callback_user_id
 
-        new_offset = current_offset
         # Search for files
         files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
             user_id=user_id,
             query=search_query,
             chat_id=user_id,
-            offset=new_offset,
+            offset=current_offset,
             limit=page_size
         )
 
@@ -58,70 +58,40 @@ class PaginationCallbackHandler(BaseCommandHandler):
         if not files:
             return await query.answer("No more results", show_alert=True)
 
-        # Generate a unique key for this search result set
-        session_id = uuid.uuid4().hex[:DisplayConstants.SESSION_ID_LENGTH]
-        search_key = CacheKeyGenerator.search_session(user_id, session_id)
+        # Cache files using SearchSessionCache
+        search_key = await self.session_cache.store_files(files, search_query, user_id)
 
-        # Store file IDs in cache for "Send All" functionality - optimized
-        # Use list comprehension for better memory efficiency
-        files_data = [
-            {
-                'file_unique_id': f.file_unique_id,
-                'file_id': f.file_id,
-                'file_ref': f.file_ref,
-                'file_name': f.file_name,
-                'file_size': f.file_size,
-                'file_type': f.file_type.value
-            }
-            for f in files
-        ]
+        # Determine if this is a private chat
+        is_private = query.message.chat.type == enums.ChatType.PRIVATE
 
-        await self.bot.cache.set(
-            search_key,
-            {'files': files_data, 'query': search_query},
-            expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
-        )
+        # Calculate current page for caption
+        current_page = (current_offset // page_size) + 1
 
-        # Build response with new pagination builder
-        pagination = PaginationBuilder(
-            total_items=total,
-            page_size=page_size,
-            current_offset=new_offset,
-            query=search_query,
+        # Build buttons using SearchResultsBuilder
+        buttons = self.results_builder.build_buttons(
+            files=files,
+            search_key=search_key,
             user_id=callback_user_id,
-            callback_prefix="search"
+            is_private=is_private,
+            total=total,
+            page_size=page_size,
+            query=search_query,
+            callback_prefix="search",
+            current_offset=current_offset
         )
 
-        # Build file buttons
-        buttons = []
-
-        # Add "Send All Files" button as the first button
-        if files:
-            buttons.append([
-                InlineKeyboardButton(
-                    f"📤 Send All Files ({len(files)})",
-                    callback_data=f"sendall#{search_key}"
-                )
-            ])
-
-        for file in files:
-            file_identifier = file.file_unique_id if file.file_unique_id else file.file_id
-            file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
-            file_button = InlineKeyboardButton(
-                f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:DisplayConstants.FILE_NAME_DISPLAY_LENGTH]}{'...' if len(file.file_name) > DisplayConstants.FILE_NAME_DISPLAY_LENGTH else ''}",
-                callback_data=f"file#{file_identifier}#{callback_user_id}"
-            )
-            buttons.append([file_button])
-
-        # Add smart pagination buttons
-        pagination_buttons = pagination.build_pagination_buttons()
-        buttons.extend(pagination_buttons)
+        # Build caption using SearchResultsBuilder (without delete notice for pagination updates)
+        caption = self.results_builder.build_caption(
+            query=search_query,
+            total=total,
+            page_size=page_size,
+            current_page=current_page,
+            include_delete_notice=False
+        )
 
         # Update message
         await query.message.edit_text(
-            f"🔍 <b>Search Results for:</b> {search_query}\n"
-            f"📁 Found {total} files\n"
-            f"📊 Page {pagination.current_page} of {pagination.total_pages}",
+            caption,
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 

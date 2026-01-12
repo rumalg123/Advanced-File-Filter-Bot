@@ -1,7 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 
 from core.constants import CacheConstants
+from core.utils.helpers import generate_session_id
+
+if TYPE_CHECKING:
+    from core.cache.redis_cache import CacheManager
 
 
 @dataclass
@@ -281,4 +285,63 @@ class CachePatterns:
             CachePatterns.search_results_pattern(user_id),
             CacheKeyGenerator.recent_settings_edit(user_id)
         ]
+
+
+class SearchSessionCache:
+    """Helper for caching search session data"""
+
+    def __init__(self, cache_manager: 'CacheManager'):
+        self.cache = cache_manager
+
+    async def store_files(
+            self,
+            files: list,
+            query: str,
+            user_id: int
+    ) -> str:
+        """
+        Cache files data for "Send All" functionality.
+
+        Args:
+            files: List of MediaFile objects
+            query: Search query string
+            user_id: User ID who initiated the search
+
+        Returns:
+            The generated search_key for retrieving cached files
+        """
+        session_id = generate_session_id()
+        search_key = CacheKeyGenerator.search_session(user_id, session_id)
+
+        files_data = [
+            {
+                'file_unique_id': f.file_unique_id,
+                'file_id': f.file_id,
+                'file_ref': f.file_ref,
+                'file_name': f.file_name,
+                'file_size': f.file_size,
+                'file_type': f.file_type.value
+            }
+            for f in files
+        ]
+
+        await self.cache.set(
+            search_key,
+            {'files': files_data, 'query': query, 'user_id': user_id},
+            expire=CacheTTLConfig.SEARCH_SESSION
+        )
+
+        return search_key
+
+    async def get_files(self, search_key: str) -> Optional[dict]:
+        """
+        Retrieve cached search session data.
+
+        Args:
+            search_key: The cache key returned by store_files()
+
+        Returns:
+            Dict with 'files', 'query', 'user_id' or None if expired/not found
+        """
+        return await self.cache.get(search_key)
 
