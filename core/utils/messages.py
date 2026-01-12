@@ -78,6 +78,14 @@ class ErrorMessages:
     FORWARD_FROM_CHANNEL = "❌ Please forward from a channel, not a group"
     MESSAGE_NOT_FOUND = "❌ The specified message doesn't exist"
     CHANNEL_ADMIN_REQUIRED = "❌ Error accessing the channel. Make sure I'm an admin in the channel."
+    BOT_ACCESS_REQUIRED = (
+        "❌ <b>Bot Access Required</b>\n"
+        "I cannot access this channel. Please:\n"
+        "1. Add me to the channel as an admin\n"
+        "2. Make sure the channel is public OR\n"
+        "3. Ensure I have proper permissions\n"
+        "Then try forwarding the message again."
+    )
     INDEX_REQUEST_FAILED = "❌ Failed to create index request"
     GENERIC_ERROR = "❌ An error occurred. Please try again."
     SKIP_POSITIVE = "❌ Skip number must be positive"

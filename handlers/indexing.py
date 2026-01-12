@@ -168,14 +168,7 @@ class IndexingHandler:
             except Exception as e:
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg or "chat not found" in error_msg:
-                    return await message.reply(
-                        "❌ <b>Bot Access Required</b>\n"
-                        "I cannot access this channel. Please:\n"
-                        "1. Add me to the channel as an admin\n"
-                        "2. Make sure the channel is public OR\n"
-                        "3. Ensure I have proper permissions\n"
-                        "Then try forwarding the message again."
-                    )
+                    return await message.reply(ErrorMessages.BOT_ACCESS_REQUIRED)
                 else:
                     return await message.reply(ErrorMessages.CHANNEL_ADMIN_REQUIRED)
 
@@ -219,14 +212,7 @@ class IndexingHandler:
         except Exception as e:
             error_msg = str(e).lower()
             if "channel_private" in error_msg:
-                return await message.reply(
-                    "❌ <b>Bot Access Required</b>\n\n"
-                    "I cannot access this channel. Please:\n"
-                    "1. Add me to the channel as an admin\n"
-                    "2. Make sure the channel is public OR\n"
-                    "3. Ensure I have proper permissions\n\n"
-                    "Then try forwarding the message again."
-                )
+                return await message.reply(ErrorMessages.BOT_ACCESS_REQUIRED)
             else:
                 logger.error(f"Error in handle_index_request: {e}")
                 return await message.reply(ErrorMessages.GENERIC_ERROR)
