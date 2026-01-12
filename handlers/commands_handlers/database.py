@@ -7,9 +7,10 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
 from core.utils.caption import CaptionFormatter
+from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.validators import admin_only
 from handlers.commands_handlers.base import BaseCommandHandler
-from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,7 +61,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
         """Handle /dbstats command - show database statistics"""
         try:
             if not hasattr(self.bot, 'multi_db_manager') or not self.bot.multi_db_manager:
-                await message.reply_text("❌ Multi-database mode is not enabled.")
+                await message.reply_text(ErrorMessages.MULTI_DB_NOT_ENABLED)
                 return
 
             # Get database statistics
@@ -116,7 +117,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
         """Handle /dbswitch command - switch write database"""
         try:
             if not hasattr(self.bot, 'multi_db_manager') or not self.bot.multi_db_manager:
-                await message.reply_text("❌ Multi-database mode is not enabled.")
+                await message.reply_text(ErrorMessages.MULTI_DB_NOT_ENABLED)
                 return
 
             # Parse command arguments
@@ -255,7 +256,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
     async def _refresh_database_stats(self, callback_query):
         """Refresh database statistics"""
         if not self.bot.multi_db_manager:
-            await callback_query.answer("❌ Multi-database not enabled", show_alert=True)
+            await callback_query.answer(ErrorMessages.MULTI_DB_NOT_ENABLED, show_alert=True)
             return
 
         await callback_query.answer("🔄 Refreshing stats...")
@@ -308,7 +309,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
         await callback_query.answer("🔄 Refreshing database info...")
         
         if not self.bot.multi_db_manager:
-            await callback_query.message.edit_text("❌ Multi-database mode is not enabled.")
+            await callback_query.message.edit_text(ErrorMessages.MULTI_DB_NOT_ENABLED)
             return
 
         # Force update stats using circuit breaker protected method

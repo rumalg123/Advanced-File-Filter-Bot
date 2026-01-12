@@ -58,6 +58,8 @@ class ErrorMessages:
     # Settings/Config errors
     SETTING_UPDATE_FAILED = "❌ Failed to update setting."
     FEATURE_NOT_AVAILABLE = "❌ This feature is not available."
+    MULTI_DB_NOT_ENABLED = "❌ Multi-database mode is not enabled."
+    SESSION_NOT_AVAILABLE = "❌ Session management not available."
 
     # Inline search messages
     INLINE_AUTH_ERROR = "❌ Authentication Error"

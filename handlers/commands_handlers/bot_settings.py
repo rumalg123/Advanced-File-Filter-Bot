@@ -307,7 +307,7 @@ class BotSettingsHandler(BaseHandler):
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting using unified session manager"""
         if not self.session_manager:
-            await message.reply("❌ Session management not available")
+            await message.reply(ErrorMessages.SESSION_NOT_AVAILABLE)
             return
 
         session_data = {
@@ -419,7 +419,7 @@ class BotSettingsHandler(BaseHandler):
         user_id = message.from_user.id
         
         if not self.session_manager:
-            await message.reply_text("❌ Session management not available.")
+            await message.reply_text(ErrorMessages.SESSION_NOT_AVAILABLE)
             return
         
         # Check if user has any active edit session
