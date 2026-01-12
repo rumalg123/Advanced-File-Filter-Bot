@@ -104,6 +104,14 @@ class ErrorMessages:
     CHANNEL_REMOVE_FAILED = "❌ Failed to remove channel. Please try again."
     CHANNEL_STATUS_FAILED = "❌ Failed to update channel status."
 
+    # Filter errors
+    ANONYMOUS_ADMIN_USE_PM = "You are anonymous admin. Use /connect in PM"
+    ADMIN_REQUIRED_ADD_FILTER = "You need to be an admin to add filters!"
+    ADMIN_REQUIRED_VIEW_FILTER = "You need to be an admin to view filters!"
+    ADMIN_REQUIRED_DELETE_FILTER = "You need to be an admin to delete filters!"
+    FILTER_ADD_FAILED = "Failed to add filter!"
+    FILTER_REMOVE_ALL_FAILED = "Couldn't remove all filters from group!"
+
     @classmethod
     def no_results_for(cls, query: str) -> str:
         """Format no results message with query"""

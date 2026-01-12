@@ -87,7 +87,7 @@ class FilterCallBackHandler(BaseCommandHandler):
 
             await query.message.edit_text(f"All filters from {title} has been removed")
         else:
-            await query.message.edit_text("Couldn't remove all filters from group!")
+            await query.message.edit_text(ErrorMessages.FILTER_REMOVE_ALL_FAILED)
 
     async def handle_delall_cancel_callback(self, client: Client, query: CallbackQuery):
         """Handle delete all filters cancellation"""

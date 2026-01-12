@@ -8,6 +8,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.validators import extract_user_id, has_admin_rights, is_owner_or_bot_admin
 from handlers.base import BaseHandler
 
@@ -54,7 +55,7 @@ class FilterHandler(BaseHandler):
         """Handle add filter command"""
         user_id = extract_user_id(message)
         if not user_id:
-            return await message.reply("You are anonymous admin. Use /connect in PM")
+            return await message.reply(ErrorMessages.ANONYMOUS_ADMIN_USE_PM)
 
         # Get group ID based on context
         group_id, title = await self.filter_service.get_active_group_id(client,message)
@@ -68,7 +69,7 @@ class FilterHandler(BaseHandler):
 
         # Check admin rights
         if not await self._check_admin_rights(client, group_id, user_id):
-            return await message.reply("You need to be an admin to add filters!")
+            return await message.reply(ErrorMessages.ADMIN_REQUIRED_ADD_FILTER)
 
         # Parse command arguments
         args = message.text.html.split(None, 1)
@@ -102,13 +103,13 @@ class FilterHandler(BaseHandler):
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
         else:
-            return await message.reply_text("Failed to add filter!", quote=True)
+            return await message.reply_text(ErrorMessages.FILTER_ADD_FAILED, quote=True)
 
     async def view_filters_command(self, client: Client, message: Message):
         """Handle view filters command"""
         user_id = extract_user_id(message)
         if not user_id:
-            return await message.reply("You are anonymous admin. Use /connect in PM")
+            return await message.reply(ErrorMessages.ANONYMOUS_ADMIN_USE_PM)
 
         # Get group ID based on context
         group_id, title = await self.filter_service.get_active_group_id(client,message)
@@ -122,7 +123,7 @@ class FilterHandler(BaseHandler):
 
         # Check admin rights
         if not await self._check_admin_rights(client, group_id, user_id):
-            return await message.reply("You need to be an admin to view filters!")
+            return await message.reply(ErrorMessages.ADMIN_REQUIRED_VIEW_FILTER)
 
         filters = await self.filter_service.get_all_filters(str(group_id))
         count = await self.filter_service.count_filters(str(group_id))
@@ -158,7 +159,7 @@ class FilterHandler(BaseHandler):
         """Handle delete filter command"""
         user_id = extract_user_id(message)
         if not user_id:
-            return await message.reply("You are anonymous admin. Use /connect in PM")
+            return await message.reply(ErrorMessages.ANONYMOUS_ADMIN_USE_PM)
 
         # Get group ID based on context
         group_id, title = await self.filter_service.get_active_group_id(client,message)
@@ -172,7 +173,7 @@ class FilterHandler(BaseHandler):
 
         # Check admin rights
         if not await self._check_admin_rights(client, group_id, user_id):
-            return await message.reply("You need to be an admin to delete filters!")
+            return await message.reply(ErrorMessages.ADMIN_REQUIRED_DELETE_FILTER)
 
         # Parse command
         try:
@@ -205,7 +206,7 @@ class FilterHandler(BaseHandler):
         """Handle delete all filters command"""
         user_id = extract_user_id(message)
         if not user_id:
-            return await message.reply("You are anonymous admin. Use /connect in PM")
+            return await message.reply(ErrorMessages.ANONYMOUS_ADMIN_USE_PM)
 
         # Get group ID based on context
         group_id, title = await self.filter_service.get_active_group_id(client,message)
