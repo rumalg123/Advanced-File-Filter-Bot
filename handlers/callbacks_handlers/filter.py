@@ -44,7 +44,7 @@ class FilterCallBackHandler(BaseCommandHandler):
                     await query.answer("Alert index out of range", show_alert=True)
             except (ValueError, SyntaxError) as e:
                 logger.warning(f"Failed to parse alerts data: {e}")
-                await query.answer("Error parsing alert data", show_alert=True)
+                await query.answer(ErrorMessages.ALERT_PARSE_ERROR, show_alert=True)
         else:
             await query.answer(ErrorMessages.ALERT_NOT_FOUND, show_alert=True)
 
@@ -67,7 +67,7 @@ class FilterCallBackHandler(BaseCommandHandler):
 
         if not is_authorized:
             return await query.answer(
-                "You need to be Group Owner or an Auth User to do that!",
+                ErrorMessages.OWNER_OR_AUTH_REQUIRED,
                 show_alert=True
             )
 

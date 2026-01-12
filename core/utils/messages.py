@@ -111,6 +111,8 @@ class ErrorMessages:
     ADMIN_REQUIRED_DELETE_FILTER = "You need to be an admin to delete filters!"
     FILTER_ADD_FAILED = "Failed to add filter!"
     FILTER_REMOVE_ALL_FAILED = "Couldn't remove all filters from group!"
+    OWNER_OR_AUTH_REQUIRED = "You need to be Group Owner or an Auth User to do that!"
+    ALERT_PARSE_ERROR = "Error parsing alert data"
 
     @classmethod
     def no_results_for(cls, query: str) -> str:
