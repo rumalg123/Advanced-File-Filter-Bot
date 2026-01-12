@@ -291,7 +291,7 @@ class IndexingHandler:
         """Start the indexing process"""
         # Check if already indexing
         if self.indexing_service.is_indexing:
-            return await query.answer("Another indexing is in progress", show_alert=True)
+            return await query.answer(ErrorMessages.INDEXING_IN_PROGRESS, show_alert=True)
 
         await query.answer("Starting indexing process...", show_alert=True)
 

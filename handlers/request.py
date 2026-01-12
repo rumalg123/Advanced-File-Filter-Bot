@@ -285,7 +285,7 @@ class RequestHandler(BaseHandler):
     async def handle_request_callback(self, client: Client, query: CallbackQuery):
         """Handle request action callbacks"""
         if self._shutdown.is_set():
-            await query.answer("Bot is shutting down", show_alert=True)
+            await query.answer(ErrorMessages.BOT_SHUTTING_DOWN, show_alert=True)
             return
 
         # Validate callback data using validator

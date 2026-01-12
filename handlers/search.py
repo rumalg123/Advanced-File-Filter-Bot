@@ -253,7 +253,7 @@ class SearchHandler:
                 await query.answer(
                     results=[],
                     cache_time=0,
-                    switch_pm_text="🚫 You are banned",
+                    switch_pm_text=ErrorMessages.INLINE_BANNED,
                     switch_pm_parameter="banned"
                 )
                 return
@@ -265,7 +265,7 @@ class SearchHandler:
                 await query.answer(
                     results=[],
                     cache_time=0,
-                    switch_pm_text="⚠️ Inline mode disabled (Premium mode active)",
+                    switch_pm_text=ErrorMessages.INLINE_PREMIUM_MODE,
                     switch_pm_parameter="inline_disabled"
                 )
                 return
@@ -284,7 +284,7 @@ class SearchHandler:
                     await query.answer(
                         results=[],
                         cache_time=0,
-                        switch_pm_text="🔒 Join channel to use bot",
+                        switch_pm_text=ErrorMessages.INLINE_JOIN_CHANNEL,
                         switch_pm_parameter="subscribe"
                     )
                     return

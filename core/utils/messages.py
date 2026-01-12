@@ -66,6 +66,13 @@ class ErrorMessages:
     INLINE_ACCESS_DENIED = "❌ Access Denied"
     INLINE_NO_RESULTS = "❌ No results found"
     INLINE_SEARCH_ERROR = "❌ Search Error"
+    INLINE_BANNED = "🚫 You are banned"
+    INLINE_PREMIUM_MODE = "⚠️ Inline mode disabled (Premium mode active)"
+    INLINE_JOIN_CHANNEL = "🔒 Join channel to use bot"
+
+    # Indexing messages
+    INDEXING_IN_PROGRESS = "Another indexing is in progress"
+    BOT_SHUTTING_DOWN = "Bot is shutting down"
 
     # Indexing errors
     FORWARD_FROM_CHANNEL = "❌ Please forward from a channel, not a group"
