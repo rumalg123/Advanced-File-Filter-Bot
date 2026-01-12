@@ -6,6 +6,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 
 from core.cache.config import CacheTTLConfig
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from handlers.base import BaseHandler
 
@@ -573,7 +574,7 @@ class BotSettingsHandler(BaseHandler):
             else:
                 # Clean up session on failure too
                 await self.session_manager.cancel_edit_session(user_id)
-                await message.reply_text("❌ Failed to update setting.")
+                await message.reply_text(ErrorMessages.SETTING_UPDATE_FAILED)
                 raise StopPropagation  # Prevent search trigger even on failure
         except StopPropagation:
             # Re-raise StopPropagation without treating it as an error
@@ -611,7 +612,7 @@ class BotSettingsHandler(BaseHandler):
                     show_alert=True
                 )
             else:
-                await query.answer("❌ Failed to update setting", show_alert=True)
+                await query.answer(ErrorMessages.SETTING_UPDATE_FAILED, show_alert=True)
         except Exception as e:
             await query.answer(f"❌ Error: {str(e)}", show_alert=True)
 
@@ -627,7 +628,7 @@ class BotSettingsHandler(BaseHandler):
                     show_alert=True
                 )
             else:
-                await query.answer("❌ Failed to reset setting", show_alert=True)
+                await query.answer(ErrorMessages.SETTING_UPDATE_FAILED, show_alert=True)
         except Exception as e:
             await query.answer(f"❌ Error: {str(e)}", show_alert=True)
 

@@ -2,6 +2,7 @@ from pyrogram import Client, enums
 from pyrogram.types import Message
 
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import admin_only
 from handlers.commands_handlers.base import BaseCommandHandler
@@ -56,7 +57,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                     await message.reply_text("❌ Invalid username. Please check and try again.")
                     return
                 else:
-                    await message.reply_text(f"❌ Error: Could not find channel. {str(e)}")
+                    await message.reply_text(f"{ErrorMessages.CHANNEL_ACCESS_ERROR} {str(e)}")
                     return
         else:
             # It's a numeric ID, try to get channel info
@@ -180,7 +181,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                 )
                 channel_id = chat.id
             except Exception:
-                await message.reply_text("❌ Error: Could not find channel.")
+                await message.reply_text(ErrorMessages.CHANNEL_ACCESS_ERROR)
                 return
 
         # Get channel info before removing
@@ -188,7 +189,7 @@ class ChannelCommandHandler(BaseCommandHandler):
         channel = await channel_repo.find_by_id(channel_id)
 
         if not channel:
-            await message.reply_text("❌ Channel not found in the indexing list.")
+            await message.reply_text(ErrorMessages.CHANNEL_NOT_FOUND)
             return
 
         # Remove channel
@@ -303,7 +304,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                 )
                 channel_id = chat.id
             except Exception:
-                await message.reply_text("❌ Error: Could not find channel.")
+                await message.reply_text(ErrorMessages.CHANNEL_ACCESS_ERROR)
                 return
 
         # Get channel info
@@ -311,7 +312,7 @@ class ChannelCommandHandler(BaseCommandHandler):
         channel = await channel_repo.find_by_id(channel_id)
 
         if not channel:
-            await message.reply_text("❌ Channel not found in the indexing list.")
+            await message.reply_text(ErrorMessages.CHANNEL_NOT_FOUND)
             return
 
         # Toggle status

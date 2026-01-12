@@ -47,6 +47,18 @@ class ErrorMessages:
     # Bot interaction
     START_BOT_FIRST = "❌ Please start the bot first!"
 
+    # Admin/User errors
+    INVALID_USER_ID = "❌ Invalid user ID format."
+    CHANNEL_NOT_FOUND = "❌ Channel not found in the indexing list."
+    CHANNEL_ACCESS_ERROR = "❌ Error: Could not find channel."
+    NO_BROADCAST_PENDING = "❌ No pending broadcast found."
+    NO_BROADCAST_IN_PROGRESS = "❌ No broadcast is currently in progress."
+    NOT_BROADCAST_OWNER = "❌ Only the admin who initiated this broadcast can confirm it."
+
+    # Settings/Config errors
+    SETTING_UPDATE_FAILED = "❌ Failed to update setting."
+    FEATURE_NOT_AVAILABLE = "❌ This feature is not available."
+
     # Inline search messages
     INLINE_AUTH_ERROR = "❌ Authentication Error"
     INLINE_ACCESS_DENIED = "❌ Access Denied"

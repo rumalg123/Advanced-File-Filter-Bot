@@ -18,6 +18,7 @@ from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
+from core.utils.messages import ErrorMessages
 from core.utils.performance import performance_monitor
 from core.utils.validators import admin_only, owner_only
 from handlers.commands_handlers.base import BaseCommandHandler
@@ -164,12 +165,12 @@ class AdminCommandHandler(BaseCommandHandler):
     async def handle_broadcast_confirmation(self, client: Client, callback_query):
         """Handle broadcast confirmation callback"""
         if not hasattr(self.bot, '_pending_broadcast') or not self.bot._pending_broadcast:
-            await callback_query.answer("❌ No pending broadcast found.")
+            await callback_query.answer(ErrorMessages.NO_BROADCAST_PENDING)
             return
 
         pending = self.bot._pending_broadcast
         if callback_query.from_user.id != pending['admin_id']:
-            await callback_query.answer("❌ Only the admin who initiated this broadcast can confirm it.")
+            await callback_query.answer(ErrorMessages.NOT_BROADCAST_OWNER)
             return
 
         if callback_query.data == "cancel_broadcast":
@@ -305,7 +306,7 @@ class AdminCommandHandler(BaseCommandHandler):
         logger.info(f"Stop broadcast check - Redis: {is_broadcasting}, Memory: {memory_state}, Task: {task_exists}, Global: {global_task_exists}")
         
         if not is_broadcasting and not memory_state and not task_exists and not global_task_exists:
-            await message.reply_text("❌ No broadcast is currently in progress.")
+            await message.reply_text(ErrorMessages.NO_BROADCAST_IN_PROGRESS)
             return
 
         # Clear persistent state regardless of task status
@@ -391,7 +392,7 @@ class AdminCommandHandler(BaseCommandHandler):
             reason = " ".join(parts[2:]) if len(parts) > 2 else "No reason provided"
 
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessages.INVALID_USER_ID)
             return
         except Exception as e:
             await message.reply_text(f"❌ Error parsing command: {str(e)}")
@@ -444,7 +445,7 @@ class AdminCommandHandler(BaseCommandHandler):
         try:
             target_user_id = int(message.command[1])
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessages.INVALID_USER_ID)
             return
 
         # Unban the user
@@ -493,7 +494,7 @@ class AdminCommandHandler(BaseCommandHandler):
         try:
             target_user_id = int(message.command[1])
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessages.INVALID_USER_ID)
             return
 
         # Add premium status
@@ -547,7 +548,7 @@ class AdminCommandHandler(BaseCommandHandler):
         try:
             target_user_id = int(message.command[1])
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessages.INVALID_USER_ID)
             return
 
         # Remove premium status
