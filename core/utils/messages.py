@@ -67,6 +67,43 @@ class ErrorMessages:
     INLINE_NO_RESULTS = "❌ No results found"
     INLINE_SEARCH_ERROR = "❌ Search Error"
 
+    # Indexing errors
+    FORWARD_FROM_CHANNEL = "❌ Please forward from a channel, not a group"
+    MESSAGE_NOT_FOUND = "❌ The specified message doesn't exist"
+    CHANNEL_ADMIN_REQUIRED = "❌ Error accessing the channel. Make sure I'm an admin in the channel."
+    INDEX_REQUEST_FAILED = "❌ Failed to create index request"
+    GENERIC_ERROR = "❌ An error occurred. Please try again."
+    SKIP_POSITIVE = "❌ Skip number must be positive"
+    INVALID_NUMBER = "❌ Invalid number format"
+
+    # Deletion errors
+    DELETION_CANCELLED = "❌ Deletion cancelled."
+    DELETION_EXPIRED = "❌ Deletion request expired. Please try again."
+
+    # Stats errors
+    STATS_ERROR = "❌ Error retrieving statistics. Please try again later."
+
+    # Broadcast errors
+    BROADCAST_CANCELLED = "❌ Broadcast cancelled."
+    NO_LOG_FILE = "❌ No log file found."
+
+    # Database errors
+    NO_DB_STATS = "❌ No database statistics available."
+    INVALID_DB_NUMBER = "❌ Invalid database number. Please provide a valid number."
+    DB_SWITCH_FAILED = "❌ Failed to switch database."
+    MULTI_DB_NOT_CONFIGURED = "❌ Multi-database mode is not properly configured."
+    CALLBACK_ERROR = "❌ Error processing request"
+
+    # Settings errors
+    SETTING_NOT_FOUND = "❌ Setting not found!"
+    NO_EDIT_SESSION = "❌ No active edit session to cancel."
+
+    # Channel errors
+    INVALID_USERNAME = "❌ Invalid username. Please check and try again."
+    CHANNEL_ADD_FAILED = "❌ Failed to add channel. Please try again."
+    CHANNEL_REMOVE_FAILED = "❌ Failed to remove channel. Please try again."
+    CHANNEL_STATUS_FAILED = "❌ Failed to update channel status."
+
     @classmethod
     def no_results_for(cls, query: str) -> str:
         """Format no results message with query"""

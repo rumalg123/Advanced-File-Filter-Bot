@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 import core.utils.messages as config_messages
+from core.utils.messages import ErrorMessages
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -220,7 +221,7 @@ class UserCommandHandler(BaseCommandHandler):
             stats = await self.bot.maintenance_service.get_system_stats()
         except Exception as e:
             logger.error(f"Error getting system stats: {e}")
-            await message.reply_text("❌ Error retrieving statistics. Please try again later.")
+            await message.reply_text(ErrorMessages.STATS_ERROR)
             return
 
         # Format stats message

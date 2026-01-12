@@ -174,7 +174,7 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         if callback_query.data == "cancel_broadcast":
-            await callback_query.message.edit_text("❌ Broadcast cancelled.")
+            await callback_query.message.edit_text(ErrorMessages.BROADCAST_CANCELLED)
             # Reset rate limit when broadcast is cancelled
             await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             self.bot._pending_broadcast = None
@@ -596,7 +596,7 @@ class AdminCommandHandler(BaseCommandHandler):
             log_path = Path("logs/bot.txt")
 
             if not log_path.exists():
-                await message.reply_text("❌ No log file found.")
+                await message.reply_text(ErrorMessages.NO_LOG_FILE)
                 return
 
             # Check file size

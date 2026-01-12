@@ -142,7 +142,7 @@ class IndexingHandler:
         elif message.forward_from_chat:
             # Forwarded message
             if message.forward_from_chat.type != enums.ChatType.CHANNEL:
-                return await message.reply("❌ Please forward from a channel, not a group")
+                return await message.reply(ErrorMessages.FORWARD_FROM_CHANNEL)
 
             last_msg_id = message.forward_from_message_id
             chat_id = message.forward_from_chat.username or message.forward_from_chat.id
@@ -164,7 +164,7 @@ class IndexingHandler:
                     chat_id=chat_id_int
                 )
                 if last_msg.empty:
-                    return await message.reply("❌ The specified message doesn't exist")
+                    return await message.reply(ErrorMessages.MESSAGE_NOT_FOUND)
             except Exception as e:
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg or "chat not found" in error_msg:
@@ -177,9 +177,7 @@ class IndexingHandler:
                         "Then try forwarding the message again."
                     )
                 else:
-                    return await message.reply(
-                        "❌ Error accessing the channel. Make sure I'm an admin in the channel."
-                    )
+                    return await message.reply(ErrorMessages.CHANNEL_ADMIN_REQUIRED)
 
             # Admin can index directly using validator
             if is_admin(user_id, self.bot.config.ADMINS):
@@ -217,7 +215,7 @@ class IndexingHandler:
                         "Your request has been sent to moderators for verification."
                     )
                 else:
-                    return await message.reply("❌ Failed to create index request")
+                    return await message.reply(ErrorMessages.INDEX_REQUEST_FAILED)
         except Exception as e:
             error_msg = str(e).lower()
             if "channel_private" in error_msg:
@@ -231,7 +229,7 @@ class IndexingHandler:
                 )
             else:
                 logger.error(f"Error in handle_index_request: {e}")
-                return await message.reply("❌ An error occurred. Please try again.")
+                return await message.reply(ErrorMessages.GENERIC_ERROR)
 
     async def handle_index_callback(self, client: Client, query: CallbackQuery):
         """Handle index-related callbacks"""
@@ -384,10 +382,10 @@ class IndexingHandler:
         try:
             skip = int(message.command[1])
             if skip < 0:
-                return await message.reply("❌ Skip number must be positive")
+                return await message.reply(ErrorMessages.SKIP_POSITIVE)
 
             await self.indexing_service.set_skip_number(skip)
             await message.reply(f"✅ Skip number set to {skip}")
 
         except ValueError:
-            await message.reply("❌ Invalid number format")
+            await message.reply(ErrorMessages.INVALID_NUMBER)

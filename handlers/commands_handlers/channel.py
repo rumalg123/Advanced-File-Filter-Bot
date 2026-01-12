@@ -54,7 +54,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                     )
                     return
                 elif "username_invalid" in error_msg or "username_not_occupied" in error_msg:
-                    await message.reply_text("❌ Invalid username. Please check and try again.")
+                    await message.reply_text(ErrorMessages.INVALID_USERNAME)
                     return
                 else:
                     await message.reply_text(f"{ErrorMessages.CHANNEL_ACCESS_ERROR} {str(e)}")
@@ -152,7 +152,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                     chat_id=self.bot.config.LOG_CHANNEL
                 )
         else:
-            await message.reply_text("❌ Failed to add channel. Please try again.")
+            await message.reply_text(ErrorMessages.CHANNEL_ADD_FAILED)
 
     @admin_only
     async def remove_channel_command(self, client: Client, message: Message):
@@ -223,7 +223,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                     chat_id=self.bot.config.LOG_CHANNEL
                 )
         else:
-            await message.reply_text("❌ Failed to remove channel. Please try again.")
+            await message.reply_text(ErrorMessages.CHANNEL_REMOVE_FAILED)
 
     @admin_only
     async def list_channels_command(self, client: Client, message: Message):
@@ -335,4 +335,4 @@ class ChannelCommandHandler(BaseCommandHandler):
 
             await message.reply_text(response)
         else:
-            await message.reply_text("❌ Failed to update channel status.")
+            await message.reply_text(ErrorMessages.CHANNEL_STATUS_FAILED)

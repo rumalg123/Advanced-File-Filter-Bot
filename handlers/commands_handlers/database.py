@@ -68,7 +68,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             stats = await self.bot.multi_db_manager.get_database_stats()
             
             if not stats:
-                await message.reply_text("❌ No database statistics available.")
+                await message.reply_text(ErrorMessages.NO_DB_STATS)
                 return
 
             # Format statistics
@@ -131,7 +131,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
             try:
                 db_index = int(message.command[1]) - 1  # Convert to 0-based index
             except ValueError:
-                await message.reply_text("❌ Invalid database number. Please provide a valid number.")
+                await message.reply_text(ErrorMessages.INVALID_DB_NUMBER)
                 return
 
             # Get database stats to validate
@@ -156,7 +156,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
                     f"📄 Files: <code>{stats[db_index]['files_count']:,}</code>"
                 )
             else:
-                await message.reply_text("❌ Failed to switch database.")
+                await message.reply_text(ErrorMessages.DB_SWITCH_FAILED)
 
         except Exception as e:
             logger.error(f"Error in database switch command: {e}")
@@ -176,7 +176,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
                     text += "💡 <b>Multi-database mode is not enabled.</b>\n"
                     text += "To enable, add `DATABASE_URIS` to your environment variables."
                 else:
-                    text = "❌ Multi-database mode is not properly configured."
+                    text = ErrorMessages.MULTI_DB_NOT_CONFIGURED
                 
                 await message.reply_text(text)
                 return
@@ -251,7 +251,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error in database callback: {e}")
-            await callback_query.answer("❌ Error processing request", show_alert=True)
+            await callback_query.answer(ErrorMessages.CALLBACK_ERROR, show_alert=True)
 
     async def _refresh_database_stats(self, callback_query):
         """Refresh database statistics"""

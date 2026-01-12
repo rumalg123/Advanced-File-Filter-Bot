@@ -237,7 +237,7 @@ class BotSettingsHandler(BaseHandler):
         settings = await self.settings_service.get_all_settings()
 
         if key not in settings:
-            await message.edit_text("❌ Setting not found!")
+            await message.edit_text(ErrorMessages.SETTING_NOT_FOUND)
             return
 
         setting = settings[key]
@@ -426,7 +426,7 @@ class BotSettingsHandler(BaseHandler):
         session = await self.session_manager.get_edit_session(user_id)
         
         if not session:
-            await message.reply_text("❌ No active edit session to cancel.")
+            await message.reply_text(ErrorMessages.NO_EDIT_SESSION)
             return
             
         # Try to delete the editing message

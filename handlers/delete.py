@@ -241,13 +241,13 @@ class DeleteHandler(BaseHandler):
 
         if action == "deleteall_cancel":
             await self.bot.cache_invalidator.invalidate_deleteall_pending(original_user_id)
-            await callback_query.message.edit_text("❌ Deletion cancelled.")
+            await callback_query.message.edit_text(ErrorMessages.DELETION_CANCELLED)
             await callback_query.answer()
             return
 
         if action == "deleteall_confirm":
             if not keyword:
-                await callback_query.message.edit_text("❌ Deletion request expired. Please try again.")
+                await callback_query.message.edit_text(ErrorMessages.DELETION_EXPIRED)
                 await callback_query.answer()
                 return
 
