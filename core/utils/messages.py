@@ -113,6 +113,12 @@ class ErrorMessages:
     FILTER_REMOVE_ALL_FAILED = "Couldn't remove all filters from group!"
     OWNER_OR_AUTH_REQUIRED = "You need to be Group Owner or an Auth User to do that!"
     ALERT_PARSE_ERROR = "Error parsing alert data"
+    NOT_CONNECTED_TO_GROUPS = "I'm not connected to any groups!\nCheck /connections or connect to any groups"
+    OWNER_ONLY_DELETE_ALL = "Only group owner or bot admins can delete all filters!"
+
+    # Filestore errors
+    REPLY_TO_MESSAGE = "Reply to a message to get a shareable link."
+    LINK_GENERATE_FAILED = "Failed to generate link. Make sure you replied to a supported media."
 
     @classmethod
     def no_results_for(cls, query: str) -> str:

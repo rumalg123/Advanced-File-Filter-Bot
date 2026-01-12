@@ -62,7 +62,7 @@ class FilterHandler(BaseHandler):
         if not group_id:
             if title == "not_connected":
                 return await message.reply_text(
-                    "I'm not connected to any groups!\nCheck /connections or connect to any groups",
+                    ErrorMessages.NOT_CONNECTED_TO_GROUPS,
                     quote=True
                 )
             return
@@ -116,7 +116,7 @@ class FilterHandler(BaseHandler):
         if not group_id:
             if title == "not_connected":
                 return await message.reply_text(
-                    "I'm not connected to any groups!\nCheck /connections or connect to any groups",
+                    ErrorMessages.NOT_CONNECTED_TO_GROUPS,
                     quote=True
                 )
             return
@@ -166,7 +166,7 @@ class FilterHandler(BaseHandler):
         if not group_id:
             if title == "not_connected":
                 return await message.reply_text(
-                    "I'm not connected to any groups!\nCheck /connections or connect to any groups",
+                    ErrorMessages.NOT_CONNECTED_TO_GROUPS,
                     quote=True
                 )
             return
@@ -213,14 +213,14 @@ class FilterHandler(BaseHandler):
         if not group_id:
             if title == "not_connected":
                 return await message.reply_text(
-                    "I'm not connected to any groups!\nCheck /connections or connect to any groups",
+                    ErrorMessages.NOT_CONNECTED_TO_GROUPS,
                     quote=True
                 )
             return
 
         # Only group owner or bot admins can delete all
         if not await self._is_owner_or_bot_admin(client, group_id, user_id):
-            return await message.reply("Only group owner or bot admins can delete all filters!")
+            return await message.reply(ErrorMessages.OWNER_ONLY_DELETE_ALL)
 
         # Confirmation
         await message.reply_text(

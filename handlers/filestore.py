@@ -7,6 +7,7 @@ from core.services.filestore import FileStoreService
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser
+from core.utils.messages import ErrorMessages
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -52,7 +53,7 @@ class FileStoreHandler(BaseHandler):
     async def link_command(self, client: Client, message: Message) -> None:
         """Generate shareable link for a file"""
         if not message.reply_to_message:
-            await message.reply('Reply to a message to get a shareable link.')
+            await message.reply(ErrorMessages.REPLY_TO_MESSAGE)
             return
 
         # Check if it's a protected link request
@@ -68,7 +69,7 @@ class FileStoreHandler(BaseHandler):
         if link:
             await message.reply(f"Here is your Link:\n{link}")
         else:
-            await message.reply("Failed to generate link. Make sure you replied to a supported media.")
+            await message.reply(ErrorMessages.LINK_GENERATE_FAILED)
 
     async def batch_command(self, client: Client, message: Message) -> None:
         """Generate batch link for multiple files"""
