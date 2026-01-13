@@ -84,10 +84,12 @@ class TelegramAPIWrapper:
                 
             except RPCError as e:
                 # Log RPC errors but don't retry for client errors (4xx)
-                if str(e.ID).startswith('4'):
-                    logger.error(f"Client error in {api_func.__name__}: {e}")
+                # e.CODE contains the numeric code (e.g., 400), e.ID is the error name
+                error_code = getattr(e, 'CODE', 0) or 0
+                if 400 <= error_code < 500:
+                    logger.debug(f"Client error in {api_func.__name__}: {e}")
                     raise e
-                
+
                 # Retry for server errors (5xx) with exponential backoff
                 if retries < self.max_retries - 1:
                     delay = self.base_delay * (2 ** retries) + random.uniform(0.1, 0.5)
