@@ -5,6 +5,7 @@ import uuid
 from weakref import WeakSet
 
 from pyrogram import Client, filters, enums
+from pyrogram.errors import QueryIdInvalid
 from pyrogram.handlers import MessageHandler, InlineQueryHandler
 from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument, InlineKeyboardButton, \
     InlineKeyboardMarkup
@@ -248,37 +249,53 @@ class SearchHandler:
         """Handle inline search queries - send files directly when clicked"""
         user_id = extract_user_id(query)
         if not user_id:
-            await query.answer(
-                results=[],
-                cache_time=0,
-                switch_pm_text="❌ Authentication Error",
-                switch_pm_parameter="start"
-            )
+            try:
+                await query.answer(
+                    results=[],
+                    cache_time=0,
+                    switch_pm_text="❌ Authentication Error",
+                    switch_pm_parameter="start"
+                )
+            except QueryIdInvalid:
+                logger.warning(f"Inline query expired for unknown user")
+            except Exception as e:
+                logger.error(f"Error answering inline query: {e}")
             return
 
         # Check if user is banned using validators
         if not is_admin(user_id, self.bot.config.ADMINS):
             user = await self.bot.user_repo.get_user(user_id)
             if user and user.status == UserStatus.BANNED:
-                await query.answer(
-                    results=[],
-                    cache_time=0,
-                    switch_pm_text="🚫 You are banned",
-                    switch_pm_parameter="banned"
-                )
+                try:
+                    await query.answer(
+                        results=[],
+                        cache_time=0,
+                        switch_pm_text="🚫 You are banned",
+                        switch_pm_parameter="banned"
+                    )
+                except QueryIdInvalid:
+                    logger.warning(f"Inline query expired for banned user")
+                except Exception as e:
+                    logger.error(f"Error answering inline query: {e}")
                 return
 
         # Check if premium mode is enabled - disable inline mode when premium is active
         if not self.bot.config.DISABLE_PREMIUM:
             # Allow admins to use inline mode even when premium is enabled
             if not is_admin(user_id, self.bot.config.ADMINS):
-                await query.answer(
-                    results=[],
-                    cache_time=0,
-                    switch_pm_text="⚠️ Inline mode disabled (Premium mode active)",
-                    switch_pm_parameter="inline_disabled"
-                )
+                try:
+                    await query.answer(
+                        results=[],
+                        cache_time=0,
+                        switch_pm_text="⚠️ Inline mode disabled (Premium mode active)",
+                        switch_pm_parameter="inline_disabled"
+                    )
+                except QueryIdInvalid:
+                    logger.warning(f"Inline query expired for user {user_id} (premium check)")
+                except Exception as e:
+                    logger.error(f"Error answering inline query: {e}")
                 return
+
 
         # Manual subscription check for inline queries using validators
         auth_users = getattr(self.bot.config, 'AUTH_USERS', [])
@@ -291,12 +308,17 @@ class SearchHandler:
                 )
 
                 if not is_subscribed:
-                    await query.answer(
-                        results=[],
-                        cache_time=0,
-                        switch_pm_text="🔒 Join channel to use bot",
-                        switch_pm_parameter="subscribe"
-                    )
+                    try:
+                        await query.answer(
+                            results=[],
+                            cache_time=0,
+                            switch_pm_text="🔒 Join channel to use bot",
+                            switch_pm_parameter="subscribe"
+                        )
+                    except QueryIdInvalid:
+                        logger.warning(f"Inline query expired for user {user_id} (subscription check)")
+                    except Exception as e:
+                        logger.error(f"Error answering inline query: {e}")
                     return
 
         # Get and sanitize search query
@@ -311,12 +333,17 @@ class SearchHandler:
             # Add file type parsing if needed
 
         if not search_query or len(search_query) < 2:
-            await query.answer(
-                results=[],
-                cache_time=0,
-                switch_pm_text="🔍 Type to search...",
-                switch_pm_parameter="start"
-            )
+            try:
+                await query.answer(
+                    results=[],
+                    cache_time=0,
+                    switch_pm_text="🔍 Type to search...",
+                    switch_pm_parameter="start"
+                )
+            except QueryIdInvalid:
+                logger.warning(f"Inline query expired for user {user_id} (empty search)")
+            except Exception as e:
+                logger.error(f"Error answering inline query: {e}")
             return
 
         # Perform search
@@ -332,21 +359,31 @@ class SearchHandler:
             )
 
             if not has_access:
-                await query.answer(
-                    results=[],
-                    cache_time=0,
-                    switch_pm_text="❌ Access Denied",
-                    switch_pm_parameter="premium"
-                )
+                try:
+                    await query.answer(
+                        results=[],
+                        cache_time=0,
+                        switch_pm_text="❌ Access Denied",
+                        switch_pm_parameter="premium"
+                    )
+                except QueryIdInvalid:
+                    logger.warning(f"Inline query expired for user {user_id} (access denied)")
+                except Exception as e:
+                    logger.error(f"Error answering inline query for access denied: {e}")
                 return
 
             if not files:
-                await query.answer(
-                    results=[],
-                    cache_time=10,
-                    switch_pm_text="❌ No results found",
-                    switch_pm_parameter="start"
-                )
+                try:
+                    await query.answer(
+                        results=[],
+                        cache_time=10,
+                        switch_pm_text="❌ No results found",
+                        switch_pm_parameter="start"
+                    )
+                except QueryIdInvalid:
+                    logger.warning(f"Inline query expired for user {user_id} (no results)")
+                except Exception as e:
+                    logger.error(f"Error answering inline query for no results: {e}")
                 return
 
             # Build inline results
@@ -378,14 +415,19 @@ class SearchHandler:
                 results.append(result)
 
             # Answer the inline query
-            await query.answer(
-                results=results,
-                cache_time=30,
-                is_personal=True,
-                next_offset=str(next_offset) if next_offset else "",
-                switch_pm_text=f"📁 Found {total} files" if total > 0 else "🔍 Search Files",
-                switch_pm_parameter="start"
-            )
+            try:
+                await query.answer(
+                    results=results,
+                    cache_time=30,
+                    is_personal=True,
+                    next_offset=str(next_offset) if next_offset else "",
+                    switch_pm_text=f"📁 Found {total} files" if total > 0 else "🔍 Search Files",
+                    switch_pm_parameter="start"
+                )
+            except QueryIdInvalid:
+                logger.warning(f"Inline query expired for user {user_id} while sending results")
+            except Exception as e:
+                logger.error(f"Error answering inline query with results for user {user_id}: {e}")
 
         except Exception as e:
             logger.error(f"Error in inline search: {e}", exc_info=True)

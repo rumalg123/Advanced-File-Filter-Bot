@@ -3,7 +3,7 @@ import base64
 from typing import Set
 
 from pyrogram import Client
-from pyrogram.errors import FloodWait, UserIsBlocked
+from pyrogram.errors import FloodWait, UserIsBlocked, QueryIdInvalid
 from pyrogram.types import CallbackQuery
 
 from core.utils.caption import CaptionFormatter
@@ -139,6 +139,17 @@ class FileCallbackHandler(BaseCommandHandler):
         if not file:
             await query.answer("❌ File not found.", show_alert=True)
             return
+        query_answered = False
+        try:
+            await query.answer("⏳ Sending file...", show_alert=False)
+            query_answered = True
+        except QueryIdInvalid:
+            # Query already expired, we'll send status via message instead
+            logger.warning(f"Query expired for user {callback_user_id}, will send message instead")
+            query_answered = False
+        except Exception as e:
+            logger.warning(f"Could not answer query for user {callback_user_id}: {e}")
+            query_answered = False
 
         # Send file to PM
         try:
@@ -164,23 +175,62 @@ class FileCallbackHandler(BaseCommandHandler):
                 parse_mode=CaptionFormatter.get_parse_mode(),
                 chat_id=callback_user_id  # for call_api rate limiting
             )
-
-            await query.answer("✅ File sent!", show_alert=False)
-
             # Schedule deletion with task tracking for cleanup
             self._track_task(
                 self._auto_delete_message(sent_msg, delete_time)
             )
 
+
         except UserIsBlocked:
-            await query.answer(
-                "❌ Please start the bot first!\n"
-                f"Click here: @{self.bot.bot_username}",
-                show_alert=True
-            )
+
+            logger.error(f"User {callback_user_id} has blocked the bot")
+
+            # Send error message only if query wasn't answered
+
+            if not query_answered:
+
+                try:
+
+                    await telegram_api.call_api(
+
+                        client.send_message,
+
+                        callback_user_id,
+
+                        f"❌ Please start the bot first!\nClick here: @{self.bot.bot_username}",
+
+                        chat_id=callback_user_id
+
+                    )
+
+                except Exception as e:
+
+                    logger.error(f"Could not send blocked message to {callback_user_id}: {e}")
+
+
         except Exception as e:
+
             logger.error(f"Error sending file via callback: {e}")
-            await query.answer("❌ Error sending file. Try again.", show_alert=True)
+
+            # Send error message using call_api
+
+            try:
+
+                await telegram_api.call_api(
+
+                    client.send_message,
+
+                    callback_user_id,
+
+                    "❌ Error sending file. Please try again.",
+
+                    chat_id=callback_user_id
+
+                )
+
+            except Exception as msg_error:
+
+                logger.error(f"Could not send error message to user {callback_user_id}: {msg_error}")
 
     @check_ban()
     async def handle_sendall_callback(self, client: Client, query: CallbackQuery):

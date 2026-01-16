@@ -4,7 +4,7 @@ from datetime import datetime, UTC
 from functools import wraps
 from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
-from pyrogram.types import Message, CallbackQuery
+from pyrogram.types import Message, CallbackQuery, InlineQuery
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 
@@ -15,7 +15,7 @@ class ValidationUtils:
     """Centralized validation utilities"""
 
     @staticmethod
-    def extract_user_id(message: Union[Message, CallbackQuery]) -> Optional[int]:
+    def extract_user_id(message: Union[Message, CallbackQuery, InlineQuery]) -> Optional[int]:
         """Extract user ID from Message or CallbackQuery"""
         if isinstance(message, CallbackQuery):
             return message.from_user.id if message.from_user else None
