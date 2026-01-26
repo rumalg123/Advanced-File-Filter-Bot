@@ -130,7 +130,8 @@ class RecommendationService:
 
     async def get_similar_queries(self, query: str, limit: int = 5) -> List[str]:
         """
-        Get queries similar to the current one based on co-occurrence
+        Get queries similar to the current one based on co-occurrence.
+        Falls back to fuzzy matching if co-occurrence data is insufficient.
         
         Args:
             query: Current search query
@@ -157,7 +158,29 @@ class RecommendationService:
                 else:
                     similar_queries.append(str(result))
             
-            return similar_queries
+            # If we don't have enough co-occurrence data, try fuzzy matching as fallback
+            if len(similar_queries) < limit and hasattr(self, 'search_history_service') and self.search_history_service:
+                try:
+                    # Get global top searches for fuzzy matching
+                    global_keywords = await self.search_history_service.get_global_top_searches(limit=20)
+                    if global_keywords:
+                        from core.utils.helpers import find_similar_queries
+                        fuzzy_matches = find_similar_queries(
+                            normalized_query,
+                            global_keywords,
+                            threshold=70.0,  # 70% similarity
+                            max_results=limit - len(similar_queries)
+                        )
+                        # Add fuzzy matches that aren't already in co-occurrence results
+                        for match, _ in fuzzy_matches:
+                            if match not in similar_queries and match != normalized_query:
+                                similar_queries.append(match)
+                                if len(similar_queries) >= limit:
+                                    break
+                except Exception as e:
+                    logger.debug(f"Error in fuzzy matching fallback for similar queries: {e}")
+            
+            return similar_queries[:limit]
             
         except Exception as e:
             logger.error(f"Error getting similar queries for {query}: {e}")
@@ -252,21 +275,29 @@ class RecommendationService:
             if hasattr(self, 'search_history_service') and self.search_history_service:
                 user_keywords = await self.search_history_service.get_most_searched_keywords(user_id, limit=3)
                 
-                # Get similar queries based on user's top searches
-                for keyword in user_keywords:
-                    similar = await self.get_similar_queries(keyword, limit=2)
-                    recommendations['similar_queries'].extend(similar)
+                if user_keywords:
+                    # Get similar queries based on user's top searches
+                    for keyword in user_keywords:
+                        similar = await self.get_similar_queries(keyword, limit=2)
+                        recommendations['similar_queries'].extend(similar)
+                    
+                    # Get files based on user's search history
+                    for keyword in user_keywords[:2]:
+                        files = await self.get_recommended_files_from_query(keyword, limit=3)
+                        recommendations['based_on_history'].extend(files)
+                else:
+                    # New user with no search history - use global trends as fallback
+                    logger.debug(f"User {user_id} has no search history, using global trends")
                 
-                # Get files based on user's search history
-                for keyword in user_keywords[:2]:
-                    files = await self.get_recommended_files_from_query(keyword, limit=3)
-                    recommendations['based_on_history'].extend(files)
-                
-                # Get trending files (from global top searches)
-                global_keywords = await self.search_history_service.get_global_top_searches(limit=3)
+                # Get trending files (from global top searches) - always show these
+                global_keywords = await self.search_history_service.get_global_top_searches(limit=5)
                 for keyword in global_keywords:
                     files = await self.get_recommended_files_from_query(keyword, limit=2)
                     recommendations['trending_files'].extend(files)
+                    
+                    # If user has no history, also add global keywords as similar queries
+                    if not user_keywords:
+                        recommendations['similar_queries'].extend(global_keywords[:3])
             
             # Remove duplicates and limit
             recommendations['similar_queries'] = list(dict.fromkeys(recommendations['similar_queries']))[:limit]
