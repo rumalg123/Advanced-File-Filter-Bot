@@ -136,16 +136,17 @@ class SearchHistoryService:
         self, 
         query: str, 
         user_id: Optional[int] = None,
-        threshold: float = 0.6,
+        threshold: float = 60.0,
         max_results: int = 3
     ) -> List[str]:
         """
-        Find similar queries using fuzzy matching from user and global search history
+        Find similar queries using fuzzy matching from user and global search history.
+        Uses rapidfuzz for fast and accurate matching.
         
         Args:
             query: The query to find similar matches for
             user_id: Optional user ID to also search user's search history
-            threshold: Minimum similarity score (0.0 to 1.0) to include a result
+            threshold: Minimum similarity score (0.0 to 100.0) to include a result
             max_results: Maximum number of results to return
             
         Returns:
@@ -176,11 +177,11 @@ class SearchHistoryService:
                     seen.add(q)
                     unique_candidates.append(q)
             
-            # Find similar queries
+            # Find similar queries using rapidfuzz
             similar = find_similar_queries(
                 query, 
                 unique_candidates, 
-                threshold=threshold,
+                threshold=threshold,  # rapidfuzz uses 0-100 scale
                 max_results=max_results
             )
             

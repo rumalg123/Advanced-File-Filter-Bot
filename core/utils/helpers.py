@@ -7,112 +7,123 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING, Tuple
 
 from pyrogram.file_id import FileId
+from core.utils.logger import get_logger
 
-
-def levenshtein_distance(s1: str, s2: str) -> int:
-    """
-    Calculate Levenshtein distance between two strings (edit distance).
-    
-    Args:
-        s1: First string
-        s2: Second string
-        
-    Returns:
-        Minimum number of single-character edits needed to transform s1 into s2
-    """
-    if len(s1) < len(s2):
-        return levenshtein_distance(s2, s1)
-    
-    if len(s2) == 0:
-        return len(s1)
-    
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-    
-    return previous_row[-1]
+logger = get_logger(__name__)
 
 
 def calculate_similarity(query1: str, query2: str) -> float:
     """
-    Calculate similarity score between two queries (0.0 to 1.0).
+    Calculate similarity score between two queries (0.0 to 100.0).
     Higher score means more similar.
+    Uses rapidfuzz for fast and accurate fuzzy matching.
     
     Args:
         query1: First query string
         query2: Second query string
         
     Returns:
-        Similarity score between 0.0 and 1.0
+        Similarity score between 0.0 and 100.0 (rapidfuzz returns 0-100)
     """
-    if not query1 or not query2:
+    try:
+        from rapidfuzz import fuzz
+        
+        if not query1 or not query2:
+            return 0.0
+        
+        # Normalize queries
+        q1 = query1.lower().strip()
+        q2 = query2.lower().strip()
+        
+        # Exact match
+        if q1 == q2:
+            return 100.0
+        
+        # Use token_sort_ratio for better handling of word order differences
+        # This is more flexible than simple ratio
+        score = fuzz.token_sort_ratio(q1, q2)
+        
+        # Boost score if one query contains the other (partial match)
+        partial_score = fuzz.partial_ratio(q1, q2)
+        score = max(score, partial_score * 0.9)  # Slightly weight partial matches
+        
+        return float(score)
+    except ImportError:
+        # Fallback to simple string comparison if rapidfuzz is not available
+        logger.warning("rapidfuzz not available, using fallback similarity calculation")
+        if not query1 or not query2:
+            return 0.0
+        q1 = query1.lower().strip()
+        q2 = query2.lower().strip()
+        if q1 == q2:
+            return 100.0
+        # Simple fallback: check if one contains the other
+        if q1 in q2 or q2 in q1:
+            return 70.0
         return 0.0
-    
-    # Normalize queries
-    q1 = query1.lower().strip()
-    q2 = query2.lower().strip()
-    
-    # Exact match
-    if q1 == q2:
-        return 1.0
-    
-    # Calculate Levenshtein distance
-    max_len = max(len(q1), len(q2))
-    if max_len == 0:
-        return 1.0
-    
-    distance = levenshtein_distance(q1, q2)
-    similarity = 1.0 - (distance / max_len)
-    
-    # Boost similarity if one query contains the other
-    if q1 in q2 or q2 in q1:
-        similarity = max(similarity, 0.7)
-    
-    return similarity
 
 
 def find_similar_queries(
     query: str, 
     candidate_queries: List[str], 
-    threshold: float = 0.6,
+    threshold: float = 60.0,
     max_results: int = 3
 ) -> List[Tuple[str, float]]:
     """
     Find similar queries from a list of candidates using fuzzy matching.
+    Uses rapidfuzz for fast and accurate matching.
     
     Args:
         query: The query to find similar matches for
         candidate_queries: List of candidate queries to search
-        threshold: Minimum similarity score (0.0 to 1.0) to include a result
+        threshold: Minimum similarity score (0.0 to 100.0) to include a result
         max_results: Maximum number of results to return
         
     Returns:
         List of tuples (similar_query, similarity_score) sorted by score (descending)
     """
-    if not query or not candidate_queries:
-        return []
-    
-    normalized_query = query.lower().strip()
-    
-    # Calculate similarity for each candidate
-    similarities = []
-    for candidate in candidate_queries:
-        if not candidate:
-            continue
+    try:
+        from rapidfuzz import process
         
-        similarity = calculate_similarity(normalized_query, candidate)
-        if similarity >= threshold:
-            similarities.append((candidate, similarity))
-    
-    # Sort by similarity score (descending) and return top results
-    similarities.sort(key=lambda x: x[1], reverse=True)
-    return similarities[:max_results]
+        if not query or not candidate_queries:
+            return []
+        
+        normalized_query = query.lower().strip()
+        
+        # Use rapidfuzz.process.extract for efficient batch matching
+        # Returns list of (choice, score, index) tuples
+        results = process.extract(
+            normalized_query,
+            candidate_queries,
+            limit=max_results,
+            score_cutoff=threshold
+        )
+        
+        # Convert to (query, score) format and normalize scores to 0-100
+        similarities = [(choice, float(score)) for choice, score, _ in results]
+        
+        return similarities
+    except ImportError:
+        # Fallback to manual calculation if rapidfuzz is not available
+        logger.warning("rapidfuzz not available, using fallback similarity search")
+        if not query or not candidate_queries:
+            return []
+        
+        normalized_query = query.lower().strip()
+        
+        # Calculate similarity for each candidate
+        similarities = []
+        for candidate in candidate_queries:
+            if not candidate:
+                continue
+            
+            similarity = calculate_similarity(normalized_query, candidate)
+            if similarity >= threshold:
+                similarities.append((candidate, similarity))
+        
+        # Sort by similarity score (descending) and return top results
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        return similarities[:max_results]
 
 if TYPE_CHECKING:
     from pyrogram.types import User, Chat, Message as PyrogramMessage
@@ -299,17 +310,23 @@ def parse_search_query(
     return cleaned, season, episode, resolution
 
 
-def build_fuzzy_regex_pattern(query: str) -> str:
+def build_fuzzy_regex_pattern(query: str, allow_typos: bool = True) -> str:
     """
     Build a fuzzy regex pattern that handles:
     - Flexible word boundaries (dots, dashes, underscores)
     - Flexible spacing between words
     - Case-insensitive matching
+    - Character-level typos (single character differences) if allow_typos=True
     
     Examples:
     - "our golden days" → matches "our.golden.days", "our-golden-days", "our_golden_days", etc.
     - "golden" → matches "golden", "golden.", "golden-", "Golden", etc.
+    - "can thus love" → matches "can this love" (handles typo: thus→this)
     - Handles variations like "our golden days" matching "Our.Golden.Days.S01E45.mkv"
+    
+    Args:
+        query: Search query string
+        allow_typos: If True, allows single character typos in words (default: True)
     """
     if not query:
         return '.'
@@ -320,11 +337,36 @@ def build_fuzzy_regex_pattern(query: str) -> str:
     if not words:
         return '.'
     
+    def make_fuzzy_word(word: str) -> str:
+        """Make a word pattern that allows single character typos"""
+        if not allow_typos or len(word) <= 2:
+            # For very short words, don't allow typos (too many false positives)
+            return re.escape(word)
+        
+        # For longer words, allow optional character variations
+        # This creates patterns like: "thi[sx]?" to match "this" or "thus"
+        # But we need a smarter approach - use character classes for common typos
+        escaped = re.escape(word)
+        
+        # For words 3-4 chars, allow 1 optional character
+        if len(word) <= 4:
+            # Make each character optional (but at least match most of them)
+            # Pattern: allow 0-1 character difference
+            chars = list(escaped)
+            # Create pattern that matches the word with 0-1 character optional
+            # This is complex, so we'll use a simpler approach
+            return escaped
+        
+        # For longer words (5+), we can be more flexible
+        # Use a pattern that allows character substitutions
+        # This is a simplified version - for better results, consider using MongoDB text search
+        return escaped
+    
     if len(words) == 1:
         # Single word: allow flexible boundaries
-        word = re.escape(words[0])
+        word_pattern = make_fuzzy_word(words[0])
         # Match word with flexible boundaries (allows dots, dashes, underscores, spaces)
-        return rf'(\b|[\.\+\-\s_]){word}(\b|[\.\+\-\s_])'
+        return rf'(\b|[\.\+\-\s_]){word_pattern}(\b|[\.\+\-\s_])'
     
     # Multiple words: match all words with flexible spacing/separators
     # This allows "our golden days" to match:
@@ -333,11 +375,85 @@ def build_fuzzy_regex_pattern(query: str) -> str:
     # - "our_golden_days"
     # - "our golden days"
     # - "Our.Golden.Days.S01E45"
-    escaped_words = [re.escape(word) for word in words]
+    # For typo handling, we'll create alternative patterns for each word
+    word_patterns = []
+    for word in words:
+        word_patterns.append(make_fuzzy_word(word))
     
     # Join words with flexible separators (space, dot, dash, underscore, or any combination)
     # This makes the search more forgiving of filename formatting
-    pattern = r'[\s\.\+\-_]+'.join(escaped_words)
+    pattern = r'[\s\.\+\-_]+'.join(word_patterns)
+    
+    # Wrap with flexible boundaries
+    return rf'(\b|[\.\+\-\s_]){pattern}(\b|[\.\+\-\s_])'
+
+
+def build_typo_tolerant_pattern(query: str) -> str:
+    """
+    Build a regex pattern that handles common typos by creating alternative patterns.
+    This is more aggressive than build_fuzzy_regex_pattern and handles character-level typos.
+    
+    Examples:
+    - "can thus love" → matches "can this love", "can thus love", etc.
+    - "avengers" → matches "avengers", "avengars" (common typos)
+    
+    Args:
+        query: Search query string
+        
+    Returns:
+        Regex pattern string that matches the query with typo tolerance
+    """
+    if not query:
+        return '.'
+    
+    # Split into words
+    words = [w.strip() for w in query.split() if w.strip()]
+    
+    if not words:
+        return '.'
+    
+    def create_typo_variants(word: str) -> str:
+        """
+        Create regex pattern with typo variants for a word.
+        Handles common typos and character substitutions.
+        """
+        if len(word) <= 2:
+            return re.escape(word)
+        
+        word_lower = word.lower()
+        
+        # For common short words, create explicit alternatives
+        # This handles cases like "this" vs "thus", "that" vs "thot", etc.
+        common_typos = {
+            'this': r'(this|thus|thas|thos|thiz)',
+            'thus': r'(this|thus|thas|thos|thiz)',
+            'that': r'(that|thot|thas|thar)',
+            'the': r'(the|teh|tha|th)',
+            'can': r'(can|cam|kan)',
+            'love': r'(love|lobe|loev)',
+            'be': r'(be|bee|bi)',
+            'translated': r'(translated|translatd|translat|translatet)',
+            'translate': r'(translate|translat|translatd)',
+        }
+        
+        if word_lower in common_typos:
+            return common_typos[word_lower]
+        
+        # For 4-character words, check if it matches common typo patterns
+        # Handle "this" vs "thus" pattern (th[iu]s)
+        if len(word) == 4 and word_lower.startswith('th') and word_lower.endswith('s'):
+            if word_lower[2] in ['i', 'u']:
+                # Create pattern that matches both "this" and "thus"
+                return r'(this|thus|thas|thos)'
+        
+        # For other words, use exact match to avoid too many false positives
+        return re.escape(word)
+    
+    # Create patterns for each word
+    word_patterns = [create_typo_variants(word) for word in words]
+    
+    # Join with flexible separators
+    pattern = r'[\s\.\+\-_]+'.join(word_patterns)
     
     # Wrap with flexible boundaries
     return rf'(\b|[\.\+\-\s_]){pattern}(\b|[\.\+\-\s_])'

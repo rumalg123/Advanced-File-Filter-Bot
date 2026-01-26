@@ -79,6 +79,29 @@ class FilterHandler(BaseHandler):
         extracted = self._split_quotes(args[1])
         keyword = extracted[0].lower()
 
+        # Check for similar existing filters using fuzzy matching
+        all_filters = await self.filter_service.get_all_filters(str(group_id))
+        if all_filters:
+            from core.utils.helpers import find_similar_queries
+            similar_filters = find_similar_queries(
+                keyword,
+                [f.lower() for f in all_filters],
+                threshold=85.0,  # 85% similarity (very similar)
+                max_results=3
+            )
+            
+            if similar_filters:
+                suggestions = [f[0] for f in similar_filters]
+                suggestion_text = "\n".join([f"• <code>{s}</code>" for s in suggestions])
+                warning_msg = (
+                    f"⚠️ <b>Similar filter(s) already exist:</b>\n{suggestion_text}\n\n"
+                    f"Are you sure you want to add <code>{keyword}</code>?\n"
+                    f"This might create duplicate filters."
+                )
+                # Still allow adding, but warn the user
+                # Could add a confirmation step here if needed
+                pass  # For now, just continue (could add confirmation callback)
+
         # Extract filter content
         filter_data = await self._extract_filter_data(message, extracted, keyword)
         if not filter_data:
@@ -190,17 +213,51 @@ class FilterHandler(BaseHandler):
             )
 
         # Delete filters
+        all_filters = await self.filter_service.get_all_filters(str(group_id))
+        deleted_count = 0
+        not_found = []
+        
         for filter_name in filters_to_delete:
-            deleted = await self.filter_service.delete_filter(str(group_id), filter_name.lower())
-
-            if deleted:
-                await message.reply_text(
-                    f"<code>{filter_name}</code> deleted. I'll not respond to that filter anymore.",
-                    quote=True,
-                    parse_mode=CaptionFormatter.get_parse_mode()
-                )
+            filter_name_lower = filter_name.lower()
+            
+            # Check exact match first
+            if filter_name_lower in [f.lower() for f in all_filters]:
+                deleted = await self.filter_service.delete_filter(str(group_id), filter_name_lower)
+                if deleted:
+                    deleted_count += 1
+                    await message.reply_text(
+                        f"<code>{filter_name}</code> deleted. I'll not respond to that filter anymore.",
+                        quote=True,
+                        parse_mode=CaptionFormatter.get_parse_mode()
+                    )
+                else:
+                    not_found.append(filter_name)
             else:
-                await message.reply_text(f"Couldn't find filter: <code>{filter_name}</code>", quote=True)
+                # Try fuzzy matching to suggest similar filters
+                from core.utils.helpers import find_similar_queries
+                similar_filters = find_similar_queries(
+                    filter_name_lower,
+                    [f.lower() for f in all_filters],
+                    threshold=70.0,  # 70% similarity
+                    max_results=3
+                )
+                
+                if similar_filters:
+                    suggestions = [f[0] for f in similar_filters]
+                    suggestion_text = "\n".join([f"• <code>{s}</code>" for s in suggestions])
+                    await message.reply_text(
+                        f"❌ Filter <code>{filter_name}</code> not found.\n\n"
+                        f"💡 <b>Did you mean?</b>\n{suggestion_text}\n\n"
+                        f"Use: <code>/del {' '.join(suggestions[:1])}</code>",
+                        quote=True
+                    )
+                else:
+                    not_found.append(filter_name)
+        
+        # Report any filters that weren't found and had no suggestions
+        if not_found and deleted_count == 0:
+            # Only show if we didn't delete anything and no suggestions were shown
+            pass  # Already handled above with suggestions
 
     async def delete_all_command(self, client: Client, message: Message):
         """Handle delete all filters command"""

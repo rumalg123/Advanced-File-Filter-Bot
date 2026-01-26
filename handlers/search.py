@@ -533,7 +533,7 @@ class SearchHandler:
                         similar_queries = await self.search_history_service.find_similar_queries(
                             query=query,
                             user_id=user_id,
-                            threshold=0.6,  # 60% similarity threshold
+                            threshold=60.0,  # 60% similarity threshold (rapidfuzz uses 0-100 scale)
                             max_results=3
                         )
                     except Exception as e:
@@ -657,9 +657,11 @@ class SearchHandler:
             return False
 
         try:
-            # Check if any filter matches
+            # Check if any filter matches (exact match first, then fuzzy)
             keywords = await self.bot.filter_service.get_all_filters(group_id)
+            query_lower = query.lower()
 
+            # First, try exact matching (faster and more accurate)
             for keyword in reversed(sorted(keywords, key=len)):
                 pattern = r"( |^|[^\w])" + re.escape(str(keyword)) + r"( |$|[^\w])"
                 if re.search(pattern, query, flags=re.IGNORECASE):
@@ -688,6 +690,55 @@ class SearchHandler:
                         )
 
                         return True
+
+            # If no exact match, try fuzzy matching for typos (only for short keywords)
+            short_keywords = [k for k in keywords if len(k) <= 10]
+            if short_keywords:
+                try:
+                    from core.utils.helpers import find_similar_queries
+                    
+                    # Check if any word in the query matches a filter keyword with high similarity
+                    query_words = query_lower.split()
+                    for word in query_words:
+                        if len(word) >= 3:  # Only check words with at least 3 chars
+                            similar = find_similar_queries(
+                                word,
+                                [k.lower() for k in short_keywords],
+                                threshold=85.0,  # High threshold to avoid false positives
+                                max_results=1
+                            )
+                            
+                            if similar:
+                                matched_keyword = similar[0][0]
+                                # Find the original keyword (case-insensitive)
+                                original_keyword = next((k for k in short_keywords if k.lower() == matched_keyword), None)
+                                if original_keyword:
+                                    reply_text, btn, alert, fileid = await self.bot.filter_service.get_filter(
+                                        group_id, original_keyword
+                                    )
+
+                                    if reply_text:
+                                        reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+
+                                        # Add a header to distinguish filter results
+                                        if is_private:
+                                            filter_header = f"🔍 <b>Filter Match from Connected Group:</b>\n"
+                                        else:
+                                            filter_header = f"🔍 <b>Filter Match:</b>\n"
+
+                                        # Send filter response
+                                        await self.bot.filter_service.send_filter_response(
+                                            client,
+                                            message,
+                                            filter_header + reply_text,
+                                            btn,
+                                            alert,
+                                            fileid
+                                        )
+
+                                        return True
+                except Exception as e:
+                    logger.debug(f"Error in fuzzy filter matching: {e}")
 
             return False
 

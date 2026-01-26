@@ -10,7 +10,7 @@ from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
 from core.utils.validators import normalize_query
-from core.utils.helpers import parse_search_query, build_fuzzy_regex_pattern
+from core.utils.helpers import parse_search_query, build_fuzzy_regex_pattern, build_typo_tolerant_pattern
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -479,7 +479,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         
         # Build fuzzy regex pattern for flexible matching
         # This handles variations, typos, and word order flexibility
-        pattern = build_fuzzy_regex_pattern(text_query)
+        # Use typo-tolerant pattern to handle common typos like "thus" vs "this"
+        pattern = build_typo_tolerant_pattern(text_query)
         regex = {'$regex': pattern, '$options': 'i'}
 
         # Build filter

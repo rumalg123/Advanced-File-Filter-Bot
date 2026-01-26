@@ -176,9 +176,14 @@ class FilterService:
 
     async def _check_filter_match(self, client: Client, message: Message,
                                   text: str, group_id: str) -> bool:
-        """Check if text matches any filter and send response"""
+        """
+        Check if text matches any filter and send response.
+        Uses exact matching first, then fuzzy matching as fallback for typos.
+        """
         keywords = await self.get_all_filters(group_id)
+        text_lower = text.lower()
 
+        # First, try exact matching (faster and more accurate)
         for keyword in sorted(keywords, key=len, reverse=True):
             pattern = r"( |^|[^\w])" + re.escape(keyword) + r"( |$|[^\w])"
             if re.search(pattern, text, flags=re.IGNORECASE):
@@ -190,10 +195,48 @@ class FilterService:
                     reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
 
                 if btn is not None:
-                    await self.send_filter_response(  # Changed from self._send_filter_response
+                    await self.send_filter_response(
                         client, message, reply_text, btn, alert, fileid
                     )
                     return True
+
+        # If no exact match, try fuzzy matching for typos (only for short keywords to avoid false positives)
+        # Only use fuzzy matching for keywords <= 10 chars to avoid performance issues
+        short_keywords = [k for k in keywords if len(k) <= 10]
+        if short_keywords:
+            try:
+                from core.utils.helpers import find_similar_queries
+                
+                # Check if any word in the text matches a filter keyword with high similarity
+                text_words = text_lower.split()
+                for word in text_words:
+                    if len(word) >= 3:  # Only check words with at least 3 chars
+                        similar = find_similar_queries(
+                            word,
+                            [k.lower() for k in short_keywords],
+                            threshold=85.0,  # High threshold to avoid false positives
+                            max_results=1
+                        )
+                        
+                        if similar:
+                            matched_keyword = similar[0][0]
+                            # Find the original keyword (case-insensitive)
+                            original_keyword = next((k for k in short_keywords if k.lower() == matched_keyword), None)
+                            if original_keyword:
+                                reply_text, btn, alert, fileid = await self.get_filter(
+                                    group_id, original_keyword
+                                )
+
+                                if reply_text:
+                                    reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+
+                                if btn is not None:
+                                    await self.send_filter_response(
+                                        client, message, reply_text, btn, alert, fileid
+                                    )
+                                    return True
+            except Exception as e:
+                logger.debug(f"Error in fuzzy filter matching: {e}")
 
         return False
 

@@ -26,6 +26,7 @@ pytz
 psutil
 pydantic
 pydantic_settings
+rapidfuzz  # Fast fuzzy string matching library
 # Optional dependencies for enhanced functionality
 Pillow  # For image processing
 python-dateutil  # For date handling
