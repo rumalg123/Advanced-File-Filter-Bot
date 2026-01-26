@@ -9,6 +9,7 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.button_builder import ButtonBuilder
+from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
 from repositories.media import MediaFile
