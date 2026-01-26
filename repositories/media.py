@@ -41,13 +41,13 @@ class MediaFile:
     file_name: str
     file_size: int
     file_type: FileType
-    resolution: Optional[str] = None
-    episode: Optional[str] = None
-    season: Optional[str] = None
     mime_type: Optional[str]
     caption: Optional[str]
     indexed_at: datetime = None
     updated_at: Optional[datetime] = None
+    resolution: Optional[str] = None
+    episode: Optional[str] = None
+    season: Optional[str] = None
 
 
     def __post_init__(self):
