@@ -10,6 +10,7 @@ from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
 from core.utils.validators import normalize_query
+from core.utils.helpers import parse_search_query
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -466,30 +467,67 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             file_type: Optional[FileType],
             use_caption: bool
     ) -> Dict[str, Any]:
-        """Build MongoDB search filter"""
-        # Build regex pattern
-        if not query:
+        """Build MongoDB search filter with support for season/episode/resolution parsing"""
+        # Parse query to extract season, episode, resolution
+        cleaned_query, season, episode, resolution = parse_search_query(query)
+        
+        # Use cleaned query for text search (without season/episode/resolution keywords)
+        text_query = cleaned_query if cleaned_query else query
+        
+        # Build regex pattern for text search
+        if not text_query:
             pattern = '.'
-        elif ' ' not in query:
-            pattern = rf'(\b|[\.\+\-_]){query}(\b|[\.\+\-_])'
+        elif ' ' not in text_query:
+            pattern = rf'(\b|[\.\+\-_]){text_query}(\b|[\.\+\-_])'
         else:
-            pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+            pattern = text_query.replace(' ', r'.*[\s\.\+\-_]')
 
         regex = {'$regex': pattern, '$options': 'i'}
 
         # Build filter
         search_filter = {}
 
-        if use_caption:
-            search_filter['$or'] = [
-                {'file_name': regex},
-                {'caption': regex}
-            ]
+        # Text search on file_name/caption (only if we have text to search)
+        if text_query:
+            if use_caption:
+                search_filter['$or'] = [
+                    {'file_name': regex},
+                    {'caption': regex}
+                ]
+            else:
+                search_filter['file_name'] = regex
         else:
-            search_filter['file_name'] = regex
+            # If no text query, we still need a base filter - match all
+            search_filter = {}
+
+        # Add metadata filters (season, episode, resolution)
+        metadata_filters = {}
+        if season:
+            metadata_filters['season'] = season
+        if episode:
+            metadata_filters['episode'] = episode
+        if resolution:
+            metadata_filters['resolution'] = resolution
+        
+        # Combine text search with metadata filters
+        if metadata_filters:
+            if search_filter:
+                # Both text and metadata filters - use $and
+                search_filter = {
+                    '$and': [
+                        search_filter,
+                        metadata_filters
+                    ]
+                }
+            else:
+                # Only metadata filters
+                search_filter = metadata_filters
 
         if file_type:
-            search_filter['file_type'] = file_type.value
+            if '$and' in search_filter:
+                search_filter['$and'].append({'file_type': file_type.value})
+            else:
+                search_filter['file_type'] = file_type.value
 
         return search_filter
 

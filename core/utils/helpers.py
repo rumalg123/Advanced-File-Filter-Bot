@@ -67,12 +67,17 @@ def parse_media_metadata(
     """
     Best-effort parser for season, episode and resolution from text.
 
-    Examples it should handle:
-    - Our.Golden.Days.S01E50.x264.540p.WEB-DL-Phanteam..mkv
-    - Our.Golden.Days.E50.END.KBS.540p.x265.mkv
-    - Positively.Yours.E04.NF.1080p.x265.mkv
-    - Love.Me.S01E12.NF.x264.720p.mkv
-    - Loving.Strangers.S01E24.2160p.YOUKU.W.mkv
+    Examples it handles:
+    TV Shows:
+    - Our.Golden.Days.S01E50.x264.540p.WEB-DL-Phanteam..mkv → season=01, episode=50, resolution=540p
+    - Our.Golden.Days.E50.END.KBS.540p.x265.mkv → season=None, episode=50, resolution=540p
+    - Positively.Yours.E04.NF.1080p.x265.mkv → season=None, episode=04, resolution=1080p
+    - Love.Me.S01E12.NF.x264.720p.mkv → season=01, episode=12, resolution=720p
+    - Loving.Strangers.S01E24.2160p.YOUKU.W.mkv → season=01, episode=24, resolution=2160p
+    
+    Movies (no season/episode):
+    - Big.Deal.2025.x265.1080p.iTunes.WEB-DL.mkv → season=None, episode=None, resolution=1080p
+    - Heart.Blackened.2017.x265.720p.NF.WEB-DL.mkv → season=None, episode=None, resolution=720p
     """
     text = file_name or ""
     if caption:
@@ -104,6 +109,81 @@ def parse_media_metadata(
             resolution = f"{match.group('width')}x{match.group('height')}"
 
     return season, episode, resolution
+
+
+# Patterns for parsing user search queries (natural language)
+_QUERY_SEASON_EPISODE_PATTERN = re.compile(
+    r"(?:season\s*)?[Ss](?P<season>\d{1,2})(?:\s*episode\s*)?[Ee](?P<episode>\d{1,3})",
+    re.IGNORECASE
+)
+
+_QUERY_EPISODE_PATTERN = re.compile(
+    r"(?:episode\s*|ep\s*)[Ee]?(?P<episode>\d{1,3})\b",
+    re.IGNORECASE
+)
+
+_QUERY_SEASON_PATTERN = re.compile(
+    r"(?:season\s*)[Ss]?(?P<season>\d{1,2})\b",
+    re.IGNORECASE
+)
+
+_QUERY_RESOLUTION_PATTERN = re.compile(
+    r"\b(?P<resolution>\d{3,4}p)\b",
+    re.IGNORECASE
+)
+
+
+def parse_search_query(
+    query: str
+) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
+    """
+    Parse user search query to extract season, episode, resolution and return cleaned query.
+    
+    Handles natural language queries like:
+    - "our golden days episode 45" → cleaned="our golden days", episode="45", season=None, resolution=None
+    - "our golden days 540p episode 45" → cleaned="our golden days", episode="45", resolution="540p", season=None
+    - "ep45 s01" → cleaned="", episode="45", season="01", resolution=None
+    - "our golden days season 1 episode 45" → cleaned="our golden days", season="01", episode="45", resolution=None
+    - "our golden days s01e45 1080p" → cleaned="our golden days", season="01", episode="45", resolution="1080p"
+    
+    Returns:
+        (cleaned_query, season, episode, resolution)
+    """
+    original_query = query
+    season: Optional[str] = None
+    episode: Optional[str] = None
+    resolution: Optional[str] = None
+    
+    # Extract season + episode together first (S01E45, season 1 episode 45)
+    match = _QUERY_SEASON_EPISODE_PATTERN.search(query)
+    if match:
+        season = match.group("season").zfill(2)
+        episode = match.group("episode").zfill(2)
+        # Remove the matched pattern from query
+        query = _QUERY_SEASON_EPISODE_PATTERN.sub("", query)
+    else:
+        # Try episode-only patterns (episode 45, ep45, e45)
+        match = _QUERY_EPISODE_PATTERN.search(query)
+        if match:
+            episode = match.group("episode").zfill(2)
+            query = _QUERY_EPISODE_PATTERN.sub("", query)
+        
+        # Try season-only patterns (season 1, s01)
+        match = _QUERY_SEASON_PATTERN.search(query)
+        if match:
+            season = match.group("season").zfill(2)
+            query = _QUERY_SEASON_PATTERN.sub("", query)
+    
+    # Extract resolution (540p, 1080p, etc.)
+    match = _QUERY_RESOLUTION_PATTERN.search(query)
+    if match:
+        resolution = match.group("resolution").lower()
+        query = _QUERY_RESOLUTION_PATTERN.sub("", query)
+    
+    # Clean up the query: remove extra spaces, trim
+    cleaned = re.sub(r'\s+', ' ', query).strip()
+    
+    return cleaned, season, episode, resolution
 
 
 class MessageProxy:

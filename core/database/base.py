@@ -255,8 +255,16 @@ class BaseRepository(ABC, Generic[T]):
             )
             return True
         except Exception as e:
-            logger.error(f"Error creating index: {e}")
-            return False
+            error_str = str(e)
+            # IndexOptionsConflict means an index with same keys but different name exists
+            # This is expected when migrating from old index names to new ones
+            if "IndexOptionsConflict" in error_str or "Index already exists" in error_str:
+                index_name = kwargs.get('name', 'unnamed')
+                logger.debug(f"Index {index_name} already exists with different name (keys: {keys})")
+                return True  # Index effectively exists, just with different name
+            else:
+                logger.error(f"Error creating index {kwargs.get('name', 'unnamed')}: {e}")
+                return False
 
 
 class AggregationMixin:
