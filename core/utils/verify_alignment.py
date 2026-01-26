@@ -255,5 +255,5 @@ async def verify_alignment_command(client, message):
 
     except Exception as e:
         logger.error(f"Verification failed: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Verification failed: {str(e)}")
+        await status_msg.edit_text(ErrorMessageFormatter.format_error(f"Verification failed: {str(e)}"))
 

@@ -12,6 +12,8 @@ from core.cache.config import CacheTTLConfig
 from core.constants import ProcessingConstants
 from core.utils.validators import normalize_filename_for_search, get_special_channels
 from core.utils.helpers import extract_file_ref, parse_media_metadata
+from core.utils.media_factory import MediaFileFactory
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from repositories.channel import ChannelRepository
@@ -311,7 +313,7 @@ class ChannelHandler:
                             await telegram_api.call_api(
                                 self.bot.send_message,
                                 self.bot.config.LOG_CHANNEL,
-                                f"⚠️ <b>Queue Overflow Alert</b>\n"
+                                ErrorMessageFormatter.format_warning("Queue Overflow Alert", title="Queue Overflow Alert") + "\n"
                                 f"The message queue has overflowed {self.queue_full_warnings} times.\n"
                                 f"Current queue size: {self.message_queue.qsize()}/{self.message_queue.maxsize}\n"
                                 f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
@@ -379,44 +381,20 @@ class ChannelHandler:
     async def _process_single_message(self, message: Message) -> str:
         """Process a single message"""
         try:
-            # Extract media object
-            media = None
-            file_type = None
-
-            for media_type in ("document", "video", "audio"):
-                media = getattr(message, media_type, None)
-                if media is not None:
-                    file_type = media_type
-                    break
-
-            if not media:
+            # Extract media object using unified extractor
+            from core.utils.media_extractor import extract_media_from_message
+            
+            result = extract_media_from_message(message, supported_types=["document", "video", "audio"])
+            if not result:
                 return "no_media"
+            
+            media, file_type, _ = result
 
-            # Create MediaFile object
-            raw_file_name = getattr(media, 'file_name', f'{file_type}_{media.file_unique_id}')
-            normalized_name = normalize_filename_for_search(raw_file_name)
-            caption_html = message.caption.html if message.caption else None
-            season, episode, parsed_resolution = parse_media_metadata(raw_file_name, caption_html)
-
-            width = getattr(media, 'width', None)
-            height = getattr(media, 'height', None)
-            if width and height:
-                resolution = f"{width}x{height}"
-            else:
-                resolution = parsed_resolution
-
-            media_file = MediaFile(
-                file_id=media.file_id,
-                file_unique_id=media.file_unique_id,
-                file_ref=extract_file_ref(media.file_id),
-                file_name=normalized_name,
-                file_size=media.file_size,
-                file_type=self._get_file_type(file_type),
-                resolution=resolution,
-                episode=episode,
-                season=season,
-                mime_type=getattr(media, 'mime_type', None),
-                caption=caption_html
+            # Create MediaFile object using MediaFileFactory
+            media_file = MediaFileFactory.from_pyrogram_media(
+                media=media,
+                message=message,
+                file_type=file_type
             )
 
             # Save to database
@@ -503,11 +481,3 @@ class ChannelHandler:
                 logger.info(f"Updated automatic indexing for {len(channels)} active channels")
 
 
-    def _get_file_type(self, media_type: str) -> FileType:
-        """Convert media type string to FileType enum"""
-        mapping = {
-            'video': FileType.VIDEO,
-            'audio': FileType.AUDIO,
-            'document': FileType.DOCUMENT,
-        }
-        return mapping.get(media_type, FileType.DOCUMENT)

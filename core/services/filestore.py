@@ -14,11 +14,13 @@ from pyrogram.types import Message
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
 from core.utils.helpers import extract_file_ref, parse_media_metadata
+from core.utils.media_factory import MediaFileFactory
 from core.concurrency import semaphore_manager
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
@@ -133,14 +135,19 @@ class FileStoreService:
         if not message.reply_to_message:
             return None
 
+        # Extract media using unified extractor
+        from core.utils.media_extractor import extract_media_by_type
+        
         file_type = message.reply_to_message.media
         if file_type not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO,
                              enums.MessageMediaType.DOCUMENT]:
             return None
 
         # Get media object
-        media = getattr(message.reply_to_message, str(file_type.value))
-        #logger.info(f"media is {media}")
+        media = extract_media_by_type(message.reply_to_message, file_type)
+        if not media:
+            return None
+        
         media_file_unique_id = media.file_unique_id
         #logger.info(f"media_file_unique_id is {media_file_unique_id}")
 
@@ -148,43 +155,12 @@ class FileStoreService:
         file = await self.media_repo.find_file(media_file_unique_id)
 
         if not file:
-            # File not in database, create and save it
-            file_ref = extract_file_ref(media.file_id)
-            identifier = media_file_unique_id
-
-            # Create MediaFile and save to database
-            # Determine file type
-            file_type_enum = FileType.DOCUMENT
-            if file_type == enums.MessageMediaType.VIDEO:
-                file_type_enum = FileType.VIDEO
-            elif file_type == enums.MessageMediaType.AUDIO:
-                file_type_enum = FileType.AUDIO
-
-            # Normalize filename for search
-            raw_filename = getattr(media, 'file_name', f'{file_type.value}_{media.file_unique_id}')
-            filename = normalize_filename_for_search(raw_filename)
-            caption_html = message.reply_to_message.caption.html if message.reply_to_message.caption else None
-            season, episode, parsed_resolution = parse_media_metadata(raw_filename, caption_html)
-
-            width = getattr(media, 'width', None)
-            height = getattr(media, 'height', None)
-            if width and height:
-                resolution = f"{width}x{height}"
-            else:
-                resolution = parsed_resolution
-
-            media_file = MediaFile(
-                file_id=media.file_id,
-                file_unique_id=identifier,
-                file_ref=file_ref,
-                file_name=filename,
-                file_size=media.file_size,
-                file_type=file_type_enum,
-                resolution=resolution,
-                episode=episode,
-                season=season,
-                mime_type=getattr(media, 'mime_type', None),
-                caption=caption_html
+            # File not in database, create and save it using MediaFileFactory
+            media_file = MediaFileFactory.from_pyrogram_media(
+                media=media,
+                message=message.reply_to_message if message.reply_to_message else message,
+                file_type=file_type,
+                file_unique_id=media_file_unique_id
             )
 
             # Save to database - now returns existing file if duplicate
@@ -460,7 +436,7 @@ class FileStoreService:
                     "global_premium": global_premium_enabled,
                     "link_premium_only": batch_link.premium_only
                 })
-                return False, "❌ Premium features are currently disabled. This batch link requires premium features to be enabled."
+                return False, ErrorMessageFormatter.format_error("Premium features are currently disabled. This batch link requires premium features to be enabled.")
 
             # Global premium is enabled, check user premium status
             if not user_is_premium:
@@ -474,7 +450,7 @@ class FileStoreService:
                     "global_premium": global_premium_enabled,
                     "link_premium_only": batch_link.premium_only
                 })
-                return False, "❌ This batch link requires premium membership. Upgrade to access premium-only content!"
+                return False, ErrorMessageFormatter.format_access_denied("This batch link requires premium membership. Upgrade to access premium-only content!")
             else:
                 logger.info(f"Premium batch access granted - user has premium", extra={
                     "event": "batch.access.granted",
@@ -498,7 +474,7 @@ class FileStoreService:
                     "user_premium": user_is_premium,
                     "global_premium": global_premium_enabled
                 })
-                return False, "❌ Premium membership required. Upgrade to access this content!"
+                return False, ErrorMessageFormatter.format_access_denied("Premium membership required. Upgrade to access this content!")
             else:
                 logger.info(f"Batch access granted - global premium satisfied", extra={
                     "event": "batch.access.granted",

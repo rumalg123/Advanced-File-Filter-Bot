@@ -96,9 +96,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             raise KeyError("Missing required field: '_id' or 'file_id'")
 
         # Convert file_type safely
+        from core.utils.file_type import get_file_type_from_value
         file_type_value = data.get('file_type')
         if isinstance(file_type_value, str):
-            data['file_type'] = FileType(file_type_value)
+            # Use utility for consistent conversion
+            converted_type = get_file_type_from_value(file_type_value)
+            data['file_type'] = converted_type if converted_type else FileType.DOCUMENT
         elif isinstance(file_type_value, FileType):
             pass  # Already correct type
         else:

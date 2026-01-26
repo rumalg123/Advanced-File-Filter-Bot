@@ -9,6 +9,9 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.services.search_results import SearchResultsService
+from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
@@ -26,6 +29,13 @@ class RequestHandler(BaseHandler):
     def __init__(self, bot):
         super().__init__(bot)
         self.background_tasks: List = []  # Track any background tasks
+        
+        # Initialize search results service
+        self.search_results_service = SearchResultsService(
+            cache_manager=bot.cache,
+            config=bot.config
+        )
+        
         self.register_handlers()
 
     def register_handlers(self) -> None:
@@ -94,7 +104,7 @@ class RequestHandler(BaseHandler):
             if success:
                 # Notify user about ban
                 ban_msg = (
-                    "🚫 <b>You have been banned from using this bot</b>\n"
+                    ErrorMessageFormatter.format_access_denied("You have been banned from using this bot", title="Banned") + "\n"
                     f"<b>Reason:</b> Over request warning limit\n"
                     f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                     "You exceeded the maximum number of request warnings.\n"
@@ -164,7 +174,7 @@ class RequestHandler(BaseHandler):
         else:
             # No results, forward to admins
             await message.reply_text(
-                f"📋 Your request has been noted. {limit_message}\n"
+                ErrorMessageFormatter.format_info("Your request has been noted.", title="Request Noted") + f" {limit_message}\n"
                 "Admins will process it as soon as possible."
             )
             await self._forward_request_to_admins(client, message, keyword)
@@ -187,9 +197,20 @@ class RequestHandler(BaseHandler):
             )
 
             if has_access and files:
-                # Send search results
-                search_sent = await self._send_search_results(
-                    client, message, files, keyword, total, page_size, user_id, is_private=False
+                # Send search results using centralized service
+                search_sent = await self.search_results_service.send_results(
+                    client=client,
+                    message=message,
+                    files=files,
+                    query=keyword,
+                    total=total,
+                    page_size=page_size,
+                    user_id=user_id,
+                    is_private=False,
+                    auto_delete_callback=lambda msg, delay: self._create_auto_delete_task(
+                        self._auto_delete_message(msg, delay)
+                    ),
+                    shutdown_check=lambda: self._shutdown.is_set()
                 )
                 if search_sent:
                     return search_sent
@@ -200,137 +221,6 @@ class RequestHandler(BaseHandler):
             logger.error(f"Error searching for request: {e}")
             return False
 
-    async def _send_search_results(
-            self,
-            client: Client,
-            message: Message,
-            files: list,
-            query: str,
-            total: int,
-            page_size: int,
-            user_id: int,
-            is_private: bool
-    ) -> bool:
-        """Send search results - returns True if sent successfully"""
-        try:
-            if self._shutdown.is_set():
-                return False
-            # Generate a unique key for this search result set
-            session_id = uuid.uuid4().hex[:8]
-            search_key = CacheKeyGenerator.search_session(user_id, session_id)
-
-            # Store file IDs in cache for "Send All" functionality - optimized
-            # Use list comprehension for better memory efficiency
-            files_data = [
-                {
-                    'file_unique_id': f.file_unique_id,
-                    'file_id': f.file_id,
-                    'file_ref': f.file_ref,
-                    'file_name': f.file_name,
-                    'file_size': f.file_size,
-                    'file_type': f.file_type.value
-                }
-                for f in files
-            ]
-
-            await self.bot.cache.set(
-                search_key,
-                {'files': files_data, 'query': query, 'user_id': user_id},
-                expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
-            )
-
-            # Create pagination builder
-            pagination = PaginationBuilder(
-                total_items=total,
-                page_size=page_size,
-                current_offset=0,  # Initial search starts at offset 0
-                query=query,
-                user_id=user_id,
-                callback_prefix="search"
-            )
-
-            # Build file buttons
-            buttons = []
-
-            # Add "Send All Files" button as the first button
-            if files and is_private:  # Send all only in private
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"📤 Send All Files ({len(files)})",
-                        callback_data=f"sendall#{search_key}"
-                    )
-                ])
-            elif files and not is_private:
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"📤 Send All Files ({len(files)})",
-                        callback_data=f"sendall#{search_key}#{user_id}"
-                    )
-                ])
-
-            # Add individual file buttons
-            for file in files:
-                file_identifier = file.file_unique_id if file.file_unique_id else file.file_ref
-                if is_private:
-                    callback_data = f"file#{file_identifier}"
-                else:
-                    callback_data = f"file#{file_identifier}#{user_id}"
-
-                file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
-                file_button = InlineKeyboardButton(
-                    f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
-                    callback_data=callback_data
-                )
-                buttons.append([file_button])
-
-            # Add smart pagination buttons if there are multiple pages
-            if total > page_size:
-                pagination_buttons = pagination.build_pagination_buttons()
-                buttons.extend(pagination_buttons)
-
-            # Build caption
-            delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-            delete_minutes = delete_time // 60
-
-            caption = (
-                f"🔍 <b>Search Results for:</b> {query}\n"
-                f"📁 Found {total} files\n"
-                f"📊 Page {pagination.current_page} of {pagination.total_pages}"
-            )
-
-            if not is_private or delete_time > 0:
-                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
-
-            # Send message with or without photo
-            if self.bot.config.PICS:
-                sent_msg = await message.reply_photo(
-                    photo=random.choice(self.bot.config.PICS),
-                    caption=caption,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            else:
-                sent_msg = await message.reply_text(
-                    caption,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-
-            # Schedule deletion using proper task tracking
-            if delete_time > 0:
-                self._create_auto_delete_task(
-                    self._auto_delete_message(sent_msg, delete_time)
-                )
-
-                # Also delete the user's search query message in private
-                if is_private:
-                    self._create_auto_delete_task(
-                        self._auto_delete_message(message, delete_time)
-                    )
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error sending search results: {e}")
-            return False
 
     async def _forward_request_to_admins(self, client: Client, message: Message, keyword: str):
         """Forward request to admin channel"""
@@ -351,14 +241,14 @@ class RequestHandler(BaseHandler):
         message_link = f"https://t.me/c/{str(self.bot.config.SUPPORT_GROUP_ID)[4:]}/{message.id}"
 
         buttons = [
-            [InlineKeyboardButton("📩 View Message", url=message_link)],
+            [ButtonBuilder.action_button("📩 View Message", url=message_link)],
             [
-                InlineKeyboardButton("❌ Unavailable", callback_data=f"req_action#unavail#{user.id}#{message.id}"),
-                InlineKeyboardButton("✅ Already Available", callback_data=f"req_action#avail#{user.id}#{message.id}")
+                ButtonBuilder.action_button("❌ Unavailable", callback_data=f"req_action#unavail#{user.id}#{message.id}"),
+                ButtonBuilder.action_button("✅ Already Available", callback_data=f"req_action#avail#{user.id}#{message.id}")
             ],
             [
-                InlineKeyboardButton("📤 Upload Complete", callback_data=f"req_action#done#{user.id}#{message.id}"),
-                InlineKeyboardButton("🚫 Reject Request", callback_data=f"req_action#reject#{user.id}#{message.id}")
+                ButtonBuilder.action_button("📤 Upload Complete", callback_data=f"req_action#done#{user.id}#{message.id}"),
+                ButtonBuilder.action_button("🚫 Reject Request", callback_data=f"req_action#reject#{user.id}#{message.id}")
             ]
         ]
 
@@ -380,13 +270,13 @@ class RequestHandler(BaseHandler):
     async def handle_request_callback(self, client: Client, query: CallbackQuery):
         """Handle request action callbacks"""
         if self._shutdown.is_set():
-            await query.answer("Bot is shutting down", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_warning("Bot is shutting down"), show_alert=True)
             return
 
         # Validate callback data using validator
         is_valid, data = validate_callback_data(query, expected_parts=4)
         if not is_valid:
-            return await query.answer("Invalid data", show_alert=True)
+            return await query.answer(ErrorMessageFormatter.format_invalid("data"), show_alert=True)
 
         _, action, user_id, msg_id = data
         user_id = int(user_id)
@@ -394,10 +284,10 @@ class RequestHandler(BaseHandler):
 
         # Map actions to messages
         action_messages = {
-            'unavail': "❌ Your requested content is currently unavailable.",
-            'avail': "✅ Your requested content is already available! Please search for it.",
-            'done': "📤 Your requested content has been uploaded! You can now search for it.",
-            'reject': "🚫 Your request has been rejected by admins."
+            'unavail': ErrorMessageFormatter.format_error("Your requested content is currently unavailable."),
+            'avail': ErrorMessageFormatter.format_success("Your requested content is already available! Please search for it."),
+            'done': ErrorMessageFormatter.format_success("Your requested content has been uploaded! You can now search for it.", title="Upload Complete"),
+            'reject': ErrorMessageFormatter.format_access_denied("Your request has been rejected by admins.")
         }
 
         response_msg = action_messages.get(action, "Your request has been processed.")
@@ -442,9 +332,9 @@ class RequestHandler(BaseHandler):
         # Update admin message
         await query.message.edit_reply_markup(None)
         await query.message.edit_text(
-            query.message.text + f"\n✅ <b>Action Taken:</b> {action.title()}"
+            query.message.text + "\n" + ErrorMessageFormatter.format_success(f"Action Taken: {action.title()}", include_prefix=False)
         )
 
-        await query.answer(f"✅ User notified: {action.title()}")
+        await query.answer(ErrorMessageFormatter.format_success(f"User notified: {action.title()}"))
 
 

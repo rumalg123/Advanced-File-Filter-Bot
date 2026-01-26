@@ -133,12 +133,10 @@ class FileAccessService:
 
 
         # Convert file_type string to enum if provided
+        from core.utils.file_type import get_file_type_from_string
         file_type_enum = None
         if file_type:
-            try:
-                file_type_enum = FileType(file_type.lower())
-            except ValueError:
-                pass
+            file_type_enum = get_file_type_from_string(file_type)
         use_caption_filter = self.config.USE_CAPTION_FILTER if self.config else True
         # Search files
         files, next_offset, total = await self.media_repo.search_files(

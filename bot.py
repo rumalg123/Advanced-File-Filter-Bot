@@ -60,6 +60,7 @@ from repositories.filter import FilterRepository
 from repositories.media import MediaRepository
 from repositories.user import UserRepository
 from core.cache.invalidation import CacheInvalidator
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 import core.utils.messages as default_messages
 from config import settings
@@ -385,10 +386,12 @@ class MediaSearchBot(Client):
                             await telegram_api.call_api(
                                 self.send_message,
                                 primary_admin,
-                                "⚠️ <b>Broadcast State Recovery</b>\n\n"
-                                "A broadcast was found to be active from the previous session. "
-                                "It may have been interrupted by a restart.\n\n"
-                                "Use /stop_broadcast to clear the broadcast state if needed.",
+                                ErrorMessageFormatter.format_warning(
+                                    "A broadcast was found to be active from the previous session. "
+                                    "It may have been interrupted by a restart.\n\n"
+                                    "Use /stop_broadcast to clear the broadcast state if needed.",
+                                    title="Broadcast State Recovery"
+                                ),
                                 parse_mode=CaptionFormatter.get_parse_mode(),
                                 chat_id=primary_admin
                             )
@@ -931,7 +934,7 @@ class MediaSearchBot(Client):
                 # Build success message with git info
                 if git_current:
                     success_msg = (
-                        f"✅ <b>Bot restarted successfully!</b>\n\n"
+                        ErrorMessageFormatter.format_success("Bot restarted successfully!", title="Bot Restarted") + "\n\n"
                         f"📝 <b>Current Version:</b>\n"
                         f"🔗 <code>{git_current['hash']}</code> - {git_current['date']}\n"
                         f"💬 {git_current['message']}"
@@ -944,7 +947,7 @@ class MediaSearchBot(Client):
                     if git_before and git_before.get('full_hash') != git_current['full_hash']:
                         success_msg += f"\n\n🆕 <b>Updated from:</b> <code>{git_before['hash']}</code>"
                 else:
-                    success_msg = "✅ <b>Bot restarted successfully!</b>"
+                    success_msg = ErrorMessageFormatter.format_success("Bot restarted successfully!", title="Bot Restarted")
 
                 # Try to edit the restart message
                 try:
@@ -987,7 +990,7 @@ class MediaSearchBot(Client):
 
                 for admin_id in self.config.ADMINS[:3]:  # Notify first 3 admins
                     try:
-                        error_msg = "⚠️ <b>Bot Configuration Issue</b>\n\n"
+                        error_msg = ErrorMessageFormatter.format_warning("Bot Configuration Issue", title="Bot Configuration Issue") + "\n\n"
                         error_msg += "The bot cannot access some force subscription channels:\n\n"
                         for error in check_results['errors']:
                             error_msg += f"• <b>{error['type']}</b> <code>{error['id']}</code>\n"

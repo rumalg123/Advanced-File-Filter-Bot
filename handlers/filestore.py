@@ -5,6 +5,7 @@ from pyrogram.types import Message
 
 from core.services.filestore import FileStoreService
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser
 from handlers.base import BaseHandler
@@ -126,11 +127,13 @@ class FileStoreHandler(BaseHandler):
         # Check if global premium is enabled first
         if self.bot.config.DISABLE_PREMIUM:
             await message.reply(
-                "⚠️ <b>Premium Features Disabled</b>\n\n"
-                "Premium batch links are not available because premium features are globally disabled.\n\n"
-                "👨‍💼 <b>Admins:</b> Enable premium features by setting:\n"
-                "<code>DISABLE_PREMIUM=false</code>\n\n"
-                "Once premium features are enabled, you can create premium-only batch links.",
+                ErrorMessageFormatter.format_warning(
+                    "Premium batch links are not available because premium features are globally disabled.\n\n"
+                    "👨‍💼 <b>Admins:</b> Enable premium features by setting:\n"
+                    "<code>DISABLE_PREMIUM=false</code>\n\n"
+                    "Once premium features are enabled, you can create premium-only batch links.",
+                    title="Premium Features Disabled"
+                ),
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
@@ -169,15 +172,17 @@ class FileStoreHandler(BaseHandler):
         parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link)
         if not parsed_links:
             await message.reply(
-                "❌ <b>Invalid Links</b>\n\n"
-                "Please check that:\n"
-                "• Both links are valid Telegram message links\n"
-                "• Both links are from the same channel\n"
-                "• First message ID is less than second message ID\n"
-                "• Batch size is reasonable (< 10,000 messages)\n\n"
-                "<b>Valid formats:</b>\n"
-                "• <code>https://t.me/channel/123</code>\n"
-                "• <code>https://t.me/c/1234567890/123</code>",
+                ErrorMessageFormatter.format_invalid(
+                    "Links",
+                    details="Please check that:\n"
+                    "• Both links are valid Telegram message links\n"
+                    "• Both links are from the same channel\n"
+                    "• First message ID is less than second message ID\n"
+                    "• Batch size is reasonable (< 10,000 messages)\n\n"
+                    "<b>Valid formats:</b>\n"
+                    "• <code>https://t.me/channel/123</code>\n"
+                    "• <code>https://t.me/c/1234567890/123</code>"
+                ),
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
             return
@@ -208,7 +213,7 @@ class FileStoreHandler(BaseHandler):
                 batch_type = "Protected Premium" if protect else "Premium"
                 
                 await sts.edit(
-                    f"✅ <b>{batch_type} Batch Link Created</b>\n\n"
+                    ErrorMessageFormatter.format_success(f"{batch_type} Batch Link Created", title=f"{batch_type} Batch Link Created") + "\n\n"
                     f"📦 <b>Messages</b>: ~{message_count:,}\n"
                     f"📡 <b>Source</b>: <code>{first_parsed.chat_identifier}</code>\n"
                     f"📋 <b>Range</b>: <code>{first_parsed.message_id}</code> → <code>{last_parsed.message_id}</code>\n"
@@ -223,13 +228,15 @@ class FileStoreHandler(BaseHandler):
                 )
             else:
                 await sts.edit(
-                    "❌ <b>Failed to Generate Premium Batch Link</b>\n\n"
-                    "<b>Please check:</b>\n"
-                    "• Bot has access to the source channel\n"
-                    "• Links are valid and from the same channel\n"
-                    "• Database is accessible\n"
-                    "• You have permission to create batch links\n\n"
-                    "*Try again in a few moments*",
+                    ErrorMessageFormatter.format_failed(
+                        "Please check:\n"
+                        "• Bot has access to the source channel\n"
+                        "• Links are valid and from the same channel\n"
+                        "• Database is accessible\n"
+                        "• You have permission to create batch links\n\n"
+                        "*Try again in a few moments*",
+                        action="to Generate Premium Batch Link"
+                    ),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
         except Exception as e:
@@ -239,8 +246,10 @@ class FileStoreHandler(BaseHandler):
                 "error": str(e)
             })
             await sts.edit(
-                "❌ <b>System Error</b>\n\n"
-                "An unexpected error occurred while creating the batch link.\n"
-                "Please try again later or contact support.",
+                ErrorMessageFormatter.format_error(
+                    "An unexpected error occurred while creating the batch link.\n"
+                    "Please try again later or contact support.",
+                    title="System Error"
+                ),
                 parse_mode=CaptionFormatter.get_parse_mode()
             )

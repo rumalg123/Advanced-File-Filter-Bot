@@ -351,6 +351,10 @@ def extract_file_info(message: 'PyrogramMessage') -> Optional[Dict[str, Any]]:
 
     Consolidated utility to replace duplicate file extraction logic
     in delete.py and channel.py handlers.
+    
+    Note: This function now uses the unified media_extractor module internally
+    for consistency. For direct media object extraction, use extract_media_from_message()
+    from core.utils.media_extractor.
 
     Args:
         message: Pyrogram Message object
@@ -358,33 +362,6 @@ def extract_file_info(message: 'PyrogramMessage') -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary with file info or None if no media found
     """
-    media_types = [
-        ('document', lambda m: m.document),
-        ('video', lambda m: m.video),
-        ('audio', lambda m: m.audio),
-        ('photo', lambda m: m.photo),
-        ('animation', lambda m: m.animation),
-        ('voice', lambda m: m.voice),
-        ('video_note', lambda m: m.video_note),
-        ('sticker', lambda m: m.sticker)
-    ]
-
-    for media_type, getter in media_types:
-        media = getter(message)
-        if media:
-            file_name = getattr(media, 'file_name', None)
-            if not file_name:
-                # Generate a descriptive name
-                file_name = f"{media_type.title()}_{media.file_unique_id[:10]}"
-
-            return {
-                'file_unique_id': media.file_unique_id,
-                'file_id': media.file_id,
-                'file_name': file_name,
-                'file_size': getattr(media, 'file_size', 0),
-                'media_type': media_type,
-                'mime_type': getattr(media, 'mime_type', None),
-                'message': message
-            }
-
-    return None
+    # Use unified media extractor for consistency
+    from core.utils.media_extractor import extract_media_info_dict
+    return extract_media_info_dict(message)

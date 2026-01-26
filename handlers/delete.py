@@ -8,6 +8,8 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from core.cache.config import CacheKeyGenerator
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.constants import ProcessingConstants
+from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import extract_file_info
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
@@ -144,7 +146,7 @@ class DeleteHandler(BaseHandler):
                     await telegram_api.call_api(
                         self.bot.send_message,
                         self.bot.config.LOG_CHANNEL,
-                        "⚠️ Delete queue is full! Consider increasing queue size or processing rate.",
+                        ErrorMessageFormatter.format_warning("Delete queue is full! Consider increasing queue size or processing rate."),
                         chat_id=self.bot.config.LOG_CHANNEL
                     )
                 except Exception as e:
@@ -158,9 +160,9 @@ class DeleteHandler(BaseHandler):
             deleted = await self._delete_file(file_unique_id)
 
             if deleted:
-                await message.reply_text("✅ File deleted from database!")
+                await message.reply_text(ErrorMessageFormatter.format_success("File deleted from database!"))
             else:
-                await message.reply_text("❌ File not found in database.")
+                await message.reply_text(ErrorMessageFormatter.format_not_found("File") + " in database")
             return
 
         if not message.reply_to_message:
@@ -174,7 +176,7 @@ class DeleteHandler(BaseHandler):
         file_info = extract_file_info(message.reply_to_message)
 
         if not file_info:
-            await message.reply_text("❌ No supported media found in the message.")
+            await message.reply_text(ErrorMessageFormatter.format_error("No supported media found in the message"))
             return
 
         # Delete from database
@@ -182,11 +184,11 @@ class DeleteHandler(BaseHandler):
 
         if deleted:
             await message.reply_text(
-                f"✅ File deleted from database!\n"
+                ErrorMessageFormatter.format_success("File deleted from database!") + "\n"
                 f"📁 Name: {file_info['file_name']}"
             )
         else:
-            await message.reply_text("❌ File not found in database.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("File") + " in database")
 
     async def handle_deleteall_command(self, client: Client, message: Message):
         """Handle delete all files by keyword"""
@@ -207,13 +209,13 @@ class DeleteHandler(BaseHandler):
 
         # Confirmation message with buttons
         await message.reply_text(
-            f"⚠️ <b>Warning!</b>\n\n"
+            ErrorMessageFormatter.format_warning("Warning!", title="Warning") + "\n\n"
             f"This will delete all files matching: <b>{keyword}</b>\n\n"
             f"Click 'Confirm' to proceed or 'Cancel' to abort.",
             reply_markup=InlineKeyboardMarkup([
                 [
-                    InlineKeyboardButton("✅ Confirm", callback_data=f"deleteall_confirm#{user_id}"),
-                    InlineKeyboardButton("❌ Cancel", callback_data=f"deleteall_cancel#{user_id}")
+                    ButtonBuilder.action_button("✅ Confirm", callback_data=f"deleteall_confirm#{user_id}"),
+                    ButtonBuilder.action_button("❌ Cancel", callback_data=f"deleteall_cancel#{user_id}")
                 ]
             ])
         )
@@ -232,7 +234,7 @@ class DeleteHandler(BaseHandler):
 
         # Only the original requester can confirm/cancel using validator
         if not is_original_requester(callback_user_id, original_user_id):
-            await callback_query.answer("❌ You cannot interact with this!", show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this"), show_alert=True)
             return
 
         cache_key = CacheKeyGenerator.deleteall_pending(original_user_id)
@@ -240,13 +242,13 @@ class DeleteHandler(BaseHandler):
 
         if action == "deleteall_cancel":
             await self.bot.cache_invalidator.invalidate_deleteall_pending(original_user_id)
-            await callback_query.message.edit_text("❌ Deletion cancelled.")
+            await callback_query.message.edit_text(ErrorMessageFormatter.format_info("Deletion cancelled", title="Cancelled"))
             await callback_query.answer()
             return
 
         if action == "deleteall_confirm":
             if not keyword:
-                await callback_query.message.edit_text("❌ Deletion request expired. Please try again.")
+                await callback_query.message.edit_text(ErrorMessageFormatter.format_error("Deletion request expired. Please try again."))
                 await callback_query.answer()
                 return
 
@@ -260,7 +262,7 @@ class DeleteHandler(BaseHandler):
             deleted_count = await self.bot.media_repo.delete_files_by_keyword(keyword)
 
             await callback_query.message.edit_text(
-                f"✅ Deleted {deleted_count} files matching: <b>{keyword}</b>"
+                ErrorMessageFormatter.format_success(f"Deleted {deleted_count} files matching: <b>{keyword}</b>")
             )
 
             # Log the bulk deletion

@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 import core.utils.messages as config_messages
+from core.utils.messages import MessageHelper
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -81,53 +82,46 @@ class UserCommandHandler(BaseCommandHandler):
         # Send welcome message (rest of the original code remains the same)
         buttons = [
             [
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "➕ Add me to Group",
                     url=f"https://t.me/{self.bot.bot_username}?startgroup=true"
                 )
             ],
             [
-                InlineKeyboardButton("📚 Help", callback_data="help"),
-                InlineKeyboardButton("ℹ️ About", callback_data="about")
+                ButtonBuilder.action_button("📚 Help", callback_data="help"),
+                ButtonBuilder.action_button("ℹ️ About", callback_data="about")
             ],
             [
-                InlineKeyboardButton("📊 Stats", callback_data="stats"),
-                InlineKeyboardButton("💎 Premium", callback_data="plans")
+                ButtonBuilder.action_button("📊 Stats", callback_data="stats"),
+                ButtonBuilder.action_button("💎 Premium", callback_data="plans")
             ]
         ]
 
         if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
             buttons.append([
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     f"💬 {self.bot.config.SUPPORT_GROUP_NAME}",
                     url=self.bot.config.SUPPORT_GROUP_URL
                 )
             ])
 
+        # Note: switch_inline_query_current_chat is not supported by ButtonBuilder yet
         buttons.append([
             InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
         ])
 
         buttons.append([
-            InlineKeyboardButton("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
+            ButtonBuilder.action_button("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
         ])
-        custom_start_message = None
-        if self.bot.config.START_MESSAGE:
-            custom_start_message = self.bot.config.START_MESSAGE
-
-        if custom_start_message:
-            # Format with available placeholders
-            welcome_text = custom_start_message.format(
-                mention=message.from_user.mention,
-                user_id=user_id,
-                first_name=message.from_user.first_name or "User",
-                bot_name=self.bot.bot_name,
-                bot_username=self.bot.bot_username
-            )
-        else:
-            # Use default message
-            mention = message.from_user.mention
-            welcome_text = config_messages.START_MSG.format(mention=mention)
+        # Get start message (checks bot config first, then falls back to default)
+        start_msg_template = MessageHelper.get_start_message(self.bot.config)
+        welcome_text = start_msg_template.format(
+            mention=message.from_user.mention,
+            user_id=user_id,
+            first_name=message.from_user.first_name or "User",
+            bot_name=self.bot.bot_name,
+            bot_username=self.bot.bot_username
+        )
 
         if self.bot.config.PICS:
             await message.reply_photo(
@@ -166,11 +160,8 @@ class UserCommandHandler(BaseCommandHandler):
             session_key=session_key
         )
 
-        message_text = (
-            "🔒 <b>Subscription Required</b>\n\n"
-            "You need to join our channel(s) to access this content.\n"
-            "Please join the required channel(s) and try again."
-        )
+        # Get subscription message from bot config or default
+        message_text = MessageHelper.get_force_sub_message(self.bot.config)
 
         await message.reply_text(
             message_text,
@@ -182,7 +173,7 @@ class UserCommandHandler(BaseCommandHandler):
     @require_subscription()
     async def help_command(self, client: Client, message: Message):
         """Handle /help command"""
-        help_text =config_messages.HELP_MSG.format(bot_username=self.bot.bot_username)
+        help_text = MessageHelper.get_help_message(self.bot.config).format(bot_username=self.bot.bot_username)
 
         if message.from_user and message.from_user.id in self.bot.config.ADMINS:
             help_text += (
@@ -208,7 +199,7 @@ class UserCommandHandler(BaseCommandHandler):
     @require_subscription()
     async def about_command(self, client: Client, message: Message):
         """Handle /about command"""
-        about_text = config_messages.ABOUT_MSG.format(bot_username=self.bot.bot_username,bot_name=self.bot.bot_name)
+        about_text = MessageHelper.get_about_message(self.bot.config).format(bot_username=self.bot.bot_username, bot_name=self.bot.bot_name)
         await message.reply_text(about_text)
 
     @check_ban()
@@ -220,7 +211,7 @@ class UserCommandHandler(BaseCommandHandler):
             stats = await self.bot.maintenance_service.get_system_stats()
         except Exception as e:
             logger.error(f"Error getting system stats: {e}")
-            await message.reply_text("❌ Error retrieving statistics. Please try again later.")
+            await message.reply_text(ErrorMessageFormatter.format_error("Error retrieving statistics. Please try again later."))
             return
 
         # Format stats message
@@ -244,10 +235,12 @@ class UserCommandHandler(BaseCommandHandler):
         # Add file type breakdown
         if stats['files']['by_type']:
             text += "\n<b>📊 By Type:</b>\n"
+            from core.utils.file_type import get_file_type_from_value
             for file_type_str, data in stats['files']['by_type'].items():
-                try:
-                    display_name = get_file_type_display_name(FileType(file_type_str))
-                except ValueError:
+                file_type = get_file_type_from_value(file_type_str)
+                if file_type:
+                    display_name = get_file_type_display_name(file_type)
+                else:
                     display_name = file_type_str.title()
                 text += f"├ {display_name}: {data['count']:,} ({format_file_size(data['size'])})\n"
 
@@ -276,7 +269,7 @@ class UserCommandHandler(BaseCommandHandler):
     async def plans_command(self, client: Client, message: Message):
         """Handle plans command"""
         if self.bot.config.DISABLE_PREMIUM:
-            await message.reply_text("✅ Premium features are disabled. Enjoy unlimited access!")
+            await message.reply_text(ErrorMessageFormatter.format_success("Premium features are disabled. Enjoy unlimited access!"))
             return
 
         user_id = message.from_user.id
@@ -308,7 +301,7 @@ class UserCommandHandler(BaseCommandHandler):
                 text += f"📁 Remaining: {remaining}\n"
 
         buttons = [[
-            InlineKeyboardButton("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)
+            ButtonBuilder.action_button("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)
         ]]
 
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -322,7 +315,7 @@ class UserCommandHandler(BaseCommandHandler):
 
         if not stats['exists']:
             await message.reply_text(
-                "❌ No request data found. Make your first request using #request in the support group!")
+                ErrorMessageFormatter.format_not_found("Request data") + ". Make your first request using #request in the support group!")
             return
 
         # Build stats message
@@ -330,16 +323,16 @@ class UserCommandHandler(BaseCommandHandler):
             "📊 <b>Your Request Statistics</b>\n\n"
             f"📅 <b>Today's Requests:</b> {stats['daily_requests']}/{stats['daily_limit']}\n"
             f"📁 <b>Remaining Today:</b> {stats['daily_remaining']}\n"
-            f"⚠️ <b>Warnings:</b> {stats['warning_count']}/{stats['warning_limit']}\n"
+            f"{ErrorMessageFormatter.format_warning('Warnings', title='Warnings')}: {stats['warning_count']}/{stats['warning_limit']}\n"
             f"📈 <b>Total Requests:</b> {stats['total_requests']}\n"
         )
 
         if stats['is_at_limit']:
-            text += "\n⚠️ <b>Status:</b> Daily limit reached! Further requests will result in warnings."
+            text += "\n" + ErrorMessageFormatter.format_warning("Daily limit reached! Further requests will result in warnings.", title="Status")
         elif stats['is_warned']:
-            text += f"\n⚠️ <b>Status:</b> You have {stats['warnings_remaining']} warnings remaining before ban."
+            text += "\n" + ErrorMessageFormatter.format_warning(f"You have {stats['warnings_remaining']} warnings remaining before ban.", title="Status")
         else:
-            text += "\n✅ <b>Status:</b> You can make requests normally."
+            text += "\n" + ErrorMessageFormatter.format_success("You can make requests normally.", title="Status")
 
         if stats['warning_reset_in_days'] is not None:
             text += f"\n\n⏱ <b>Warning Reset:</b> {stats['warning_reset_in_days']} days"

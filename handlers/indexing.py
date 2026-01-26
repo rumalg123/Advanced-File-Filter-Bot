@@ -6,6 +6,8 @@ from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.indexing import IndexingService, IndexRequestService
+from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin
@@ -130,7 +132,7 @@ class IndexingHandler:
             match = regex.match(message.text)
             if not match:
                 logger.debug("Triggered in handle_index_request")
-                return await message.reply("❌ Invalid link format.")
+                return await message.reply(ErrorMessageFormatter.format_invalid("link format"))
 
             chat_id = match.group(4)
             last_msg_id = int(match.group(5))
@@ -141,7 +143,7 @@ class IndexingHandler:
         elif message.forward_from_chat:
             # Forwarded message
             if message.forward_from_chat.type != enums.ChatType.CHANNEL:
-                return await message.reply("❌ Please forward from a channel, not a group")
+                return await message.reply(ErrorMessageFormatter.format_error("Please forward from a channel, not a group"))
 
             last_msg_id = message.forward_from_message_id
             chat_id = message.forward_from_chat.username or message.forward_from_chat.id
@@ -152,7 +154,7 @@ class IndexingHandler:
         try:
             chat_id_int, error = await self.indexing_service.validate_channel(client, chat_id)
             if error:
-                return await message.reply(f"❌ {error}")
+                return await message.reply(ErrorMessageFormatter.format_error(error))
 
             # Check if last message exists
             try:
@@ -163,34 +165,36 @@ class IndexingHandler:
                     chat_id=chat_id_int
                 )
                 if last_msg.empty:
-                    return await message.reply("❌ The specified message doesn't exist")
+                    return await message.reply(ErrorMessageFormatter.format_not_found("Message"))
             except Exception as e:
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg or "chat not found" in error_msg:
                     return await message.reply(
-                        "❌ <b>Bot Access Required</b>\n"
-                        "I cannot access this channel. Please:\n"
-                        "1. Add me to the channel as an admin\n"
-                        "2. Make sure the channel is public OR\n"
-                        "3. Ensure I have proper permissions\n"
-                        "Then try forwarding the message again."
+                        ErrorMessageFormatter.format_error(
+                            "I cannot access this channel. Please:\n"
+                            "1. Add me to the channel as an admin\n"
+                            "2. Make sure the channel is public OR\n"
+                            "3. Ensure I have proper permissions\n"
+                            "Then try forwarding the message again.",
+                            title="Bot Access Required"
+                        )
                     )
                 else:
                     return await message.reply(
-                        "❌ Error accessing the channel. Make sure I'm an admin in the channel."
+                        ErrorMessageFormatter.format_error("Error accessing the channel. Make sure I'm an admin in the channel.")
                     )
 
             # Admin can index directly using validator
             if is_admin(user_id, self.bot.config.ADMINS):
                 buttons = [
                     [
-                        InlineKeyboardButton(
+                        ButtonBuilder.action_button(
                             "✅ Yes",
                             callback_data=f"index#accept#{chat_id_int}#{last_msg_id}#{user_id}"
                         )
                     ],
                     [
-                        InlineKeyboardButton("❌ Cancel", callback_data="close_data")
+                        ButtonBuilder.action_button("❌ Cancel", callback_data="close_data")
                     ]
                 ]
 
@@ -212,25 +216,27 @@ class IndexingHandler:
 
                 if success:
                     return await message.reply(
-                        "✅ Thank you for the contribution!\n"
+                        ErrorMessageFormatter.format_success("Thank you for the contribution!") + "\n"
                         "Your request has been sent to moderators for verification."
                     )
                 else:
-                    return await message.reply("❌ Failed to create index request")
+                    return await message.reply(ErrorMessageFormatter.format_failed("to create index request"))
         except Exception as e:
             error_msg = str(e).lower()
             if "channel_private" in error_msg:
                 return await message.reply(
-                    "❌ <b>Bot Access Required</b>\n\n"
-                    "I cannot access this channel. Please:\n"
-                    "1. Add me to the channel as an admin\n"
-                    "2. Make sure the channel is public OR\n"
-                    "3. Ensure I have proper permissions\n\n"
-                    "Then try forwarding the message again."
+                    ErrorMessageFormatter.format_error(
+                        "I cannot access this channel. Please:\n"
+                        "1. Add me to the channel as an admin\n"
+                        "2. Make sure the channel is public OR\n"
+                        "3. Ensure I have proper permissions\n\n"
+                        "Then try forwarding the message again.",
+                        title="Bot Access Required"
+                    )
                 )
             else:
                 logger.error(f"Error in handle_index_request: {e}")
-                return await message.reply("❌ An error occurred. Please try again.")
+                return await message.reply(ErrorMessageFormatter.format_error("An error occurred. Please try again."))
 
     async def handle_index_callback(self, client: Client, query: CallbackQuery):
         """Handle index-related callbacks"""
@@ -261,7 +267,7 @@ class IndexingHandler:
                     await telegram_api.call_api(
                         client.send_message,
                         int(from_user),
-                        f"❌ Your request to index <code>{chat_id}</code> has been declined by moderators.",
+                        ErrorMessageFormatter.format_error(f"Your request to index <code>{chat_id}</code> has been declined by moderators."),
                         reply_to_message_id=int(param),
                         chat_id=int(from_user)
                     )
@@ -302,7 +308,7 @@ class IndexingHandler:
                 await telegram_api.call_api(
                     client.send_message,
                     int(requested_by),
-                    f"✅ Your request to index <code>{chat_id}</code> has been accepted!\n"
+                    ErrorMessageFormatter.format_success(f"Your request to index <code>{chat_id}</code> has been accepted!") + "\n"
                     "Indexing will begin shortly.",
                     reply_to_message_id=last_msg_id,
                     chat_id=int(requested_by)
@@ -314,7 +320,7 @@ class IndexingHandler:
         await query.message.edit_text(
             "🔄 Starting Indexing...",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("❌ Cancel", callback_data="index#cancel")]
+                [ButtonBuilder.action_button("❌ Cancel", callback_data="index#cancel")]
             ])
         )
 
@@ -334,7 +340,7 @@ class IndexingHandler:
                 await query.message.edit_text(
                     text,
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("❌ Cancel", callback_data="index#cancel")]
+                        [ButtonBuilder.action_button("❌ Cancel", callback_data="index#cancel")]
                     ])
                 )
             except Exception:
@@ -352,7 +358,7 @@ class IndexingHandler:
             # Final message
             if self.indexing_service.cancel_indexing:
                 final_text = (
-                    f"🛑 <b>Indexing Cancelled!</b>\n"
+                    ErrorMessageFormatter.format_info("Indexing Cancelled!", title="Indexing Cancelled") + "\n"
                     f"Files Saved: <code>{stats['total_files']}</code>\n"
                     f"Duplicates Skipped: <code>{stats['duplicate']}</code>\n"
                     f"Deleted Messages: <code>{stats['deleted']}</code>\n"
@@ -361,7 +367,7 @@ class IndexingHandler:
                 )
             else:
                 final_text = (
-                    f"✅ <b>Indexing Completed!</b>\n"
+                    ErrorMessageFormatter.format_success("Indexing Completed!", title="Indexing Completed") + "\n"
                     f"Successfully saved <code>{stats['total_files']}</code> files\n"
                     f"Duplicates Skipped: <code>{stats['duplicate']}</code>\n"
                     f"Deleted Messages: <code>{stats['deleted']}</code>\n"
@@ -373,7 +379,7 @@ class IndexingHandler:
 
         except Exception as e:
             logger.error(f"Indexing error: {e}")
-            await query.message.edit_text(f"❌ Error during indexing: {str(e)}")
+            await query.message.edit_text(ErrorMessageFormatter.format_error(f"Error during indexing: {str(e)}"))
 
     async def set_skip_command(self, client: Client, message: Message):
         """Set skip number for indexing"""
@@ -383,10 +389,10 @@ class IndexingHandler:
         try:
             skip = int(message.command[1])
             if skip < 0:
-                return await message.reply("❌ Skip number must be positive")
+                return await message.reply(ErrorMessageFormatter.format_error("Skip number must be positive"))
 
             await self.indexing_service.set_skip_number(skip)
-            await message.reply(f"✅ Skip number set to {skip}")
+            await message.reply(ErrorMessageFormatter.format_success(f"Skip number set to {skip}"))
 
         except ValueError:
-            await message.reply("❌ Invalid number format")
+            await message.reply(ErrorMessageFormatter.format_invalid("number format"))

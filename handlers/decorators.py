@@ -4,7 +4,9 @@ from typing import Union, Optional, Callable
 from pyrogram import Client
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
+from core.utils.messages import MessageHelper
 from core.utils.validators import (
     extract_user_id, is_admin, is_auth_user, is_bot_user,
     get_special_channels, is_special_channel
@@ -48,8 +50,9 @@ class SubscriptionRequired:
                 user_id = extract_user_id(message)
 
                 if not user_id:
+                    from core.utils.error_formatter import ErrorMessageFormatter
                     if isinstance(message, Message):
-                        await message.reply_text("❌ Anonymous users cannot use this bot.")
+                        await message.reply_text(ErrorMessageFormatter.format_error("Anonymous users cannot use this bot"))
                     return
 
                 # Skip check for admins
@@ -115,13 +118,11 @@ class SubscriptionRequired:
             custom_callback_data=callback_data
         )
 
-        # Default subscription message
+        # Default subscription message - check bot config first
         if not custom_message:
-            custom_message = (
-                "🔒 <b>Subscription Required</b>\n"
-                "You need to join our channel(s) to use this bot.\n"
-                "Please join the required channel(s) and try again."
-            )
+            # Get bot config if available
+            bot_config = getattr(bot, 'config', None)
+            custom_message = MessageHelper.get_force_sub_message(bot_config)
 
         reply_markup = InlineKeyboardMarkup(buttons)
 
@@ -167,7 +168,7 @@ class BanCheck:
                 user = await self.bot.user_repo.get_user(user_id)
                 if user and user.status == UserStatus.BANNED:
                     ban_text = (
-                        "🚫 <b>You are banned from using this bot</b>\n"
+                        ErrorMessageFormatter.format_access_denied("You are banned from using this bot", title="Banned") + "\n"
                         f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
                         f"<b>Banned on:</b> {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n"
                         "Contact the bot admin if you think this is a mistake."

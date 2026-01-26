@@ -2,7 +2,9 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.connection import ConnectionService
+from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin, is_group_admin
@@ -118,16 +120,20 @@ class ConnectionHandler(BaseHandler):
             error_msg = str(e).lower()
             if "channel_private" in error_msg or "chat not found" in error_msg:
                 await message.reply_text(
-                    "❌ <b>Cannot Access Group</b>\n\n"
-                    "This group is private or I'm not a member.\n"
-                    "Please add me to the group and make me an admin first.",
+                    ErrorMessageFormatter.format_error(
+                        "This group is private or I'm not a member.\n"
+                        "Please add me to the group and make me an admin first.",
+                        title="Cannot Access Group"
+                    ),
                     quote=True
                 )
             else:
                 logger.error(f"Error in connect command: {e}")
                 await message.reply_text(
-                    "Invalid Group ID or Username!\n\n"
-                    "If correct, make sure I'm present in your group!",
+                    ErrorMessageFormatter.format_invalid(
+                        "Group ID or Username",
+                        details="If correct, make sure I'm present in your group!"
+                    ),
                     quote=True
                 )
 
@@ -167,13 +173,13 @@ class ConnectionHandler(BaseHandler):
                         if filter_count > 0:
                             buttons = [
                                 [
-                                    InlineKeyboardButton(
+                                    ButtonBuilder.action_button(
                                         f"🗑 Delete {filter_count} filters",
                                         callback_data=f"delete_group_filters:{group_id}"
                                     )
                                 ],
                                 [
-                                    InlineKeyboardButton(
+                                    ButtonBuilder.action_button(
                                         "✅ Keep filters",
                                         callback_data="close_data"
                                     )
@@ -208,13 +214,13 @@ class ConnectionHandler(BaseHandler):
             try:
                 success = await self.bot.filter_service.delete_all_filters(str(group_id))
                 if success:
-                    await query.answer("✅ All filters deleted!", show_alert=True)
-                    await query.message.edit_text("✅ All filters have been deleted from the group.")
+                    await query.answer(ErrorMessageFormatter.format_success("All filters deleted!"), show_alert=True)
+                    await query.message.edit_text(ErrorMessageFormatter.format_success("All filters have been deleted from the group."))
                 else:
-                    await query.answer("Failed to delete filters", show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_failed("to delete filters"), show_alert=True)
             except Exception as e:
                 logger.error(f"Error deleting filters: {e}")
-                await query.answer("Error deleting filters", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_error("Error deleting filters"), show_alert=True)
 
     async def connections_command(self, client: Client, message: Message):
         """Handle /connections command"""
@@ -236,7 +242,7 @@ class ConnectionHandler(BaseHandler):
                 title += " ✅"
 
             buttons.append([
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     text=title,
                     callback_data=f"groupcb:{conn['id']}:{conn['is_active']}"
                 )
@@ -244,7 +250,7 @@ class ConnectionHandler(BaseHandler):
 
         # Add cleanup button
         buttons.append([
-            InlineKeyboardButton(
+            ButtonBuilder.action_button(
                 "🗑 Clean Invalid Connections",
                 callback_data="cleanup_connections"
             )
@@ -275,28 +281,28 @@ class ConnectionHandler(BaseHandler):
 
         if is_active == "True":
             buttons.append([
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "❌ Deactivate",
                     callback_data=f"deactivate_group:{group_id}"
                 )
             ])
         else:
             buttons.append([
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "✅ Activate",
                     callback_data=f"connect_group:{group_id}"
                 )
             ])
 
         buttons.append([
-            InlineKeyboardButton(
+            ButtonBuilder.action_button(
                 "🗑 Delete Connection",
                 callback_data=f"delete_connection:{group_id}"
             )
         ])
 
         buttons.append([
-            InlineKeyboardButton(
+            ButtonBuilder.action_button(
                 "⬅️ Back",
                 callback_data="back_to_connections"
             )
@@ -323,7 +329,7 @@ class ConnectionHandler(BaseHandler):
                 f"<b>Group Details</b>\n\n"
                 f"🆔 ID: <code>{group_id}</code>\n"
                 f"✅ Status: {'Active' if is_active == 'True' else 'Inactive'}\n"
-                f"⚠️ Unable to fetch group details"
+                f"{ErrorMessageFormatter.format_warning('Unable to fetch group details')}"
             )
 
         await query.message.edit_text(
@@ -338,7 +344,7 @@ class ConnectionHandler(BaseHandler):
         data = query.data.split(":")
 
         if len(data) != 2:
-            return await query.answer("Invalid data", show_alert=True)
+            return await query.answer(ErrorMessageFormatter.format_invalid("data"), show_alert=True)
 
         action, group_id = data
 
@@ -349,7 +355,7 @@ class ConnectionHandler(BaseHandler):
             )
 
             if success:
-                await query.answer("✅ Connection activated!", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_success("Connection activated!"), show_alert=True)
             else:
                 await query.answer(msg, show_alert=True)
 
@@ -362,9 +368,9 @@ class ConnectionHandler(BaseHandler):
             success = await self.connection_service.clear_active_connection(user_id)
 
             if success:
-                await query.answer("✅ Connection deactivated!", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_success("Connection deactivated!"), show_alert=True)
             else:
-                await query.answer("Failed to deactivate", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_failed("to deactivate"), show_alert=True)
 
             # Refresh the current view
             query.data = f"groupcb:{group_id}:False"  # Set is_active to False
@@ -374,19 +380,19 @@ class ConnectionHandler(BaseHandler):
             # Ask about filters
             buttons = [
                 [
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "🗑 Delete filters too",
                         callback_data=f"disconnect_group_with_filters:{group_id}"
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "📁 Keep filters",
                         callback_data=f"disconnect_group:{group_id}"
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "❌ Cancel",
                         callback_data=f"groupcb:{group_id}:False"
                     )
@@ -410,9 +416,9 @@ class ConnectionHandler(BaseHandler):
                 # If delete_filters is True, delete all filters
                 if delete_filters and not self.bot.config.DISABLE_FILTER:
                     await self.bot.filter_service.delete_all_filters(str(group_id))
-                    await query.answer("✅ Connection and filters deleted!", show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_success("Connection and filters deleted!"), show_alert=True)
                 else:
-                    await query.answer("✅ Connection deleted!", show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_success("Connection deleted!"), show_alert=True)
             else:
                 await query.answer(msg, show_alert=True)
 
@@ -430,11 +436,11 @@ class ConnectionHandler(BaseHandler):
 
         if removed > 0:
             await query.answer(
-                f"Removed {removed} invalid connection(s)!",
+                ErrorMessageFormatter.format_success(f"Removed {removed} invalid connection(s)!"),
                 show_alert=True
             )
         else:
-            await query.answer("No invalid connections found!", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_info("No invalid connections found!"), show_alert=True)
 
         # Refresh connections list
         await self.connections_command(client, query.message)

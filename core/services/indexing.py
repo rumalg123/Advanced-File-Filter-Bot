@@ -8,11 +8,14 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.redis_cache import CacheManager
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.validators import normalize_filename_for_search
 from core.utils.link_parser import TelegramLinkParser
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.helpers import extract_file_ref, parse_media_metadata
+from core.utils.media_factory import MediaFileFactory
 from repositories.media import MediaRepository, MediaFile, FileType
 
 logger = get_logger(__name__)
@@ -243,39 +246,19 @@ class IndexingService:
                 batch_stats['unsupported'] += 1
                 continue
 
-            media = getattr(message, message.media.value, None)
+            # Extract media using unified extractor
+            from core.utils.media_extractor import extract_media_by_type
+            media = extract_media_by_type(message, message.media)
             if not media:
                 batch_stats['unsupported'] += 1
                 continue
 
             try:
-                file_type = self._get_file_type(message.media)
-                raw_file_name = getattr(media, 'file_name', f'file_{media.file_unique_id}')
-                normalized_name = normalize_filename_for_search(raw_file_name)
-                caption_html = message.caption.html if message.caption else None
-                season, episode, parsed_resolution = parse_media_metadata(raw_file_name, caption_html)
-
-                # Prefer real video dimensions when available
-                resolution = None
-                width = getattr(media, 'width', None)
-                height = getattr(media, 'height', None)
-                if width and height:
-                    resolution = f"{width}x{height}"
-                elif parsed_resolution:
-                    resolution = parsed_resolution
-
-                media_file = MediaFile(
-                    file_id=media.file_id,
-                    file_unique_id=media.file_unique_id,
-                    file_ref=extract_file_ref(media.file_id),
-                    file_name=normalized_name,
-                    file_size=media.file_size,
-                    file_type=file_type,
-                    resolution=resolution,
-                    episode=episode,
-                    season=season,
-                    mime_type=getattr(media, 'mime_type', None),
-                    caption=caption_html
+                # Use MediaFileFactory to create MediaFile
+                media_file = MediaFileFactory.from_pyrogram_media(
+                    media=media,
+                    message=message,
+                    file_type=message.media
                 )
                 media_files.append(media_file)
                 message_to_media[message.id] = media_file
@@ -372,16 +355,6 @@ class IndexingService:
 
         return saved_count, error_count
 
-    def _get_file_type(self, media_type: enums.MessageMediaType) -> FileType:
-        """Convert Pyrogram media type to FileType enum"""
-        mapping = {
-            enums.MessageMediaType.VIDEO: FileType.VIDEO,
-            enums.MessageMediaType.AUDIO: FileType.AUDIO,
-            enums.MessageMediaType.DOCUMENT: FileType.DOCUMENT,
-            enums.MessageMediaType.PHOTO: FileType.PHOTO,
-            enums.MessageMediaType.ANIMATION: FileType.ANIMATION
-        }
-        return mapping.get(media_type, FileType.DOCUMENT)
 
 
 class IndexRequestService:
@@ -434,13 +407,13 @@ class IndexRequestService:
             # Buttons for admin actions
             buttons = [
                 [
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "✅ Accept",
                         callback_data=f"index#accept#{chat_id}#{last_msg_id}#{user_id}"
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "❌ Reject",
                         callback_data=f"index#reject#{chat_id}#{message_id}#{user_id}"
                     )
@@ -468,7 +441,7 @@ class IndexRequestService:
                         await telegram_api.call_api(
                             client.send_message,
                             self.log_channel,
-                            text + "\n\n⚠️ Failed to send to INDEX_REQ_CHANNEL",
+                            text + "\n\n" + ErrorMessageFormatter.format_warning("Failed to send to INDEX_REQ_CHANNEL"),
                             reply_markup=InlineKeyboardMarkup(buttons),
                             chat_id=self.log_channel
                         )

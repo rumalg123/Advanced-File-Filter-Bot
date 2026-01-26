@@ -1,9 +1,11 @@
 from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
 import core.utils.messages as config_messages
+from core.utils.messages import MessageHelper
 from repositories.media import FileType
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
@@ -18,7 +20,7 @@ class UserCallbackHandler(BaseCommandHandler):
     @require_subscription()
     async def handle_help_callback(self, client: Client, query: CallbackQuery):
         """Handle help button callback"""
-        help_text = config_messages.HELP_MSG.format(bot_username=self.bot.bot_username)
+        help_text = MessageHelper.get_help_message(self.bot.config).format(bot_username=self.bot.bot_username)
 
         if query.from_user and query.from_user.id in self.bot.config.ADMINS:
             help_text += (
@@ -38,7 +40,7 @@ class UserCallbackHandler(BaseCommandHandler):
             )
 
         back_button = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]
+            [ButtonBuilder.action_button("⬅️ Back", callback_data="start_menu")]
         ])
 
         await query.message.edit_text(help_text, reply_markup=back_button)
@@ -47,10 +49,10 @@ class UserCallbackHandler(BaseCommandHandler):
     @require_subscription()
     async def handle_about_callback(self, client: Client, query: CallbackQuery):
         """Handle about button callback"""
-        about_text = config_messages.ABOUT_MSG.format(bot_username=self.bot.bot_username, bot_name=self.bot.bot_name)
+        about_text = MessageHelper.get_about_message(self.bot.config).format(bot_username=self.bot.bot_username, bot_name=self.bot.bot_name)
 
         back_button = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]
+            [ButtonBuilder.action_button("⬅️ Back", callback_data="start_menu")]
         ])
 
         await query.message.edit_text(about_text, reply_markup=back_button)
@@ -78,15 +80,17 @@ class UserCallbackHandler(BaseCommandHandler):
         # Add file type breakdown
         if stats['files']['by_type']:
             text += "\n<b>📊 By Type:</b>\n"
+            from core.utils.file_type import get_file_type_from_value
             for file_type_str, data in stats['files']['by_type'].items():
-                try:
-                    display_name = get_file_type_display_name(FileType(file_type_str))
-                except ValueError:
+                file_type = get_file_type_from_value(file_type_str)
+                if file_type:
+                    display_name = get_file_type_display_name(file_type)
+                else:
                     display_name = file_type_str.title()
                 text += f"├ {display_name}: {data['count']:,} ({format_file_size(data['size'])})\n"
 
         back_button = InlineKeyboardMarkup([
-            [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]
+            [ButtonBuilder.action_button("⬅️ Back", callback_data="start_menu")]
         ])
 
         await query.message.edit_text(text, reply_markup=back_button)
@@ -96,7 +100,7 @@ class UserCallbackHandler(BaseCommandHandler):
     async def handle_plans_callback(self, client: Client, query: CallbackQuery):
         """Handle plans button callback"""
         if self.bot.config.DISABLE_PREMIUM:
-            await query.answer("✅ Premium features are disabled. Enjoy unlimited access!")
+            await query.answer(ErrorMessageFormatter.format_success("Premium features are disabled. Enjoy unlimited access!"))
             return
 
         user_id = query.from_user.id
@@ -128,8 +132,8 @@ class UserCallbackHandler(BaseCommandHandler):
                 text += f"📁 Remaining: {remaining}\n"
 
         buttons = [
-            [InlineKeyboardButton("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)],
-            [InlineKeyboardButton("⬅️ Back", callback_data="start_menu")]
+            [ButtonBuilder.action_button("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)],
+            [ButtonBuilder.action_button("⬅️ Back", callback_data="start_menu")]
         ]
 
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -149,37 +153,45 @@ class UserCallbackHandler(BaseCommandHandler):
         # Send welcome message
         buttons = [
             [
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "➕ Add me to Group",
                     url=f"https://t.me/{self.bot.bot_username}?startgroup=true"
                 )
             ],
             [
-                InlineKeyboardButton("📚 Help", callback_data="help"),
-                InlineKeyboardButton("ℹ️ About", callback_data="about")
+                ButtonBuilder.action_button("📚 Help", callback_data="help"),
+                ButtonBuilder.action_button("ℹ️ About", callback_data="about")
             ],
             [
-                InlineKeyboardButton("📊 Stats", callback_data="stats"),
-                InlineKeyboardButton("💎 Premium", callback_data="plans")
+                ButtonBuilder.action_button("📊 Stats", callback_data="stats"),
+                ButtonBuilder.action_button("💎 Premium", callback_data="plans")
             ]
         ]
 
         if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
             buttons.append([
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     f"💬 {self.bot.config.SUPPORT_GROUP_NAME}",
                     url=self.bot.config.SUPPORT_GROUP_URL
                 )
             ])
+        # Note: switch_inline_query_current_chat is not supported by ButtonBuilder yet
         buttons.append([
             InlineKeyboardButton("📁 Search Files", switch_inline_query_current_chat='')
-        ]
-        )
+        ])
         buttons.append([
-            InlineKeyboardButton("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
+            ButtonBuilder.action_button("🍺 Buy me a Beer", url=self.bot.config.PAYMENT_LINK)
         ])
         mention = query.from_user.mention
-        welcome_text = config_messages.START_MSG.format(mention=mention)
+        # Check for custom start message from bot settings
+        start_msg_template = MessageHelper.get_start_message(self.bot.config)
+        welcome_text = start_msg_template.format(
+            mention=mention,
+            user_id=query.from_user.id,
+            first_name=query.from_user.first_name or "User",
+            bot_name=self.bot.bot_name,
+            bot_username=self.bot.bot_username
+        )
 
         await query.message.edit_text(
             welcome_text,

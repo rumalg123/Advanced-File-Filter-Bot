@@ -5,6 +5,7 @@ from pyrogram import Client
 from pyrogram.types import Message
 
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from handlers.commands_handlers.base import BaseCommandHandler
@@ -107,7 +108,7 @@ class DeepLinkHandler(BaseCommandHandler):
         file_identifier, protect = self.bot.filestore_service.decode_file_identifier(encoded)
 
         if not file_identifier:
-            await self.safe_reply(message, "❌ Invalid link format.")
+            await self.safe_reply(message, ErrorMessageFormatter.format_invalid("link format"))
             return
 
         # Check user access using unified lookup
@@ -120,12 +121,12 @@ class DeepLinkHandler(BaseCommandHandler):
 
         if not can_access:
             logger.warning(f"Access denied for user {user_id}: {reason}")
-            await message.reply_text(f"❌ {reason}")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
         if not file:
             logger.error(f"File not found for identifier: {file_identifier}")
-            await message.reply_text("❌ File not found.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("File"))
             return
 
         # Send file directly using file_id
@@ -166,7 +167,7 @@ class DeepLinkHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error sending file to user {user_id}: {e}", exc_info=True)
-            await message.reply_text("❌ Failed to send file. Please try again.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to send file"))
 
     async def _send_dstore_files(self, client: Client, message: Message, encoded: str):
         """Send files directly from channel"""
@@ -187,7 +188,7 @@ class DeepLinkHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Failed to decode identifier: {encoded} Error: {e}")
-            await self.safe_reply(message, "❌ Invalid link format.")
+            await self.safe_reply(message, ErrorMessageFormatter.format_invalid("link format"))
             return
 
         # Check access
@@ -195,7 +196,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(f"❌ {reason}")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
         sts = await message.reply("<b>Processing files...</b>")
@@ -215,11 +216,11 @@ class DeepLinkHandler(BaseCommandHandler):
 
         if success_count > 0:
             await message.reply_text(
-                f"✅ Transfer completed!\n"
+                ErrorMessageFormatter.format_success("Transfer completed!") + "\n"
                 f"Files sent: {success_count}/{total_count}"
             )
         else:
-            await message.reply_text("❌ Failed to send files.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("to send files"))
 
 
     async def _send_all_from_search(self, client: Client, message: Message, search_key: str):
@@ -232,13 +233,13 @@ class DeepLinkHandler(BaseCommandHandler):
 
         if not cached_data:
             logger.warning(f"Deep link sendall - search results expired or not found for key: {search_key}")
-            await message.reply_text("❌ Search results expired. Please search again.")
+            await message.reply_text(ErrorMessageFormatter.format_error("Search results expired. Please search again."))
             return
 
         files_data = cached_data.get('files', [])
 
         if not files_data:
-            await message.reply_text("❌ No files found.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Files"))
             return
 
         # Check access for bulk send
@@ -246,7 +247,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(f"❌ {reason}")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
         # Check quota for non-premium users
@@ -262,8 +263,10 @@ class DeepLinkHandler(BaseCommandHandler):
             remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
             if remaining < len(files_data):
                 await message.reply_text(
-                    f"❌ You can only retrieve {remaining} more files today. "
-                    f"Upgrade to premium for unlimited access!"
+                    ErrorMessageFormatter.format_error(
+                        f"You can only retrieve {remaining} more files today. "
+                        f"Upgrade to premium for unlimited access!"
+                    )
                 )
                 return
 
@@ -320,7 +323,7 @@ class DeepLinkHandler(BaseCommandHandler):
         if success_count > 0 and access_ctx.should_track_retrieval:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
-        await message.reply_text(f"✅ Sent {success_count}/{len(files_data)} files!")
+        await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
         await telegram_api.call_api(
             client.delete_messages,
             sending_file_msg.chat.id,
@@ -339,7 +342,7 @@ class DeepLinkHandler(BaseCommandHandler):
         batch_data = await self.bot.filestore_service.get_batch_data(client, batch_id)
 
         if not batch_data:
-            await message.reply_text("❌ Batch not found or expired.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Batch") + " or expired")
             return
 
         # Check access
@@ -347,7 +350,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(f"❌ {reason}")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
         # Send batch files
@@ -363,7 +366,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 f"Files sent: {success_count}/{total_count}"
             )
         else:
-            await message.reply_text("❌ Failed to send batch files.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("to send batch files"))
 
     async def _send_all_files(self, client: Client, message: Message, key: str, file_type: str):
         """Send all files of a specific type"""
@@ -377,16 +380,16 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(f"❌ {reason}")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
         # Validate file type if specified
         from repositories.media import FileType
+        from core.utils.file_type import get_file_type_from_value
         if file_type:
-            try:
-                FileType(file_type.lower())  # Validate the type exists
-            except ValueError:
-                await message.reply_text("❌ Invalid file type.")
+            validated_type = get_file_type_from_value(file_type)
+            if not validated_type:
+                await message.reply_text(ErrorMessageFormatter.format_invalid("file type"))
                 return
 
         # Get all files (using a higher limit)
@@ -400,11 +403,11 @@ class DeepLinkHandler(BaseCommandHandler):
         )
 
         if not has_access:
-            await message.reply_text("❌ Access denied.")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied())
             return
 
         if not files:
-            await message.reply_text("❌ No files found.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Files"))
             return
 
         # Send files
@@ -452,7 +455,7 @@ class DeepLinkHandler(BaseCommandHandler):
         if access_ctx.should_track_retrieval and success_count > 0:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
-        await message.reply_text(f"✅ Sent {success_count}/{len(files)} files!")
+        await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
 
         # Delete the command message
         await self.safe_delete(message)
@@ -464,13 +467,13 @@ class DeepLinkHandler(BaseCommandHandler):
         # Get batch link details
         batch_link = await self.bot.filestore_service.get_premium_batch_link(batch_id)
         if not batch_link:
-            await message.reply_text("❌ Batch link not found or expired.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Batch link") + " or expired")
             return
 
         # Get user details
         user = await self.bot.user_repo.get_user(user_id)
         if not user:
-            await message.reply_text("❌ User not found. Please start the bot again.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("User") + ". Please start the bot again.")
             return
 
         # Check premium access with precedence rules
@@ -489,7 +492,7 @@ class DeepLinkHandler(BaseCommandHandler):
         # Check general user status (banned, etc.) but bypass premium checks for premium batch links
         # Premium batch links have their own access control logic above
         if user.status == UserStatus.BANNED:
-            await message.reply_text(f"❌ Access denied: {user.ban_reason or 'User banned'}")
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(user.ban_reason or 'User banned'))
             return
 
         sts = await message.reply("📦 <b>Processing premium batch files...</b>")
@@ -509,13 +512,13 @@ class DeepLinkHandler(BaseCommandHandler):
         if success_count > 0:
             batch_type = "protected premium" if batch_link.protected else "premium"
             await message.reply_text(
-                f"✅ <b>Premium Batch Transfer Completed!</b>\n"
+                ErrorMessageFormatter.format_success("Premium Batch Transfer Completed!", title="Premium Batch Transfer Completed") + "\n"
                 f"📦 Batch Type: {batch_type.title()}\n"
                 f"📊 Files sent: <b>{success_count}</b>/<b>{total_count}</b>\n"
                 f"💎 Premium access verified"
             )
         else:
-            await message.reply_text("❌ Failed to send batch files. Please try again.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to send batch files"))
 
         # Delete the command message
         await self.safe_delete(message)

@@ -5,6 +5,7 @@ from functools import wraps
 from typing import Optional, Union, Tuple, Any, List
 from pyrogram import Client, enums
 from pyrogram.types import Message, CallbackQuery, InlineQuery
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 
@@ -166,7 +167,7 @@ class ValidationDecorators:
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
             user_id = ValidationUtils.extract_user_id(message)
             if not user_id or not ValidationUtils.is_admin(user_id, self.bot.config.ADMINS):
-                error_msg = "⚠️ This command is restricted to bot admins only."
+                error_msg = ErrorMessageFormatter.format_warning("This command is restricted to bot admins only.")
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -184,7 +185,7 @@ class ValidationDecorators:
             # Get the first admin as primary owner
             owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
             if not user_id or user_id != owner_id:
-                error_msg = "⚠️ This command is restricted to the bot owner only."
+                error_msg = ErrorMessageFormatter.format_warning("This command is restricted to the bot owner only.")
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -199,7 +200,7 @@ class ValidationDecorators:
         @wraps(func)
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
             if not ValidationUtils.is_private_chat(message):
-                error_msg = "⚠️ This command can only be used in private chats."
+                error_msg = ErrorMessageFormatter.format_warning("This command can only be used in private chats.")
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -224,7 +225,7 @@ class ValidationDecorators:
             # Check auth users
             auth_users = getattr(self.bot.config, 'AUTH_USERS', [])
             if not ValidationUtils.is_auth_user(user_id, auth_users):
-                error_msg = "⚠️ You are not authorized to use this command."
+                error_msg = ErrorMessageFormatter.format_warning("You are not authorized to use this command.")
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -350,7 +351,7 @@ class AccessControl:
         can_access, reason = await AccessControl.can_access_file(user_repo, user_id)
         
         if not can_access:
-            error_msg = f"⚠️ Access denied: {reason}"
+            error_msg = ErrorMessageFormatter.format_access_denied(reason)
             if isinstance(message, Message):
                 await message.reply_text(error_msg)
             elif isinstance(message, CallbackQuery):
@@ -373,7 +374,7 @@ class AccessControl:
                 return True, callback_user_id, None  # No original user restriction
             
             if not PermissionUtils.is_original_requester(callback_user_id, original_user_id):
-                await query.answer("❌ You cannot interact with this message!", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message!"), show_alert=True)
                 return False, callback_user_id, original_user_id
             
             return True, callback_user_id, original_user_id

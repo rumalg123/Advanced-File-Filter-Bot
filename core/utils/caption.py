@@ -4,7 +4,8 @@ from typing import Optional
 from pyrogram import enums
 
 from core.utils.helpers import format_file_size
-from core.utils.messages import AUTO_DEL_MSG
+from core.utils.messages import AUTO_DEL_MSG, MessageHelper
+from core.utils.pagination import PaginationBuilder
 from repositories.media import MediaFile
 from core.utils.logger import get_logger
 
@@ -63,14 +64,17 @@ class CaptionFormatter:
 
         # Add auto-delete notification if needed
         if caption and auto_delete_minutes and not disable_notification:
-            # Use custom message if provided, otherwise use default
+            # Use custom message if provided, otherwise check bot config, then default
             if auto_delete_message:
                 delete_msg = auto_delete_message.format(
                     content_type='file',
                     minutes=auto_delete_minutes
                 )
             else:
-                delete_msg = AUTO_DEL_MSG.format(
+                # Get auto-delete message from bot config or default
+                # Note: config should be passed in, but for backward compatibility, we'll use the parameter
+                delete_msg_template = auto_delete_message or AUTO_DEL_MSG
+                delete_msg = delete_msg_template.format(
                     content_type='file',
                     minutes=auto_delete_minutes
                 )
@@ -83,7 +87,9 @@ class CaptionFormatter:
                     minutes=auto_delete_minutes
                 )
             else:
-                caption = AUTO_DEL_MSG.format(
+                # Use default auto-delete message
+                delete_msg_template = AUTO_DEL_MSG
+                caption = delete_msg_template.format(
                     content_type='file',
                     minutes=auto_delete_minutes
                 )
@@ -141,3 +147,39 @@ class CaptionFormatter:
             auto_delete_minutes=delete_minutes,
             auto_delete_message=getattr(config, 'AUTO_DELETE_MESSAGE', None)
         )
+
+    @staticmethod
+    def format_search_results_caption(
+        query: str,
+        total: int,
+        pagination: PaginationBuilder,
+        delete_time: int = 0,
+        is_private: bool = False
+    ) -> str:
+        """
+        Format caption for search results message.
+
+        Args:
+            query: Search query string
+            total: Total number of files found
+            pagination: PaginationBuilder instance with page information
+            delete_time: Auto-delete time in seconds (0 to disable)
+            is_private: Whether this is a private chat
+
+        Returns:
+            Formatted search results caption with HTML
+        """
+        caption = (
+            f"🔍 <b>Search Results for:</b> {query}\n"
+            f"📁 Found {total} files\n"
+            f"📊 Page {pagination.current_page} of {pagination.total_pages}"
+        )
+
+        # Add auto-delete note if enabled
+        if delete_time > 0:
+            delete_minutes = delete_time // 60
+            # Show delete note in private always, in groups only if enabled
+            if is_private or delete_time > 0:
+                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
+
+        return caption

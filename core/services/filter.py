@@ -8,6 +8,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.redis_cache import CacheManager
 from core.services.connection import ConnectionService
+from core.utils.button_builder import ButtonBuilder
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_private_chat
@@ -85,28 +86,25 @@ class FilterService:
                 prev = match.end(1)
 
                 if match.group(3) == "buttonalert":
+                    button = ButtonBuilder.action_button(
+                        text=match.group(2),
+                        callback_data=f"alertmessage:{i}:{keyword}"
+                    )
                     if bool(match.group(5)) and buttons:
-                        buttons[-1].append(InlineKeyboardButton(
-                            text=match.group(2),
-                            callback_data=f"alertmessage:{i}:{keyword}"
-                        ))
+                        buttons[-1].append(button)
                     else:
-                        buttons.append([InlineKeyboardButton(
-                            text=match.group(2),
-                            callback_data=f"alertmessage:{i}:{keyword}"
-                        )])
+                        buttons.append([button])
                     i += 1
                     alerts.append(match.group(4))
-                elif bool(match.group(5)) and buttons:
-                    buttons[-1].append(InlineKeyboardButton(
-                        text=match.group(2),
-                        url=match.group(4).replace(" ", "")
-                    ))
                 else:
-                    buttons.append([InlineKeyboardButton(
+                    button = ButtonBuilder.action_button(
                         text=match.group(2),
                         url=match.group(4).replace(" ", "")
-                    )])
+                    )
+                    if bool(match.group(5)) and buttons:
+                        buttons[-1].append(button)
+                    else:
+                        buttons.append([button])
             else:
                 note_data += text[prev:to_check]
                 prev = match.start(1) - 1

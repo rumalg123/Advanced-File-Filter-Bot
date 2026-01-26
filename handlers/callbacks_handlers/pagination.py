@@ -4,8 +4,9 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
-from core.utils.file_emoji import get_file_emoji
-from core.utils.helpers import format_file_size
+from core.utils.button_builder import ButtonBuilder
+from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder, PaginationHelper
 from handlers.commands_handlers.base import BaseCommandHandler
@@ -34,7 +35,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
-            await query.answer("❌ You cannot interact with this message!", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message"), show_alert=True)
             return
 
         page_size = self.bot.config.MAX_BTN_SIZE
@@ -51,7 +52,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         )
 
         if not has_access:
-            return await query.answer("❌ Access denied", show_alert=True)
+            return await query.answer(ErrorMessageFormatter.format_access_denied(), show_alert=True)
 
         if not files:
             return await query.answer("No more results", show_alert=True)
@@ -95,31 +96,37 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         # Add "Send All Files" button as the first button
         if files:
-            buttons.append([
-                InlineKeyboardButton(
-                    f"📤 Send All Files ({len(files)})",
-                    callback_data=f"sendall#{search_key}"
-                )
-            ])
-
-        for file in files:
-            file_identifier = file.file_unique_id if file.file_unique_id else file.file_id
-            file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
-            file_button = InlineKeyboardButton(
-                f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
-                callback_data=f"file#{file_identifier}#{callback_user_id}"
+            send_all_button = ButtonBuilder.send_all_button(
+                file_count=len(files),
+                search_key=search_key,
+                user_id=callback_user_id,
+                is_private=True  # Pagination is typically in private chats
             )
-            buttons.append([file_button])
+            buttons.append([send_all_button])
+
+        # Add individual file buttons
+        file_buttons = ButtonBuilder.file_buttons_row(
+            files=files,
+            user_id=callback_user_id,
+            is_private=True  # Pagination is typically in private chats
+        )
+        buttons.extend(file_buttons)
 
         # Add smart pagination buttons
         pagination_buttons = pagination.build_pagination_buttons()
         buttons.extend(pagination_buttons)
 
-        # Update message
+        # Update message using centralized caption formatter
+        caption = CaptionFormatter.format_search_results_caption(
+            query=search_query,
+            total=total,
+            pagination=pagination,
+            delete_time=0,  # Pagination updates don't show delete time
+            is_private=True  # Pagination is typically in private chats
+        )
+        
         await query.message.edit_text(
-            f"🔍 <b>Search Results for:</b> {search_query}\n"
-            f"📁 Found {total} files\n"
-            f"📊 Page {pagination.current_page} of {pagination.total_pages}",
+            caption,
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 

@@ -4,6 +4,7 @@ from pyrogram import Client, enums
 from pyrogram.errors import UserNotParticipant, ChatAdminRequired
 from pyrogram.types import InlineKeyboardButton
 
+from core.utils.button_builder import ButtonBuilder
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 
@@ -182,7 +183,7 @@ class SubscriptionManager:
                     channel_name = "Updates Channel"
 
                 buttons.append([
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         f"📢 Join {channel_name}",
                         url=chat_link
                     )
@@ -205,7 +206,7 @@ class SubscriptionManager:
                     group_name = "Required Group"
 
                 buttons.append([
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         f"👥 Join {group_name}",
                         url=chat_link
                     )
@@ -228,7 +229,7 @@ class SubscriptionManager:
             callback_data = f"checksub#{user_id}#general"
 
         buttons.append([
-            InlineKeyboardButton("🔄 Try Again", callback_data=callback_data)
+            ButtonBuilder.action_button("🔄 Try Again", callback_data=callback_data)
         ])
 
         return buttons

@@ -1,6 +1,7 @@
 from pyrogram import Client, enums
 from pyrogram.types import Message
 
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import admin_only
@@ -45,18 +46,20 @@ class ChannelCommandHandler(BaseCommandHandler):
                 error_msg = str(e).lower()
                 if "channel_private" in error_msg:
                     await message.reply_text(
-                        "❌ <b>Cannot Access Channel</b>\n\n"
-                        "This is a private channel. Please:\n"
-                        "1. Add me to the channel first\n"
-                        "2. Make me an admin\n"
-                        "3. Try the command again"
+                        ErrorMessageFormatter.format_error(
+                            "This is a private channel. Please:\n"
+                            "1. Add me to the channel first\n"
+                            "2. Make me an admin\n"
+                            "3. Try the command again",
+                            title="Cannot Access Channel"
+                        )
                     )
                     return
                 elif "username_invalid" in error_msg or "username_not_occupied" in error_msg:
-                    await message.reply_text("❌ Invalid username. Please check and try again.")
+                    await message.reply_text(ErrorMessageFormatter.format_invalid("username", "Please check and try again"))
                     return
                 else:
-                    await message.reply_text(f"❌ Error: Could not find channel. {str(e)}")
+                    await message.reply_text(ErrorMessageFormatter.format_error(f"Could not find channel: {str(e)}"))
                     return
         else:
             # It's a numeric ID, try to get channel info
@@ -73,10 +76,12 @@ class ChannelCommandHandler(BaseCommandHandler):
                 if "channel_private" in error_msg:
                     # Channel might be private or bot not member
                     await message.reply_text(
-                        "❌ <b>Cannot Access Channel</b>\n\n"
-                        "This channel is private or I'm not a member.\n"
-                        "Please add me to the channel as an admin first.\n\n"
-                        "If you've already added me, wait a moment and try again."
+                        ErrorMessageFormatter.format_error(
+                            "This channel is private or I'm not a member.\n"
+                            "Please add me to the channel as an admin first.\n\n"
+                            "If you've already added me, wait a moment and try again.",
+                            title="Cannot Access Channel"
+                        )
                     )
                     return
                 else:
@@ -94,25 +99,32 @@ class ChannelCommandHandler(BaseCommandHandler):
             )
             if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.MEMBER]:
                 await message.reply_text(
-                    "❌ I need to be a member/admin of the channel to index files.\n"
-                    "Please add me to the channel first."
+                    ErrorMessageFormatter.format_error(
+                        "I need to be a member/admin of the channel to index files.\n"
+                        "Please add me to the channel first."
+                    )
                 )
                 return
         except Exception as e:
             error_msg = str(e).lower()
             if "channel_private" in error_msg or "user_not_participant" in error_msg:
                 await message.reply_text(
-                    "⚠️ <b>Warning:</b> I cannot verify my membership in this channel.\n\n"
-                    "Make sure:\n"
-                    "1. I'm added to the channel\n"
-                    "2. I'm an admin (for private channels)\n"
-                    "3. The channel exists\n\n"
-                    "Adding anyway, but indexing might fail."
+                    ErrorMessageFormatter.format_warning(
+                        "I cannot verify my membership in this channel.\n\n"
+                        "Make sure:\n"
+                        "1. I'm added to the channel\n"
+                        "2. I'm an admin (for private channels)\n"
+                        "3. The channel exists\n\n"
+                        "Adding anyway, but indexing might fail.",
+                        title="Warning"
+                    )
                 )
             else:
                 await message.reply_text(
-                    "⚠️ Warning: Could not verify channel membership.\n"
-                    "Make sure I'm added to the channel for indexing to work."
+                    ErrorMessageFormatter.format_warning(
+                        "Could not verify channel membership.\n"
+                        "Make sure I'm added to the channel for indexing to work."
+                    )
                 )
 
         # Add channel to database
@@ -129,7 +141,7 @@ class ChannelCommandHandler(BaseCommandHandler):
             await self.bot.channel_handler.update_handlers()
 
             response = (
-                f"✅ Channel added successfully!\n\n"
+                ErrorMessageFormatter.format_success("Channel added successfully!") + "\n\n"
                 f"📢 <b>Channel:</b> {channel_title or channel_input}\n"
                 f"🆔 <b>ID:</b> <code>{channel_id}</code>\n"
             )
@@ -151,7 +163,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                     chat_id=self.bot.config.LOG_CHANNEL
                 )
         else:
-            await message.reply_text("❌ Failed to add channel. Please try again.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to add channel"))
 
     @admin_only
     async def remove_channel_command(self, client: Client, message: Message):
@@ -180,7 +192,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                 )
                 channel_id = chat.id
             except Exception:
-                await message.reply_text("❌ Error: Could not find channel.")
+                await message.reply_text(ErrorMessageFormatter.format_error("Could not find channel"))
                 return
 
         # Get channel info before removing
@@ -188,7 +200,7 @@ class ChannelCommandHandler(BaseCommandHandler):
         channel = await channel_repo.find_by_id(channel_id)
 
         if not channel:
-            await message.reply_text("❌ Channel not found in the indexing list.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Channel") + " in the indexing list")
             return
 
         # Remove channel
@@ -200,7 +212,7 @@ class ChannelCommandHandler(BaseCommandHandler):
             await self.bot.channel_handler.update_handlers()
 
             response = (
-                f"✅ Channel removed successfully!\n\n"
+                ErrorMessageFormatter.format_success("Channel removed successfully!") + "\n\n"
                 f"📢 <b>Channel:</b> {channel.channel_title or channel_id}\n"
                 f"🆔 <b>ID:</b> <code>{channel_id}</code>\n"
                 f"📊 <b>Files indexed:</b> {channel.indexed_count}\n"
@@ -222,7 +234,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                     chat_id=self.bot.config.LOG_CHANNEL
                 )
         else:
-            await message.reply_text("❌ Failed to remove channel. Please try again.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to remove channel"))
 
     @admin_only
     async def list_channels_command(self, client: Client, message: Message):
@@ -303,7 +315,7 @@ class ChannelCommandHandler(BaseCommandHandler):
                 )
                 channel_id = chat.id
             except Exception:
-                await message.reply_text("❌ Error: Could not find channel.")
+                await message.reply_text(ErrorMessageFormatter.format_error("Could not find channel"))
                 return
 
         # Get channel info
@@ -311,7 +323,7 @@ class ChannelCommandHandler(BaseCommandHandler):
         channel = await channel_repo.find_by_id(channel_id)
 
         if not channel:
-            await message.reply_text("❌ Channel not found in the indexing list.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Channel") + " in the indexing list")
             return
 
         # Toggle status
@@ -323,10 +335,14 @@ class ChannelCommandHandler(BaseCommandHandler):
             await self.bot.channel_handler.update_handlers()
 
             status_text = "enabled" if new_status else "disabled"
-            emoji = "✅" if new_status else "❌"
+            
+            if new_status:
+                status_msg = ErrorMessageFormatter.format_success(f"Channel {status_text}!")
+            else:
+                status_msg = ErrorMessageFormatter.format_error(f"Channel {status_text}")
 
             response = (
-                f"{emoji} Channel {status_text}!\n\n"
+                f"{status_msg}\n\n"
                 f"📢 <b>Channel:</b> {channel.channel_title or channel_id}\n"
                 f"🆔 <b>ID:</b> <code>{channel_id}</code>\n"
                 f"📊 <b>Status:</b> {'Active' if new_status else 'Disabled'}\n"
@@ -334,4 +350,4 @@ class ChannelCommandHandler(BaseCommandHandler):
 
             await message.reply_text(response)
         else:
-            await message.reply_text("❌ Failed to update channel status.")
+            await message.reply_text(ErrorMessageFormatter.format_failed("to update channel status"))

@@ -5,6 +5,8 @@ from pyrogram import StopPropagation
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheTTLConfig
+from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from handlers.base import BaseHandler
@@ -78,7 +80,7 @@ class BotSettingsHandler(BaseHandler):
                     key = page_keys[i + j]
                     # Shorten key for button display
                     display_name = self._get_display_name(key)
-                    row.append(InlineKeyboardButton(
+                    row.append(ButtonBuilder.action_button(
                         display_name,
                         callback_data=f"bset_view_{key}_{page}"  # Include page number in callback
                     ))
@@ -94,12 +96,12 @@ class BotSettingsHandler(BaseHandler):
                 for p in range(total_pages):
                     if p == page:
                         # Current page (highlighted)
-                        page_row.append(InlineKeyboardButton(
+                        page_row.append(ButtonBuilder.action_button(
                             f"• {p + 1} •",
                             callback_data="bset_noop"
                         ))
                     else:
-                        page_row.append(InlineKeyboardButton(
+                        page_row.append(ButtonBuilder.action_button(
                             str(p + 1),
                             callback_data=f"bset_page_{p}"
                         ))
@@ -113,51 +115,51 @@ class BotSettingsHandler(BaseHandler):
 
                 # Previous button
                 if page > 0:
-                    page_buttons.append(InlineKeyboardButton("◀️", callback_data=f"bset_page_{page - 1}"))
+                    page_buttons.append(ButtonBuilder.action_button("◀️", callback_data=f"bset_page_{page - 1}"))
 
                 # Calculate which pages to show
                 if page < 4:
                     # Near the beginning
                     for p in range(min(7, total_pages)):
                         if p == page:
-                            page_buttons.append(InlineKeyboardButton(f"• {p + 1} •", callback_data="bset_noop"))
+                            page_buttons.append(ButtonBuilder.action_button(f"• {p + 1} •", callback_data="bset_noop"))
                         else:
-                            page_buttons.append(InlineKeyboardButton(str(p + 1), callback_data=f"bset_page_{p}"))
+                            page_buttons.append(ButtonBuilder.action_button(str(p + 1), callback_data=f"bset_page_{p}"))
                     if total_pages > 7:
-                        page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
+                        page_buttons.append(ButtonBuilder.action_button("...", callback_data="bset_noop"))
                         page_buttons.append(
-                            InlineKeyboardButton(str(total_pages), callback_data=f"bset_page_{total_pages - 1}"))
+                            ButtonBuilder.action_button(str(total_pages), callback_data=f"bset_page_{total_pages - 1}"))
                 elif page >= total_pages - 4:
                     # Near the end
-                    page_buttons.append(InlineKeyboardButton("1", callback_data="bset_page_0"))
-                    page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
+                    page_buttons.append(ButtonBuilder.action_button("1", callback_data="bset_page_0"))
+                    page_buttons.append(ButtonBuilder.action_button("...", callback_data="bset_noop"))
                     for p in range(max(0, total_pages - 7), total_pages):
                         if p == page:
-                            page_buttons.append(InlineKeyboardButton(f"• {p + 1} •", callback_data="bset_noop"))
+                            page_buttons.append(ButtonBuilder.action_button(f"• {p + 1} •", callback_data="bset_noop"))
                         else:
-                            page_buttons.append(InlineKeyboardButton(str(p + 1), callback_data=f"bset_page_{p}"))
+                            page_buttons.append(ButtonBuilder.action_button(str(p + 1), callback_data=f"bset_page_{p}"))
                 else:
                     # In the middle
-                    page_buttons.append(InlineKeyboardButton("1", callback_data="bset_page_0"))
-                    page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
+                    page_buttons.append(ButtonBuilder.action_button("1", callback_data="bset_page_0"))
+                    page_buttons.append(ButtonBuilder.action_button("...", callback_data="bset_noop"))
                     for p in range(page - 2, page + 3):
                         if p == page:
-                            page_buttons.append(InlineKeyboardButton(f"• {p + 1} •", callback_data="bset_noop"))
+                            page_buttons.append(ButtonBuilder.action_button(f"• {p + 1} •", callback_data="bset_noop"))
                         else:
-                            page_buttons.append(InlineKeyboardButton(str(p + 1), callback_data=f"bset_page_{p}"))
-                    page_buttons.append(InlineKeyboardButton("...", callback_data="bset_noop"))
+                            page_buttons.append(ButtonBuilder.action_button(str(p + 1), callback_data=f"bset_page_{p}"))
+                    page_buttons.append(ButtonBuilder.action_button("...", callback_data="bset_noop"))
                     page_buttons.append(
-                        InlineKeyboardButton(str(total_pages), callback_data=f"bset_page_{total_pages - 1}"))
+                        ButtonBuilder.action_button(str(total_pages), callback_data=f"bset_page_{total_pages - 1}"))
 
                 # Next button
                 if page < total_pages - 1:
-                    page_buttons.append(InlineKeyboardButton("▶️", callback_data=f"bset_page_{page + 1}"))
+                    page_buttons.append(ButtonBuilder.action_button("▶️", callback_data=f"bset_page_{page + 1}"))
 
                 # Add page navigation row
                 buttons.append(page_buttons)
 
         # Close button
-        buttons.append([InlineKeyboardButton("❌ Close", callback_data="bset_close")])
+        buttons.append([ButtonBuilder.action_button("❌ Close", callback_data="bset_close")])
 
         text = (
             "⚙️ <b>Bot Settings</b>\n\n"
@@ -181,7 +183,7 @@ class BotSettingsHandler(BaseHandler):
 
         # Check if user is first admin
         if not self.bot.config.ADMINS or user_id != self.bot.config.ADMINS[0]:
-            await query.answer("⚠️ Only the primary admin can access settings!", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_warning("Only the primary admin can access settings!"), show_alert=True)
             return
 
         data = query.data
@@ -236,7 +238,7 @@ class BotSettingsHandler(BaseHandler):
         settings = await self.settings_service.get_all_settings()
 
         if key not in settings:
-            await message.edit_text("❌ Setting not found!")
+            await message.edit_text(ErrorMessageFormatter.format_not_found("Setting") + "!")
             return
 
         setting = settings[key]
@@ -274,11 +276,11 @@ class BotSettingsHandler(BaseHandler):
             if setting_type == 'bool':
                 # Boolean settings get True/False buttons
                 buttons.append([
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "✅ True" if current_value else "☐ True",
                         callback_data=f"bset_bool_{key}_true"
                     ),
-                    InlineKeyboardButton(
+                    ButtonBuilder.action_button(
                         "✅ False" if not current_value else "☐ False",
                         callback_data=f"bset_bool_{key}_false"
                     )
@@ -286,19 +288,19 @@ class BotSettingsHandler(BaseHandler):
             else:
                 # Other types get Edit button
                 buttons.append([
-                    InlineKeyboardButton("✏️ Edit Value", callback_data=f"bset_edit_{key}")
+                    ButtonBuilder.action_button("✏️ Edit Value", callback_data=f"bset_edit_{key}")
                 ])
 
             # Use Default button if current != default
             if current_display != default_display:
                 buttons.append([
-                    InlineKeyboardButton("🔄 Use Default Value", callback_data=f"bset_default_{key}")
+                    ButtonBuilder.action_button("🔄 Use Default Value", callback_data=f"bset_default_{key}")
                 ])
 
         # Always add Back and Close buttons (for both protected and non-protected)
         buttons.append([
-            InlineKeyboardButton("⬅️ Back", callback_data="bset_back"),
-            InlineKeyboardButton("❌ Close", callback_data="bset_close")
+            ButtonBuilder.action_button("⬅️ Back", callback_data="bset_back"),
+            ButtonBuilder.action_button("❌ Close", callback_data="bset_close")
         ])
 
         await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -306,7 +308,7 @@ class BotSettingsHandler(BaseHandler):
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting using unified session manager"""
         if not self.session_manager:
-            await message.reply("❌ Session management not available")
+            await message.reply(ErrorMessageFormatter.format_error("Session management not available"))
             return
 
         session_data = {
@@ -418,14 +420,14 @@ class BotSettingsHandler(BaseHandler):
         user_id = message.from_user.id
         
         if not self.session_manager:
-            await message.reply_text("❌ Session management not available.")
+            await message.reply_text(ErrorMessageFormatter.format_error("Session management not available"))
             return
         
         # Check if user has any active edit session
         session = await self.session_manager.get_edit_session(user_id)
         
         if not session:
-            await message.reply_text("❌ No active edit session to cancel.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Active edit session") + " to cancel")
             return
             
         # Try to delete the editing message
@@ -518,12 +520,14 @@ class BotSettingsHandler(BaseHandler):
         try:
             if key in self.PROTECTED_SETTINGS:
                 await message.reply_text(
-                    f"⚠️ <b>Security Warning</b>\n\n"
-                    f"The setting `{key}` is protected and cannot be changed via bot.\n"
-                    f"Changing this setting requires:\n"
-                    f"1. Manual update in environment variables\n"
-                    f"2. Complete bot restart\n\n"
-                    f"This protection prevents accidental bot lockouts."
+                    ErrorMessageFormatter.format_warning(
+                        f"The setting `{key}` is protected and cannot be changed via bot.\n"
+                        f"Changing this setting requires:\n"
+                        f"1. Manual update in environment variables\n"
+                        f"2. Complete bot restart\n\n"
+                        f"This protection prevents accidental bot lockouts.",
+                        title="Security Warning"
+                    )
                 )
                 await self.session_manager.cancel_edit_session(user_id)
                 raise StopPropagation  # Prevent other handlers from processing this message
@@ -556,9 +560,9 @@ class BotSettingsHandler(BaseHandler):
                 success_msg = await telegram_api.call_api(
                     client.send_message,
                     message.chat.id,
-                    f"✅ Setting <b>{self._get_display_name(key)}</b> updated successfully!\n\n"
-                    f"⚠️ <b>Important:</b> You must restart the bot for changes to take effect.\n\n"
-                    f"Use `/restart` command now to apply changes.",
+                    ErrorMessageFormatter.format_success(f"Setting <b>{self._get_display_name(key)}</b> updated successfully!") + "\n\n"
+                    + ErrorMessageFormatter.format_warning("You must restart the bot for changes to take effect.", title="Important") + "\n\n"
+                    + "Use `/restart` command now to apply changes.",
                     chat_id=message.chat.id
                 )
 
@@ -573,7 +577,7 @@ class BotSettingsHandler(BaseHandler):
             else:
                 # Clean up session on failure too
                 await self.session_manager.cancel_edit_session(user_id)
-                await message.reply_text("❌ Failed to update setting.")
+                await message.reply_text(ErrorMessageFormatter.format_failed("to update setting"))
                 raise StopPropagation  # Prevent search trigger even on failure
         except StopPropagation:
             # Re-raise StopPropagation without treating it as an error
@@ -587,7 +591,7 @@ class BotSettingsHandler(BaseHandler):
             error_msg = str(e).strip() if str(e).strip() else "Unknown error occurred"
             logger.error(f"Error in bot settings edit for user {user_id}: {error_msg}", exc_info=True)
             
-            await message.reply_text(f"❌ Error updating setting: {error_msg}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error updating setting: {error_msg}"))
             raise StopPropagation  # Prevent search trigger on error
 
 
@@ -607,13 +611,13 @@ class BotSettingsHandler(BaseHandler):
                         logger.info("Enabling filter handlers")
                 await self.show_setting_details(query.message, key)
                 await query.answer(
-                    f"✅ Setting updated! Restart bot for changes to take effect.",
+                    ErrorMessageFormatter.format_success("Setting updated! Restart bot for changes to take effect."),
                     show_alert=True
                 )
             else:
-                await query.answer("❌ Failed to update setting", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_failed("to update setting"), show_alert=True)
         except Exception as e:
-            await query.answer(f"❌ Error: {str(e)}", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_error(str(e)), show_alert=True)
 
     async def reset_to_default(self, query: CallbackQuery, key: str):
         """Reset a setting to default value"""
@@ -623,13 +627,13 @@ class BotSettingsHandler(BaseHandler):
             if success:
                 await self.show_setting_details(query.message, key)
                 await query.answer(
-                    f"✅ Reset to default! Restart bot for changes to take effect.",
+                    ErrorMessageFormatter.format_success("Reset to default! Restart bot for changes to take effect."),
                     show_alert=True
                 )
             else:
-                await query.answer("❌ Failed to reset setting", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_failed("to reset setting"), show_alert=True)
         except Exception as e:
-            await query.answer(f"❌ Error: {str(e)}", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_error(str(e)), show_alert=True)
 
     def _get_git_info(self):
         """Get current git information"""
@@ -717,21 +721,21 @@ class BotSettingsHandler(BaseHandler):
                 if git_info_before and git_info_after:
                     if git_info_before['full_hash'] != git_info_after['full_hash']:
                         update_msg = (
-                            f"✅ <b>Updates pulled!</b>\n\n"
+                            ErrorMessageFormatter.format_success("Updates pulled!", title="Updates") + "\n\n"
                             f"📝 <b>Latest Commit:</b>\n"
                             f"🔗 `{git_info_after['hash']}` - {git_info_after['date']}\n"
                             f"💬 {git_info_after['message']}\n\n"
                             f"🔄 <b>Restarting...</b>"
                         )
                     else:
-                        update_msg = "ℹ️ <b>No new updates available. Restarting...</b>"
+                        update_msg = ErrorMessageFormatter.format_info("No new updates available. Restarting...", include_prefix=False)
                 else:
-                    update_msg = "✅ <b>Updates pulled! Restarting...</b>"
+                    update_msg = ErrorMessageFormatter.format_success("Updates pulled! Restarting...", include_prefix=False)
                     
                 await restart_msg.edit_text(update_msg)
             except Exception as e:
                 logger.error(f"Failed to force pull updates: {e}")
-                await restart_msg.edit_text("⚠️ <b>Failed to force pull updates. Restarting anyway...</b>")
+                await restart_msg.edit_text(ErrorMessageFormatter.format_warning("Failed to force pull updates. Restarting anyway...", include_prefix=False))
 
         # Platform-specific restart
         if platform.system() == "Windows":
@@ -754,7 +758,7 @@ class BotSettingsHandler(BaseHandler):
                 sys.exit(0)
             except Exception as e:
                 logger.error(f"Windows restart failed: {e}")
-                await restart_msg.edit_text(f"❌ <b>Restart failed:</b> {str(e)}")
+                await restart_msg.edit_text(ErrorMessageFormatter.format_failed(str(e), action="Restart"))
         else:
             # Unix-like systems (Linux, macOS)
             os.execl(sys.executable, sys.executable, *sys.argv)

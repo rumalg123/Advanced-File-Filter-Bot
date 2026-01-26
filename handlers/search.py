@@ -12,9 +12,13 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.session.manager import SessionType
+from core.services.search_results import SearchResultsService
+from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.file_emoji import get_file_emoji, get_file_type_display_name
 from core.utils.helpers import format_file_size
+from core.utils.messages import MessageHelper
 from handlers.decorators import require_subscription, check_ban
 
 from core.utils.logger import get_logger
@@ -40,6 +44,12 @@ class SearchHandler:
         
         # Use unified session manager
         self.session_manager = getattr(bot, 'session_manager', None)
+        
+        # Initialize search results service
+        self.search_results_service = SearchResultsService(
+            cache_manager=bot.cache,
+            config=bot.config
+        )
         
         self.register_handlers()
 
@@ -219,11 +229,7 @@ class SearchHandler:
         elif message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
             await self._handle_group_search_no_subscription(client, message, query, user_id)
 
-    @require_subscription(custom_message=(
-            "🔒 <b>Subscription Required</b>\n"
-            "To search for files, you need to join our channel(s) first.\n"
-            "👇 Click the button(s) below to join, then try your search again."
-    ))
+    @require_subscription(custom_message=None)  # Will use MessageHelper.get_force_sub_message() in decorator
     async def _handle_private_search_with_subscription(
             self,
             client: Client,
@@ -253,7 +259,7 @@ class SearchHandler:
                 await query.answer(
                     results=[],
                     cache_time=0,
-                    switch_pm_text="❌ Authentication Error",
+                    switch_pm_text=ErrorMessageFormatter.format_error("Authentication Error", include_prefix=False),
                     switch_pm_parameter="start"
                 )
             except QueryIdInvalid:
@@ -266,11 +272,20 @@ class SearchHandler:
         if not is_admin(user_id, self.bot.config.ADMINS):
             user = await self.bot.user_repo.get_user(user_id)
             if user and user.status == UserStatus.BANNED:
+                # Get ban message from bot config or default (shortened for inline query)
+                ban_msg_template = MessageHelper.get_ban_message(self.bot.config)
+                # Format with user's ban info
+                ban_text = ban_msg_template.format(
+                    reason=user.ban_reason or 'No reason provided',
+                    date=user.updated_at.strftime('%Y-%m-%d') if user.updated_at else 'Unknown'
+                )
+                # Use shortened version for inline query switch_pm_text
+                switch_text = "🚫 You are banned"
                 try:
                     await query.answer(
                         results=[],
                         cache_time=0,
-                        switch_pm_text="🚫 You are banned",
+                        switch_pm_text=switch_text,
                         switch_pm_parameter="banned"
                     )
                 except QueryIdInvalid:
@@ -287,7 +302,7 @@ class SearchHandler:
                     await query.answer(
                         results=[],
                         cache_time=0,
-                        switch_pm_text="⚠️ Inline mode disabled (Premium mode active)",
+                        switch_pm_text=ErrorMessageFormatter.format_warning("Inline mode disabled (Premium mode active)", include_prefix=False),
                         switch_pm_parameter="inline_disabled"
                     )
                 except QueryIdInvalid:
@@ -363,7 +378,7 @@ class SearchHandler:
                     await query.answer(
                         results=[],
                         cache_time=0,
-                        switch_pm_text="❌ Access Denied",
+                        switch_pm_text=ErrorMessageFormatter.format_access_denied(include_prefix=False),
                         switch_pm_parameter="premium"
                     )
                 except QueryIdInvalid:
@@ -377,7 +392,7 @@ class SearchHandler:
                     await query.answer(
                         results=[],
                         cache_time=10,
-                        switch_pm_text="❌ No results found",
+                        switch_pm_text=ErrorMessageFormatter.format_not_found("Results", include_prefix=False),
                         switch_pm_parameter="start"
                     )
                 except QueryIdInvalid:
@@ -434,7 +449,7 @@ class SearchHandler:
             await query.answer(
                 results=[],
                 cache_time=0,
-                switch_pm_text="❌ Search Error",
+                switch_pm_text=ErrorMessageFormatter.format_error("Search Error", include_prefix=False),
                 switch_pm_parameter="start"
             )
 
@@ -461,9 +476,17 @@ class SearchHandler:
             )
 
             if has_access and files:
-                # Send search results
-                search_sent = await self._send_search_results(
-                    client, message, files, query, total, page_size, user_id, is_private=True
+                # Send search results using centralized service
+                search_sent = await self.search_results_service.send_results(
+                    client=client,
+                    message=message,
+                    files=files,
+                    query=query,
+                    total=total,
+                    page_size=page_size,
+                    user_id=user_id,
+                    is_private=True,
+                    auto_delete_callback=self._schedule_auto_delete
                 )
 
             # Check filters if enabled
@@ -480,22 +503,25 @@ class SearchHandler:
                 no_results_buttons = []
                 if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
                     no_results_buttons.append([
-                        InlineKeyboardButton(
+                        ButtonBuilder.action_button(
                             f"💬 {self.bot.config.SUPPORT_GROUP_NAME}",
                             url=self.bot.config.SUPPORT_GROUP_URL
                         )
                     ])
 
+                # Get no results message from bot config or default
+                no_results_template = MessageHelper.get_no_results_message(self.bot.config)
+                no_results_text = no_results_template.format(query=query)
+                
                 await message.reply_text(
-                    f"❌ No results found for <b>{query}</b>\n"
-                    "Try using different keywords or check spelling.",
+                    no_results_text,
                     reply_markup=InlineKeyboardMarkup(no_results_buttons) if no_results_buttons else None
                 )
 
         except Exception as e:
             logger.error(f"Error in private search: {e}", exc_info=True)
             if not search_sent and not filter_sent:
-                await message.reply_text("❌ An error occurred while searching. Please try again.")
+                await message.reply_text(ErrorMessageFormatter.format_error("An error occurred while searching. Please try again."))
 
     async def _handle_group_search(
             self,
@@ -517,9 +543,17 @@ class SearchHandler:
             )
 
             if has_access and files:
-                # Send search results
-                await self._send_search_results(
-                    client, message, files, query, total, page_size, user_id, is_private=False
+                # Send search results using centralized service
+                await self.search_results_service.send_results(
+                    client=client,
+                    message=message,
+                    files=files,
+                    query=query,
+                    total=total,
+                    page_size=page_size,
+                    user_id=user_id,
+                    is_private=False,
+                    auto_delete_callback=self._schedule_auto_delete
                 )
 
             # Check filters if enabled
@@ -534,135 +568,6 @@ class SearchHandler:
             logger.error(f"Error in group search: {e}")
             # Don't send error messages in groups to avoid spam
 
-    async def _send_search_results(
-            self,
-            client: Client,
-            message: Message,
-            files: list,
-            query: str,
-            total: int,
-            page_size: int,
-            user_id: int,
-            is_private: bool
-    ) -> bool:
-        """Send search results - returns True if sent successfully"""
-        try:
-            # Generate a unique session for search results
-            session_id = uuid.uuid4().hex[:8]
-            
-            # Store file IDs in cache for "Send All" functionality - optimized
-            search_key = CacheKeyGenerator.search_session(user_id, session_id)
-            # Use list comprehension for better memory efficiency
-            files_data = [
-                {
-                    'file_unique_id': f.file_unique_id,
-                    'file_id': f.file_id,
-                    'file_ref': f.file_ref,
-                    'file_name': f.file_name,
-                    'file_size': f.file_size,
-                    'file_type': f.file_type.value
-                }
-                for f in files
-            ]
-
-            # Store search results with debug logging
-            search_data = {'files': files_data, 'query': query, 'user_id': user_id}
-            await self.bot.cache.set(
-                search_key,
-                search_data,
-                expire=self.ttl.SEARCH_SESSION  # 1 hour expiry
-            )
-            
-            logger.debug(f"Stored search results for key: {search_key}, TTL: {self.ttl.SEARCH_SESSION}s, files count: {len(files_data)}")
-
-            # Create pagination builder
-            pagination = PaginationBuilder(
-                total_items=total,
-                page_size=page_size,
-                current_offset=0,
-                query=query,
-                user_id=user_id,
-                callback_prefix="search"
-            )
-
-            # Build file buttons
-            buttons = []
-
-            # Add "Send All Files" button
-            if files:
-                if is_private:
-                    buttons.append([
-                        InlineKeyboardButton(
-                            f"📤 Send All Files ({len(files)})",
-                            callback_data=f"sendall#{search_key}"
-                        )
-                    ])
-                else:
-                    buttons.append([
-                        InlineKeyboardButton(
-                            f"📤 Send All Files ({len(files)})",
-                            callback_data=f"sendall#{search_key}#{user_id}"
-                        )
-                    ])
-
-            # Add individual file buttons
-            for file in files:
-                file_identifier = file.file_unique_id if file.file_unique_id else file.file_ref
-                if is_private:
-                    callback_data = f"file#{file_identifier}"
-                else:
-                    callback_data = f"file#{file_identifier}#{user_id}"
-
-                file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
-                file_button = InlineKeyboardButton(
-                    f"{format_file_size(file.file_size)} {file_emoji} {file.file_name[:50]}{'...' if len(file.file_name) > 50 else ''}",
-                    callback_data=callback_data
-                )
-                buttons.append([file_button])
-
-            # Add pagination buttons if needed
-            if total > page_size:
-                pagination_buttons = pagination.build_pagination_buttons()
-                buttons.extend(pagination_buttons)
-
-            # Build caption
-            delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-            delete_minutes = delete_time // 60 if delete_time > 0 else 0
-
-            caption = (
-                f"🔍 <b>Search Results for:</b> {query}\n"
-                f"📁 Found {total} files\n"
-                f"📊 Page {pagination.current_page} of {pagination.total_pages}"
-            )
-
-            if delete_time > 0:
-                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
-
-                # Send message with or without photo
-            if self.bot.config.PICS:
-                sent_msg = await message.reply_photo(
-                    photo=random.choice(self.bot.config.PICS),
-                    caption=caption,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            else:
-                sent_msg = await message.reply_text(
-                    caption,
-                    reply_markup=InlineKeyboardMarkup(buttons)
-                )
-            if delete_time > 0:
-                # Schedule deletion of the result message
-                _ = self._schedule_auto_delete(sent_msg, delete_time)
-
-                # Also delete the user's search query message in private
-                if is_private:
-                    _ = self._schedule_auto_delete(message, delete_time)
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error sending search results: {e}", exc_info=True)
-            return False
 
     async def _check_and_send_filter(
             self,

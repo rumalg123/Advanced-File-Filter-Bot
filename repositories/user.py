@@ -11,6 +11,7 @@ from core.cache.redis_cache import cache_premium_status
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.base import BaseRepository, AggregationMixin
 
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import normalize_expiry_date, is_premium_valid, get_days_remaining, is_admin
 
@@ -186,12 +187,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """Ban a user"""
         user = await self.get_user(user_id)
         if not user:
-            return False, "❌ User not found in database. User must have used the bot before.", None
+            return False, ErrorMessageFormatter.format_not_found("User") + " in database. User must have used the bot before.", None
             # Check if already banned
         if user.status == UserStatus.BANNED:
             ban_date = user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'
             return False, (
-                f"❌ User is already banned!\n\n"
+                ErrorMessageFormatter.format_error("User is already banned!", title="Already Banned") + "\n\n"
                 f"<b>User ID:</b> <code>{user_id}</code>\n"
                 f"<b>Name:</b> {user.name}\n"
                 f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
@@ -214,16 +215,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.updated_at = datetime.now(UTC)
             logger.info(f"User {user_id} banned and cache updated")
 
-        return success, "✅ User banned successfully!" if success else "❌ Failed to ban user.", user
+        return success, ErrorMessageFormatter.format_success("User banned successfully!") if success else ErrorMessageFormatter.format_failed("to ban user"), user
 
     async def unban_user(self, user_id: int) -> Tuple[bool, str, Optional[User]]:
         """Unban a user"""
         user = await self.get_user(user_id)
         if not user:
-            return False, "❌ User not found in database.", None
+            return False, ErrorMessageFormatter.format_not_found("User") + " in database.", None
 
         if user.status != UserStatus.BANNED:
-            return False, f"❌ User <code>{user_id}</code> is not banned!", user
+            return False, ErrorMessageFormatter.format_error(f"User <code>{user_id}</code> is not banned!"), user
 
         # Reset request-related counters when unbanning
         update_data = {
@@ -249,7 +250,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user.updated_at = datetime.now(UTC)
             logger.info(f"User {user_id} unbanned and request counters reset")
 
-        return success, "✅ User unbanned successfully! Request counters have been reset." if success else "❌ Failed to unban user.", user
+        return success, ErrorMessageFormatter.format_success("User unbanned successfully! Request counters have been reset.") if success else ErrorMessageFormatter.format_failed("to unban user"), user
 
     async def get_banned_users(self) -> List[int]:
         """Get all banned user IDs with proper cache key"""
@@ -280,12 +281,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # Check if user exists
         user = await self.get_user(user_id)
         if not user:
-            return False, "❌ User not found in database.", None
+            return False, ErrorMessageFormatter.format_not_found("User") + " in database.", None
 
         # Check if already has the same premium status
         if user.is_premium == is_premium:
             status_text = "premium" if is_premium else "non-premium"
-            return False, f"❌ User is already {status_text}!", user
+            return False, ErrorMessageFormatter.format_error(f"User is already {status_text}!"), user
         update_data: Dict[str, Any] = {
             'is_premium': is_premium,
             'premium_activation_date': datetime.now(UTC) if is_premium else None,
@@ -307,7 +308,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.cache_invalidator.invalidate_user_data(user_id)
 
         action = "added" if is_premium else "removed"
-        return success, f"✅ Premium status {action} successfully!" if success else f"❌ Failed to {action.replace('ed', '')} premium status.", user
+        return success, ErrorMessageFormatter.format_success(f"Premium status {action} successfully!") if success else ErrorMessageFormatter.format_failed(f"to {action.replace('ed', '')} premium status"), user
 
     @cache_premium_status(ttl=600)  # Cache for 10 minutes
     async def check_and_update_premium_status(self, user: User) -> Tuple[bool, Optional[str]]:
@@ -862,7 +863,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 # Auto-ban the user
                 return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
             else:
-                return False, f"⚠️ Daily request limit ({REQUEST_PER_DAY}) exceeded! Warning {user.warning_count}/{REQUEST_WARNING_LIMIT}. You have {remaining_warnings} warnings left before ban.", False, True  # Log this as warning - actual abuse
+                return False, ErrorMessageFormatter.format_warning(f"Daily request limit ({REQUEST_PER_DAY}) exceeded! Warning {user.warning_count}/{REQUEST_WARNING_LIMIT}. You have {remaining_warnings} warnings left before ban."), False, True  # Log this as warning - actual abuse
 
         # Allow the request and increment counters
         user.daily_request_count += 1

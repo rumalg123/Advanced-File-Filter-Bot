@@ -15,7 +15,9 @@ from core.cache.config import CacheKeyGenerator
 from core.utils.telegram_api import telegram_api
 from core.cache.monitor import CacheMonitor
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.performance import performance_monitor
@@ -87,7 +89,7 @@ class AdminCommandHandler(BaseCommandHandler):
         """Enhanced broadcast command with HTML formatting and preview"""
         if not message.reply_to_message:
             await message.reply_text(
-                "⚠️ Reply to a message to broadcast it.\n\n"
+                ErrorMessageFormatter.format_warning("Reply to a message to broadcast it.") + "\n\n"
                 "<b>Features:</b>\n"
                 "• HTML formatting support\n"
                 "• Preview before sending\n"
@@ -101,7 +103,7 @@ class AdminCommandHandler(BaseCommandHandler):
         # Check persistent broadcast state
         is_broadcasting = await self._get_broadcast_state()
         if is_broadcasting:
-            await message.reply_text("⚠️ A broadcast is already in progress. Use /stop_broadcast to stop it.")
+            await message.reply_text(ErrorMessageFormatter.format_warning("A broadcast is already in progress. Use /stop_broadcast to stop it."))
             return
 
         # Rate limit check
@@ -111,7 +113,7 @@ class AdminCommandHandler(BaseCommandHandler):
         )
         if not is_allowed:
             await message.reply_text(
-                f"⚠️ Broadcast rate limit. Try again in {cooldown} seconds."
+                ErrorMessageFormatter.format_warning(f"Broadcast rate limit. Try again in {cooldown} seconds.")
             )
             return
 
@@ -142,13 +144,13 @@ class AdminCommandHandler(BaseCommandHandler):
         else:
             preview_text += f"📱 <i>Media message</i>"
 
-        preview_text += f"\n\n⚠️ <b>Warning:</b> This will send the message with HTML formatting to all users."
+        preview_text += "\n\n" + ErrorMessageFormatter.format_warning("This will send the message with HTML formatting to all users.", title="Warning")
 
         # Confirmation buttons
         buttons = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("✅ Confirm Broadcast", callback_data="confirm_broadcast"),
-                InlineKeyboardButton("❌ Cancel", callback_data="cancel_broadcast")
+                ButtonBuilder.action_button("✅ Confirm Broadcast", callback_data="confirm_broadcast"),
+                ButtonBuilder.action_button("❌ Cancel", callback_data="cancel_broadcast")
             ]
         ])
 
@@ -164,16 +166,16 @@ class AdminCommandHandler(BaseCommandHandler):
     async def handle_broadcast_confirmation(self, client: Client, callback_query):
         """Handle broadcast confirmation callback"""
         if not hasattr(self.bot, '_pending_broadcast') or not self.bot._pending_broadcast:
-            await callback_query.answer("❌ No pending broadcast found.")
+            await callback_query.answer(ErrorMessageFormatter.format_not_found("Pending broadcast"), show_alert=True)
             return
 
         pending = self.bot._pending_broadcast
         if callback_query.from_user.id != pending['admin_id']:
-            await callback_query.answer("❌ Only the admin who initiated this broadcast can confirm it.")
+            await callback_query.answer(ErrorMessageFormatter.format_access_denied("Only the admin who initiated this broadcast can confirm it"), show_alert=True)
             return
 
         if callback_query.data == "cancel_broadcast":
-            await callback_query.message.edit_text("❌ Broadcast cancelled.")
+            await callback_query.message.edit_text(ErrorMessageFormatter.format_info("Broadcast cancelled", title="Cancelled"))
             # Reset rate limit when broadcast is cancelled
             await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             self.bot._pending_broadcast = None
@@ -184,7 +186,7 @@ class AdminCommandHandler(BaseCommandHandler):
             # Check persistent broadcast state
             is_broadcasting = await self._get_broadcast_state()
             if is_broadcasting:
-                await callback_query.answer("⚠️ A broadcast is already in progress.")
+                await callback_query.answer(ErrorMessageFormatter.format_warning("A broadcast is already in progress."))
                 return
 
             # Set broadcast state as active
@@ -240,7 +242,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 # Final message
                 duration = datetime.now() - start_time
                 final_text = (
-                    f"✅ <b>Broadcast Completed!</b>\n\n"
+                    ErrorMessageFormatter.format_success("Broadcast Completed!", title="Broadcast Completed") + "\n\n"
                     f"⏱ Duration: {duration}\n"
                     f"📊 Total Users: {final_stats['total']:,}\n"
                     f"✅ Success: {final_stats['success']:,} ({final_stats['success'] / final_stats['total'] * 100:.1f}%)\n"
@@ -275,8 +277,7 @@ class AdminCommandHandler(BaseCommandHandler):
             except Exception as e:
                 logger.error(f"Broadcast error: {e}")
                 await callback_query.message.edit_text(
-                    f"❌ <b>Broadcast Failed</b>\n\n"
-                    f"Error: {str(e)}",
+                    ErrorMessageFormatter.format_failed(str(e), action="Broadcast"),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 # Reset rate limit when broadcast fails
@@ -305,7 +306,7 @@ class AdminCommandHandler(BaseCommandHandler):
         logger.info(f"Stop broadcast check - Redis: {is_broadcasting}, Memory: {memory_state}, Task: {task_exists}, Global: {global_task_exists}")
         
         if not is_broadcasting and not memory_state and not task_exists and not global_task_exists:
-            await message.reply_text("❌ No broadcast is currently in progress.")
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Broadcast") + " currently in progress")
             return
 
         # Clear persistent state regardless of task status
@@ -347,13 +348,13 @@ class AdminCommandHandler(BaseCommandHandler):
             user_id = message.from_user.id
             await self.bot.rate_limiter.reset_rate_limit(user_id, 'broadcast')
             await message.reply_text(
-                "✅ <b>Broadcast Rate Limit Reset</b>\n\n"
+                ErrorMessageFormatter.format_success("Broadcast Rate Limit Reset", title="Broadcast Rate Limit Reset") + "\n\n"
                 "You can now use the broadcast command again.",
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
             logger.info(f"Admin {user_id} reset their broadcast rate limit")
         except Exception as e:
-            await message.reply_text(f"❌ Error resetting rate limit: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error resetting rate limit: {str(e)}"))
             logger.error(f"Error resetting broadcast rate limit: {e}")
 
     @admin_only
@@ -391,10 +392,10 @@ class AdminCommandHandler(BaseCommandHandler):
             reason = " ".join(parts[2:]) if len(parts) > 2 else "No reason provided"
 
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessageFormatter.format_invalid("user ID format"))
             return
         except Exception as e:
-            await message.reply_text(f"❌ Error parsing command: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error parsing command: {str(e)}"))
             return
 
         # Ban the user
@@ -406,7 +407,7 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the banned user
             ban_notification = (
-                "🚫 <b>You have been banned from using this bot</b>\n"
+                ErrorMessageFormatter.format_access_denied("You have been banned from using this bot", title="Banned") + "\n"
                 f"<b>Reason:</b> {reason}\n"
                 f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "If you believe this is a mistake, please contact the bot administrator."
@@ -422,7 +423,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"<b>Reason:</b> {reason}\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
-                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await telegram_api.call_api(
@@ -444,7 +445,7 @@ class AdminCommandHandler(BaseCommandHandler):
         try:
             target_user_id = int(message.command[1])
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessageFormatter.format_invalid("user ID format"))
             return
 
         # Unban the user
@@ -456,7 +457,7 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the user
             unban_notification = (
-                "✅ <b>You have been unbanned!</b>\n"
+                ErrorMessageFormatter.format_success("You have been unbanned!", title="Unbanned") + "\n"
                 f"You can now use the bot again.\n"
                 f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "Welcome back!"
@@ -471,7 +472,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"#UserUnbanned\n\n"
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
-                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await telegram_api.call_api(
@@ -493,7 +494,7 @@ class AdminCommandHandler(BaseCommandHandler):
         try:
             target_user_id = int(message.command[1])
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessageFormatter.format_invalid("user ID format"))
             return
 
         # Add premium status
@@ -525,7 +526,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"<b>Duration:</b> {self.bot.config.PREMIUM_DURATION_DAYS} days\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
-                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await telegram_api.call_api(
@@ -547,7 +548,7 @@ class AdminCommandHandler(BaseCommandHandler):
         try:
             target_user_id = int(message.command[1])
         except ValueError:
-            await message.reply_text("❌ Invalid user ID format.")
+            await message.reply_text(ErrorMessageFormatter.format_invalid("user ID format"))
             return
 
         # Remove premium status
@@ -576,7 +577,7 @@ class AdminCommandHandler(BaseCommandHandler):
                         f"#PremiumRemoved\n\n"
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
-                        f"<b>Notification:</b> {'✅ Sent' if notification_sent else '❌ Failed'}\n"
+                        f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     )
                     await telegram_api.call_api(
@@ -595,7 +596,7 @@ class AdminCommandHandler(BaseCommandHandler):
             log_path = Path("logs/bot.txt")
 
             if not log_path.exists():
-                await message.reply_text("❌ No log file found.")
+                await message.reply_text(ErrorMessageFormatter.format_not_found("Log file"))
                 return
 
             # Check file size
@@ -603,7 +604,7 @@ class AdminCommandHandler(BaseCommandHandler):
 
             if file_size > 50 * 1024 * 1024:  # 50MB limit
                 await message.reply_text(
-                    f"❌ Log file too large ({format_file_size(file_size)}). "
+                    ErrorMessageFormatter.format_error(f"Log file too large ({format_file_size(file_size)}). ")
                     "Please check logs directly on the server."
                 )
                 return
@@ -617,7 +618,7 @@ class AdminCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error sending log file: {e}")
-            await message.reply_text(f"❌ Error: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(str(e)))
 
     @admin_only
     async def performance_command(self, client: Client, message: Message):
@@ -681,7 +682,7 @@ class AdminCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error getting performance metrics: {e}")
-            await message.reply_text(f"❌ Error getting performance metrics: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error getting performance metrics: {str(e)}"))
 
     @admin_only
     async def cache_stats_command(self, client: Client, message: Message):
@@ -694,7 +695,7 @@ class AdminCommandHandler(BaseCommandHandler):
             stats = await monitor.get_cache_stats()
 
             if "error" in stats:
-                await status_msg.edit_text(f"❌ Error: {stats['error']}")
+                await status_msg.edit_text(ErrorMessageFormatter.format_error(stats['error']))
                 return
 
             text = (
@@ -735,7 +736,7 @@ class AdminCommandHandler(BaseCommandHandler):
             await status_msg.edit_text(text)
 
         except Exception as e:
-            await status_msg.edit_text(f"❌ Error: {str(e)}")
+            await status_msg.edit_text(ErrorMessageFormatter.format_error(str(e)))
 
     @admin_only
     async def cache_analyze_command(self, client: Client, message: Message):
@@ -754,7 +755,7 @@ class AdminCommandHandler(BaseCommandHandler):
             text = "🔍 <b>Cache Analysis</b>\n\n"
 
             if duplicates:
-                text += f"<b>⚠️ Found {len(duplicates)} duplicate entries:</b>\n"
+                text += ErrorMessageFormatter.format_warning(f"Found {len(duplicates)} duplicate entries:", include_prefix=False) + "\n"
                 for dup in duplicates[:5]:  # Show first 5
                     text += f"├ File {dup['file_id'][:10]}... has {dup['count']} cache entries\n"
                 if len(duplicates) > 5:
@@ -788,14 +789,14 @@ class AdminCommandHandler(BaseCommandHandler):
             await status_msg.edit_text(text)
 
         except Exception as e:
-            await status_msg.edit_text(f"❌ Error: {str(e)}")
+            await status_msg.edit_text(ErrorMessageFormatter.format_error(str(e)))
 
     @admin_only
     async def cache_cleanup_command(self, client: Client, message: Message):
         """Clean up duplicate cache entries"""
         if len(message.command) < 2 or message.command[1] != "confirm":
             await message.reply_text(
-                "⚠️ <b>Cache Cleanup</b>\n\n"
+                ErrorMessageFormatter.format_warning("Cache Cleanup", title="Cache Cleanup") + "\n\n"
                 "This will remove duplicate cache entries.\n"
                 "Use <code>/cache_cleanup confirm</code> to proceed."
             )
@@ -809,7 +810,7 @@ class AdminCommandHandler(BaseCommandHandler):
             duplicates = await monitor.find_duplicate_data()
 
             if not duplicates:
-                await status_msg.edit_text("✅ No duplicate entries found!")
+                await status_msg.edit_text(ErrorMessageFormatter.format_success("No duplicate entries found!"))
                 return
 
             cleaned = 0
@@ -820,13 +821,13 @@ class AdminCommandHandler(BaseCommandHandler):
                     cleaned += 1
 
             await status_msg.edit_text(
-                f"✅ <b>Cache Cleanup Complete</b>\n\n"
+                ErrorMessageFormatter.format_success("Cache Cleanup Complete", title="Cache Cleanup Complete") + "\n\n"
                 f"Removed {cleaned} duplicate entries\n"
                 f"Freed up memory from {len(duplicates)} files"
             )
 
         except Exception as e:
-            await status_msg.edit_text(f"❌ Error: {str(e)}")
+            await status_msg.edit_text(ErrorMessageFormatter.format_error(str(e)))
 
     @owner_only
     async def shell_command(self, client: Client, message: Message):
@@ -844,15 +845,14 @@ class AdminCommandHandler(BaseCommandHandler):
                     "• <code>/shell git status</code>\n"
                     "• <code>/shell python --version</code>\n"
                     "• <code>/shell df -h</code>\n\n"
-                    "⚠️ <b>Security Warning:</b>\n"
-                    "This command has full system access. Use with extreme caution!\n\n"
+                    + ErrorMessageFormatter.format_warning("This command has full system access. Use with extreme caution!", title="Security Warning") + "\n\n"
                     "<b>Safe Commands:</b>\n"
                     "• Package management: <code>pip install/uninstall</code>\n"
                     "• File operations: <code>ls</code>, <code>cat</code>, <code>head</code>, <code>tail</code>\n"
                     "• System info: <code>ps</code>, <code>df</code>, <code>free</code>, <code>uname</code>\n"
                     "• Git operations: <code>git status</code>, <code>git log</code>\n\n"
                     "<b>Dangerous Commands:</b>\n"
-                    "❌ Avoid: <code>rm -rf</code>, <code>chmod 777</code>, <code>sudo su</code>, etc.",
+                    ErrorMessageFormatter.format_error("Avoid: <code>rm -rf</code>, <code>chmod 777</code>, <code>sudo su</code>, etc.", include_prefix=False),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 return
@@ -871,7 +871,7 @@ class AdminCommandHandler(BaseCommandHandler):
             
             if is_dangerous:
                 await message.reply_text(
-                    f"⚠️ <b>Potentially Dangerous Command Detected</b>\n\n"
+                    ErrorMessageFormatter.format_warning("Potentially Dangerous Command Detected", title="Potentially Dangerous Command Detected") + "\n\n"
                     f"<b>Command:</b> <code>{command}</code>\n\n"
                     f"This command appears to be potentially destructive. "
                     f"Please review carefully before execution.\n\n"
@@ -916,21 +916,21 @@ class AdminCommandHandler(BaseCommandHandler):
                     stdout, stderr = process.communicate()
                     return_code = -1
                     execution_time = 300
-                    stderr += "\n⚠️ Command timed out after 5 minutes"
+                    stderr += "\n" + ErrorMessageFormatter.format_warning("Command timed out after 5 minutes", include_prefix=False)
                 
             except Exception as e:
                 await status_msg.edit_text(
                     f"🐚 <b>Shell Command Failed</b>\n\n"
                     f"<b>Command:</b> <code>{command}</code>\n"
                     f"<b>Error:</b> {str(e)}\n\n"
-                    f"❌ Execution failed before completion",
+                    ErrorMessageFormatter.format_failed("Execution failed before completion"),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 logger.error(f"Shell command execution failed: {e}")
                 return
             
             # Prepare output message
-            execution_status = "✅ Success" if return_code == 0 else f"❌ Failed (Exit Code: {return_code})"
+            execution_status = ErrorMessageFormatter.format_success("Success", include_prefix=False) if return_code == 0 else ErrorMessageFormatter.format_error(f"Failed (Exit Code: {return_code})", include_prefix=False)
             
             # Combine stdout and stderr
             output_parts = []
@@ -964,7 +964,7 @@ class AdminCommandHandler(BaseCommandHandler):
 <b>Execution Time:</b> {execution_time:.2f}s
 <b>Return Code:</b> {return_code}
 
-⚠️ <b>Output too long - sending as file...</b>"""
+{ErrorMessageFormatter.format_warning('Output too long - sending as file...', include_prefix=False)}"""
                 
                 await status_msg.edit_text(basic_info, parse_mode=CaptionFormatter.get_parse_mode())
                 
@@ -1006,13 +1006,13 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"🐚 <b>Shell Command Error</b>\n\n"
                     f"<b>Command:</b> <code>{command if 'command' in locals() else 'Unknown'}</code>\n"
                     f"<b>Error:</b> {str(e)}\n\n"
-                    f"❌ Unexpected error occurred",
+                    f"{ErrorMessageFormatter.format_error('Unexpected error occurred')}",
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
             except Exception:
                 await message.reply_text(
                     f"🐚 <b>Shell Command Error</b>\n\n"
                     f"<b>Error:</b> {str(e)}\n\n"
-                    f"❌ Failed to execute shell command",
+                    f"{ErrorMessageFormatter.format_failed('to execute shell command')}",
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )

@@ -6,6 +6,7 @@ from typing import List
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
+from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import extract_user_id, has_admin_rights, is_owner_or_bot_admin
@@ -225,8 +226,8 @@ class FilterHandler(BaseHandler):
         await message.reply_text(
             f"This will delete all filters from '{title}'.\nDo you want to continue??",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(text="YES", callback_data=f"delallconfirm#{group_id}")],
-                [InlineKeyboardButton(text="CANCEL", callback_data="delallcancel")]
+                [ButtonBuilder.action_button(text="YES", callback_data=f"delallconfirm#{group_id}")],
+                [ButtonBuilder.action_button(text="CANCEL", callback_data="delallcancel")]
             ]),
             quote=True
         )
@@ -268,22 +269,13 @@ class FilterHandler(BaseHandler):
         elif message.reply_to_message:
             # Extract from replied message
             if message.reply_to_message.media:
-                # Get file ID based on media type
-                media_mapping = {
-                    enums.MessageMediaType.DOCUMENT: "document",
-                    enums.MessageMediaType.VIDEO: "video",
-                    enums.MessageMediaType.AUDIO: "audio",
-                    enums.MessageMediaType.ANIMATION: "animation",
-                    enums.MessageMediaType.PHOTO: "photo",
-                    enums.MessageMediaType.STICKER: "sticker"
-                }
-
-                for media_type, attr in media_mapping.items():
-                    if message.reply_to_message.media == media_type:
-                        media = getattr(message.reply_to_message, attr, None)
-                        if media:
-                            fileid = media.file_id
-                            break
+                # Get file ID using unified extractor
+                from core.utils.media_extractor import extract_media_by_type
+                
+                if isinstance(message.reply_to_message.media, enums.MessageMediaType):
+                    media = extract_media_by_type(message.reply_to_message, message.reply_to_message.media)
+                    if media:
+                        fileid = media.file_id
 
             # Get text or caption
             if message.reply_to_message.text:

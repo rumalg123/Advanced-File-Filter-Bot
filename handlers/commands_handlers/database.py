@@ -6,7 +6,9 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
+from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.validators import admin_only
 from handlers.commands_handlers.base import BaseCommandHandler
 from core.utils.logger import get_logger
@@ -60,14 +62,14 @@ class DatabaseCommandHandler(BaseCommandHandler):
         """Handle /dbstats command - show database statistics"""
         try:
             if not hasattr(self.bot, 'multi_db_manager') or not self.bot.multi_db_manager:
-                await message.reply_text("❌ Multi-database mode is not enabled.")
+                await message.reply_text(ErrorMessageFormatter.format_error("Multi-database mode is not enabled"))
                 return
 
             # Get database statistics
             stats = await self.bot.multi_db_manager.get_database_stats()
             
             if not stats:
-                await message.reply_text("❌ No database statistics available.")
+                await message.reply_text(ErrorMessageFormatter.format_not_found("Database statistics"))
                 return
 
             # Format statistics
@@ -97,8 +99,8 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
             # Create management buttons
             buttons = [
-                [InlineKeyboardButton("🔄 Refresh Stats", callback_data="db_refresh_stats")],
-                [InlineKeyboardButton("🔧 Database Info", callback_data="db_detailed_info")]
+                [ButtonBuilder.action_button("🔄 Refresh Stats", callback_data="db_refresh_stats")],
+                [ButtonBuilder.action_button("🔧 Database Info", callback_data="db_detailed_info")]
             ]
 
             await message.reply_text(
@@ -109,38 +111,41 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error in database stats command: {e}")
-            await message.reply_text(f"❌ Error retrieving database stats: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error retrieving database stats: {str(e)}"))
 
     @admin_only
     async def handle_database_switch(self, client: Client, message: Message):
         """Handle /dbswitch command - switch write database"""
         try:
             if not hasattr(self.bot, 'multi_db_manager') or not self.bot.multi_db_manager:
-                await message.reply_text("❌ Multi-database mode is not enabled.")
+                await message.reply_text(ErrorMessageFormatter.format_error("Multi-database mode is not enabled"))
                 return
 
             # Parse command arguments
             if len(message.command) != 2:
                 await message.reply_text(
-                    "❌ <b>Usage:</b> <code>/dbswitch &lt;database_number&gt;</code>\n"
-                    "Example: <code>/dbswitch 2</code> (switch to database 2)"
+                    ErrorMessageFormatter.format_error(
+                        "<b>Usage:</b> <code>/dbswitch &lt;database_number&gt;</code>\n"
+                        "Example: <code>/dbswitch 2</code> (switch to database 2)",
+                        title="Usage"
+                    )
                 )
                 return
 
             try:
                 db_index = int(message.command[1]) - 1  # Convert to 0-based index
             except ValueError:
-                await message.reply_text("❌ Invalid database number. Please provide a valid number.")
+                await message.reply_text(ErrorMessageFormatter.format_invalid("database number", "Please provide a valid number"))
                 return
 
             # Get database stats to validate
             stats = await self.bot.multi_db_manager.get_database_stats()
             if db_index < 0 or db_index >= len(stats):
-                await message.reply_text(f"❌ Invalid database number. Available databases: 1-{len(stats)}")
+                await message.reply_text(ErrorMessageFormatter.format_invalid("database number", f"Available databases: 1-{len(stats)}"))
                 return
 
             if not stats[db_index]['is_active']:
-                await message.reply_text(f"❌ Database {db_index + 1} is not active.")
+                await message.reply_text(ErrorMessageFormatter.format_error(f"Database {db_index + 1} is not active"))
                 return
 
             # Switch database
@@ -149,17 +154,17 @@ class DatabaseCommandHandler(BaseCommandHandler):
             if success:
                 db_name = stats[db_index]['name']
                 await message.reply_text(
-                    f"✅ <b>Successfully switched to Database {db_index + 1}</b>\n"
+                    ErrorMessageFormatter.format_success(f"Successfully switched to Database {db_index + 1}", title="Database Switch") + "\n"
                     f"📝 Name: <code>{db_name}</code>\n"
                     f"📦 Size: <code>{stats[db_index]['size_gb']}GB</code>\n"
                     f"📄 Files: <code>{stats[db_index]['files_count']:,}</code>"
                 )
             else:
-                await message.reply_text("❌ Failed to switch database.")
+                await message.reply_text(ErrorMessageFormatter.format_failed("to switch database"))
 
         except Exception as e:
             logger.error(f"Error in database switch command: {e}")
-            await message.reply_text(f"❌ Error switching database: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error switching database: {str(e)}"))
 
     @admin_only
     async def handle_database_info(self, client: Client, message: Message):
@@ -175,7 +180,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
                     text += "💡 <b>Multi-database mode is not enabled.</b>\n"
                     text += "To enable, add `DATABASE_URIS` to your environment variables."
                 else:
-                    text = "❌ Multi-database mode is not properly configured."
+                    text = ErrorMessageFormatter.format_error("Multi-database mode is not properly configured.")
                 
                 await message.reply_text(text)
                 return
@@ -216,8 +221,8 @@ class DatabaseCommandHandler(BaseCommandHandler):
                 text += "• Enable auto-switch if disabled\n"
 
             buttons = [
-                [InlineKeyboardButton("📊 View Stats", callback_data="db_stats")],
-                [InlineKeyboardButton("🔄 Refresh Info", callback_data="db_refresh_info")]
+                [ButtonBuilder.action_button("📊 View Stats", callback_data="db_stats")],
+                [ButtonBuilder.action_button("🔄 Refresh Info", callback_data="db_refresh_info")]
             ]
 
             await message.reply_text(
@@ -228,7 +233,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error in database info command: {e}")
-            await message.reply_text(f"❌ Error retrieving database info: {str(e)}")
+            await message.reply_text(ErrorMessageFormatter.format_error(f"Error retrieving database info: {str(e)}"))
 
     async def handle_database_callback(self, client: Client, callback_query):
         """Handle database management callbacks"""
@@ -250,12 +255,12 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error in database callback: {e}")
-            await callback_query.answer("❌ Error processing request", show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_error("Error processing request"), show_alert=True)
 
     async def _refresh_database_stats(self, callback_query):
         """Refresh database statistics"""
         if not self.bot.multi_db_manager:
-            await callback_query.answer("❌ Multi-database not enabled", show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_error("Multi-database not enabled"), show_alert=True)
             return
 
         await callback_query.answer("🔄 Refreshing stats...")
@@ -280,8 +285,8 @@ class DatabaseCommandHandler(BaseCommandHandler):
             text += f"   📄 Files: `{stat['files_count']:,}`\n\n"
 
         buttons = [
-            [InlineKeyboardButton("🔄 Refresh Stats", callback_data="db_refresh_stats")],
-            [InlineKeyboardButton("🔧 Database Info", callback_data="db_detailed_info")]
+            [ButtonBuilder.action_button("🔄 Refresh Stats", callback_data="db_refresh_stats")],
+            [ButtonBuilder.action_button("🔧 Database Info", callback_data="db_detailed_info")]
         ]
 
         await callback_query.message.edit_text(
@@ -308,7 +313,7 @@ class DatabaseCommandHandler(BaseCommandHandler):
         await callback_query.answer("🔄 Refreshing database info...")
         
         if not self.bot.multi_db_manager:
-            await callback_query.message.edit_text("❌ Multi-database mode is not enabled.")
+            await callback_query.message.edit_text(ErrorMessageFormatter.format_error("Multi-database mode is not enabled"))
             return
 
         # Force update stats using circuit breaker protected method

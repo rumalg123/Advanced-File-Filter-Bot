@@ -7,7 +7,9 @@ from pyrogram.errors import FloodWait, UserIsBlocked, QueryIdInvalid
 from pyrogram.types import CallbackQuery
 
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
+from core.utils.messages import MessageHelper
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import (
     is_original_requester, is_private_chat, skip_subscription_check,
@@ -61,19 +63,19 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             parts = query.data.split('#', 2)
             if len(parts) < 2:
-                await query.answer("❌ Invalid callback data", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_invalid("callback data"), show_alert=True)
                 return
 
             file_identifier = parts[1]
             original_user_id = int(parts[2]) if len(parts) >= 3 else callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid callback data format: {query.data}, error: {e}")
-            await query.answer("❌ Invalid request format", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_invalid("request format"), show_alert=True)
             return
 
         # Check if the callback user is the original requester
         if original_user_id and not is_original_requester(callback_user_id, original_user_id):
-            await query.answer("❌ You cannot interact with this message!", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message"), show_alert=True)
             return
 
         # If in group, redirect to PM
@@ -116,7 +118,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
+                ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )
@@ -137,7 +139,7 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         if not file:
-            await query.answer("❌ File not found.", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_not_found("File"), show_alert=True)
             return
         query_answered = False
         try:
@@ -197,7 +199,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
                         callback_user_id,
 
-                        f"❌ Please start the bot first!\nClick here: @{self.bot.bot_username}",
+                        ErrorMessageFormatter.format_error("Please start the bot first!") + f"\nClick here: @{self.bot.bot_username}",
 
                         chat_id=callback_user_id
 
@@ -222,7 +224,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
                     callback_user_id,
 
-                    "❌ Error sending file. Please try again.",
+                    ErrorMessageFormatter.format_error("Error sending file. Please try again."),
 
                     chat_id=callback_user_id
 
@@ -241,7 +243,7 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             parts = query.data.split('#', 2)
             if len(parts) < 2:
-                await query.answer("❌ Invalid callback data", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_invalid("callback data"), show_alert=True)
                 return
 
             search_key = parts[1]
@@ -251,12 +253,12 @@ class FileCallbackHandler(BaseCommandHandler):
                 original_user_id = callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid sendall callback data: {query.data}, error: {e}")
-            await query.answer("❌ Invalid request format", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_invalid("request format"), show_alert=True)
             return
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
-            await query.answer("❌ You cannot interact with this message!", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message"), show_alert=True)
             return
 
         # If in group, redirect to PM
@@ -300,7 +302,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
+                ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )
@@ -312,14 +314,14 @@ class FileCallbackHandler(BaseCommandHandler):
         cached_data = await self.bot.cache.get(search_key)
         
         if not cached_data:
-            await query.answer("❌ Search results expired. Please search again.", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_error("Search results expired. Please search again."), show_alert=True)
             return
 
         files_data = cached_data.get('files', [])
         search_query = cached_data.get('query', '')
 
         if not files_data:
-            await query.answer("❌ No files found.", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_not_found("Files"), show_alert=True)
             return
 
         # Check access for bulk send
@@ -327,7 +329,7 @@ class FileCallbackHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await query.answer(f"❌ {reason}", show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied(reason), show_alert=True)
             return
 
         # Check if user is admin or owner (they bypass quota) using validators
@@ -354,7 +356,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
             if not success:
                 await query.answer(
-                    f"❌ {message}. Upgrade to premium for unlimited access!",
+                    ErrorMessageFormatter.format_error(f"{message}. Upgrade to premium for unlimited access!"),
                     show_alert=True
                 )
                 return
@@ -375,7 +377,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                "❌ Please start the bot first!\n"
+                ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )
@@ -434,8 +436,8 @@ class FileCallbackHandler(BaseCommandHandler):
                             f"Query: {search_query}\n"
                             f"Total Files: {len(files_data)}\n"
                             f"Progress: {idx + 1}/{len(files_data)}\n"
-                            f"✅ Success: {success_count}\n"
-                            f"❌ Failed: {failed_count}"
+                            f"{ErrorMessageFormatter.format_success('Success', include_prefix=False)}: {success_count}\n"
+                            f"{ErrorMessageFormatter.format_error('Failed', include_prefix=False)}: {failed_count}"
                         )
                     except Exception:
                         pass  # Status message update is non-critical
@@ -457,14 +459,14 @@ class FileCallbackHandler(BaseCommandHandler):
 
         # Final status
         final_text = (
-            f"✅ <b>Transfer Complete!</b>\n"
+            ErrorMessageFormatter.format_success("Transfer Complete!", title="Transfer Complete") + "\n"
             f"Query: {search_query}\n"
             f"Total Files: {len(files_data)}\n"
             f"✅ Sent: {success_count}\n"
         )
 
         if failed_count > 0:
-            final_text += f"❌ Failed: {failed_count}\n"
+            final_text += ErrorMessageFormatter.format_error(f"Failed: {failed_count}", include_prefix=False) + "\n"
 
         # Add auto-delete notice if enabled
         if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
@@ -494,11 +496,8 @@ class FileCallbackHandler(BaseCommandHandler):
             extra_data=file_identifier
         )
 
-        message_text = (
-            "🔒 <b>Subscription Required</b>\n"
-            "You need to join our channel(s) to get files.\n"
-            "Please join the required channel(s) and try again."
-        )
+        # Get subscription message from bot config or default
+        message_text = MessageHelper.get_force_sub_message(self.bot.config)
 
         await query.answer("🔒 Join our channel(s) first!", show_alert=True)
 
@@ -525,11 +524,8 @@ class FileCallbackHandler(BaseCommandHandler):
             extra_data=search_key
         )
 
-        message_text = (
-            "🔒 <b>Subscription Required</b>\n"
-            "You need to join our channel(s) to get files.\n"
-            "Please join the required channel(s) and try again."
-        )
+        # Get subscription message from bot config or default
+        message_text = MessageHelper.get_force_sub_message(self.bot.config)
 
         await query.answer("🔒 Join our channel(s) first!", show_alert=True)
 

@@ -1,6 +1,7 @@
 from pyrogram import Client
 from pyrogram.types import CallbackQuery
 
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import MessageProxy
 from core.utils.logger import get_logger
 from core.utils.validators import extract_user_id, skip_subscription_check
@@ -27,7 +28,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             # Retrieve the cached deeplink
             cached_data = await self.bot.cache.get(session_key)
             if not cached_data:
-                await query.answer("❌ Session expired. Please try again.", show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_error("Session expired. Please try again."), show_alert=True)
                 return
 
             original_user_id = cached_data.get('user_id', current_user_id)
@@ -56,7 +57,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         # Check if current user matches original user
         if current_user_id != original_user_id:
             await query.answer(
-                "❌ This subscription check is for another user. Please use your own command.",
+                ErrorMessageFormatter.format_error("This subscription check is for another user. Please use your own command."),
                 show_alert=True
             )
             return
@@ -77,13 +78,13 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
                 if not is_subscribed:
                     await query.answer(
-                        "❌ You still need to join the required channel(s)!",
+                        ErrorMessageFormatter.format_access_denied("You still need to join the required channel(s)!"),
                         show_alert=True
                     )
                     return
 
         # User is now subscribed, handle the original request
-        await query.answer("✅ Subscription verified!", show_alert=True)
+        await query.answer(ErrorMessageFormatter.format_success("Subscription verified!"), show_alert=True)
 
         # Try to delete the subscription message
         try:
@@ -108,7 +109,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         elif param == "search":
             # Just show success for search
             await query.message.reply_text(
-                "✅ Subscription verified! You can now search for files."
+                ErrorMessageFormatter.format_success("Subscription verified! You can now search for files.")
             )
 
         elif param.startswith("file#"):
@@ -122,7 +123,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         elif param == "general":
             # General try again - just show success
             await query.message.reply_text(
-                "✅ Subscription verified! You can now use the bot."
+                ErrorMessageFormatter.format_success("Subscription verified! You can now use the bot.")
             )
         else:
             # Handle deep link parameter

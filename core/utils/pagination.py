@@ -2,6 +2,8 @@
 from typing import List, Optional, Tuple
 from pyrogram.types import InlineKeyboardButton
 
+from core.utils.button_builder import ButtonBuilder
+
 
 class PaginationBuilder:
     """Smart pagination builder with dynamic page range display"""
@@ -146,7 +148,7 @@ class PaginationBuilder:
         # First page button (only show if not on first page)
         if self.current_page > 1:
             nav_row.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "⏮ First",
                     callback_data=self._create_callback_data("first")
                 )
@@ -155,7 +157,7 @@ class PaginationBuilder:
         # Previous button (only show if not on first page)
         if self.current_page > 1:
             nav_row.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "◀️ Prev",
                     callback_data=self._create_callback_data("prev")
                 )
@@ -163,7 +165,7 @@ class PaginationBuilder:
 
         # Current page indicator (always shown)
         nav_row.append(
-            InlineKeyboardButton(
+            ButtonBuilder.action_button(
                 f"📄 {self.current_page}/{self.total_pages}",
                 callback_data=self._create_callback_data("noop")
             )
@@ -172,7 +174,7 @@ class PaginationBuilder:
         # Next button (only show if not on last page)
         if self.current_page < self.total_pages:
             nav_row.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "Next ▶️",
                     callback_data=self._create_callback_data("next")
                 )
@@ -181,7 +183,7 @@ class PaginationBuilder:
         # Last page button (only show if not on last page)
         if self.current_page < self.total_pages:
             nav_row.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "Last ⏭",
                     callback_data=self._create_callback_data("last")
                 )
@@ -198,7 +200,7 @@ class PaginationBuilder:
                 if page_item is None:
                     # Add ellipsis
                     page_row.append(
-                        InlineKeyboardButton(
+                        ButtonBuilder.action_button(
                             "...",
                             callback_data=self._create_callback_data("noop")
                         )
@@ -213,7 +215,7 @@ class PaginationBuilder:
                         button_text = str(page_item)
 
                     page_row.append(
-                        InlineKeyboardButton(
+                        ButtonBuilder.action_button(
                             button_text,
                             callback_data=self._create_callback_data("page", page_offset)
                         )
@@ -236,13 +238,13 @@ class PaginationBuilder:
         # First and Previous buttons
         if self.current_page > 1:
             nav_buttons.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "⏮ First",
                     callback_data=self._create_callback_data("first")
                 )
             )
             nav_buttons.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "◀️ Prev",
                     callback_data=self._create_callback_data("prev")
                 )
@@ -250,7 +252,7 @@ class PaginationBuilder:
 
         # Current page indicator
         nav_buttons.append(
-            InlineKeyboardButton(
+            ButtonBuilder.action_button(
                 f"📄 {self.current_page}/{self.total_pages}",
                 callback_data=self._create_callback_data("noop")
             )
@@ -259,13 +261,13 @@ class PaginationBuilder:
         # Next and Last buttons
         if self.current_page < self.total_pages:
             nav_buttons.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "Next ▶️",
                     callback_data=self._create_callback_data("next")
                 )
             )
             nav_buttons.append(
-                InlineKeyboardButton(
+                ButtonBuilder.action_button(
                     "Last ⏭",
                     callback_data=self._create_callback_data("last")
                 )
