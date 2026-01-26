@@ -83,6 +83,54 @@ class IndexOptimizer:
                 'name': 'unique_file_id_idx',
                 'unique': True,
                 'background': True
+            },
+            
+            # Season + Episode compound index (most common query pattern)
+            {
+                'keys': [('season', 1), ('episode', 1)],
+                'name': 'season_episode_idx',
+                'sparse': True,  # Only index documents where these fields exist
+                'background': True
+            },
+            
+            # Season + Episode + Resolution (complete metadata filter)
+            {
+                'keys': [('season', 1), ('episode', 1), ('resolution', 1)],
+                'name': 'season_episode_resolution_idx',
+                'sparse': True,
+                'background': True
+            },
+            
+            # Resolution index (for resolution-only queries)
+            {
+                'keys': [('resolution', 1)],
+                'name': 'resolution_idx',
+                'sparse': True,
+                'background': True
+            },
+            
+            # Resolution + File Type (e.g., "1080p videos")
+            {
+                'keys': [('resolution', 1), ('file_type', 1)],
+                'name': 'resolution_type_idx',
+                'sparse': True,
+                'background': True
+            },
+            
+            # Episode only (for queries without season)
+            {
+                'keys': [('episode', 1)],
+                'name': 'episode_idx',
+                'sparse': True,
+                'background': True
+            },
+            
+            # Resolution + Date (for "latest 1080p files")
+            {
+                'keys': [('resolution', 1), ('indexed_at', -1)],
+                'name': 'resolution_date_idx',
+                'sparse': True,
+                'background': True
             }
         ]
         

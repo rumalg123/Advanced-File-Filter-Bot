@@ -619,7 +619,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             ([('indexed_at', -1)], {'name': 'date_index'}),
             ([('file_ref', 1)], {'name': 'file_ref_index', 'unique': True, 'sparse': True}),
             ([('file_type', 1), ('file_name', 1)], {'name': 'type_name_index'}),
-            ([('file_unique_id', 1)], {'name': 'unique_file_id_idx', 'unique': True})
+            ([('file_unique_id', 1)], {'name': 'unique_file_id_idx', 'unique': True}),
+            # New indexes for season/episode/resolution fields
+            ([('season', 1), ('episode', 1)], {'name': 'season_episode_idx', 'sparse': True}),
+            ([('season', 1), ('episode', 1), ('resolution', 1)], {'name': 'season_episode_resolution_idx', 'sparse': True}),
+            ([('resolution', 1)], {'name': 'resolution_idx', 'sparse': True}),
+            ([('resolution', 1), ('file_type', 1)], {'name': 'resolution_type_idx', 'sparse': True}),
+            ([('episode', 1)], {'name': 'episode_idx', 'sparse': True}),
         ]
 
         for keys, kwargs in indexes:
