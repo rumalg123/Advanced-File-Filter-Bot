@@ -171,6 +171,11 @@ class FileStoreService:
                 file_name=filename,
                 file_size=media.file_size,
                 file_type=file_type_enum,
+                resolution=(
+                    f"{getattr(media, 'width', None)}x{getattr(media, 'height', None)}"
+                    if getattr(media, 'width', None) and getattr(media, 'height', None)
+                    else None
+                ),
                 mime_type=getattr(media, 'mime_type', None),
                 caption=message.reply_to_message.caption.html if message.reply_to_message.caption else None
             )

@@ -259,6 +259,11 @@ class IndexingService:
                     ),
                     file_size=media.file_size,
                     file_type=file_type,
+                    resolution=(
+                        f"{getattr(media, 'width', None)}x{getattr(media, 'height', None)}"
+                        if getattr(media, 'width', None) and getattr(media, 'height', None)
+                        else None
+                    ),
                     mime_type=getattr(media, 'mime_type', None),
                     caption=message.caption.html if message.caption else None
                 )

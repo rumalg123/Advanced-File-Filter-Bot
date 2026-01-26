@@ -175,6 +175,9 @@ class BatchOptimizations:
                     file_name=result["file_name"],
                     file_size=result["file_size"],
                     file_type=result["file_type"],
+                    resolution=None,
+                    episode=None,
+                    season=None,
                     mime_type=result.get("mime_type", ""),
                     caption=result.get("caption", "")
                 )
