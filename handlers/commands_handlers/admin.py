@@ -837,21 +837,21 @@ class AdminCommandHandler(BaseCommandHandler):
             command_parts = message.text.split(' ', 1)
             if len(command_parts) < 2:
                 await message.reply_text(
-                    "🐚 <b>Shell Command Usage:</b>\n\n"
-                    "<b>Syntax:</b> <code>/shell &lt;command&gt;</code>\n\n"
-                    "<b>Examples:</b>\n"
-                    "• <code>/shell pip install requests</code>\n"
-                    "• <code>/shell ls -la</code>\n"
-                    "• <code>/shell git status</code>\n"
-                    "• <code>/shell python --version</code>\n"
-                    "• <code>/shell df -h</code>\n\n"
-                    + ErrorMessageFormatter.format_warning("This command has full system access. Use with extreme caution!", title="Security Warning") + "\n\n"
-                    "<b>Safe Commands:</b>\n"
-                    "• Package management: <code>pip install/uninstall</code>\n"
-                    "• File operations: <code>ls</code>, <code>cat</code>, <code>head</code>, <code>tail</code>\n"
-                    "• System info: <code>ps</code>, <code>df</code>, <code>free</code>, <code>uname</code>\n"
-                    "• Git operations: <code>git status</code>, <code>git log</code>\n\n"
-                    "<b>Dangerous Commands:</b>\n"
+                    "🐚 <b>Shell Command Usage:</b>\n\n" +
+                    "<b>Syntax:</b> <code>/shell &lt;command&gt;</code>\n\n" +
+                    "<b>Examples:</b>\n" +
+                    "• <code>/shell pip install requests</code>\n" +
+                    "• <code>/shell ls -la</code>\n" +
+                    "• <code>/shell git status</code>\n" +
+                    "• <code>/shell python --version</code>\n" +
+                    "• <code>/shell df -h</code>\n\n" +
+                    ErrorMessageFormatter.format_warning("This command has full system access. Use with extreme caution!", title="Security Warning") + "\n\n" +
+                    "<b>Safe Commands:</b>\n" +
+                    "• Package management: <code>pip install/uninstall</code>\n" +
+                    "• File operations: <code>ls</code>, <code>cat</code>, <code>head</code>, <code>tail</code>\n" +
+                    "• System info: <code>ps</code>, <code>df</code>, <code>free</code>, <code>uname</code>\n" +
+                    "• Git operations: <code>git status</code>, <code>git log</code>\n\n" +
+                    "<b>Dangerous Commands:</b>\n" +
                     ErrorMessageFormatter.format_error("Avoid: <code>rm -rf</code>, <code>chmod 777</code>, <code>sudo su</code>, etc.", include_prefix=False),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
@@ -920,9 +920,9 @@ class AdminCommandHandler(BaseCommandHandler):
                 
             except Exception as e:
                 await status_msg.edit_text(
-                    f"🐚 <b>Shell Command Failed</b>\n\n"
-                    f"<b>Command:</b> <code>{command}</code>\n"
-                    f"<b>Error:</b> {str(e)}\n\n"
+                    f"🐚 <b>Shell Command Failed</b>\n\n" +
+                    f"<b>Command:</b> <code>{command}</code>\n" +
+                    f"<b>Error:</b> {str(e)}\n\n" +
                     ErrorMessageFormatter.format_failed("Execution failed before completion"),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
