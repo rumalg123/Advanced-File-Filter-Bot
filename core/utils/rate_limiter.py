@@ -62,8 +62,18 @@ class RateLimiter:
             return True, None
 
         # Set expiration on first request (when count becomes 1)
+        # Use expire() which is safe even if key already exists
         if new_count == 1:
-            await self.cache.expire(key, config.time_window)
+            # Set expiration - if this fails, log warning but continue
+            expire_result = await self.cache.expire(key, config.time_window)
+            if not expire_result:
+                logger.warning(f"Failed to set expiration for rate limit key {key}, but continuing")
+        elif new_count > 1:
+            # Ensure expiration is set even if it wasn't set on first request
+            # This handles race conditions where multiple requests increment before expire is set
+            current_ttl = await self.cache.ttl(key)
+            if current_ttl == -1:  # Key exists but has no expiration
+                await self.cache.expire(key, config.time_window)
 
         # Check if limit exceeded AFTER incrementing
         if new_count > config.max_requests:

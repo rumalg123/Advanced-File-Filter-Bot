@@ -37,6 +37,9 @@ class CacheInvalidator:
         if new_version == 1:
             # First increment, set to 2 to ensure version exists
             new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
+            # Set a very long expiration (1 year) for the version key since it's a persistent counter
+            # This prevents memory leaks while keeping the version persistent
+            await self.cache.expire(self.SEARCH_CACHE_VERSION_KEY, 31536000)  # 1 year
         return new_version
 
     async def invalidate_user_data(self, user_id: int) -> bool:
