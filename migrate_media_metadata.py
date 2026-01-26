@@ -253,23 +253,23 @@ async def main():
     
     args = parser.parse_args()
     
-    # Initialize database connection
-    # Note: This script should be run with the same environment as the bot
-    # Make sure .env file is loaded or environment variables are set
-    try:
-        from config.settings import settings
-        
-        db_pool = DatabaseConnectionPool()
-        await db_pool.initialize(
-            settings.MONGODB_URI,
-            settings.DATABASE_NAME
-        )
-        logger.info("Database connection initialized")
-        
-        # Initialize cache (not strictly needed for migration, but for consistency)
-        cache = CacheManager(settings.REDIS_URI if hasattr(settings, 'REDIS_URI') else None)
-        await cache.initialize()
-        logger.info("Cache initialized")
+        # Initialize database connection
+        # Note: This script should be run with the same environment as the bot
+        # Make sure .env file is loaded or environment variables are set
+        try:
+            from config.settings import settings
+            
+            db_pool = DatabaseConnectionPool()
+            await db_pool.initialize(
+                settings.database.uri,
+                settings.database.name
+            )
+            logger.info("Database connection initialized")
+            
+            # Initialize cache (not strictly needed for migration, but for consistency)
+            cache = CacheManager(settings.redis.uri if settings.redis.uri else None)
+            await cache.initialize()
+            logger.info("Cache initialized")
         
         # Run migration
         migration = MediaMetadataMigration(db_pool, batch_size=args.batch_size)
