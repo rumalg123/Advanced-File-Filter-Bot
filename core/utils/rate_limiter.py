@@ -28,7 +28,6 @@ class RateLimiter:
             'file_request': RateLimitConfig(max_requests=10, time_window=60),
             'broadcast': RateLimitConfig(max_requests=1, time_window=3600),
             'inline_query': RateLimitConfig(max_requests=50, time_window=60),
-            'premium_check': RateLimitConfig(max_requests=100, time_window=60),
         }
 
     async def check_rate_limit(

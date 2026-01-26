@@ -58,11 +58,9 @@ class PaginationCallbackHandler(BaseCommandHandler):
             # If this is a new search (offset 0) and no results, show proper message
             if new_offset == 0:
                 # This might be from a "Did you mean?" suggestion that still has no results
-                # Show a helpful message
+                # Show a helpful message (plain text for query.answer with show_alert)
                 await query.answer(
-                    ErrorMessageFormatter.format_warning(
-                        f"No results found for '{search_query}'. Try a different search term."
-                    ),
+                    f"⚠️ No results found for '{search_query}'. Try a different search term.",
                     show_alert=True
                 )
                 return

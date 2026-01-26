@@ -288,6 +288,27 @@ class SearchHandler:
                 logger.error(f"Error answering inline query: {e}")
             return
 
+        # Check rate limit for inline queries
+        is_allowed, cooldown = await self.bot.rate_limiter.check_rate_limit(
+            user_id, 'inline_query'
+        )
+        if not is_allowed:
+            try:
+                await query.answer(
+                    results=[],
+                    cache_time=0,
+                    switch_pm_text=ErrorMessageFormatter.format_warning(
+                        f"Rate limit exceeded. Try again in {cooldown} seconds.",
+                        include_prefix=False
+                    ),
+                    switch_pm_parameter="start"
+                )
+            except QueryIdInvalid:
+                logger.warning(f"Inline query expired for user {user_id} (rate limit)")
+            except Exception as e:
+                logger.error(f"Error answering inline query for rate limit: {e}")
+            return
+
         # Check if user is banned using validators
         if not is_admin(user_id, self.bot.config.ADMINS):
             user = await self.bot.user_repo.get_user(user_id)
