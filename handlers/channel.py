@@ -11,7 +11,7 @@ from config.settings import settings
 from core.cache.config import CacheTTLConfig
 from core.constants import ProcessingConstants
 from core.utils.validators import normalize_filename_for_search, get_special_channels
-from core.utils.helpers import extract_file_ref
+from core.utils.helpers import extract_file_ref, parse_media_metadata
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from repositories.channel import ChannelRepository
@@ -393,22 +393,30 @@ class ChannelHandler:
                 return "no_media"
 
             # Create MediaFile object
+            raw_file_name = getattr(media, 'file_name', f'{file_type}_{media.file_unique_id}')
+            normalized_name = normalize_filename_for_search(raw_file_name)
+            caption_html = message.caption.html if message.caption else None
+            season, episode, parsed_resolution = parse_media_metadata(raw_file_name, caption_html)
+
+            width = getattr(media, 'width', None)
+            height = getattr(media, 'height', None)
+            if width and height:
+                resolution = f"{width}x{height}"
+            else:
+                resolution = parsed_resolution
+
             media_file = MediaFile(
                 file_id=media.file_id,
                 file_unique_id=media.file_unique_id,
                 file_ref=extract_file_ref(media.file_id),
-                file_name=normalize_filename_for_search(
-                    getattr(media, 'file_name', f'{file_type}_{media.file_unique_id}')
-                ),
+                file_name=normalized_name,
                 file_size=media.file_size,
                 file_type=self._get_file_type(file_type),
-                resolution=(
-                    f"{getattr(media, 'width', None)}x{getattr(media, 'height', None)}"
-                    if getattr(media, 'width', None) and getattr(media, 'height', None)
-                    else None
-                ),
+                resolution=resolution,
+                episode=episode,
+                season=season,
                 mime_type=getattr(media, 'mime_type', None),
-                caption=message.caption.html if message.caption else None
+                caption=caption_html
             )
 
             # Save to database

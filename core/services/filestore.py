@@ -18,7 +18,7 @@ from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
-from core.utils.helpers import extract_file_ref
+from core.utils.helpers import extract_file_ref, parse_media_metadata
 from core.concurrency import semaphore_manager
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
@@ -161,8 +161,17 @@ class FileStoreService:
                 file_type_enum = FileType.AUDIO
 
             # Normalize filename for search
-            filename = getattr(media, 'file_name', f'{file_type.value}_{media.file_unique_id}')
-            filename = normalize_filename_for_search(filename)
+            raw_filename = getattr(media, 'file_name', f'{file_type.value}_{media.file_unique_id}')
+            filename = normalize_filename_for_search(raw_filename)
+            caption_html = message.reply_to_message.caption.html if message.reply_to_message.caption else None
+            season, episode, parsed_resolution = parse_media_metadata(raw_filename, caption_html)
+
+            width = getattr(media, 'width', None)
+            height = getattr(media, 'height', None)
+            if width and height:
+                resolution = f"{width}x{height}"
+            else:
+                resolution = parsed_resolution
 
             media_file = MediaFile(
                 file_id=media.file_id,
@@ -171,13 +180,11 @@ class FileStoreService:
                 file_name=filename,
                 file_size=media.file_size,
                 file_type=file_type_enum,
-                resolution=(
-                    f"{getattr(media, 'width', None)}x{getattr(media, 'height', None)}"
-                    if getattr(media, 'width', None) and getattr(media, 'height', None)
-                    else None
-                ),
+                resolution=resolution,
+                episode=episode,
+                season=season,
                 mime_type=getattr(media, 'mime_type', None),
-                caption=message.reply_to_message.caption.html if message.reply_to_message.caption else None
+                caption=caption_html
             )
 
             # Save to database - now returns existing file if duplicate

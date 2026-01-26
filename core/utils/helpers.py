@@ -2,8 +2,9 @@
 """Common utility functions used across the application"""
 import base64
 import hashlib
+import re
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING, Tuple
 
 from pyrogram.file_id import FileId
 
@@ -39,6 +40,70 @@ def extract_file_ref(file_id: str) -> str:
     except Exception:
         # Generate a fallback ref using hash
         return hashlib.md5(file_id.encode()).hexdigest()[:20]
+
+
+_SEASON_EPISODE_PATTERN = re.compile(
+    r"[Ss](?P<season>\d{1,2})[ ._/-]*[Ee](?P<episode>\d{1,3})"
+)
+
+_EPISODE_ONLY_PATTERN = re.compile(
+    r"[^\w]?[Ee](?P<episode>\d{1,3})(?:\D|$)"
+)
+
+_RESOLUTION_PATTERN = re.compile(
+    r"(?P<resolution>\d{3,4}p)\b",
+    re.IGNORECASE,
+)
+
+_PIXEL_RESOLUTION_PATTERN = re.compile(
+    r"(?P<width>\d{3,4})[xX](?P<height>\d{3,4})"
+)
+
+
+def parse_media_metadata(
+    file_name: str,
+    caption: Optional[str] = None
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Best-effort parser for season, episode and resolution from text.
+
+    Examples it should handle:
+    - Our.Golden.Days.S01E50.x264.540p.WEB-DL-Phanteam..mkv
+    - Our.Golden.Days.E50.END.KBS.540p.x265.mkv
+    - Positively.Yours.E04.NF.1080p.x265.mkv
+    - Love.Me.S01E12.NF.x264.720p.mkv
+    - Loving.Strangers.S01E24.2160p.YOUKU.W.mkv
+    """
+    text = file_name or ""
+    if caption:
+        text = f"{text} {caption}"
+
+    season: Optional[str] = None
+    episode: Optional[str] = None
+    resolution: Optional[str] = None
+
+    # Season + episode first (S01E50)
+    match = _SEASON_EPISODE_PATTERN.search(text)
+    if match:
+        season = match.group("season").zfill(2)
+        episode = match.group("episode").zfill(2)
+    else:
+        # Episode-only patterns (E50 / E04.END)
+        match = _EPISODE_ONLY_PATTERN.search(text)
+        if match:
+            episode = match.group("episode").zfill(2)
+
+    # Resolution like 540p / 1080p / 2160p
+    match = _RESOLUTION_PATTERN.search(text)
+    if match:
+        resolution = match.group("resolution").lower()
+    else:
+        # Fallback for 1920x1080 style
+        match = _PIXEL_RESOLUTION_PATTERN.search(text)
+        if match:
+            resolution = f"{match.group('width')}x{match.group('height')}"
+
+    return season, episode, resolution
 
 
 class MessageProxy:
