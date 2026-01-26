@@ -415,7 +415,7 @@ def build_typo_tolerant_pattern(query: str) -> str:
     def create_typo_variants(word: str) -> str:
         """
         Create regex pattern with typo variants for a word.
-        Handles common typos and character substitutions.
+        Handles common typos, missing characters, and character substitutions.
         """
         if len(word) <= 2:
             return re.escape(word)
@@ -434,6 +434,9 @@ def build_typo_tolerant_pattern(query: str) -> str:
             'be': r'(be|bee|bi)',
             'translated': r'(translated|translatd|translat|translatet)',
             'translate': r'(translate|translat|translatd)',
+            'fever': r'(fever|fevr|fevar|feve|feverr)',
+            'fevr': r'(fever|fevr|fevar|feve|feverr)',
+            'spring': r'(spring|sprng|sprin|springg)',
         }
         
         if word_lower in common_typos:
@@ -445,6 +448,11 @@ def build_typo_tolerant_pattern(query: str) -> str:
             if word_lower[2] in ['i', 'u']:
                 # Create pattern that matches both "this" and "thus"
                 return r'(this|thus|thas|thos)'
+        
+        # For words not in common_typos, use exact match
+        # Note: We rely on common_typos dictionary for typo handling
+        # For new typos, they should be added to common_typos
+        return re.escape(word)
         
         # For other words, use exact match to avoid too many false positives
         return re.escape(word)

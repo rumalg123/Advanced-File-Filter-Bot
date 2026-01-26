@@ -55,7 +55,19 @@ class PaginationCallbackHandler(BaseCommandHandler):
             return await query.answer(ErrorMessageFormatter.format_access_denied(), show_alert=True)
 
         if not files:
-            return await query.answer("No more results", show_alert=True)
+            # If this is a new search (offset 0) and no results, show proper message
+            if new_offset == 0:
+                # This might be from a "Did you mean?" suggestion that still has no results
+                # Show a helpful message
+                await query.answer(
+                    ErrorMessageFormatter.format_warning(
+                        f"No results found for '{search_query}'. Try a different search term."
+                    ),
+                    show_alert=True
+                )
+                return
+            else:
+                return await query.answer("No more results", show_alert=True)
 
         # Generate a unique key for this search result set
         session_id = uuid.uuid4().hex[:8]
