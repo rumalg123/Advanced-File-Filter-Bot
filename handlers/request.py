@@ -36,9 +36,6 @@ class RequestHandler(BaseHandler):
             config=bot.config,
             recommendation_service=getattr(bot, 'recommendation_service', None)
         )
-            cache_manager=bot.cache,
-            config=bot.config
-        )
         
         self.register_handlers()
 
