@@ -525,6 +525,35 @@ class SearchHandler:
             # Send "not found" message only if nothing was sent
             if not search_sent and not filter_sent:
                 no_results_buttons = []
+                
+                # Try to find similar queries using fuzzy matching
+                similar_queries = []
+                if self.search_history_service:
+                    try:
+                        similar_queries = await self.search_history_service.find_similar_queries(
+                            query=query,
+                            user_id=user_id,
+                            threshold=0.6,  # 60% similarity threshold
+                            max_results=3
+                        )
+                    except Exception as e:
+                        logger.debug(f"Error finding similar queries: {e}")
+                
+                # Add "Did you mean?" buttons if similar queries found
+                if similar_queries:
+                    did_you_mean_text = "💡 <b>Did you mean?</b>\n\n"
+                    query_buttons = []
+                    for similar_query in similar_queries:
+                        query_buttons.append(
+                            ButtonBuilder.action_button(
+                                f"🔍 {similar_query}",
+                                callback_data=f"search#page#{similar_query}#0#0#{user_id}"
+                            )
+                        )
+                    # Add 2 queries per row
+                    for i in range(0, len(query_buttons), 2):
+                        no_results_buttons.append(query_buttons[i:i+2])
+                
                 if self.bot.config.SUPPORT_GROUP_URL and self.bot.config.SUPPORT_GROUP_NAME:
                     no_results_buttons.append([
                         ButtonBuilder.action_button(
@@ -536,6 +565,17 @@ class SearchHandler:
                 # Get no results message from bot config or default
                 no_results_template = MessageHelper.get_no_results_message(self.bot.config)
                 no_results_text = no_results_template.format(query=query)
+                
+                # Add "Did you mean?" text if we have suggestions
+                if similar_queries:
+                    no_results_text = (
+                        no_results_text + 
+                        "\n\n" + 
+                        ErrorMessageFormatter.format_info(
+                            "Try clicking one of the suggestions above!",
+                            title="Suggestions Available"
+                        )
+                    )
                 
                 await message.reply_text(
                     no_results_text,

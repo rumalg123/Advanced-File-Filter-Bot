@@ -8,6 +8,112 @@ from typing import Dict, Any, Optional, List, Callable, TYPE_CHECKING, Tuple
 
 from pyrogram.file_id import FileId
 
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """
+    Calculate Levenshtein distance between two strings (edit distance).
+    
+    Args:
+        s1: First string
+        s2: Second string
+        
+    Returns:
+        Minimum number of single-character edits needed to transform s1 into s2
+    """
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    
+    if len(s2) == 0:
+        return len(s1)
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
+
+
+def calculate_similarity(query1: str, query2: str) -> float:
+    """
+    Calculate similarity score between two queries (0.0 to 1.0).
+    Higher score means more similar.
+    
+    Args:
+        query1: First query string
+        query2: Second query string
+        
+    Returns:
+        Similarity score between 0.0 and 1.0
+    """
+    if not query1 or not query2:
+        return 0.0
+    
+    # Normalize queries
+    q1 = query1.lower().strip()
+    q2 = query2.lower().strip()
+    
+    # Exact match
+    if q1 == q2:
+        return 1.0
+    
+    # Calculate Levenshtein distance
+    max_len = max(len(q1), len(q2))
+    if max_len == 0:
+        return 1.0
+    
+    distance = levenshtein_distance(q1, q2)
+    similarity = 1.0 - (distance / max_len)
+    
+    # Boost similarity if one query contains the other
+    if q1 in q2 or q2 in q1:
+        similarity = max(similarity, 0.7)
+    
+    return similarity
+
+
+def find_similar_queries(
+    query: str, 
+    candidate_queries: List[str], 
+    threshold: float = 0.6,
+    max_results: int = 3
+) -> List[Tuple[str, float]]:
+    """
+    Find similar queries from a list of candidates using fuzzy matching.
+    
+    Args:
+        query: The query to find similar matches for
+        candidate_queries: List of candidate queries to search
+        threshold: Minimum similarity score (0.0 to 1.0) to include a result
+        max_results: Maximum number of results to return
+        
+    Returns:
+        List of tuples (similar_query, similarity_score) sorted by score (descending)
+    """
+    if not query or not candidate_queries:
+        return []
+    
+    normalized_query = query.lower().strip()
+    
+    # Calculate similarity for each candidate
+    similarities = []
+    for candidate in candidate_queries:
+        if not candidate:
+            continue
+        
+        similarity = calculate_similarity(normalized_query, candidate)
+        if similarity >= threshold:
+            similarities.append((candidate, similarity))
+    
+    # Sort by similarity score (descending) and return top results
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    return similarities[:max_results]
+
 if TYPE_CHECKING:
     from pyrogram.types import User, Chat, Message as PyrogramMessage
 

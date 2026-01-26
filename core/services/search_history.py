@@ -131,3 +131,62 @@ class SearchHistoryService:
         except Exception as e:
             logger.error(f"Error clearing search history for user {user_id}: {e}")
             return False
+
+    async def find_similar_queries(
+        self, 
+        query: str, 
+        user_id: Optional[int] = None,
+        threshold: float = 0.6,
+        max_results: int = 3
+    ) -> List[str]:
+        """
+        Find similar queries using fuzzy matching from user and global search history
+        
+        Args:
+            query: The query to find similar matches for
+            user_id: Optional user ID to also search user's search history
+            threshold: Minimum similarity score (0.0 to 1.0) to include a result
+            max_results: Maximum number of results to return
+            
+        Returns:
+            List of similar query strings, sorted by similarity (descending)
+        """
+        if not query or len(query.strip()) < 2:
+            return []
+        
+        try:
+            from core.utils.helpers import find_similar_queries
+            
+            candidate_queries = []
+            
+            # Get user's search history if user_id provided
+            if user_id:
+                user_keywords = await self.get_most_searched_keywords(user_id, limit=50)
+                candidate_queries.extend(user_keywords)
+            
+            # Get global top searches
+            global_keywords = await self.get_global_top_searches(limit=50)
+            candidate_queries.extend(global_keywords)
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_candidates = []
+            for q in candidate_queries:
+                if q not in seen:
+                    seen.add(q)
+                    unique_candidates.append(q)
+            
+            # Find similar queries
+            similar = find_similar_queries(
+                query, 
+                unique_candidates, 
+                threshold=threshold,
+                max_results=max_results
+            )
+            
+            # Return just the query strings (without scores)
+            return [q for q, _ in similar]
+            
+        except Exception as e:
+            logger.error(f"Error finding similar queries for {query}: {e}")
+            return []
