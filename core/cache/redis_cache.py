@@ -274,7 +274,8 @@ class CacheManager:
             return []
         
         try:
-            return await self.redis.zrevrange(key, start, end, with_scores=with_scores)
+            # Redis uses 'withscores' (no underscore) as parameter name
+            return await self.redis.zrevrange(key, start, end, withscores=with_scores)
         except Exception as e:
             logger.error(f"Cache zrevrange error for key {key}: {e}")
             return []
