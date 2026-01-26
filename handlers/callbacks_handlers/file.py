@@ -207,7 +207,7 @@ class FileCallbackHandler(BaseCommandHandler):
                     try:
                         from core.cache.config import CacheKeyGenerator
                         # Try to get from user's recent search (stored separately)
-                        recent_search_key = f"user_last_search:{callback_user_id}"
+                        recent_search_key = CacheKeyGenerator.user_last_search(callback_user_id)
                         recent_search = await self.bot.cache.get(recent_search_key)
                         if recent_search and isinstance(recent_search, dict):
                             query = recent_search.get('query', '')

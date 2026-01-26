@@ -1,7 +1,7 @@
 # core/services/recommendation.py
 """Service for generating smart recommendations based on user behavior and file metadata"""
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger

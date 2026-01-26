@@ -57,6 +57,7 @@ class CacheTTLConfig:
     FILE_COOCCURRENCE: int = 2592000  # 30 days for file co-occurrence
     USER_RECOMMENDATIONS: int = 600  # 10 minutes for cached user recommendations
     QUERY_FILES_MAPPING: int = 604800  # 7 days for query-to-files mapping
+    USER_LAST_SEARCH: int = 600  # 10 minutes for user's last search tracking
     
     # Timing delays (in seconds)
     CHANNEL_INDEX_DELAY: int = 5  # Channel indexing delay
@@ -281,6 +282,11 @@ class CacheKeyGenerator:
     def user_recommendations_cache(user_id: int) -> str:
         """Key for cached user recommendations"""
         return f"rec:user_cache:{user_id}"
+    
+    @staticmethod
+    def user_last_search(user_id: int) -> str:
+        """Key for user's last search query (for recommendation tracking)"""
+        return f"user_last_search:{user_id}"
 
 
 # Cache patterns to identify related keys for bulk operations

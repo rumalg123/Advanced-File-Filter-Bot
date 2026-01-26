@@ -6,12 +6,11 @@ from typing import List, Optional, Callable, Any
 
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from core.utils.button_builder import ButtonBuilder
-from core.utils.error_formatter import ErrorMessageFormatter
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder
 from repositories.media import MediaFile
@@ -112,12 +111,11 @@ class SearchResultsService:
             )
             
             # Store user's last search for recommendation tracking
-            from core.cache.config import CacheKeyGenerator
-            recent_search_key = f"user_last_search:{user_id}"
+            recent_search_key = CacheKeyGenerator.user_last_search(user_id)
             await self.cache.set(
                 recent_search_key,
                 {'query': query, 'search_key': search_key},
-                expire=600  # 10 minutes
+                expire=self.ttl.USER_LAST_SEARCH
             )
             
             # Track files shown for this query (for recommendations)
