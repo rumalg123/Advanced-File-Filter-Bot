@@ -467,6 +467,8 @@ class MediaSearchBot(Client):
                 BotCommand("stats", "📊 Bot statistics"),
                 BotCommand("plans", "💎 View premium plans"),
                 BotCommand("request_stats","📝 View your request limits and warnings"),
+                BotCommand("my_keywords", "🔍 Your most searched keywords"),
+                BotCommand("popular_keywords", "🔥 Top 10 popular searches"),
             ]
 
             # Connection commands (if filters enabled)
@@ -783,6 +785,10 @@ class MediaSearchBot(Client):
                 self.batch_link_repo
             )
 
+            # Initialize search history service
+            from core.services.search_history import SearchHistoryService
+            self.search_history_service = SearchHistoryService(self.cache)
+            
             logger.info("Services initialized")
             logger.info("Services initialized with database settings")
 

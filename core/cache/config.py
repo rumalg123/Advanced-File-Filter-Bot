@@ -48,6 +48,10 @@ class CacheTTLConfig:
     # Rate limiting
     RATE_LIMIT_COOLDOWN: int = 3600  # 1 hour for rate limit cooldowns
     
+    # Search history
+    USER_SEARCH_HISTORY: int = 2592000  # 30 days for user search history
+    GLOBAL_SEARCH_HISTORY: int = 31536000  # 1 year for global search history
+    
     # Timing delays (in seconds)
     CHANNEL_INDEX_DELAY: int = 5  # Channel indexing delay
     INDEXING_FLOOD_DELAY: int = 2  # Anti-flood delay during indexing
@@ -227,6 +231,17 @@ class CacheKeyGenerator:
     @staticmethod
     def search_cache_version() -> str:
         return "cache:search:version"
+    
+    # Search history keys
+    @staticmethod
+    def user_search_history(user_id: int) -> str:
+        """Key for storing user's search history (sorted set)"""
+        return f"search_history:{user_id}"
+    
+    @staticmethod
+    def global_search_history() -> str:
+        """Key for storing global search history (sorted set)"""
+        return "search_history:global"
 
 
 # Cache patterns to identify related keys for bulk operations

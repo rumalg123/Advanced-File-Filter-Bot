@@ -8,7 +8,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.errors import QueryIdInvalid
 from pyrogram.handlers import MessageHandler, InlineQueryHandler
 from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument, InlineKeyboardButton, \
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup, ReplyKeyboardRemove
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.session.manager import SessionType
@@ -51,13 +51,16 @@ class SearchHandler:
             config=bot.config
         )
         
+        # Get search history service from bot
+        self.search_history_service = getattr(bot, 'search_history_service', None)
+        
         self.register_handlers()
 
     def register_handlers(self):
         """Register search handlers"""
         # Text message search in groups and private chats
         excluded_commands = [
-            'start', 'help', 'about', 'stats', 'plans',
+            'start', 'help', 'about', 'stats', 'plans', 'my_keywords', 'popular_keywords',
             'broadcast', 'users', 'ban', 'unban', 'addpremium', 'removepremium',
             'add_channel', 'remove_channel', 'list_channels', 'toggle_channel',
             'connect', 'disconnect', 'connections', 'setskip',
@@ -220,6 +223,15 @@ class SearchHandler:
 
         # Get search query
         query = message.text.strip()
+        
+        # Handle "Close" button click (replaces "Remove Keyboard")
+        if query == "❌ Close":
+            await message.reply_text(
+                "Keyboard closed. Use /keywords to show it again.",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return
+        
         if not query or len(query) < 2:
             return
 
@@ -465,6 +477,10 @@ class SearchHandler:
         filter_sent = False
 
         try:
+            # Track search query for history
+            if self.search_history_service:
+                await self.search_history_service.track_search(user_id, query)
+            
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
             files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
@@ -532,6 +548,10 @@ class SearchHandler:
     ):
         """Handle search in group chat - only show results, no 'not found' messages"""
         try:
+            # Track search query for history (both user and global)
+            if self.search_history_service:
+                await self.search_history_service.track_search(user_id, query, track_global=True)
+            
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
             files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(

@@ -245,6 +245,40 @@ class CacheManager:
 
         return stats
 
+    async def zadd(self, key: str, score: float, member: str) -> bool:
+        """Add member to sorted set with score"""
+        if not self.redis:
+            return False
+        
+        try:
+            await self.redis.zadd(key, {member: score})
+            return True
+        except Exception as e:
+            logger.error(f"Cache zadd error for key {key}: {e}")
+            return False
+
+    async def zincrby(self, key: str, amount: float, member: str) -> Optional[float]:
+        """Increment score of member in sorted set"""
+        if not self.redis:
+            return None
+        
+        try:
+            return await self.redis.zincrby(key, amount, member)
+        except Exception as e:
+            logger.error(f"Cache zincrby error for key {key}: {e}")
+            return None
+
+    async def zrevrange(self, key: str, start: int = 0, end: int = -1, with_scores: bool = False) -> List:
+        """Get members from sorted set in reverse order (highest score first)"""
+        if not self.redis:
+            return []
+        
+        try:
+            return await self.redis.zrevrange(key, start, end, with_scores=with_scores)
+        except Exception as e:
+            logger.error(f"Cache zrevrange error for key {key}: {e}")
+            return []
+
 
 def cache_premium_status(ttl: int = 600) -> Callable:
     """

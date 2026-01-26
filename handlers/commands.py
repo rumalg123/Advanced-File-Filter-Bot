@@ -67,6 +67,18 @@ class CommandHandler:
                 filters.command("request_stats") & filters.private
             )
         )
+        self.bot.add_handler(
+            MessageHandler(
+                self.user_handler.my_keywords_command,
+                filters.command("my_keywords") & filters.private
+            )
+        )
+        self.bot.add_handler(
+            MessageHandler(
+                self.user_handler.popular_keywords_command,
+                filters.command("popular_keywords") & filters.private
+            )
+        )
 
         # In the register_handlers method, add this BEFORE registering search handlers (around line 42):
 

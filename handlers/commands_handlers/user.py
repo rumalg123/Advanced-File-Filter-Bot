@@ -2,13 +2,14 @@ import random
 import uuid
 
 from pyrogram import Client
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 import core.utils.messages as config_messages
 from core.utils.messages import MessageHelper
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
 from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from repositories.media import FileType
 from core.utils.logger import get_logger
@@ -342,3 +343,109 @@ class UserCommandHandler(BaseCommandHandler):
             text += f"\n📅 <b>Last Request:</b> {stats['last_request_date']}"
 
         await message.reply_text(text)
+
+    @check_ban()
+    @require_subscription()
+    async def my_keywords_command(self, client: Client, message: Message):
+        """Show user's most searched keywords as keyboard buttons"""
+        user_id = message.from_user.id
+        
+        # Get search history service
+        if not hasattr(self.bot, 'search_history_service') or not self.bot.search_history_service:
+            await message.reply_text(
+                ErrorMessageFormatter.format_error("Search history feature is not available.")
+            )
+            return
+        
+        # Get user's most searched keywords
+        keywords = await self.bot.search_history_service.get_most_searched_keywords(user_id, limit=8)
+        
+        if not keywords:
+            await message.reply_text(
+                ErrorMessageFormatter.format_info(
+                    "You haven't searched for anything yet. Start searching and your most used keywords will appear here!",
+                    title="No Search History"
+                )
+            )
+            return
+        
+        # Build keyboard with keywords (2 buttons per row)
+        keyboard_buttons = []
+        for i in range(0, len(keywords), 2):
+            row = []
+            # Add first button in row
+            row.append(KeyboardButton(keywords[i]))
+            # Add second button if exists
+            if i + 1 < len(keywords):
+                row.append(KeyboardButton(keywords[i + 1]))
+            keyboard_buttons.append(row)
+        
+        # Add a "❌ Close" button at the end
+        keyboard_buttons.append([KeyboardButton("❌ Close")])
+        
+        keyboard = ReplyKeyboardMarkup(
+            keyboard_buttons,
+            resize_keyboard=True,
+            one_time_keyboard=False
+        )
+        
+        text = (
+            "🔍 <b>Your Most Searched Keywords</b>\n\n"
+            f"<b>Top Searches:</b> {', '.join(keywords[:5])}\n\n"
+            "Click any keyword to search, or type your own query.\n"
+            "Use /my_keywords to refresh the list."
+        )
+        
+        await message.reply_text(text, reply_markup=keyboard)
+
+    @check_ban()
+    @require_subscription()
+    async def popular_keywords_command(self, client: Client, message: Message):
+        """Show top 10 global searches as keyboard buttons"""
+        # Get search history service
+        if not hasattr(self.bot, 'search_history_service') or not self.bot.search_history_service:
+            await message.reply_text(
+                ErrorMessageFormatter.format_error("Search history feature is not available.")
+            )
+            return
+        
+        # Get global top searches
+        keywords = await self.bot.search_history_service.get_global_top_searches(limit=10)
+        
+        if not keywords:
+            await message.reply_text(
+                ErrorMessageFormatter.format_info(
+                    "No global search data available yet. Start searching and popular keywords will appear here!",
+                    title="No Popular Searches"
+                )
+            )
+            return
+        
+        # Build keyboard with keywords (2 buttons per row)
+        keyboard_buttons = []
+        for i in range(0, len(keywords), 2):
+            row = []
+            # Add first button in row
+            row.append(KeyboardButton(keywords[i]))
+            # Add second button if exists
+            if i + 1 < len(keywords):
+                row.append(KeyboardButton(keywords[i + 1]))
+            keyboard_buttons.append(row)
+        
+        # Add a "❌ Close" button at the end
+        keyboard_buttons.append([KeyboardButton("❌ Close")])
+        
+        keyboard = ReplyKeyboardMarkup(
+            keyboard_buttons,
+            resize_keyboard=True,
+            one_time_keyboard=False
+        )
+        
+        text = (
+            "🔥 <b>Top 10 Popular Searches</b>\n\n"
+            f"<b>Most Popular:</b> {', '.join(keywords[:5])}\n\n"
+            "Click any keyword to search, or type your own query.\n"
+            "Use /popular_keywords to refresh the list."
+        )
+        
+        await message.reply_text(text, reply_markup=keyboard)
