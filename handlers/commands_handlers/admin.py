@@ -604,7 +604,7 @@ class AdminCommandHandler(BaseCommandHandler):
 
             if file_size > 50 * 1024 * 1024:  # 50MB limit
                 await message.reply_text(
-                    ErrorMessageFormatter.format_error(f"Log file too large ({format_file_size(file_size)}). ")
+                    ErrorMessageFormatter.format_error(f"Log file too large ({format_file_size(file_size)}). ") +
                     "Please check logs directly on the server."
                 )
                 return
