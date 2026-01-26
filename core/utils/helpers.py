@@ -145,6 +145,7 @@ def parse_search_query(
     - "ep45 s01" → cleaned="", episode="45", season="01", resolution=None
     - "our golden days season 1 episode 45" → cleaned="our golden days", season="01", episode="45", resolution=None
     - "our golden days s01e45 1080p" → cleaned="our golden days", season="01", episode="45", resolution="1080p"
+    - "our golden days ep 45 tv show" → cleaned="our golden days", episode="45", season=None, resolution=None
     
     Returns:
         (cleaned_query, season, episode, resolution)
@@ -162,7 +163,7 @@ def parse_search_query(
         # Remove the matched pattern from query
         query = _QUERY_SEASON_EPISODE_PATTERN.sub("", query)
     else:
-        # Try episode-only patterns (episode 45, ep45, e45)
+        # Try episode-only patterns (episode 45, ep45, e45, ep 45)
         match = _QUERY_EPISODE_PATTERN.search(query)
         if match:
             episode = match.group("episode").zfill(2)
@@ -180,10 +181,60 @@ def parse_search_query(
         resolution = match.group("resolution").lower()
         query = _QUERY_RESOLUTION_PATTERN.sub("", query)
     
+    # Remove common noise words that don't help with search
+    noise_words = ['tv', 'show', 'series', 'drama', 'movie', 'film', 'video', 'file']
+    words = query.split()
+    cleaned_words = [w for w in words if w.lower() not in noise_words]
+    query = ' '.join(cleaned_words)
+    
     # Clean up the query: remove extra spaces, trim
     cleaned = re.sub(r'\s+', ' ', query).strip()
     
     return cleaned, season, episode, resolution
+
+
+def build_fuzzy_regex_pattern(query: str) -> str:
+    """
+    Build a fuzzy regex pattern that handles:
+    - Flexible word boundaries (dots, dashes, underscores)
+    - Flexible spacing between words
+    - Case-insensitive matching
+    
+    Examples:
+    - "our golden days" → matches "our.golden.days", "our-golden-days", "our_golden_days", etc.
+    - "golden" → matches "golden", "golden.", "golden-", "Golden", etc.
+    - Handles variations like "our golden days" matching "Our.Golden.Days.S01E45.mkv"
+    """
+    if not query:
+        return '.'
+    
+    # Split into words and clean
+    words = [w.strip() for w in query.split() if w.strip()]
+    
+    if not words:
+        return '.'
+    
+    if len(words) == 1:
+        # Single word: allow flexible boundaries
+        word = re.escape(words[0])
+        # Match word with flexible boundaries (allows dots, dashes, underscores, spaces)
+        return rf'(\b|[\.\+\-\s_]){word}(\b|[\.\+\-\s_])'
+    
+    # Multiple words: match all words with flexible spacing/separators
+    # This allows "our golden days" to match:
+    # - "our.golden.days"
+    # - "our-golden-days" 
+    # - "our_golden_days"
+    # - "our golden days"
+    # - "Our.Golden.Days.S01E45"
+    escaped_words = [re.escape(word) for word in words]
+    
+    # Join words with flexible separators (space, dot, dash, underscore, or any combination)
+    # This makes the search more forgiving of filename formatting
+    pattern = r'[\s\.\+\-_]+'.join(escaped_words)
+    
+    # Wrap with flexible boundaries
+    return rf'(\b|[\.\+\-\s_]){pattern}(\b|[\.\+\-\s_])'
 
 
 class MessageProxy:
