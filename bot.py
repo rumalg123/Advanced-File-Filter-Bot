@@ -469,6 +469,7 @@ class MediaSearchBot(Client):
                 BotCommand("request_stats","📝 View your request limits and warnings"),
                 BotCommand("my_keywords", "🔍 Your most searched keywords"),
                 BotCommand("popular_keywords", "🔥 Top 10 popular searches"),
+                BotCommand("recommendations", "💡 Personalized recommendations"),
             ]
 
             # Connection commands (if filters enabled)
@@ -788,6 +789,12 @@ class MediaSearchBot(Client):
             # Initialize search history service
             from core.services.search_history import SearchHistoryService
             self.search_history_service = SearchHistoryService(self.cache)
+            
+            # Initialize recommendation service
+            from core.services.recommendation import RecommendationService
+            self.recommendation_service = RecommendationService(self.cache)
+            # Link search history service for recommendations
+            self.recommendation_service.search_history_service = self.search_history_service
             
             logger.info("Services initialized")
             logger.info("Services initialized with database settings")

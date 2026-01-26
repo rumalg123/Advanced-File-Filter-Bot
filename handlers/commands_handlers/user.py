@@ -449,3 +449,80 @@ class UserCommandHandler(BaseCommandHandler):
         )
         
         await message.reply_text(text, reply_markup=keyboard)
+
+    @check_ban()
+    @require_subscription()
+    async def recommendations_command(self, client: Client, message: Message):
+        """Show personalized recommendations for the user"""
+        user_id = message.from_user.id
+        
+        # Get recommendation service
+        if not hasattr(self.bot, 'recommendation_service') or not self.bot.recommendation_service:
+            await message.reply_text(
+                ErrorMessageFormatter.format_error("Recommendations feature is not available.")
+            )
+            return
+        
+        try:
+            # Get recommendations
+            recommendations = await self.bot.recommendation_service.get_recommendations_for_user(
+                user_id, limit=10
+            )
+            
+            text_parts = ["💡 <b>Personalized Recommendations</b>\n"]
+            buttons = []
+            
+            # Similar queries section
+            if recommendations.get('similar_queries'):
+                text_parts.append("<b>🔍 Similar Searches:</b>")
+                query_buttons = []
+                for query in recommendations['similar_queries'][:4]:
+                    # Truncate long queries
+                    display_query = query[:25] + "..." if len(query) > 25 else query
+                    query_buttons.append(
+                        ButtonBuilder.action_button(
+                            f"🔍 {display_query}",
+                            callback_data=f"search#page#{query}#0#0#{user_id}"
+                        )
+                    )
+                if query_buttons:
+                    # Add 2 per row
+                    for i in range(0, len(query_buttons), 2):
+                        buttons.append(query_buttons[i:i+2])
+            
+            # Based on history section
+            if recommendations.get('based_on_history'):
+                text_parts.append(f"\n<b>📚 Based on Your History:</b> {len(recommendations['based_on_history'])} files")
+                # Note: To show actual files, we'd need to fetch them from DB
+                # For now, we'll just show the count
+            
+            # Trending section
+            if recommendations.get('trending_files'):
+                text_parts.append(f"\n<b>🔥 Trending:</b> {len(recommendations['trending_files'])} files")
+            
+            if not recommendations.get('similar_queries') and not recommendations.get('based_on_history'):
+                text_parts.append(
+                    "\n" + ErrorMessageFormatter.format_info(
+                        "Start searching to get personalized recommendations!",
+                        title="No Recommendations Yet"
+                    )
+                )
+            
+            text = "\n".join(text_parts)
+            
+            # Add refresh button
+            if buttons:
+                buttons.append([
+                    ButtonBuilder.action_button("🔄 Refresh", callback_data="refresh_recommendations")
+                ])
+            
+            await message.reply_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting recommendations: {e}")
+            await message.reply_text(
+                ErrorMessageFormatter.format_error("Error getting recommendations. Please try again later.")
+            )

@@ -52,6 +52,12 @@ class CacheTTLConfig:
     USER_SEARCH_HISTORY: int = 2592000  # 30 days for user search history
     GLOBAL_SEARCH_HISTORY: int = 31536000  # 1 year for global search history
     
+    # Recommendations
+    QUERY_COOCCURRENCE: int = 2592000  # 30 days for query co-occurrence
+    FILE_COOCCURRENCE: int = 2592000  # 30 days for file co-occurrence
+    USER_RECOMMENDATIONS: int = 600  # 10 minutes for cached user recommendations
+    QUERY_FILES_MAPPING: int = 604800  # 7 days for query-to-files mapping
+    
     # Timing delays (in seconds)
     CHANNEL_INDEX_DELAY: int = 5  # Channel indexing delay
     INDEXING_FLOOD_DELAY: int = 2  # Anti-flood delay during indexing
@@ -242,6 +248,39 @@ class CacheKeyGenerator:
     def global_search_history() -> str:
         """Key for storing global search history (sorted set)"""
         return "search_history:global"
+    
+    # Recommendation keys
+    @staticmethod
+    def query_cooccurrence(query: str) -> str:
+        """Key for query co-occurrence (sorted set)"""
+        normalized = query.lower().strip()
+        return f"rec:query_cooccur:{normalized}"
+    
+    @staticmethod
+    def file_cooccurrence(file_unique_id: str) -> str:
+        """Key for file co-occurrence (sorted set)"""
+        return f"rec:file_cooccur:{file_unique_id}"
+    
+    @staticmethod
+    def query_files_mapping(query: str) -> str:
+        """Key for query-to-files mapping (sorted set)"""
+        normalized = query.lower().strip()
+        return f"rec:query_files:{normalized}"
+    
+    @staticmethod
+    def user_file_interactions(user_id: int) -> str:
+        """Key for user file interactions (sorted set)"""
+        return f"rec:user_interactions:{user_id}"
+    
+    @staticmethod
+    def user_search_pattern(user_id: int) -> str:
+        """Key for user search patterns (sorted set)"""
+        return f"rec:user_pattern:{user_id}"
+    
+    @staticmethod
+    def user_recommendations_cache(user_id: int) -> str:
+        """Key for cached user recommendations"""
+        return f"rec:user_cache:{user_id}"
 
 
 # Cache patterns to identify related keys for bulk operations

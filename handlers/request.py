@@ -33,6 +33,10 @@ class RequestHandler(BaseHandler):
         # Initialize search results service
         self.search_results_service = SearchResultsService(
             cache_manager=bot.cache,
+            config=bot.config,
+            recommendation_service=getattr(bot, 'recommendation_service', None)
+        )
+            cache_manager=bot.cache,
             config=bot.config
         )
         

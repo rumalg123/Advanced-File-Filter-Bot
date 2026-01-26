@@ -141,6 +141,20 @@ class FileCallbackHandler(BaseCommandHandler):
         if not file:
             await query.answer(ErrorMessageFormatter.format_not_found("File"), show_alert=True)
             return
+        
+        # Track file click for recommendations (if recommendation service available)
+        if hasattr(self.bot, 'recommendation_service') and self.bot.recommendation_service:
+            # Try to get query from search_key if available in callback data
+            # The query is stored in search session cache, we'll track it after file is sent
+            # For now, we'll track it asynchronously without blocking
+            try:
+                # Extract search_key from callback if it exists (for file buttons from search results)
+                # The search_key format is stored in cache with query info
+                # We'll track this after successful file send
+                pass  # Will track after file is successfully sent
+            except Exception as e:
+                logger.debug(f"Could not extract query for recommendation tracking: {e}")
+        
         query_answered = False
         try:
             await query.answer("⏳ Sending file...", show_alert=False)
@@ -181,6 +195,32 @@ class FileCallbackHandler(BaseCommandHandler):
             self._track_task(
                 self._auto_delete_message(sent_msg, delete_time)
             )
+            
+            # Track file click for recommendations (non-blocking)
+            if hasattr(self.bot, 'recommendation_service') and self.bot.recommendation_service:
+                try:
+                    # Try to find query from recent search sessions for this user
+                    # We'll look for search sessions that contain this file
+                    query = ""
+                    # Search for recent search sessions (last 10 minutes worth)
+                    # This is a best-effort approach - if we can't find it, we still track the click
+                    try:
+                        from core.cache.config import CacheKeyGenerator
+                        # Try to get from user's recent search (stored separately)
+                        recent_search_key = f"user_last_search:{callback_user_id}"
+                        recent_search = await self.bot.cache.get(recent_search_key)
+                        if recent_search and isinstance(recent_search, dict):
+                            query = recent_search.get('query', '')
+                    except Exception:
+                        pass
+                    
+                    await self.bot.recommendation_service.track_file_click(
+                        callback_user_id,
+                        query,
+                        file.file_unique_id
+                    )
+                except Exception as e:
+                    logger.debug(f"Error tracking file click for recommendations: {e}")
 
 
         except UserIsBlocked:

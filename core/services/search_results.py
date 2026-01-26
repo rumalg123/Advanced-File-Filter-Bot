@@ -6,6 +6,8 @@ from typing import List, Optional, Callable, Any
 
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from core.utils.button_builder import ButtonBuilder
+from core.utils.error_formatter import ErrorMessageFormatter
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.button_builder import ButtonBuilder
@@ -20,17 +22,19 @@ logger = get_logger(__name__)
 class SearchResultsService:
     """Service for sending search results with unified formatting and pagination"""
 
-    def __init__(self, cache_manager, config):
+    def __init__(self, cache_manager, config, recommendation_service=None):
         """
         Initialize SearchResultsService
         
         Args:
             cache_manager: Cache manager instance for storing search sessions
             config: Bot configuration object
+            recommendation_service: Optional recommendation service for tracking
         """
         self.cache = cache_manager
         self.config = config
         self.ttl = CacheTTLConfig()
+        self.recommendation_service = recommendation_service
 
     async def send_results(
         self,
@@ -106,6 +110,23 @@ class SearchResultsService:
                 search_data,
                 expire=self.ttl.SEARCH_SESSION
             )
+            
+            # Store user's last search for recommendation tracking
+            from core.cache.config import CacheKeyGenerator
+            recent_search_key = f"user_last_search:{user_id}"
+            await self.cache.set(
+                recent_search_key,
+                {'query': query, 'search_key': search_key},
+                expire=600  # 10 minutes
+            )
+            
+            # Track files shown for this query (for recommendations)
+            if hasattr(self, 'recommendation_service') and self.recommendation_service:
+                try:
+                    file_unique_ids = [f.file_unique_id for f in files]
+                    await self.recommendation_service.track_files_from_query(query, file_unique_ids)
+                except Exception as e:
+                    logger.debug(f"Error tracking files for recommendations: {e}")
 
             logger.debug(
                 f"Stored search results for key: {search_key}, "
@@ -158,6 +179,30 @@ class SearchResultsService:
                 # Also delete the user's search query message in private
                 if is_private:
                     auto_delete_callback(message, delete_time)
+            
+            # Show recommendations after search results (non-blocking, async)
+            if self.recommendation_service and is_private:
+                try:
+                    # Get recommendations based on current query
+                    recommended_file_ids = await self.recommendation_service.get_recommended_files_from_query(
+                        query, limit=3
+                    )
+                    
+                    # Get similar queries
+                    similar_queries = await self.recommendation_service.get_similar_queries(query, limit=3)
+                    
+                    # Only show if we have recommendations
+                    if recommended_file_ids or similar_queries:
+                        # This will be sent as a separate message (non-blocking)
+                        # We'll create a background task for this
+                        import asyncio
+                        asyncio.create_task(
+                            self._send_recommendations(
+                                client, message, query, recommended_file_ids, similar_queries, user_id
+                            )
+                        )
+                except Exception as e:
+                    logger.debug(f"Error showing recommendations: {e}")
 
             return True
 
@@ -202,6 +247,50 @@ class SearchResultsService:
             buttons.extend(pagination_buttons)
 
         return buttons
+    
+    async def _send_recommendations(
+        self,
+        client: Client,
+        message: Message,
+        query: str,
+        recommended_file_ids: List[str],
+        similar_queries: List[str],
+        user_id: int
+    ):
+        """Send recommendations as a separate message (non-blocking)"""
+        try:
+            from core.utils.error_formatter import ErrorMessageFormatter
+            from core.utils.button_builder import ButtonBuilder
+            
+            text_parts = []
+            buttons = []
+            
+            # Add similar queries as buttons
+            if similar_queries:
+                text_parts.append("💡 <b>Similar Searches:</b>")
+                query_buttons = []
+                for similar_query in similar_queries[:3]:
+                    query_buttons.append(
+                        ButtonBuilder.action_button(
+                            f"🔍 {similar_query[:20]}...",
+                            callback_data=f"search#page#{similar_query}#0#0#{user_id}"
+                        )
+                    )
+                if query_buttons:
+                    buttons.append(query_buttons)
+            
+            # Note: File recommendations would require fetching files from DB
+            # For now, we'll just show query recommendations
+            # File recommendations can be added later when files are fetched
+            
+            if buttons:
+                text = "\n".join(text_parts) if text_parts else "💡 <b>Recommendations</b>"
+                await message.reply_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
+                )
+        except Exception as e:
+            logger.debug(f"Error sending recommendations: {e}")
 
     async def _send_message(
         self,

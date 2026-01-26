@@ -2,6 +2,7 @@ import asyncio
 import random
 import re
 import uuid
+from typing import Dict
 from weakref import WeakSet
 
 from pyrogram import Client, filters, enums
@@ -48,11 +49,18 @@ class SearchHandler:
         # Initialize search results service
         self.search_results_service = SearchResultsService(
             cache_manager=bot.cache,
-            config=bot.config
+            config=bot.config,
+            recommendation_service=getattr(bot, 'recommendation_service', None)
         )
         
         # Get search history service from bot
         self.search_history_service = getattr(bot, 'search_history_service', None)
+        
+        # Get recommendation service from bot
+        self.recommendation_service = getattr(bot, 'recommendation_service', None)
+        
+        # Store last query per user for sequence tracking
+        self._user_last_query: Dict[int, str] = {}
         
         self.register_handlers()
 
@@ -60,7 +68,7 @@ class SearchHandler:
         """Register search handlers"""
         # Text message search in groups and private chats
         excluded_commands = [
-            'start', 'help', 'about', 'stats', 'plans', 'my_keywords', 'popular_keywords',
+            'start', 'help', 'about', 'stats', 'plans', 'my_keywords', 'popular_keywords', 'recommendations',
             'broadcast', 'users', 'ban', 'unban', 'addpremium', 'removepremium',
             'add_channel', 'remove_channel', 'list_channels', 'toggle_channel',
             'connect', 'disconnect', 'connections', 'setskip',
@@ -551,6 +559,12 @@ class SearchHandler:
             # Track search query for history (both user and global)
             if self.search_history_service:
                 await self.search_history_service.track_search(user_id, query, track_global=True)
+            
+            # Track search sequence for recommendations
+            if self.recommendation_service:
+                previous_query = self._user_last_query.get(user_id)
+                await self.recommendation_service.track_search_sequence(user_id, previous_query, query)
+                self._user_last_query[user_id] = query
             
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE

@@ -79,6 +79,12 @@ class CommandHandler:
                 filters.command("popular_keywords") & filters.private
             )
         )
+        self.bot.add_handler(
+            MessageHandler(
+                self.user_handler.recommendations_command,
+                filters.command("recommendations") & filters.private
+            )
+        )
 
         # In the register_handlers method, add this BEFORE registering search handlers (around line 42):
 
@@ -221,6 +227,18 @@ class CommandHandler:
             CallbackQueryHandler(
                 self.user_callback_handler.handle_start_menu_callback,
                 filters.regex(r"^start_menu$")
+            )
+        )
+        self.bot.add_handler(
+            CallbackQueryHandler(
+                self.user_callback_handler.handle_refresh_recommendations_callback,
+                filters.regex(r"^refresh_recommendations$")
+            )
+        )
+        self.bot.add_handler(
+            CallbackQueryHandler(
+                self.user_callback_handler.handle_close_recommendations_callback,
+                filters.regex(r"^close_recommendations$")
             )
         )
         

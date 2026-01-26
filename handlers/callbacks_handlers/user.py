@@ -4,6 +4,7 @@ from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
+from core.utils.button_builder import ButtonBuilder
 import core.utils.messages as config_messages
 from core.utils.messages import MessageHelper
 from repositories.media import FileType
@@ -198,3 +199,21 @@ class UserCallbackHandler(BaseCommandHandler):
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         await query.answer()
+
+    @require_subscription()
+    async def handle_refresh_recommendations_callback(self, client: Client, query: CallbackQuery):
+        """Handle refresh recommendations callback"""
+        await query.answer("🔄 Refreshing recommendations...")
+        # Re-run recommendations command
+        from handlers.commands_handlers.user import UserCommandHandler
+        user_handler = UserCommandHandler(self.bot)
+        await user_handler.recommendations_command(client, query.message)
+
+    @require_subscription()
+    async def handle_close_recommendations_callback(self, client: Client, query: CallbackQuery):
+        """Handle close recommendations callback"""
+        await query.answer("❌ Closed")
+        try:
+            await query.message.delete()
+        except Exception as e:
+            logger.debug(f"Could not delete recommendations message: {e}")
