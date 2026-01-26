@@ -235,7 +235,7 @@ class SearchHandler:
         # Handle "Close" button click (replaces "Remove Keyboard")
         if query == "❌ Close":
             await message.reply_text(
-                "Keyboard closed. Use /keywords to show it again.",
+                "Keyboard closed. Use /my_keywords to show it again.",
                 reply_markup=ReplyKeyboardRemove()
             )
             return
