@@ -16,10 +16,13 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - **🗃️ Multi-Database Support**: Automatic scaling with multiple MongoDB databases and size limits
 - **🔄 Auto-Indexing**: Automatically index files from configured channels
 - **💎 Premium System**: Tiered access with configurable daily limits for free users
-- **🛡️ Rate Limiting**: Prevent spam and ensure quality of service
-- **💾 Redis Caching**: Improved performance with distributed caching
+- **🛡️ Rate Limiting**: Comprehensive rate limiting for search, file requests, inline queries, and broadcasts
+- **💾 Redis Caching**: Improved performance with distributed caching and TTL management
 - **🚀 uvloop Support**: Enhanced performance on Linux with uvloop event loop
 - **🎯 Smart File Emojis**: File-type specific emojis (🎬 for videos, 📦 for archives, 💬 for subtitles, etc.)
+- **💡 Smart Recommendations**: Personalized file and search recommendations based on user behavior
+- **📊 Search History**: Track and display most searched keywords with keyboard shortcuts
+- **🔍 Fuzzy Matching**: Typo-tolerant search with "Did you mean?" suggestions
 
 ### 🎯 Advanced Features
 - **🔗 Connection Management**: Connect groups to manage filters privately
@@ -37,6 +40,10 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - **🛡️ Advanced Security**: Structured error handling with correlation IDs and audit logging
 - **⚡ Performance Optimized**: LRU/TTL caching with metrics tracking and batch database operations
 - **🎨 Premium Gating**: Link-level premium requirements with flexible access control
+- **💡 Smart Recommendations**: Personalized file and search recommendations based on user behavior
+- **📊 Search History**: Track and display most searched keywords with keyboard shortcuts
+- **🔍 Fuzzy Matching**: Typo-tolerant search with "Did you mean?" suggestions using rapidfuzz
+- **🛡️ Rate Limiting**: Comprehensive rate limiting for search, file requests, inline queries, and broadcasts
 
 ### 👨‍💼 Admin Features
 - **📈 Detailed Statistics**: User stats, file stats, cache stats, and system metrics
@@ -62,6 +69,15 @@ A powerful and feature-rich Telegram bot for searching and managing media files 
 - A Telegram Bot Token (from [@BotFather](https://t.me/botfather))
 - API ID and Hash (from [telegram.org](https://my.telegram.org))
 - Linux OS (recommended for uvloop optimization)
+
+### Python Dependencies
+Key libraries include:
+- `pyrogram` - Telegram MTProto API wrapper
+- `motor` - Async MongoDB driver
+- `redis` - Redis client for caching and rate limiting
+- `rapidfuzz` - High-performance fuzzy string matching for typo tolerance
+- `pydantic` - Settings management and validation
+- `uvloop` (optional) - Enhanced event loop performance on Linux
 
 ## 🛠️ Installation
 
@@ -96,11 +112,21 @@ pip install uvloop
 ### 3. Configure Environment Variables
 ```bash
 # Copy sample environment file
-cp sample.env .env
+cp .env.example .env
+# Note: The file is named .env.example (not sample.env)
 
 # Edit .env with your configuration
 nano .env  # or use any text editor
 ```
+
+**Required Variables:**
+- `API_ID` and `API_HASH` - Get from [telegram.org](https://my.telegram.org)
+- `BOT_TOKEN` - Get from [@BotFather](https://t.me/botfather)
+- `DATABASE_URI` - MongoDB connection string
+- `REDIS_URI` - Redis connection string
+- `ADMINS` - Your Telegram user ID (comma-separated for multiple admins)
+
+See the [Configuration Guide](#-configuration-guide) section for all available options.
 
 ### 4. Set Up MongoDB
 
@@ -197,11 +223,13 @@ Add these environment variables to your `.env` file:
 # Auto-Update Settings
 UPDATE_REPO=https://github.com/rumalg123/Advanced-File-Filter-Bot
 UPDATE_BRANCH=main
-AUTO_UPDATE=false          # Auto-update on every start
-UPDATE_ON_START=false      # Update once on start
-BACKUP_ON_UPDATE=true      # Create backups (recommended)
+AUTO_UPDATE=false              # Auto-update on every start
+UPDATE_ON_START=false          # Update once on start
+BACKUP_ON_UPDATE=true          # Create backups (recommended)
 CONTINUE_ON_UPDATE_FAIL=false  # Continue with old version if update fails (Docker only)
 ```
+
+**Note**: The bot uses `UPDATE_REPO` and `UPDATE_BRANCH` (not `UPSTREAM_REPO` and `UPSTREAM_BRANCH`). The `UPSTREAM_*` variables are legacy and may still work but `UPDATE_*` is preferred.
 
 ### 📚 Update Process
 1. **Validation**: Repository URL and branch name validation
@@ -304,22 +332,75 @@ docker run -d \
 | `KEEP_ORIGINAL_CAPTION` | Keep original file captions | `True` |
 | `DATABASE_AUTO_SWITCH` | Auto-switch databases when full | `True` |
 | `DATABASE_SIZE_LIMIT_GB` | Size limit per database (GB) | `0.5` |
+| `DATABASE_MAX_FAILURES` | Max failures before circuit breaker opens | `5` |
+| `DATABASE_RECOVERY_TIMEOUT` | Recovery timeout in seconds | `300` |
+| `DATABASE_HALF_OPEN_CALLS` | Max calls in half-open state | `3` |
+| `COLLECTION_NAME` | MongoDB collection name | `FILES` |
+| `SESSION` | Bot session name | `Media_search` |
+| `PORT` | Server port | `8000` |
+| `WORKERS` | Number of workers | `50` |
 | `AUTO_DELETE_MESSAGE` | Custom auto-delete message template | `⏱ This {content_type} will be auto-deleted after {minutes} minutes` |
 | `START_MESSAGE` | Custom start message template | `Welcome to the bot!` |
-| `UPSTREAM_REPO` | Git repository for auto-updates | `https://github.com/user/repo.git` |
-| `UPSTREAM_BRANCH` | Git branch for updates | `main` |
+| `UPDATE_REPO` | Git repository for auto-updates | `https://github.com/user/repo.git` |
+| `UPDATE_BRANCH` | Git branch for updates | `main` |
+| `AUTO_UPDATE` | Auto-update on every start | `false` |
+| `UPDATE_ON_START` | Update once on start | `false` |
+| `BACKUP_ON_UPDATE` | Create backups during updates | `true` |
+| `CONTINUE_ON_UPDATE_FAIL` | Continue with old version if update fails (Docker) | `false` |
+| `REQUEST_ONLY_FOR_PREMIUM` | Restrict #request feature to premium users only | `False` |
+| `REQUEST_PER_DAY` | Daily request limit per user | `3` |
+| `REQUEST_WARNING_LIMIT` | Warning limit before ban | `5` |
+| `USE_ORIGINAL_CAPTION_FOR_BATCH` | Use original captions in batch mode | `true` |
+| `CUSTOM_FILE_CAPTION` | Custom file caption template (placeholders: {filename}, {size}) | Empty (uses default) |
+| `BATCH_FILE_CAPTION` | Batch file caption template | Empty (uses default) |
+| `TZ` | Timezone setting | `UTC` |
 
 ### Optional Features
 
 | Variable | Description               | Required |
 |----|---------------------------|----------|
 | `AUTH_CHANNEL` | Force subscription channel | Optional |
-| `AUTH_GROUPS` | Force subscription groups | Optional |
+| `AUTH_GROUPS` | Force subscription groups (comma-separated) | Optional |
+| `AUTH_USERS` | Authorized user IDs (comma-separated) | Optional |
 | `FILE_STORE_CHANNEL` | Channels for file storage | Optional |
 | `SUPPORT_GROUP_ID` | Support group for #request | Optional |
+| `SUPPORT_GROUP_URL` | Support group URL | Optional |
+| `SUPPORT_GROUP_NAME` | Support group name | Optional |
 | `INDEX_REQ_CHANNEL` | Channel for index requests | Optional |
 | `DELETE_CHANNEL` | Channel for file deletion | Optional |
+| `REQ_CHANNEL` | Request channel ID (uses LOG_CHANNEL if 0) | Optional |
 | `PAYMENT_LINK` | Payment Method Link       | Optional |
+| `PICS` | Picture URLs for start command (comma-separated) | Optional |
+| `CHANNELS` | Channel IDs to index (comma-separated) | Optional |
+
+### Concurrency Configuration (Optional)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CONCURRENCY_TELEGRAM_SEND` | Max concurrent Telegram send operations | `10` |
+| `CONCURRENCY_TELEGRAM_FETCH` | Max concurrent Telegram fetch operations | `15` |
+| `CONCURRENCY_DATABASE_WRITE` | Max concurrent database write operations | `20` |
+| `CONCURRENCY_DATABASE_READ` | Max concurrent database read operations | `30` |
+| `CONCURRENCY_FILE_PROCESSING` | Max concurrent file processing operations | `5` |
+| `CONCURRENCY_BROADCAST` | Max concurrent broadcast operations | `3` |
+| `CONCURRENCY_INDEXING` | Max concurrent indexing operations | `8` |
+
+### Processing Limits Configuration (Optional)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROCESSING_BATCH_SIZE_HIGH_LOAD` | Batch size when queue > 500 | `50` |
+| `PROCESSING_BATCH_SIZE_MEDIUM_LOAD` | Batch size when queue > 200 | `30` |
+| `PROCESSING_BATCH_SIZE_LOW_LOAD` | Batch size when queue <= 200 | `20` |
+| `PROCESSING_QUEUE_HIGH_THRESHOLD` | Queue size threshold for high load | `500` |
+| `PROCESSING_QUEUE_MEDIUM_THRESHOLD` | Queue size threshold for medium load | `200` |
+| `PROCESSING_MAX_BATCH_MESSAGES` | Maximum messages in a single batch link | `10000` |
+| `PROCESSING_MESSAGE_QUEUE_SIZE` | Maximum message queue size | `1000` |
+| `PROCESSING_OVERFLOW_QUEUE_SIZE` | Maximum overflow queue size | `500` |
+| `PROCESSING_INTER_MESSAGE_DELAY` | Delay between processing messages (seconds) | `0.5` |
+| `PROCESSING_BATCH_WAIT_TIME_HIGH` | Wait time in high load (seconds) | `2` |
+| `PROCESSING_BATCH_WAIT_TIME_MEDIUM` | Wait time in medium load (seconds) | `3` |
+| `PROCESSING_BATCH_WAIT_TIME_LOW` | Wait time in low load (seconds) | `5` |
 
 ## 📚 Usage Guide
 
@@ -332,6 +413,9 @@ docker run -d \
 | `/about` | About the bot |
 | `/stats` | Bot statistics |
 | `/plans` | View premium plans |
+| `/recommendations` | Get personalized file and search recommendations |
+| `/my_keywords` | View your most searched keywords |
+| `/popular_keywords` | View globally popular search keywords |
 
 ### 🔍 Search Features
 - **Direct Search**: Just send any text to search for files
@@ -341,6 +425,10 @@ docker run -d \
 - **Smart File Emojis**: Files display with type-specific emojis for easy identification
 - **Cross-Database Search**: Search across multiple databases simultaneously with proper result ordering
 - **Auto-Delete Results**: Search results automatically delete after configured time to keep chats clean
+- **Fuzzy Matching**: Typo-tolerant search automatically handles common typos (e.g., "fevr" matches "fever")
+- **"Did you mean?" Suggestions**: When no results found, bot suggests similar queries with clickable buttons
+- **Search History**: Track your search patterns and access frequently used keywords via keyboard shortcuts
+- **Smart Recommendations**: Get personalized file and search suggestions based on your search history and behavior
 
 #### File Type Emojis
 | File Types | Emoji | Examples |
@@ -932,6 +1020,10 @@ mongorestore --uri="your-connection-string" backup/
 ## 🆕 Recent Updates & New Features
 
 ### ✨ Latest Major Additions
+- **💡 Smart Recommendations**: Personalized file and search recommendations based on user behavior, search history, and trending content
+- **📊 Search History & Keywords**: Track user and global search patterns with keyboard shortcuts for quick access
+- **🔍 Fuzzy Matching & Typo Tolerance**: Advanced typo-tolerant search with "Did you mean?" suggestions using rapidfuzz library
+- **🛡️ Comprehensive Rate Limiting**: Rate limiting for search (30/min), file requests (10/min), inline queries (50/min), and broadcasts (1/hour)
 - **📡 Enhanced Broadcasting System**: HTML formatting, message preview, confirmation buttons, progress tracking, and emergency stop functionality
 - **🔄 Enterprise Auto-Update System**: Comprehensive auto-update with security validation, backup system, and rollback capabilities
 - **🐚 Secure Shell Command**: Owner-only shell access with dangerous command detection and security checks
@@ -957,6 +1049,8 @@ mongorestore --uri="your-connection-string" backup/
 
 ### 🔧 Command Improvements
 All commands now automatically appear in Telegram's command menu:
+- Added smart recommendations command (`/recommendations`) with personalized file and search suggestions
+- Added search history commands (`/my_keywords`, `/popular_keywords`) with keyboard shortcuts
 - Added secure shell command (`/shell`) with owner-only access and security checks
 - Added database management commands (`/dbstats`, `/dbinfo`, `/dbswitch`)
 - Added missing filter command aliases (`/filter`, `/viewfilters`, `/delf`, `/delallf`)
@@ -1003,11 +1097,21 @@ All commands now automatically appear in Telegram's command menu:
 ```bash
 # Single database (existing setup)
 DATABASE_URI=mongodb://localhost:27017
+DATABASE_NAME=PIRO
+COLLECTION_NAME=FILES
 
 # Multi-database (new feature)
+DATABASE_URI=mongodb://localhost:27017  # Primary database (still required)
+DATABASE_NAME=PIRO  # Primary database name
 DATABASE_URIS=mongodb://localhost:27017,mongodb://localhost:27018,mongodb://localhost:27019
+DATABASE_NAMES=PIRO_DB1,PIRO_DB2,PIRO_DB3
 DATABASE_SIZE_LIMIT_GB=0.5
-DATABASE_AUTO_SWITCH=True
+DATABASE_AUTO_SWITCH=true
+
+# Circuit breaker configuration (optional)
+DATABASE_MAX_FAILURES=5
+DATABASE_RECOVERY_TIMEOUT=300
+DATABASE_HALF_OPEN_CALLS=3
 ```
 
 ### Duplicate Detection
@@ -1028,6 +1132,80 @@ DATABASE_AUTO_SWITCH=True
 - Manage filters privately
 - Multiple group connections
 - Auto-cleanup of invalid connections
+
+### Processing & Performance Configuration
+The bot includes advanced processing limits for optimal performance:
+
+**Dynamic Batch Sizing:**
+- Automatically adjusts batch sizes based on queue load
+- High load (>500): 50 messages per batch
+- Medium load (>200): 30 messages per batch
+- Low load (≤200): 20 messages per batch
+
+**Queue Management:**
+- Maximum message queue size: 1000
+- Overflow queue size: 500
+- Configurable wait times based on load
+
+**Batch Link Limits:**
+- Maximum 10,000 messages per batch link
+- Automatic queue management and overflow handling
+- Configurable inter-message delays
+
+All processing limits can be configured via environment variables (see Configuration Guide).
+
+**Configuration Variables:**
+- `PROCESSING_BATCH_SIZE_HIGH_LOAD` - Batch size for high load scenarios
+- `PROCESSING_BATCH_SIZE_MEDIUM_LOAD` - Batch size for medium load scenarios
+- `PROCESSING_BATCH_SIZE_LOW_LOAD` - Batch size for low load scenarios
+- `PROCESSING_QUEUE_HIGH_THRESHOLD` - Queue threshold for high load detection
+- `PROCESSING_QUEUE_MEDIUM_THRESHOLD` - Queue threshold for medium load detection
+- `PROCESSING_MAX_BATCH_MESSAGES` - Maximum messages per batch link
+- `PROCESSING_MESSAGE_QUEUE_SIZE` - Maximum message queue size
+- `PROCESSING_OVERFLOW_QUEUE_SIZE` - Maximum overflow queue size
+- `PROCESSING_INTER_MESSAGE_DELAY` - Delay between processing messages
+- `PROCESSING_BATCH_WAIT_TIME_HIGH/MEDIUM/LOW` - Wait times based on load
+
+### Smart Recommendations System
+- **Personalized Recommendations**: Get file and search suggestions based on your search history and behavior
+- **Similar Searches**: Discover related queries based on co-occurrence patterns and fuzzy matching
+- **Based on History**: See files you might like based on your past searches with actual file names displayed
+- **Trending Content**: Discover popular files from global search trends with file names
+- **Clickable Results**: All recommendations are clickable - search queries and files with proper buttons
+- **Real-time Updates**: Recommendations update as you search and interact with files
+- **Caching**: Recommendations are cached for 10 minutes for fast access
+- **Display Format**: Shows actual file names with emojis and search queries in a user-friendly format
+
+### Search History & Keywords
+- **User Search History**: Track your personal search patterns and frequently used keywords
+- **Global Popular Searches**: See what's trending across all users
+- **Keyboard Shortcuts**: Access your most searched keywords via ReplyKeyboardMarkup
+- **Quick Access**: Click any keyword to instantly search again
+- **Privacy**: Your search history is stored securely in Redis with configurable TTL
+
+### Fuzzy Matching & Typo Tolerance
+- **Typo-Tolerant Search**: Automatically handles common typos (e.g., "fevr" → "fever", "thus" → "this")
+- **"Did you mean?" Suggestions**: When no results found, bot suggests similar queries with clickable buttons
+- **rapidfuzz Integration**: High-performance fuzzy matching library for accurate suggestions
+- **Filter Matching**: Fuzzy matching also works for filter commands (add, delete, match)
+- **Regex Patterns**: Typo-tolerant regex patterns for database queries
+- **Smart Thresholds**: Configurable similarity thresholds for different use cases
+
+### Rate Limiting System
+- **Search Rate Limiting**: 30 searches per minute per user
+- **File Request Rate Limiting**: 10 file requests per minute per user
+- **Inline Query Rate Limiting**: 50 inline queries per minute per user
+- **Broadcast Rate Limiting**: 1 broadcast per hour per admin
+- **Cooldown System**: Automatic cooldown periods (60 seconds) when limits are exceeded
+- **Redis-Based**: Atomic rate limiting using Redis for distributed systems
+- **Graceful Handling**: User-friendly error messages with remaining time display
+- **Automatic Expiration**: Rate limit counters automatically expire after time window
+- **Thread-Safe**: Prevents race conditions with atomic Redis operations
+
+**Rate Limit Configuration:**
+- All rate limits are configured in `core/utils/rate_limiter.py`
+- Time windows and cooldown periods are customizable
+- Rate limits are enforced at the service level for consistency
 
 ## 🤝 Contributing
 
