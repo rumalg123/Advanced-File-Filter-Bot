@@ -10,6 +10,7 @@ from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
 from core.utils.button_builder import ButtonBuilder
 from core.utils.error_formatter import ErrorMessageFormatter
+from core.utils.caption import CaptionFormatter
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from repositories.media import FileType
 from core.utils.logger import get_logger
@@ -476,9 +477,9 @@ class UserCommandHandler(BaseCommandHandler):
             if recommendations.get('similar_queries'):
                 text_parts.append("<b>🔍 Similar Searches:</b>")
                 query_buttons = []
-                for query in recommendations['similar_queries'][:4]:
-                    # Truncate long queries
-                    display_query = query[:25] + "..." if len(query) > 25 else query
+                for query in recommendations['similar_queries'][:6]:  # Show up to 6 queries
+                    # Truncate long queries for display
+                    display_query = query[:30] + "..." if len(query) > 30 else query
                     query_buttons.append(
                         ButtonBuilder.action_button(
                             f"🔍 {display_query}",
@@ -489,18 +490,78 @@ class UserCommandHandler(BaseCommandHandler):
                     # Add 2 per row
                     for i in range(0, len(query_buttons), 2):
                         buttons.append(query_buttons[i:i+2])
+                    # Show query list in text
+                    query_list = ", ".join([f"<code>{q[:20]}...</code>" if len(q) > 20 else f"<code>{q}</code>" 
+                                           for q in recommendations['similar_queries'][:4]])
+                    text_parts.append(f"  {query_list}\n")
             
-            # Based on history section
+            # Based on history section - fetch and display actual files
             if recommendations.get('based_on_history'):
-                text_parts.append(f"\n<b>📚 Based on Your History:</b> {len(recommendations['based_on_history'])} files")
-                # Note: To show actual files, we'd need to fetch them from DB
-                # For now, we'll just show the count
+                file_ids = recommendations['based_on_history'][:5]  # Limit to 5 files
+                # Fetch files using batch lookup (efficient)
+                files_dict = await self.bot.media_repo.find_files_batch(file_ids)
+                files = [f for f in files_dict.values() if f is not None]  # Filter out None values
+                
+                if files:
+                    text_parts.append(f"\n<b>📚 Based on Your History:</b> {len(files)} files")
+                    # Show file names in text
+                    from core.utils.file_emoji import get_file_emoji
+                    file_names = []
+                    file_buttons = []
+                    for file in files[:5]:  # Show up to 5 files
+                        emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
+                        # Truncate long filenames
+                        display_name = file.file_name[:35] + "..." if len(file.file_name) > 35 else file.file_name
+                        file_names.append(f"{emoji} <code>{display_name}</code>")
+                        # Create clickable file button
+                        file_buttons.append(
+                            ButtonBuilder.file_button(file, user_id=user_id, is_private=True)
+                        )
+                    
+                    # Add file names to text (2 per line)
+                    for i in range(0, len(file_names), 2):
+                        line = "  " + " • ".join(file_names[i:i+2])
+                        text_parts.append(line)
+                    
+                    # Add file buttons (2 per row)
+                    if file_buttons:
+                        for i in range(0, len(file_buttons), 2):
+                            buttons.append(file_buttons[i:i+2])
             
-            # Trending section
+            # Trending section - fetch and display actual files
             if recommendations.get('trending_files'):
-                text_parts.append(f"\n<b>🔥 Trending:</b> {len(recommendations['trending_files'])} files")
+                file_ids = recommendations['trending_files'][:5]  # Limit to 5 files
+                # Fetch files using batch lookup (efficient)
+                files_dict = await self.bot.media_repo.find_files_batch(file_ids)
+                files = [f for f in files_dict.values() if f is not None]  # Filter out None values
+                
+                if files:
+                    text_parts.append(f"\n<b>🔥 Trending:</b> {len(files)} files")
+                    # Show file names in text
+                    from core.utils.file_emoji import get_file_emoji
+                    file_names = []
+                    file_buttons = []
+                    for file in files[:5]:  # Show up to 5 files
+                        emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
+                        # Truncate long filenames
+                        display_name = file.file_name[:35] + "..." if len(file.file_name) > 35 else file.file_name
+                        file_names.append(f"{emoji} <code>{display_name}</code>")
+                        # Create clickable file button
+                        file_buttons.append(
+                            ButtonBuilder.file_button(file, user_id=user_id, is_private=True)
+                        )
+                    
+                    # Add file names to text (2 per line)
+                    for i in range(0, len(file_names), 2):
+                        line = "  " + " • ".join(file_names[i:i+2])
+                        text_parts.append(line)
+                    
+                    # Add file buttons (2 per row)
+                    if file_buttons:
+                        for i in range(0, len(file_buttons), 2):
+                            buttons.append(file_buttons[i:i+2])
             
-            if not recommendations.get('similar_queries') and not recommendations.get('based_on_history'):
+            if not recommendations.get('similar_queries') and not recommendations.get('based_on_history') and not recommendations.get('trending_files'):
                 text_parts.append(
                     "\n" + ErrorMessageFormatter.format_info(
                         "Start searching to get personalized recommendations!",
@@ -510,19 +571,23 @@ class UserCommandHandler(BaseCommandHandler):
             
             text = "\n".join(text_parts)
             
-            # Add refresh button
-            if buttons:
-                buttons.append([
-                    ButtonBuilder.action_button("🔄 Refresh", callback_data="refresh_recommendations")
-                ])
+            # Add refresh and close buttons
+            action_buttons = []
+            if recommendations.get('similar_queries') or recommendations.get('based_on_history') or recommendations.get('trending_files'):
+                action_buttons.append(ButtonBuilder.action_button("🔄 Refresh", callback_data="refresh_recommendations"))
+            action_buttons.append(ButtonBuilder.action_button("❌ Close", callback_data="close_recommendations"))
+            
+            if action_buttons:
+                buttons.append(action_buttons)
             
             await message.reply_text(
                 text,
-                reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
+                reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
+                parse_mode=CaptionFormatter.get_parse_mode()
             )
             
         except Exception as e:
-            logger.error(f"Error getting recommendations: {e}")
+            logger.error(f"Error getting recommendations: {e}", exc_info=True)
             await message.reply_text(
                 ErrorMessageFormatter.format_error("Error getting recommendations. Please try again later.")
             )

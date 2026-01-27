@@ -254,8 +254,8 @@ class RecommendationService:
             Dictionary with recommendation data:
             {
                 'similar_queries': [...],
-                'trending_files': [...],
-                'based_on_history': [...]
+                'trending_files': [...],  # List of file_unique_ids
+                'based_on_history': [...]  # List of file_unique_ids
             }
         """
         try:
