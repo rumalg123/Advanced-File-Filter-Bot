@@ -148,7 +148,7 @@ class CacheMonitor:
             try:
                 # Get value size (some Redis versions might not support memory_usage)
                 try:
-                    value_size = await self.cache.redis.memory_usage(key)
+                    value_size = self.cache.redis.memory_usage(key)
                 except (AttributeError, Exception):
                     # Fallback: estimate size by getting the actual value
                     value = await self.cache.redis.get(key)
@@ -192,7 +192,7 @@ class CacheMonitor:
         if not self.cache.redis:
             return {"error": "Redis not connected"}
 
-        analysis = {
+        analysis: Dict[str, Any] = {
             "samples_analyzed": 0,
             "total_current_size": 0,
             "potential_savings": {},

@@ -56,7 +56,7 @@ class DatabaseConfig(BaseSettings):
     # Primary database
     uri: str = Field(default='', description="Primary MongoDB URI")
     name: str = Field(default='PIRO', description="Primary database name")
-    collection_name: str = Field(default='FILES', env='COLLECTION_NAME', description="Collection name")
+    collection_name: str = Field(default='FILES', description="Collection name")
     
     # Multi-database support
     size_limit_gb: float = Field(default=0.5, description="Database size limit in GB")
