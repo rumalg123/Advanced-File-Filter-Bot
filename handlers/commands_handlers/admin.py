@@ -166,12 +166,12 @@ class AdminCommandHandler(BaseCommandHandler):
     async def handle_broadcast_confirmation(self, client: Client, callback_query):
         """Handle broadcast confirmation callback"""
         if not hasattr(self.bot, '_pending_broadcast') or not self.bot._pending_broadcast:
-            await callback_query.answer(ErrorMessageFormatter.format_not_found("Pending broadcast"), show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_not_found("Pending broadcast", plain_text=True), show_alert=True)
             return
 
         pending = self.bot._pending_broadcast
         if callback_query.from_user.id != pending['admin_id']:
-            await callback_query.answer(ErrorMessageFormatter.format_access_denied("Only the admin who initiated this broadcast can confirm it"), show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_access_denied("Only the admin who initiated this broadcast can confirm it", plain_text=True), show_alert=True)
             return
 
         if callback_query.data == "cancel_broadcast":
@@ -407,7 +407,7 @@ class AdminCommandHandler(BaseCommandHandler):
             await self.bot.cache_invalidator.invalidate_user_cache(target_user_id)
             # Notify the banned user
             ban_notification = (
-                ErrorMessageFormatter.format_access_denied("You have been banned from using this bot", title="Banned") + "\n"
+                ErrorMessageFormatter.format_access_denied("You have been banned from using this bot") + "\n"
                 f"<b>Reason:</b> {reason}\n"
                 f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "If you believe this is a mistake, please contact the bot administrator."

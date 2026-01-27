@@ -28,7 +28,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             # Retrieve the cached deeplink
             cached_data = await self.bot.cache.get(session_key)
             if not cached_data:
-                await query.answer(ErrorMessageFormatter.format_error("Session expired. Please try again."), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_error("Session expired. Please try again.", plain_text=True), show_alert=True)
                 return
 
             original_user_id = cached_data.get('user_id', current_user_id)
@@ -78,13 +78,13 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
                 if not is_subscribed:
                     await query.answer(
-                        ErrorMessageFormatter.format_access_denied("You still need to join the required channel(s)!"),
+                        ErrorMessageFormatter.format_access_denied("You still need to join the required channel(s)!", plain_text=True),
                         show_alert=True
                     )
                     return
 
         # User is now subscribed, handle the original request
-        await query.answer(ErrorMessageFormatter.format_success("Subscription verified!"), show_alert=True)
+        await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
 
         # Try to delete the subscription message
         try:

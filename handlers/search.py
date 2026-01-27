@@ -25,7 +25,7 @@ from handlers.decorators import require_subscription, check_ban
 from core.utils.logger import get_logger
 from core.utils.validators import (
     sanitize_search_query, extract_user_id, is_admin, is_auth_user,
-    is_bot_user, get_special_channels, is_special_channel
+    is_bot_user, get_special_channels, is_special_channel, is_private_chat
 )
 from repositories.user import UserStatus
 from core.utils.pagination import PaginationBuilder
@@ -405,7 +405,7 @@ class SearchHandler:
         # Perform search
         try:
             offset = int(query.offset or 0)
-            files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
+            files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
                 user_id=user_id,
                 query=search_query,
                 chat_id=user_id,  # Use user_id for private context
@@ -415,11 +415,16 @@ class SearchHandler:
             )
 
             if not has_access:
+                # Check if it's daily limit
+                if access_reason and "Daily limit reached" in access_reason:
+                    switch_text = "⚠️ Daily limit reached. Upgrade to premium for unlimited access!"
+                else:
+                    switch_text = ErrorMessageFormatter.format_access_denied(access_reason, include_prefix=False, plain_text=True)
                 try:
                     await query.answer(
                         results=[],
                         cache_time=0,
-                        switch_pm_text=ErrorMessageFormatter.format_access_denied(include_prefix=False),
+                        switch_pm_text=switch_text,
                         switch_pm_parameter="premium"
                     )
                 except QueryIdInvalid:
@@ -512,13 +517,30 @@ class SearchHandler:
             
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
-            files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
+            files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
                 user_id=user_id,
                 query=query,
                 chat_id=user_id,
                 offset=0,
                 limit=page_size
             )
+
+            # If access denied due to daily limit, show proper message
+            if not has_access and access_reason and "Daily limit reached" in access_reason:
+                user = await self.bot.user_repo.get_user(user_id)
+                if user:
+                    daily_limit = self.bot.user_repo.daily_limit
+                    limit_msg = ErrorMessageFormatter.format_warning(
+                        f"Daily limit reached ({user.daily_retrieval_count}/{daily_limit}). Upgrade to premium for unlimited access!",
+                        title="Daily Limit Reached"
+                    )
+                else:
+                    limit_msg = ErrorMessageFormatter.format_warning(
+                        "Daily limit reached. Upgrade to premium for unlimited access!",
+                        title="Daily Limit Reached"
+                    )
+                await message.reply_text(limit_msg)
+                return
 
             if has_access and files:
                 # Send search results using centralized service
@@ -629,13 +651,30 @@ class SearchHandler:
             
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
-            files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
+            files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
                 user_id=user_id,
                 query=query,
                 chat_id=message.chat.id,
                 offset=0,
                 limit=page_size
             )
+
+            # If access denied due to daily limit, show proper message (only in private)
+            if not has_access and access_reason and "Daily limit reached" in access_reason and is_private_chat(message):
+                user = await self.bot.user_repo.get_user(user_id)
+                if user:
+                    daily_limit = self.bot.user_repo.daily_limit
+                    limit_msg = ErrorMessageFormatter.format_warning(
+                        f"Daily limit reached ({user.daily_retrieval_count}/{daily_limit}). Upgrade to premium for unlimited access!",
+                        title="Daily Limit Reached"
+                    )
+                else:
+                    limit_msg = ErrorMessageFormatter.format_warning(
+                        "Daily limit reached. Upgrade to premium for unlimited access!",
+                        title="Daily Limit Reached"
+                    )
+                await message.reply_text(limit_msg)
+                return
 
             if has_access and files:
                 # Send search results using centralized service

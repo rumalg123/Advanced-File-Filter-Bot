@@ -214,13 +214,13 @@ class ConnectionHandler(BaseHandler):
             try:
                 success = await self.bot.filter_service.delete_all_filters(str(group_id))
                 if success:
-                    await query.answer(ErrorMessageFormatter.format_success("All filters deleted!"), show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_success("All filters deleted!", plain_text=True), show_alert=True)
                     await query.message.edit_text(ErrorMessageFormatter.format_success("All filters have been deleted from the group."))
                 else:
-                    await query.answer(ErrorMessageFormatter.format_failed("to delete filters"), show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_failed("to delete filters", plain_text=True), show_alert=True)
             except Exception as e:
                 logger.error(f"Error deleting filters: {e}")
-                await query.answer(ErrorMessageFormatter.format_error("Error deleting filters"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_error("Error deleting filters", plain_text=True), show_alert=True)
 
     async def connections_command(self, client: Client, message: Message):
         """Handle /connections command"""
@@ -344,7 +344,7 @@ class ConnectionHandler(BaseHandler):
         data = query.data.split(":")
 
         if len(data) != 2:
-            return await query.answer(ErrorMessageFormatter.format_invalid("data"), show_alert=True)
+            return await query.answer(ErrorMessageFormatter.format_invalid("data", plain_text=True), show_alert=True)
 
         action, group_id = data
 
@@ -355,7 +355,7 @@ class ConnectionHandler(BaseHandler):
             )
 
             if success:
-                await query.answer(ErrorMessageFormatter.format_success("Connection activated!"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_success("Connection activated!", plain_text=True), show_alert=True)
             else:
                 await query.answer(msg, show_alert=True)
 
@@ -368,9 +368,9 @@ class ConnectionHandler(BaseHandler):
             success = await self.connection_service.clear_active_connection(user_id)
 
             if success:
-                await query.answer(ErrorMessageFormatter.format_success("Connection deactivated!"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_success("Connection deactivated!", plain_text=True), show_alert=True)
             else:
-                await query.answer(ErrorMessageFormatter.format_failed("to deactivate"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_failed("to deactivate", plain_text=True), show_alert=True)
 
             # Refresh the current view
             query.data = f"groupcb:{group_id}:False"  # Set is_active to False
@@ -416,9 +416,9 @@ class ConnectionHandler(BaseHandler):
                 # If delete_filters is True, delete all filters
                 if delete_filters and not self.bot.config.DISABLE_FILTER:
                     await self.bot.filter_service.delete_all_filters(str(group_id))
-                    await query.answer(ErrorMessageFormatter.format_success("Connection and filters deleted!"), show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_success("Connection and filters deleted!", plain_text=True), show_alert=True)
                 else:
-                    await query.answer(ErrorMessageFormatter.format_success("Connection deleted!"), show_alert=True)
+                    await query.answer(ErrorMessageFormatter.format_success("Connection deleted!", plain_text=True), show_alert=True)
             else:
                 await query.answer(msg, show_alert=True)
 
@@ -440,7 +440,7 @@ class ConnectionHandler(BaseHandler):
                 show_alert=True
             )
         else:
-            await query.answer(ErrorMessageFormatter.format_info("No invalid connections found!"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_info("No invalid connections found!", plain_text=True), show_alert=True)
 
         # Refresh connections list
         await self.connections_command(client, query.message)

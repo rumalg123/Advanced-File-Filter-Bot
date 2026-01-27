@@ -234,7 +234,7 @@ class DeleteHandler(BaseHandler):
 
         # Only the original requester can confirm/cancel using validator
         if not is_original_requester(callback_user_id, original_user_id):
-            await callback_query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this"), show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this", plain_text=True), show_alert=True)
             return
 
         cache_key = CacheKeyGenerator.deleteall_pending(original_user_id)

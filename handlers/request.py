@@ -105,7 +105,7 @@ class RequestHandler(BaseHandler):
             if success:
                 # Notify user about ban
                 ban_msg = (
-                    ErrorMessageFormatter.format_access_denied("You have been banned from using this bot", title="Banned") + "\n"
+                    ErrorMessageFormatter.format_access_denied("You have been banned from using this bot") + "\n"
                     f"<b>Reason:</b> Over request warning limit\n"
                     f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                     "You exceeded the maximum number of request warnings.\n"
@@ -189,7 +189,7 @@ class RequestHandler(BaseHandler):
 
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
-            files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
+            files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
                 user_id=user_id,
                 query=keyword,
                 chat_id=user_id,
@@ -271,13 +271,13 @@ class RequestHandler(BaseHandler):
     async def handle_request_callback(self, client: Client, query: CallbackQuery):
         """Handle request action callbacks"""
         if self._shutdown.is_set():
-            await query.answer(ErrorMessageFormatter.format_warning("Bot is shutting down"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_warning("Bot is shutting down", plain_text=True), show_alert=True)
             return
 
         # Validate callback data using validator
         is_valid, data = validate_callback_data(query, expected_parts=4)
         if not is_valid:
-            return await query.answer(ErrorMessageFormatter.format_invalid("data"), show_alert=True)
+            return await query.answer(ErrorMessageFormatter.format_invalid("data", plain_text=True), show_alert=True)
 
         _, action, user_id, msg_id = data
         user_id = int(user_id)

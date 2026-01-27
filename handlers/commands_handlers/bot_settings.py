@@ -4,7 +4,7 @@ from pyrogram import Client
 from pyrogram import StopPropagation
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from core.cache.config import CacheTTLConfig
+from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.button_builder import ButtonBuilder
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
@@ -183,7 +183,7 @@ class BotSettingsHandler(BaseHandler):
 
         # Check if user is first admin
         if not self.bot.config.ADMINS or user_id != self.bot.config.ADMINS[0]:
-            await query.answer(ErrorMessageFormatter.format_warning("Only the primary admin can access settings!"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_warning("Only the primary admin can access settings!", plain_text=True), show_alert=True)
             return
 
         data = query.data
@@ -615,9 +615,9 @@ class BotSettingsHandler(BaseHandler):
                     show_alert=True
                 )
             else:
-                await query.answer(ErrorMessageFormatter.format_failed("to update setting"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_failed("to update setting", plain_text=True), show_alert=True)
         except Exception as e:
-            await query.answer(ErrorMessageFormatter.format_error(str(e)), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_error(str(e), plain_text=True), show_alert=True)
 
     async def reset_to_default(self, query: CallbackQuery, key: str):
         """Reset a setting to default value"""
@@ -627,13 +627,13 @@ class BotSettingsHandler(BaseHandler):
             if success:
                 await self.show_setting_details(query.message, key)
                 await query.answer(
-                    ErrorMessageFormatter.format_success("Reset to default! Restart bot for changes to take effect."),
+                    ErrorMessageFormatter.format_success("Reset to default! Restart bot for changes to take effect.", plain_text=True),
                     show_alert=True
                 )
             else:
-                await query.answer(ErrorMessageFormatter.format_failed("to reset setting"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_failed("to reset setting", plain_text=True), show_alert=True)
         except Exception as e:
-            await query.answer(ErrorMessageFormatter.format_error(str(e)), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_error(str(e), plain_text=True), show_alert=True)
 
     def _get_git_info(self):
         """Get current git information"""

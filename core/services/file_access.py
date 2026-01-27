@@ -114,22 +114,23 @@ class FileAccessService:
             file_type: Optional[str] = None,
             offset: int = 0,
             limit: int = 10
-    ) -> Tuple[List[MediaFile], int, int, bool]:
+    ) -> Tuple[List[MediaFile], int, int, bool, Optional[str]]:
         """
         Search files with access check
-        Returns: (files, next_offset, total, has_access)
+        Returns: (files, next_offset, total, has_access, access_reason)
+        access_reason: None if has_access=True, otherwise the reason for denial
         """
         # Check rate limit
         is_allowed, cooldown = await self.rate_limiter.check_rate_limit(
             user_id, 'search'
         )
         if not is_allowed:
-            return [], 0, 0, False
+            return [], 0, 0, False, f"Rate limit exceeded. Try again in {cooldown} seconds."
 
         # Check user access (without incrementing count for search)
-        can_access, _ = await self.user_repo.can_retrieve_file(user_id)
+        can_access, reason = await self.user_repo.can_retrieve_file(user_id)
         if not can_access:
-            return [], 0, 0, False
+            return [], 0, 0, False, reason
 
 
         # Convert file_type string to enum if provided
@@ -147,4 +148,4 @@ class FileAccessService:
             use_caption_filter
         )
 
-        return files, next_offset, total, True
+        return files, next_offset, total, True, None

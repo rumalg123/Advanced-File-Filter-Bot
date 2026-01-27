@@ -69,7 +69,7 @@ def extract_media_from_message(
                 # Find the string type name
                 for type_str, (enum_val, _) in type_mapping.items():
                     if enum_val == media_type_enum:
-                        return (media, type_str, media_type_enum)
+                        return media, type_str, media_type_enum
         else:
             # Fallback: try to get media from message.media.value
             try:
@@ -79,7 +79,7 @@ def extract_media_from_message(
                     # Try to find matching enum
                     for type_str, (enum_val, _) in type_mapping.items():
                         if attr_name == type_str:
-                            return (media, type_str, enum_val)
+                            return media, type_str, enum_val
             except (AttributeError, TypeError):
                 pass
     
@@ -89,7 +89,7 @@ def extract_media_from_message(
             media_type_enum, attr_name = type_mapping[media_type_str]
             media = getattr(message, attr_name, None)
             if media:
-                return (media, media_type_str, media_type_enum)
+                return media, media_type_str, media_type_enum
     
     return None
 

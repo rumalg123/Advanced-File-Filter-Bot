@@ -63,19 +63,19 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             parts = query.data.split('#', 2)
             if len(parts) < 2:
-                await query.answer(ErrorMessageFormatter.format_invalid("callback data"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_invalid("callback data", plain_text=True), show_alert=True)
                 return
 
             file_identifier = parts[1]
             original_user_id = int(parts[2]) if len(parts) >= 3 else callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid callback data format: {query.data}, error: {e}")
-            await query.answer(ErrorMessageFormatter.format_invalid("request format"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_invalid("request format", plain_text=True), show_alert=True)
             return
 
         # Check if the callback user is the original requester
         if original_user_id and not is_original_requester(callback_user_id, original_user_id):
-            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message", plain_text=True), show_alert=True)
             return
 
         # If in group, redirect to PM
@@ -135,11 +135,23 @@ class FileCallbackHandler(BaseCommandHandler):
         )
 
         if not can_access:
-            await query.answer(reason, show_alert=True)
+            # Check if it's daily limit
+            if reason and "Daily limit reached" in reason:
+                # Show proper daily limit message
+                user = await self.bot.user_repo.get_user(callback_user_id)
+                if user:
+                    daily_limit = self.bot.user_repo.daily_limit
+                    message = f"⚠️ Daily limit reached ({user.daily_retrieval_count}/{daily_limit}). Upgrade to premium for unlimited access!"
+                else:
+                    message = "⚠️ Daily limit reached. Upgrade to premium for unlimited access!"
+            else:
+                # Use the reason as-is (already formatted)
+                message = reason
+            await query.answer(message, show_alert=True)
             return
 
         if not file:
-            await query.answer(ErrorMessageFormatter.format_not_found("File"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_not_found("File", plain_text=True), show_alert=True)
             return
         
         # Track file click for recommendations (if recommendation service available)
@@ -283,7 +295,7 @@ class FileCallbackHandler(BaseCommandHandler):
         try:
             parts = query.data.split('#', 2)
             if len(parts) < 2:
-                await query.answer(ErrorMessageFormatter.format_invalid("callback data"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_invalid("callback data", plain_text=True), show_alert=True)
                 return
 
             search_key = parts[1]
@@ -293,12 +305,12 @@ class FileCallbackHandler(BaseCommandHandler):
                 original_user_id = callback_user_id
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid sendall callback data: {query.data}, error: {e}")
-            await query.answer(ErrorMessageFormatter.format_invalid("request format"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_invalid("request format", plain_text=True), show_alert=True)
             return
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
-            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message", plain_text=True), show_alert=True)
             return
 
         # If in group, redirect to PM
@@ -354,14 +366,14 @@ class FileCallbackHandler(BaseCommandHandler):
         cached_data = await self.bot.cache.get(search_key)
         
         if not cached_data:
-            await query.answer(ErrorMessageFormatter.format_error("Search results expired. Please search again."), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_error("Search results expired. Please search again.", plain_text=True), show_alert=True)
             return
 
         files_data = cached_data.get('files', [])
         search_query = cached_data.get('query', '')
 
         if not files_data:
-            await query.answer(ErrorMessageFormatter.format_not_found("Files"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_not_found("Files", plain_text=True), show_alert=True)
             return
 
         # Check access for bulk send
@@ -369,7 +381,7 @@ class FileCallbackHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await query.answer(ErrorMessageFormatter.format_access_denied(reason), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied(reason, plain_text=True), show_alert=True)
             return
 
         # Check if user is admin or owner (they bypass quota) using validators

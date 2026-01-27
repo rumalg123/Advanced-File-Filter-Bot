@@ -454,8 +454,7 @@ def build_typo_tolerant_pattern(query: str) -> str:
         # For new typos, they should be added to common_typos
         return re.escape(word)
         
-        # For other words, use exact match to avoid too many false positives
-        return re.escape(word)
+
     
     # Create patterns for each word
     word_patterns = [create_typo_variants(word) for word in words]

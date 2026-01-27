@@ -35,7 +35,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
-            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message"), show_alert=True)
+            await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message", plain_text=True), show_alert=True)
             return
 
         page_size = self.bot.config.MAX_BTN_SIZE
@@ -43,7 +43,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         new_offset = current_offset
         # Search for files
-        files, next_offset, total, has_access = await self.bot.file_service.search_files_with_access_check(
+        files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
             user_id=user_id,
             query=search_query,
             chat_id=user_id,
@@ -52,7 +52,19 @@ class PaginationCallbackHandler(BaseCommandHandler):
         )
 
         if not has_access:
-            return await query.answer(ErrorMessageFormatter.format_access_denied(), show_alert=True)
+            # Check if it's daily limit or ban
+            if access_reason and "Daily limit reached" in access_reason:
+                # Show proper daily limit message
+                user = await self.bot.user_repo.get_user(user_id)
+                if user:
+                    daily_limit = self.bot.user_repo.daily_limit
+                    message = f"⚠️ Daily limit reached ({user.daily_retrieval_count}/{daily_limit}). Upgrade to premium for unlimited access!"
+                else:
+                    message = "⚠️ Daily limit reached. Upgrade to premium for unlimited access!"
+            else:
+                # Ban or other access denied reason
+                message = ErrorMessageFormatter.format_access_denied(access_reason, plain_text=True) if access_reason else ErrorMessageFormatter.format_access_denied(plain_text=True)
+            return await query.answer(message, show_alert=True)
 
         if not files:
             # If this is a new search (offset 0) and no results, show proper message

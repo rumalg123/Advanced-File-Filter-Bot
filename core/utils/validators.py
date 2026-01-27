@@ -351,10 +351,20 @@ class AccessControl:
         can_access, reason = await AccessControl.can_access_file(user_repo, user_id)
         
         if not can_access:
-            error_msg = ErrorMessageFormatter.format_access_denied(reason)
             if isinstance(message, Message):
+                error_msg = ErrorMessageFormatter.format_access_denied(reason)
                 await message.reply_text(error_msg)
             elif isinstance(message, CallbackQuery):
+                # Check if it's daily limit to show proper message
+                if reason and "Daily limit reached" in reason:
+                    user = await user_repo.get_user(user_id)
+                    if user:
+                        daily_limit = user_repo.daily_limit
+                        error_msg = f"⚠️ Daily limit reached ({user.daily_retrieval_count}/{daily_limit}). Upgrade to premium for unlimited access!"
+                    else:
+                        error_msg = "⚠️ Daily limit reached. Upgrade to premium for unlimited access!"
+                else:
+                    error_msg = ErrorMessageFormatter.format_access_denied(reason, plain_text=True)
                 await message.answer(error_msg, show_alert=True)
             return False
         
@@ -374,7 +384,7 @@ class AccessControl:
                 return True, callback_user_id, None  # No original user restriction
             
             if not PermissionUtils.is_original_requester(callback_user_id, original_user_id):
-                await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message!"), show_alert=True)
+                await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message!", plain_text=True), show_alert=True)
                 return False, callback_user_id, original_user_id
             
             return True, callback_user_id, original_user_id

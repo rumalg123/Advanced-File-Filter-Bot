@@ -10,7 +10,8 @@ class ErrorMessageFormatter:
     def format_error(
         message: str,
         title: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format error messages consistently.
@@ -31,13 +32,16 @@ class ErrorMessageFormatter:
         """
         prefix = "❌ " if include_prefix else ""
         title_text = title if title else "Error"
+        if plain_text:
+            return f"{prefix}{title_text}: {message}"
         return f"{prefix}<b>{title_text}:</b> {message}"
 
     @staticmethod
     def format_failed(
         message: str,
         action: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format failure messages consistently.
@@ -46,9 +50,10 @@ class ErrorMessageFormatter:
             message: Failure message text
             action: Optional action that failed (e.g., "to send file")
             include_prefix: Whether to include emoji prefix (default: True)
+            plain_text: If True, return plain text without HTML (for alerts)
             
         Returns:
-            Formatted failure message with HTML
+            Formatted failure message with HTML (or plain text if plain_text=True)
             
         Example:
             >>> ErrorMessageFormatter.format_failed("to send file")
@@ -57,6 +62,10 @@ class ErrorMessageFormatter:
             '❌ <b>Failed</b> to process Operation'
         """
         prefix = "❌ " if include_prefix else ""
+        if plain_text:
+            if action:
+                return f"{prefix}Failed {action}: {message}"
+            return f"{prefix}Failed: {message}"
         if action:
             return f"{prefix}<b>Failed</b> {action}: {message}"
         return f"{prefix}<b>Failed:</b> {message}"
@@ -65,7 +74,8 @@ class ErrorMessageFormatter:
     def format_success(
         message: str,
         title: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format success messages consistently.
@@ -74,9 +84,10 @@ class ErrorMessageFormatter:
             message: Success message text
             title: Optional title (defaults to "Success")
             include_prefix: Whether to include emoji prefix (default: True)
+            plain_text: If True, return plain text without HTML (for alerts)
             
         Returns:
-            Formatted success message with HTML
+            Formatted success message with HTML (or plain text if plain_text=True)
             
         Example:
             >>> ErrorMessageFormatter.format_success("File sent")
@@ -84,13 +95,16 @@ class ErrorMessageFormatter:
         """
         prefix = "✅ " if include_prefix else ""
         title_text = title if title else "Success"
+        if plain_text:
+            return f"{prefix}{title_text}: {message}"
         return f"{prefix}<b>{title_text}:</b> {message}"
 
     @staticmethod
     def format_warning(
         message: str,
         title: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format warning messages consistently.
@@ -109,13 +123,16 @@ class ErrorMessageFormatter:
         """
         prefix = "⚠️ " if include_prefix else ""
         title_text = title if title else "Warning"
+        if plain_text:
+            return f"{prefix}{title_text}: {message}"
         return f"{prefix}<b>{title_text}:</b> {message}"
 
     @staticmethod
     def format_info(
         message: str,
         title: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format info messages consistently.
@@ -124,9 +141,10 @@ class ErrorMessageFormatter:
             message: Info message text
             title: Optional title (defaults to "Info")
             include_prefix: Whether to include emoji prefix (default: True)
+            plain_text: If True, return plain text without HTML (for alerts)
             
         Returns:
-            Formatted info message with HTML
+            Formatted info message with HTML (or plain text if plain_text=True)
             
         Example:
             >>> ErrorMessageFormatter.format_info("Processing request")
@@ -134,12 +152,15 @@ class ErrorMessageFormatter:
         """
         prefix = "ℹ️ " if include_prefix else ""
         title_text = title if title else "Info"
+        if plain_text:
+            return f"{prefix}{title_text}: {message}"
         return f"{prefix}<b>{title_text}:</b> {message}"
 
     @staticmethod
     def format_access_denied(
         reason: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format access denied messages consistently.
@@ -147,24 +168,33 @@ class ErrorMessageFormatter:
         Args:
             reason: Optional reason for denial
             include_prefix: Whether to include emoji prefix (default: True)
+            plain_text: If True, return plain text without HTML (for alerts)
             
         Returns:
-            Formatted access denied message with HTML
+            Formatted access denied message with HTML (or plain text if plain_text=True)
             
         Example:
             >>> ErrorMessageFormatter.format_access_denied("User banned")
             '❌ <b>Access Denied:</b> User banned'
+            >>> ErrorMessageFormatter.format_access_denied("User banned", plain_text=True)
+            '❌ Access Denied: User banned'
         """
         prefix = "❌ " if include_prefix else ""
-        message = f"{prefix}<b>Access Denied:</b>"
-        if reason:
-            message += f" {reason}"
+        if plain_text:
+            message = f"{prefix}Access Denied:"
+            if reason:
+                message += f" {reason}"
+        else:
+            message = f"{prefix}<b>Access Denied:</b>"
+            if reason:
+                message += f" {reason}"
         return message
 
     @staticmethod
     def format_not_found(
         item: str,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format "not found" messages consistently.
@@ -172,22 +202,26 @@ class ErrorMessageFormatter:
         Args:
             item: Item that was not found (e.g., "File", "User")
             include_prefix: Whether to include emoji prefix (default: True)
+            plain_text: If True, return plain text without HTML (for alerts)
             
         Returns:
-            Formatted not found message with HTML
+            Formatted not found message with HTML (or plain text if plain_text=True)
             
         Example:
             >>> ErrorMessageFormatter.format_not_found("File")
             '❌ <b>File</b> not found'
         """
         prefix = "❌ " if include_prefix else ""
+        if plain_text:
+            return f"{prefix}{item} not found"
         return f"{prefix}<b>{item}</b> not found"
 
     @staticmethod
     def format_invalid(
         item: str,
         details: Optional[str] = None,
-        include_prefix: bool = True
+        include_prefix: bool = True,
+        plain_text: bool = False
     ) -> str:
         """
         Format "invalid" messages consistently.
@@ -205,7 +239,12 @@ class ErrorMessageFormatter:
             '❌ <b>Invalid</b> link format'
         """
         prefix = "❌ " if include_prefix else ""
-        message = f"{prefix}<b>Invalid</b> {item}"
-        if details:
-            message += f": {details}"
+        if plain_text:
+            message = f"{prefix}Invalid {item}"
+            if details:
+                message += f": {details}"
+        else:
+            message = f"{prefix}<b>Invalid</b> {item}"
+            if details:
+                message += f": {details}"
         return message

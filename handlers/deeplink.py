@@ -418,7 +418,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 return
 
         # Get all files (using a higher limit)
-        files, _, total, has_access = await self.bot.file_service.search_files_with_access_check(
+        files, _, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
             user_id=user_id,
             query=search_query,
             chat_id=user_id,

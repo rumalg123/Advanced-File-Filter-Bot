@@ -167,16 +167,22 @@ class BanCheck:
                 # Check if user is banned
                 user = await self.bot.user_repo.get_user(user_id)
                 if user and user.status == UserStatus.BANNED:
-                    ban_text = (
-                        ErrorMessageFormatter.format_access_denied("You are banned from using this bot", title="Banned") + "\n"
-                        f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
-                        f"<b>Banned on:</b> {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n"
-                        "Contact the bot admin if you think this is a mistake."
-                    )
-
                     if isinstance(message, Message):
+                        ban_text = (
+                            ErrorMessageFormatter.format_access_denied("You are banned from using this bot") + "\n"
+                            f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
+                            f"<b>Banned on:</b> {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n"
+                            "Contact the bot admin if you think this is a mistake."
+                        )
                         await message.reply_text(ban_text)
                     elif isinstance(message, CallbackQuery):
+                        # Use plain text for alerts
+                        ban_text = (
+                            ErrorMessageFormatter.format_access_denied("You are banned from using this bot", plain_text=True) + "\n"
+                            f"Reason: {user.ban_reason or 'No reason provided'}\n"
+                            f"Banned on: {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n"
+                            "Contact the bot admin if you think this is a mistake."
+                        )
                         await message.answer(ban_text, show_alert=True)
                     return
 

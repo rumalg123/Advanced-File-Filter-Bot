@@ -226,11 +226,10 @@ class BotConfig:
     
     def _parse_database_names(self) -> List[str]:
         """Parse multiple database names from settings"""
-        names = []
+        names = [self.DATABASE_NAME]
         
         # Always include primary DATABASE_NAME first
-        names.append(self.DATABASE_NAME)
-        
+
         # Add additional names from settings
         additional_names = self._settings.database.get_additional_names()
         names.extend(additional_names)

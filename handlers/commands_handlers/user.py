@@ -374,9 +374,8 @@ class UserCommandHandler(BaseCommandHandler):
         # Build keyboard with keywords (2 buttons per row)
         keyboard_buttons = []
         for i in range(0, len(keywords), 2):
-            row = []
+            row = [KeyboardButton(keywords[i])]
             # Add first button in row
-            row.append(KeyboardButton(keywords[i]))
             # Add second button if exists
             if i + 1 < len(keywords):
                 row.append(KeyboardButton(keywords[i + 1]))
@@ -426,9 +425,8 @@ class UserCommandHandler(BaseCommandHandler):
         # Build keyboard with keywords (2 buttons per row)
         keyboard_buttons = []
         for i in range(0, len(keywords), 2):
-            row = []
+            row = [KeyboardButton(keywords[i])]
             # Add first button in row
-            row.append(KeyboardButton(keywords[i]))
             # Add second button if exists
             if i + 1 < len(keywords):
                 row.append(KeyboardButton(keywords[i + 1]))

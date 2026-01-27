@@ -255,12 +255,12 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
         except Exception as e:
             logger.error(f"Error in database callback: {e}")
-            await callback_query.answer(ErrorMessageFormatter.format_error("Error processing request"), show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_error("Error processing request", plain_text=True), show_alert=True)
 
     async def _refresh_database_stats(self, callback_query):
         """Refresh database statistics"""
         if not self.bot.multi_db_manager:
-            await callback_query.answer(ErrorMessageFormatter.format_error("Multi-database not enabled"), show_alert=True)
+            await callback_query.answer(ErrorMessageFormatter.format_error("Multi-database not enabled", plain_text=True), show_alert=True)
             return
 
         await callback_query.answer("🔄 Refreshing stats...")
