@@ -515,8 +515,13 @@ class FileCallbackHandler(BaseCommandHandler):
 
         await status_msg.edit_text(final_text)
 
-        # Schedule auto-deletion for all sent messages with task tracking
+        # Schedule auto-deletion for all sent messages and status message with task tracking
         if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+            # Auto-delete status message (Transfer Complete)
+            self._track_task(
+                self._auto_delete_message(status_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            )
+            # Auto-delete all sent file messages
             for sent_msg in sent_messages:
                 self._track_task(
                     self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)

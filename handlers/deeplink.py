@@ -215,12 +215,22 @@ class DeepLinkHandler(BaseCommandHandler):
         await sts.delete()
 
         if success_count > 0:
-            await message.reply_text(
+            transfer_msg = await message.reply_text(
                 ErrorMessageFormatter.format_success("Transfer completed!") + "\n"
                 f"Files sent: {success_count}/{total_count}"
             )
+            # Schedule auto-delete for transfer complete message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and transfer_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(transfer_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
         else:
-            await message.reply_text(ErrorMessageFormatter.format_failed("to send files"))
+            failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("to send files"))
+            # Schedule auto-delete for error message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
 
 
     async def _send_all_from_search(self, client: Client, message: Message, search_key: str):
@@ -323,7 +333,12 @@ class DeepLinkHandler(BaseCommandHandler):
         if success_count > 0 and access_ctx.should_track_retrieval:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
-        await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
+        sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
+        # Schedule auto-delete for completion message
+        if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_msg:
+            asyncio.create_task(
+                self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            )
         await telegram_api.call_api(
             client.delete_messages,
             sending_file_msg.chat.id,
@@ -361,12 +376,22 @@ class DeepLinkHandler(BaseCommandHandler):
         )
 
         if success_count > 0:
-            await message.reply_text(
+            batch_msg = await message.reply_text(
                 f"✅ Batch transfer completed!\n"
                 f"Files sent: {success_count}/{total_count}"
             )
+            # Schedule auto-delete for batch transfer complete message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and batch_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(batch_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
         else:
-            await message.reply_text(ErrorMessageFormatter.format_failed("to send batch files"))
+            failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("to send batch files"))
+            # Schedule auto-delete for error message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
 
     async def _send_all_files(self, client: Client, message: Message, key: str, file_type: str):
         """Send all files of a specific type"""
@@ -455,7 +480,12 @@ class DeepLinkHandler(BaseCommandHandler):
         if access_ctx.should_track_retrieval and success_count > 0:
             await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
 
-        await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
+        sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
+        # Schedule auto-delete for completion message
+        if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_msg:
+            asyncio.create_task(
+                self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            )
 
         # Delete the command message
         await self.safe_delete(message)
@@ -511,14 +541,24 @@ class DeepLinkHandler(BaseCommandHandler):
 
         if success_count > 0:
             batch_type = "protected premium" if batch_link.protected else "premium"
-            await message.reply_text(
+            premium_msg = await message.reply_text(
                 ErrorMessageFormatter.format_success("Premium Batch Transfer Completed!", title="Premium Batch Transfer Completed") + "\n"
                 f"📦 Batch Type: {batch_type.title()}\n"
                 f"📊 Files sent: <b>{success_count}</b>/<b>{total_count}</b>\n"
                 f"💎 Premium access verified"
             )
+            # Schedule auto-delete for premium batch transfer complete message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and premium_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(premium_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
         else:
-            await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to send batch files"))
+            failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to send batch files"))
+            # Schedule auto-delete for error message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
 
         # Delete the command message
         await self.safe_delete(message)

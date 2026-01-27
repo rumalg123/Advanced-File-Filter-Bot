@@ -1,3 +1,4 @@
+import asyncio
 import random
 import uuid
 
@@ -580,14 +581,25 @@ class UserCommandHandler(BaseCommandHandler):
             if action_buttons:
                 buttons.append(action_buttons)
             
-            await message.reply_text(
+            sent_message = await message.reply_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
             
+            # Schedule auto-delete for recommendations message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_message:
+                asyncio.create_task(
+                    self._auto_delete_message(sent_message, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
+            
         except Exception as e:
             logger.error(f"Error getting recommendations: {e}", exc_info=True)
-            await message.reply_text(
+            error_msg = await message.reply_text(
                 ErrorMessageFormatter.format_error("Error getting recommendations. Please try again later.")
             )
+            # Schedule auto-delete for error message too
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and error_msg:
+                asyncio.create_task(
+                    self._auto_delete_message(error_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
