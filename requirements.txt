@@ -1,6 +1,6 @@
 # Core dependencies
 pyrofork
-tgcrypto
+tgcrypto; platform_system == "Linux"
 sqlalchemy
 
 # Database
