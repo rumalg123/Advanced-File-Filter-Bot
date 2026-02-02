@@ -55,7 +55,8 @@ class ChannelHandler:
         self._create_background_tasks()
 
         # Initialize channels after manager is ready
-        bot.handler_manager.create_background_task(
+        # noinspection PyTypeChecker
+        bot.handler_manager.create_background_task(  # noqa
             self._setup_initial_channels(),
             name="channel_initial_setup"
         )
