@@ -1034,17 +1034,25 @@ class MediaSearchBot(Client):
 
         # Health check endpoint
         async def health_check(request):
-            stats = await self.maintenance_service.get_system_stats()
+            health_data = await self.maintenance_service.get_system_health_data()
+            status = health_data.get('status', 'unhealthy')
+            http_status = 200 if status in ('healthy', 'degraded') else 503
             return web.json_response({
-                'status': 'healthy',
+                'status': status,
                 'bot_username': self.bot_username,
-                'stats': stats
-            })
+                'stats': health_data.get('stats', {}),
+                'meta': health_data.get('meta', {})
+            }, status=http_status)
 
         # Performance metrics endpoint
         async def performance_metrics(request):
             try:
                 metrics = await performance_monitor.get_metrics()
+                # Backward-compatible aliases for existing consumers.
+                if 'cpu_percent' not in metrics:
+                    metrics['cpu_percent'] = metrics.get('process_cpu_percent', 0.0)
+                if 'memory_mb' not in metrics:
+                    metrics['memory_mb'] = metrics.get('process_memory_rss_mb', 0.0)
                 return web.json_response({
                     'status': 'success',
                     'metrics': metrics,

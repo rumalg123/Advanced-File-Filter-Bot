@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, UTC
 from typing import Dict, Any, Optional
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -69,26 +69,83 @@ class MaintenanceService:
 
     async def get_system_stats(self) -> Dict[str, Any]:
         """Get comprehensive system statistics"""
-        stats = {}
+        health_data = await self.get_system_health_data()
+        return health_data['stats']
+
+    async def get_system_health_data(self) -> Dict[str, Any]:
+        """Get system stats with freshness and partial-failure metadata."""
+        stats: Dict[str, Any] = {}
+        components: Dict[str, Any] = {}
+        errors = []
+        generated_at = datetime.now(UTC).isoformat()
 
         # User stats
-        user_stats = await self.user_repo.get_user_stats()
-        stats['users'] = user_stats
+        try:
+            user_stats = await self.user_repo.get_user_stats()
+            stats['users'] = user_stats
+            user_ttl = await self.cache.ttl(CacheKeyGenerator.user_stats())
+            components['users'] = {
+                'ok': True,
+                'cached': user_ttl >= 0,
+                'cache_ttl_seconds': user_ttl if user_ttl >= 0 else None
+            }
+        except Exception as e:
+            logger.error(f"Error getting user stats: {e}")
+            stats['users'] = {'total': 0, 'premium': 0, 'banned': 0, 'active_today': 0}
+            components['users'] = {'ok': False, 'error': str(e)}
+            errors.append({'component': 'users', 'error': str(e)})
 
         # File stats
-        file_stats = await self.media_repo.get_file_stats()
-        stats['files'] = file_stats
+        try:
+            file_stats = await self.media_repo.get_file_stats()
+            stats['files'] = file_stats
+            file_ttl = await self.cache.ttl(CacheKeyGenerator.file_stats())
+            components['files'] = {
+                'ok': True,
+                'cached': file_ttl >= 0,
+                'cache_ttl_seconds': file_ttl if file_ttl >= 0 else None
+            }
+        except Exception as e:
+            logger.error(f"Error getting file stats: {e}")
+            stats['files'] = {'total_files': 0, 'total_size': 0, 'by_type': {}}
+            components['files'] = {'ok': False, 'error': str(e)}
+            errors.append({'component': 'files', 'error': str(e)})
 
         # Database storage stats
-        storage_stats = await self.get_database_storage_stats()
+        storage_stats = await self.get_database_storage_stats(include_error=True)
+        storage_error = storage_stats.pop('_error', None)
         stats['storage'] = storage_stats
+        if storage_error:
+            components['storage'] = {'ok': False, 'error': storage_error}
+            errors.append({'component': 'storage', 'error': storage_error})
+        else:
+            components['storage'] = {'ok': True, 'cached': False}
 
-        # Cache stats (if Redis provides them)
-        # stats['cache'] = await self.cache.get_stats()
+        healthy_components = sum(1 for component in components.values() if component.get('ok'))
+        if healthy_components == len(components):
+            status = 'healthy'
+        elif healthy_components == 0:
+            status = 'unhealthy'
+        else:
+            status = 'degraded'
 
-        return stats
+        return {
+            'status': status,
+            'stats': stats,
+            'meta': {
+                'generated_at_utc': generated_at,
+                'partial_failures': len(errors) > 0,
+                'errors': errors,
+                'components': components,
+                'data_freshness': {
+                    'users': components.get('users', {}),
+                    'files': components.get('files', {}),
+                    'storage': components.get('storage', {})
+                }
+            }
+        }
 
-    async def get_database_storage_stats(self) -> Dict[str, Any]:
+    async def get_database_storage_stats(self, include_error: bool = False) -> Dict[str, Any]:
         """Get MongoDB database storage statistics"""
         try:
             # Access database through media repository's db_pool
@@ -132,7 +189,7 @@ class MaintenanceService:
             
         except Exception as e:
             logger.error(f"Error getting database storage stats: {e}")
-            return {
+            fallback = {
                 'database_size': 0,
                 'storage_size': 0,
                 'index_size': 0,
@@ -141,6 +198,9 @@ class MaintenanceService:
                 'avg_obj_size': 0,
                 'objects_count': 0
             }
+            if include_error:
+                fallback['_error'] = str(e)
+            return fallback
 
     async def _get_last_counter_reset_date(self) -> Optional[date]:
         """Get the last counter reset date from database (persistent storage)"""
