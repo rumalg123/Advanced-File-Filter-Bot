@@ -276,6 +276,13 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_error("Search results expired. Please search again."))
             return
 
+        original_user_id = cached_data.get('user_id')
+        if original_user_id and original_user_id != user_id:
+            await message.reply_text(
+                ErrorMessageFormatter.format_access_denied("These search results belong to another user.")
+            )
+            return
+
         files_data = cached_data.get('files', [])
 
         if not files_data:
@@ -290,22 +297,22 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
-        # Check quota for non-premium users
-        # Force fresh fetch from DB, not cache, to get accurate count
-        await self.bot.user_repo.cache_invalidator.invalidate_user_data(user_id)
         user = await self.bot.user_repo.get_user(user_id)
 
         # Build access context for permission checks
         access_ctx = UserAccessContext.from_config(user_id, user, self.bot.config)
+        reserved_count = 0
 
-        # Only check quota for users who should be tracked (non-premium, non-admin, non-owner)
         if access_ctx.should_track_retrieval:
-            remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
-            if remaining < len(files_data):
+            reserve_ok, reserved_count, reserve_message = await self.bot.user_repo.reserve_quota_atomic(
+                user_id,
+                len(files_data),
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT
+            )
+            if not reserve_ok:
                 await message.reply_text(
                     ErrorMessageFormatter.format_error(
-                        f"You can only retrieve {remaining} more files today. "
-                        f"Upgrade to premium for unlimited access!"
+                        f"{reserve_message}. Upgrade to premium for unlimited access!"
                     )
                 )
                 return
@@ -359,9 +366,11 @@ class DeepLinkHandler(BaseCommandHandler):
                 logger.error(f"Error sending file: {e}")
                 continue
 
-        # Increment retrieval count for all successfully sent files at once (batch operation)
-        if success_count > 0 and access_ctx.should_track_retrieval:
-            await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
+        if access_ctx.should_track_retrieval and reserved_count > success_count:
+            await self.bot.user_repo.release_quota(
+                user_id,
+                reserved_count - success_count
+            )
 
         sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
         # Schedule auto-delete for completion message
