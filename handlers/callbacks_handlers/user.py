@@ -2,7 +2,7 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.utils.error_formatter import ErrorMessageFormatter
-from core.utils.helpers import format_file_size
+from core.utils.helpers import MessageProxy, format_file_size
 from core.utils.file_emoji import get_file_type_display_name
 from core.utils.button_builder import ButtonBuilder
 import core.utils.messages as config_messages
@@ -207,7 +207,12 @@ class UserCallbackHandler(BaseCommandHandler):
         # Re-run recommendations command
         from handlers.commands_handlers.user import UserCommandHandler
         user_handler = UserCommandHandler(self.bot)
-        await user_handler.recommendations_command(client, query.message)
+        fake_message = MessageProxy.from_callback_query(
+            query,
+            text='/recommendations',
+            command=['/recommendations']
+        )
+        await user_handler.recommendations_command(client, fake_message)
 
     @require_subscription()
     async def handle_close_recommendations_callback(self, client: Client, query: CallbackQuery):
