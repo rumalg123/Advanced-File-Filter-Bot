@@ -172,6 +172,12 @@ class CommandHandler:
                 filters.regex(r"^noop(?:#\d+)?$")
             )
         )
+        self.bot.add_handler(
+            CallbackQueryHandler(
+                self.handle_close_data_callback,
+                filters.regex(r"^close_data$")
+            )
+        )
 
         # In the register_handlers method, add these callback handlers:
 
@@ -374,3 +380,17 @@ class CommandHandler:
 
 
         logger.info("All command handlers registered successfully")
+
+    async def handle_close_data_callback(self, client, query):
+        """Dismiss simple callback prompts."""
+        await query.answer()
+        if not query.message:
+            return
+
+        try:
+            await query.message.delete()
+        except Exception:
+            try:
+                await query.message.edit_reply_markup(None)
+            except Exception:
+                pass
