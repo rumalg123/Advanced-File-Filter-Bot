@@ -48,7 +48,7 @@ class RequestHandler(BaseHandler):
         # Handle #request messages in support group
         self._register_message_handlers([
             (self.handle_request_message,
-             filters.chat(self.bot.config.SUPPORT_GROUP_ID) & filters.text & filters.regex(r"^#request\s+"))
+             filters.chat(self.bot.config.SUPPORT_GROUP_ID) & filters.text & filters.regex(r"(?i)^#request\s+"))
         ])
 
         # Handle request action callbacks
