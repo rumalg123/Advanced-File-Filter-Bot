@@ -224,15 +224,28 @@ class ConnectionHandler(BaseHandler):
 
     async def connections_command(self, client: Client, message: Message):
         """Handle /connections command"""
-        user_id = message.from_user.id
+        user_id = extract_user_id(message)
+        if not user_id:
+            return await message.reply_text(
+                ErrorMessageFormatter.format_error("Unable to determine which user's connections to show."),
+                quote=True
+            )
+
+        await self._show_connections(client, message, user_id)
+
+    async def _show_connections(self, client: Client, message: Message, user_id: int, edit: bool = False):
+        """Show the connection list for a specific user."""
 
         connections = await self.connection_service.get_all_connections(client, user_id)
 
         if not connections:
-            await message.reply_text(
-                "There are no active connections!! Connect to some groups first.",
-                quote=True
-            )
+            if edit:
+                await message.edit_text("There are no active connections!! Connect to some groups first.")
+            else:
+                await message.reply_text(
+                    "There are no active connections!! Connect to some groups first.",
+                    quote=True
+                )
             return
 
         buttons = []
@@ -256,18 +269,24 @@ class ConnectionHandler(BaseHandler):
             )
         ])
 
-        await message.reply_text(
-            "Your connected group details:\n\n",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            quote=True
-        )
+        if edit:
+            await message.edit_text(
+                "Your connected group details:\n\n",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            await message.reply_text(
+                "Your connected group details:\n\n",
+                reply_markup=InlineKeyboardMarkup(buttons),
+                quote=True
+            )
 
     async def connection_callback(self, client: Client, query: CallbackQuery):
         """Handle connection selection callback"""
         await query.answer()
 
         if query.data == "back_to_connections":
-            return await self.connections_command(client, query.message)
+            return await self._show_connections(client, query.message, query.from_user.id, edit=True)
 
         data = query.data.split(":")
         if len(data) != 3:
@@ -423,7 +442,7 @@ class ConnectionHandler(BaseHandler):
                 await query.answer(msg, show_alert=True)
 
             # Go back to connections list
-            await self.connections_command(client, query.message)
+            await self._show_connections(client, query.message, user_id, edit=True)
 
     async def cleanup_connections_callback(self, client: Client, query: CallbackQuery):
         """Handle cleanup connections callback"""
@@ -443,4 +462,4 @@ class ConnectionHandler(BaseHandler):
             await query.answer(ErrorMessageFormatter.format_info("No invalid connections found!", plain_text=True), show_alert=True)
 
         # Refresh connections list
-        await self.connections_command(client, query.message)
+        await self._show_connections(client, query.message, user_id, edit=True)
