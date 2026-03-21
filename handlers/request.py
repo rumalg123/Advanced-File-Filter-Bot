@@ -301,7 +301,7 @@ class RequestHandler(BaseHandler):
         response_msg = action_messages.get(action, "Your request has been processed.")
 
         # Try to send PM first
-        pm_sent = False
+        notification_sent = False
         try:
             await telegram_api.call_api(
                 client.send_message,
@@ -309,14 +309,14 @@ class RequestHandler(BaseHandler):
                 response_msg,
                 chat_id=user_id
             )
-            pm_sent = True
+            notification_sent = True
         except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid):
             pass
         except Exception as e:
             logger.error(f"Failed to send PM: {e}")
 
         # If PM failed and we have support group, try there
-        if not pm_sent and self.bot.config.SUPPORT_GROUP_ID:
+        if not notification_sent and self.bot.config.SUPPORT_GROUP_ID:
             try:
                 user = await telegram_api.call_api(
                     client.get_users,
@@ -334,8 +334,19 @@ class RequestHandler(BaseHandler):
                     reply_to_message_id=msg_id,
                     chat_id=self.bot.config.SUPPORT_GROUP_ID
                 )
+                notification_sent = True
             except Exception as e:
                 logger.error(f"Failed to send to group: {e}")
+
+        if not notification_sent:
+            await query.answer(
+                ErrorMessageFormatter.format_error(
+                    "Failed to notify the requester. The action was not marked as complete.",
+                    plain_text=True
+                ),
+                show_alert=True
+            )
+            return
 
         # Update admin message
         await query.message.edit_reply_markup(None)
