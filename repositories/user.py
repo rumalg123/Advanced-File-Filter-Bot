@@ -354,7 +354,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             user_docs = await self.db_pool.execute_with_retry(
                 collection.find(
                     {"_id": {"$in": user_ids}},
-                    {"_id": 1, "is_premium": 1, "premium_activation_date": 1}
+                    {
+                        "_id": 1,
+                        "is_premium": 1,
+                        "premium_activation_date": 1,
+                        "premium_expiry_date": 1
+                    }
                 ).to_list,
                 length=len(user_ids)
             )
