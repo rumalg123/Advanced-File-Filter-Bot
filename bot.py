@@ -1098,7 +1098,7 @@ class MediaSearchBot(Client):
         This helper mimics Telethon's ``iter_messages`` for compatibility.
         Messages are yielded in ascending order.
         """
-        current = max(first_msg_id + 1, 1)
+        current = max(first_msg_id, 1)
 
         while current <= last_msg_id:
             end = min(current + batch_size - 1, last_msg_id)
