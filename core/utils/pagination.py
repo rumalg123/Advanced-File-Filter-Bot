@@ -292,26 +292,30 @@ class PaginationHelper:
         """
         parts = callback_data.split("#")
 
-        # Handle new format with user_id
-        if len(parts) >= 6:
-            return {
-                'prefix': parts[0],
-                'action': parts[1],
-                'query': parts[2],
-                'offset': int(parts[3]),
-                'total': int(parts[4]),
-                'user_id': int(parts[5])
-            }
+        try:
+            # Handle new format with user_id.
+            # Parse from the end so queries can safely contain '#'.
+            if len(parts) >= 6:
+                return {
+                    'prefix': parts[0],
+                    'action': parts[1],
+                    'query': "#".join(parts[2:-3]),
+                    'offset': int(parts[-3]),
+                    'total': int(parts[-2]),
+                    'user_id': int(parts[-1])
+                }
 
-        # Handle old format without user_id
-        elif len(parts) >= 5:
-            return {
-                'prefix': parts[0],
-                'action': parts[1],
-                'query': parts[2],
-                'offset': int(parts[3]),
-                'total': int(parts[4]),
-                'user_id': None
-            }
+            # Handle old format without user_id.
+            elif len(parts) >= 5:
+                return {
+                    'prefix': parts[0],
+                    'action': parts[1],
+                    'query': "#".join(parts[2:-2]),
+                    'offset': int(parts[-2]),
+                    'total': int(parts[-1]),
+                    'user_id': None
+                }
+        except (TypeError, ValueError):
+            return None
 
         return None

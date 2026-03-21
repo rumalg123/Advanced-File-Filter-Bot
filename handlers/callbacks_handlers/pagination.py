@@ -1,7 +1,7 @@
 import uuid
 
 from pyrogram import Client
-from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.button_builder import ButtonBuilder
@@ -9,6 +9,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.pagination import PaginationBuilder, PaginationHelper
+from core.utils.validators import is_private_chat
 from handlers.commands_handlers.base import BaseCommandHandler
 
 logger = get_logger(__name__)
@@ -32,6 +33,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
         current_offset = parsed_data['offset']
         total = parsed_data['total']
         original_user_id = parsed_data['user_id']
+        result_owner_id = original_user_id or callback_user_id
 
         # Check ownership
         if original_user_id and callback_user_id != original_user_id:
@@ -40,6 +42,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         page_size = self.bot.config.MAX_BTN_SIZE
         user_id = callback_user_id
+        is_private = is_private_chat(query)
 
         new_offset = current_offset
         # Search for files
@@ -81,7 +84,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         # Generate a unique key for this search result set
         session_id = uuid.uuid4().hex[:8]
-        search_key = CacheKeyGenerator.search_session(user_id, session_id)
+        search_key = CacheKeyGenerator.search_session(result_owner_id, session_id)
 
         # Store file IDs in cache for "Send All" functionality - optimized
         # Use list comprehension for better memory efficiency
@@ -99,7 +102,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         await self.bot.cache.set(
             search_key,
-            {'files': files_data, 'query': search_query},
+            {'files': files_data, 'query': search_query, 'user_id': result_owner_id},
             expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
         )
 
@@ -109,7 +112,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
             page_size=page_size,
             current_offset=new_offset,
             query=search_query,
-            user_id=callback_user_id,
+            user_id=result_owner_id,
             callback_prefix="search"
         )
 
@@ -121,16 +124,16 @@ class PaginationCallbackHandler(BaseCommandHandler):
             send_all_button = ButtonBuilder.send_all_button(
                 file_count=len(files),
                 search_key=search_key,
-                user_id=callback_user_id,
-                is_private=True  # Pagination is typically in private chats
+                user_id=result_owner_id,
+                is_private=is_private
             )
             buttons.append([send_all_button])
 
         # Add individual file buttons
         file_buttons = ButtonBuilder.file_buttons_row(
             files=files,
-            user_id=callback_user_id,
-            is_private=True  # Pagination is typically in private chats
+            user_id=result_owner_id,
+            is_private=is_private
         )
         buttons.extend(file_buttons)
 
@@ -144,12 +147,18 @@ class PaginationCallbackHandler(BaseCommandHandler):
             total=total,
             pagination=pagination,
             delete_time=0,  # Pagination updates don't show delete time
-            is_private=True  # Pagination is typically in private chats
+            is_private=is_private
         )
-        
-        await query.message.edit_text(
-            caption,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+
+        if query.message and query.message.photo:
+            await query.message.edit_caption(
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            await query.message.edit_text(
+                caption,
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
 
         await query.answer()

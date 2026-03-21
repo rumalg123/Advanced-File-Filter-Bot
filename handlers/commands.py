@@ -169,7 +169,7 @@ class CommandHandler:
         self.bot.add_handler(
             CallbackQueryHandler(
                 lambda c, q: q.answer(),
-                filters.regex(r"^noop$")
+                filters.regex(r"^noop(?:#\d+)?$")
             )
         )
 
