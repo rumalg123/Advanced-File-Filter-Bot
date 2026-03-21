@@ -190,6 +190,8 @@ class SearchHandler:
 
     async def _auto_delete_message(self, message: Message, delay: int):
         """Auto-delete message after delay"""
+        if delay <= 0:
+            return
         try:
             await asyncio.sleep(delay)
             if not self._shutdown.is_set():  # Only delete if not shutting down

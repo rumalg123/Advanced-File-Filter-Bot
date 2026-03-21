@@ -457,6 +457,8 @@ class BotSettingsHandler(BaseHandler):
 
     async def _auto_delete_message(self, message, delay_seconds):
         """Auto-delete a message after specified delay"""
+        if delay_seconds <= 0:
+            return
         try:
             await asyncio.sleep(delay_seconds)
             await message.delete()

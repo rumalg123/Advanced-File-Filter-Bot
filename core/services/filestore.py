@@ -51,6 +51,8 @@ class FileStoreService:
 
     async def _auto_delete_message(self, message: Message, delay: int):
         """Auto-delete message after delay"""
+        if delay <= 0:
+            return
         try:
             await asyncio.sleep(delay)
             await message.delete()
