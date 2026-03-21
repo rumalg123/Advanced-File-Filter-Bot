@@ -810,6 +810,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.create_user(user_id, user_name)
             user = await self.get_user(user_id)
 
+        if user and user.status == UserStatus.BANNED:
+            return (
+                False,
+                ErrorMessageFormatter.format_access_denied(
+                    user.ban_reason or "You have been banned from using this bot."
+                ),
+                False,
+                False
+            )
+
         # Get settings from config - use settings to avoid circular import
         REQUEST_PER_DAY = _feature_config.request_per_day
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
