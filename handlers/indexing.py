@@ -245,6 +245,13 @@ class IndexingHandler:
         if len(data) < 2:
             return await query.answer("Invalid callback data")
 
+        callback_user_id = extract_user_id(query)
+        if not callback_user_id or not is_admin(callback_user_id, self.bot.config.ADMINS):
+            return await query.answer(
+                ErrorMessageFormatter.format_warning("Only bot admins can manage indexing.", plain_text=True),
+                show_alert=True
+            )
+
         action = data[1]
 
         if action == "cancel":
