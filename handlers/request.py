@@ -173,12 +173,19 @@ class RequestHandler(BaseHandler):
         if search_results:
             logger.debug(f"Search results found for request: {keyword}")
         else:
-            # No results, forward to admins
-            await message.reply_text(
-                ErrorMessageFormatter.format_info("Your request has been noted.", title="Request Noted") + f" {limit_message}\n"
-                "Admins will process it as soon as possible."
-            )
-            await self._forward_request_to_admins(client, message, keyword)
+            # No results, forward to admins if possible
+            forwarded = await self._forward_request_to_admins(client, message, keyword)
+            if forwarded:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_info("Your request has been noted.", title="Request Noted") + f" {limit_message}\n"
+                    "Admins will process it as soon as possible."
+                )
+            else:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_error(
+                        "Your request could not be forwarded to admins right now. Please try again later."
+                    ) + f" {limit_message}"
+                )
 
     async def _search_for_request(self, client: Client, message: Message, keyword: str, user_id: int) -> Optional[bool]:
         """Search for files matching the request"""
@@ -255,6 +262,9 @@ class RequestHandler(BaseHandler):
 
         # Send to REQ_CHANNEL or LOG_CHANNEL
         target_channel = self.bot.config.REQ_CHANNEL or self.bot.config.LOG_CHANNEL
+        if not target_channel:
+            logger.warning("Cannot forward request: neither REQ_CHANNEL nor LOG_CHANNEL is configured")
+            return False
 
         try:
             # telegram_api.call_api already uses semaphore_manager internally
@@ -265,8 +275,10 @@ class RequestHandler(BaseHandler):
                 reply_markup=InlineKeyboardMarkup(buttons),
                 chat_id=target_channel
             )
+            return True
         except Exception as e:
             logger.error(f"Failed to forward request: {e}")
+            return False
 
     async def handle_request_callback(self, client: Client, query: CallbackQuery):
         """Handle request action callbacks"""
