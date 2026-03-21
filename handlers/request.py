@@ -274,6 +274,13 @@ class RequestHandler(BaseHandler):
             await query.answer(ErrorMessageFormatter.format_warning("Bot is shutting down", plain_text=True), show_alert=True)
             return
 
+        if not query.from_user or query.from_user.id not in self.bot.config.ADMINS:
+            await query.answer(
+                ErrorMessageFormatter.format_warning("Only bot admins can manage requests.", plain_text=True),
+                show_alert=True
+            )
+            return
+
         # Validate callback data using validator
         is_valid, data = validate_callback_data(query, expected_parts=4)
         if not is_valid:
