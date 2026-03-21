@@ -169,11 +169,12 @@ class FileStoreService:
             if status == 0 and existing_file:
                 # Duplicate found, use the existing file
                 file = existing_file
-                identifier = file.file_unique_id
+                identifier = file.file_ref or file.file_unique_id
                 logger.info(f"Using existing duplicate file with ref: {identifier}")
             elif success:
                 # New file saved successfully
-                identifier = media_file.file_unique_id
+                file = media_file
+                identifier = file.file_ref or file.file_unique_id
                 logger.info(f"Successfully saved new file to database with ref: {identifier}")
             else:
                 # Error saving file and no duplicate found
@@ -181,7 +182,7 @@ class FileStoreService:
                 return None
         else:
             # Use file_ref from existing database entry
-            identifier = file.file_unique_id
+            identifier = file.file_ref or file.file_unique_id
             logger.info(f"Using existing file_ref from database: {identifier}")
 
         # Generate link
@@ -196,12 +197,17 @@ class FileStoreService:
             short_ref = hashlib.md5(identifier.encode()).hexdigest()[:16]
 
             # Update the file with short ref
-            if file:
-                await self.media_repo.update(file.file_unique_id, {'file_ref': short_ref})
-            else:
-                await self.media_repo.update(media_file_unique_id, {'file_ref': short_ref})
+            if not file:
+                logger.error(f"Cannot persist shortened file ref for {media_file_unique_id}")
+                return None
+
+            updated = await self.media_repo.update(file.file_id, {'file_ref': short_ref})
+            if not updated:
+                logger.error(f"Failed to persist shortened file ref for {media_file_unique_id}")
+                return None
 
             encoded = self.encode_file_identifier(short_ref, protect)
+            identifier = short_ref
             logger.info(f"Using shortened ref: {short_ref}")
 
         link = f"https://t.me/{bot_username}?start={encoded}"

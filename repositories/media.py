@@ -132,11 +132,19 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 logger.warning(f"Corrupt cache data for {identifier}, clearing: {e}")
                 await self.cache_invalidator.invalidate_media_entry(identifier)
 
+        lookup_filter = {
+            "$or": [
+                {"file_unique_id": identifier},
+                {"file_ref": identifier},
+                {"_id": identifier}
+            ]
+        }
+
         if self.is_multi_db:
             # Search across all databases
             data, db_index = await self.multi_db_manager.find_file_in_all_databases(
                 self.collection_name,
-                {"file_unique_id": identifier}
+                lookup_filter
             )
             if data:
                 file = self._dict_to_entity(data)
@@ -147,7 +155,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             # Single database mode
             collection = await self.collection()
             data = await self.db_pool.execute_with_retry(
-                collection.find_one, {"file_unique_id": identifier}
+                collection.find_one, lookup_filter
             )
             if data:
                 file = self._dict_to_entity(data)
