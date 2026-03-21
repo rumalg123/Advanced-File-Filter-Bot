@@ -652,6 +652,27 @@ class FileStoreService:
 
         return success_count, len(batch_data)
 
+    async def count_channel_media_items(
+            self,
+            bot,
+            chat_id: int,
+            first_msg_id: int,
+            last_msg_id: int
+    ) -> int:
+        """Count media messages in a channel range for quota reservation."""
+        media_count = 0
+
+        try:
+            async for message in bot.iter_messages(
+                    chat_id, last_msg_id, first_msg_id
+            ):
+                if message.media:
+                    media_count += 1
+        except Exception as e:
+            logger.error(f"Error counting channel media items: {e}")
+
+        return media_count
+
     async def send_channel_files(
             self,
             bot,  # Changed from client: Client to bot
@@ -660,13 +681,14 @@ class FileStoreService:
             first_msg_id: int,
             last_msg_id: int,
             protect: bool = False,
-    ) -> Tuple[int, int]:
+    ) -> Tuple[int, int, int]:
         """
         Send files directly from channel (DSTORE method)
-        Returns: (success_count, total_count)
+        Returns: (success_count, total_count, media_success_count)
         """
         success_count = 0
         total_count = 0
+        media_success_count = 0
         sent_messages = []  # Track sent messages for deletion
 
         try:
@@ -724,6 +746,7 @@ class FileStoreService:
 
                         sent_messages.append(sent_msg)
                         success_count += 1
+                        media_success_count += 1
 
                     except Exception as e:
                         # telegram_api.call_api already handles FloodWait with retries
@@ -747,4 +770,4 @@ class FileStoreService:
         except Exception as e:
             logger.error(f"Error sending channel files: {e}")
 
-        return success_count, total_count
+        return success_count, total_count, media_success_count

@@ -199,11 +199,35 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
+        user = await self.bot.user_repo.get_user(user_id)
+        access_ctx = UserAccessContext.from_config(user_id, user, self.bot.config)
+        reserved_count = 0
+
+        if access_ctx.should_track_retrieval:
+            requested_count = await self.bot.filestore_service.count_channel_media_items(
+                self.bot,
+                chat_id,
+                f_msg_id,
+                l_msg_id
+            )
+            reserve_ok, reserved_count, reserve_message = await self.bot.user_repo.reserve_quota_atomic(
+                user_id,
+                requested_count,
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT
+            )
+            if not reserve_ok:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_error(
+                        f"{reserve_message}. Upgrade to premium for unlimited access!"
+                    )
+                )
+                return
+
         sts = await message.reply("<b>Processing files...</b>")
 
         # Send files - pass self.bot instead of client
 
-        success_count, total_count = await self.bot.filestore_service.send_channel_files(
+        success_count, total_count, media_success_count = await self.bot.filestore_service.send_channel_files(
             self.bot,  # Changed from client to self.bot
             user_id,
             chat_id,
@@ -211,6 +235,12 @@ class DeepLinkHandler(BaseCommandHandler):
             l_msg_id,
             protect=protect
         )
+
+        if access_ctx.should_track_retrieval and reserved_count > media_success_count:
+            await self.bot.user_repo.release_quota(
+                user_id,
+                reserved_count - media_success_count
+            )
 
         await sts.delete()
 
@@ -368,12 +398,36 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
             return
 
+        user = await self.bot.user_repo.get_user(user_id)
+        access_ctx = UserAccessContext.from_config(user_id, user, self.bot.config)
+        reserved_count = 0
+
+        if access_ctx.should_track_retrieval:
+            reserve_ok, reserved_count, reserve_message = await self.bot.user_repo.reserve_quota_atomic(
+                user_id,
+                len(batch_data),
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT
+            )
+            if not reserve_ok:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_error(
+                        f"{reserve_message}. Upgrade to premium for unlimited access!"
+                    )
+                )
+                return
+
         # Send batch files
         success_count, total_count = await self.bot.filestore_service.send_batch_files(
             client,
             user_id,
             batch_data
         )
+
+        if access_ctx.should_track_retrieval and reserved_count > success_count:
+            await self.bot.user_repo.release_quota(
+                user_id,
+                reserved_count - success_count
+            )
 
         if success_count > 0:
             batch_msg = await message.reply_text(
@@ -528,7 +582,7 @@ class DeepLinkHandler(BaseCommandHandler):
         sts = await message.reply("📦 <b>Processing premium batch files...</b>")
 
         # Send files from the batch link
-        success_count, total_count = await self.bot.filestore_service.send_channel_files(
+        success_count, total_count, _ = await self.bot.filestore_service.send_channel_files(
             self.bot,
             user_id,
             batch_link.source_chat_id,
