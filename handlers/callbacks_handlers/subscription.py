@@ -10,6 +10,21 @@ from handlers.commands_handlers.base import BaseCommandHandler
 logger = get_logger(__name__)
 
 
+class _CallbackQueryProxy:
+    """Minimal callback query proxy that replays the original callback data."""
+
+    def __init__(self, query: CallbackQuery, data: str):
+        self._query = query
+        self.id = getattr(query, "id", None)
+        self.from_user = query.from_user
+        self.message = query.message
+        self.chat_instance = getattr(query, "chat_instance", None)
+        self.data = data
+
+    async def answer(self, *args, **kwargs):
+        return await self._query.answer(*args, **kwargs)
+
+
 class SubscriptionCallbackHandler(BaseCommandHandler):
     """Handler for subscription-related callbacks"""
 
@@ -83,17 +98,9 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
                     )
                     return
 
-        # User is now subscribed, handle the original request
-        await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
-
-        # Try to delete the subscription message
-        try:
-            await query.message.delete()
-        except Exception as e:
-            logger.debug(f"Could not delete subscription message: {e}")
-
         # Handle the original command
         if param == "start":
+            await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
             # Import here to avoid circular imports
             from handlers.commands_handlers.user import UserCommandHandler
             user_handler = UserCommandHandler(self.bot)
@@ -107,6 +114,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             await user_handler.start_command(client, fake_message)
 
         elif param == "search":
+            await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
             # Just show success for search
             await query.message.reply_text(
                 ErrorMessageFormatter.format_success("Subscription verified! You can now search for files.")
@@ -117,15 +125,25 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             from handlers.callbacks_handlers.file import FileCallbackHandler
             file_handler = FileCallbackHandler(self.bot)
 
-            # Handle file callback
-            await file_handler.handle_file_callback(client, query)
+            callback_query = _CallbackQueryProxy(query, param)
+            await file_handler.handle_file_callback(client, callback_query)
+
+        elif param.startswith("sendall#"):
+            # Import here to avoid circular imports
+            from handlers.callbacks_handlers.file import FileCallbackHandler
+            file_handler = FileCallbackHandler(self.bot)
+
+            callback_query = _CallbackQueryProxy(query, param)
+            await file_handler.handle_sendall_callback(client, callback_query)
 
         elif param == "general":
+            await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
             # General try again - just show success
             await query.message.reply_text(
                 ErrorMessageFormatter.format_success("Subscription verified! You can now use the bot.")
             )
         else:
+            await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
             # Handle deep link parameter
             from handlers.deeplink import DeepLinkHandler
             deeplink_handler = DeepLinkHandler(self.bot)
@@ -139,3 +157,8 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
             # Call the internal method directly (without decorator check)
             await deeplink_handler.handle_deep_link_internal(client, fake_message, param)
+
+        try:
+            await query.message.delete()
+        except Exception as e:
+            logger.debug(f"Could not delete subscription message: {e}")
