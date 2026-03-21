@@ -69,6 +69,8 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             param = "start"
             original_user_id = current_user_id
 
+        should_delete_message = True
+
         # Check if current user matches original user
         if current_user_id != original_user_id:
             await query.answer(
@@ -136,6 +138,34 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             callback_query = _CallbackQueryProxy(query, param)
             await file_handler.handle_sendall_callback(client, callback_query)
 
+        elif param.startswith("cb#"):
+            original_callback = param[3:]
+            callback_query = _CallbackQueryProxy(query, original_callback)
+            should_delete_message = False
+
+            from handlers.callbacks_handlers.user import UserCallbackHandler
+            user_handler = UserCallbackHandler(self.bot)
+
+            callback_routes = {
+                "help": user_handler.handle_help_callback,
+                "about": user_handler.handle_about_callback,
+                "stats": user_handler.handle_stats_callback,
+                "plans": user_handler.handle_plans_callback,
+                "start_menu": user_handler.handle_start_menu_callback,
+                "refresh_recommendations": user_handler.handle_refresh_recommendations_callback,
+                "close_recommendations": user_handler.handle_close_recommendations_callback,
+            }
+
+            handler = callback_routes.get(original_callback)
+            if not handler:
+                await callback_query.answer(
+                    ErrorMessageFormatter.format_invalid("callback action", plain_text=True),
+                    show_alert=True
+                )
+                return
+
+            await handler(client, callback_query)
+
         elif param == "general":
             await query.answer(ErrorMessageFormatter.format_success("Subscription verified!", plain_text=True), show_alert=True)
             # General try again - just show success
@@ -158,7 +188,8 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             # Call the internal method directly (without decorator check)
             await deeplink_handler.handle_deep_link_internal(client, fake_message, param)
 
-        try:
-            await query.message.delete()
-        except Exception as e:
-            logger.debug(f"Could not delete subscription message: {e}")
+        if should_delete_message:
+            try:
+                await query.message.delete()
+            except Exception as e:
+                logger.debug(f"Could not delete subscription message: {e}")

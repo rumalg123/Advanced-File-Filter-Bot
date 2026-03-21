@@ -108,8 +108,7 @@ class SubscriptionRequired:
             elif message.text and not message.text.startswith("/"):
                 callback_data = f"checksub#{original_user_id}#search"
         elif isinstance(message, CallbackQuery):
-            if message.data.startswith('file#'):
-                callback_data = f"checksub#{original_user_id}#{message.data}"
+            callback_data = f"checksub#{original_user_id}#cb#{message.data}"
 
         # Build buttons using subscription manager
         buttons = await bot.subscription_manager.build_subscription_buttons(
@@ -137,6 +136,14 @@ class SubscriptionRequired:
                 "🔒 You need to join our channel(s) first!",
                 show_alert=True
             )
+            try:
+                await message.message.reply_text(
+                    custom_message,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
+            except Exception as e:
+                logger.debug(f"Failed to send callback subscription message: {e}")
 
 
 # Create decorator instance for easy import
