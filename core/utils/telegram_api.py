@@ -37,9 +37,10 @@ class TelegramAPIWrapper:
         """
         # Determine operation domain for concurrency control
         func_name = getattr(api_func, '__name__', 'unknown')
-        if 'send' in func_name.lower():
+        func_name_lower = func_name.lower()
+        if any(keyword in func_name_lower for keyword in ('send', 'copy', 'forward')):
             domain = 'telegram_send'
-        elif 'get' in func_name.lower() or 'fetch' in func_name.lower():
+        elif 'get' in func_name_lower or 'fetch' in func_name_lower:
             domain = 'telegram_fetch'
         else:
             domain = 'telegram_general'

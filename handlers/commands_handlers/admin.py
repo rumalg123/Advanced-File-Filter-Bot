@@ -316,7 +316,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     ErrorMessageFormatter.format_success("Broadcast Completed!", title="Broadcast Completed") + "\n\n"
                     f"⏱ Duration: {duration}\n"
                     f"📊 Total Users: {final_stats['total']:,}\n"
-                    f"✅ Success: {final_stats['success']:,} ({final_stats['success'] / final_stats['total'] * 100:.1f}%)\n"
+                    f"✅ Success: {final_stats['success']:,} ({success_rate:.1f}%)\n"
                     f"🚫 Blocked: {final_stats['blocked']:,}\n"
                     f"❌ Deleted: {final_stats['deleted']:,}\n"
                     f"⚠️ Failed: {final_stats['failed']:,}"

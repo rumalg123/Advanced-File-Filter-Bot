@@ -46,6 +46,7 @@ class SemaphoreManager:
         'telegram_send': 10,      # Telegram API sends
         'telegram_fetch': 15,     # Telegram API fetches
         'telegram_general': 10,   # Other Telegram API operations
+        'broadcast': 3,           # Concurrent broadcast deliveries
         'database_write': 20,     # Database writes
         'file_processing': 5,     # File processing operations
     }

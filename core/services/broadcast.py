@@ -1,7 +1,8 @@
 import asyncio
-from typing import Dict
+from typing import Dict, List, Tuple
 
 from core.cache.redis_cache import CacheManager
+from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
 from core.utils.telegram_api import telegram_api
@@ -24,19 +25,60 @@ class BroadcastService:
         self.rate_limiter = rate_limiter
         self.batch_size = 50
         self.delay_between_batches = 2  # seconds
+        self.progress_update_interval = 10
 
-        # Add these improvements to the BroadcastService class:
+    async def _send_to_user(self, client, message, user_id: int) -> Tuple[str, int]:
+        """Deliver the broadcast to a single user under the broadcast semaphore."""
+        try:
+            async with semaphore_manager.acquire('broadcast', f"broadcast_{user_id}"):
+                if hasattr(message, 'copy'):
+                    await telegram_api.call_api(
+                        message.copy,
+                        user_id,
+                        chat_id=user_id
+                    )
+                else:
+                    text_payload = getattr(message, 'text', None) or getattr(message, 'caption', None) or str(message)
+                    await telegram_api.call_api(
+                        client.send_message,
+                        user_id,
+                        text_payload,
+                        chat_id=user_id
+                    )
 
-    # core/services/broadcast.py
+            return 'success', user_id
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "blocked" in error_msg or "forbidden" in error_msg:
+                return 'blocked', user_id
+            if "user not found" in error_msg or "chat not found" in error_msg:
+                return 'deleted', user_id
+
+            logger.warning(f"Broadcast delivery failed for user {user_id}: {e}")
+            return 'failed', user_id
+
+    @staticmethod
+    def _apply_batch_results(
+            stats: Dict[str, int],
+            batch_results: List[Tuple[str, int]],
+            stale_user_ids: set
+    ) -> None:
+        """Merge a completed batch into the running broadcast stats."""
+        for status, user_id in batch_results:
+            stats[status] += 1
+            if status == 'deleted':
+                stale_user_ids.add(user_id)
+
     async def broadcast_to_users(
             self,
-            client,  # Add client parameter
+            client,
             message,
             progress_callback=None,
             target_users=None
     ) -> Dict[str, int]:
-        """Broadcast message to all users with improvements"""
-        # Get total user count upfront for accurate progress calculation
+        """Broadcast a message to users with bounded parallelism."""
         if target_users:
             total_users = len(target_users)
         else:
@@ -54,7 +96,6 @@ class BroadcastService:
         if progress_callback:
             await progress_callback(stats)
 
-        # Get all users in batches
         offset = 0
         last_user_id = None
         last_progress_update = 0
@@ -82,47 +123,25 @@ class BroadcastService:
             if not target_users and hasattr(users[-1], 'id'):
                 last_user_id = users[-1].id
 
-            # Process batch
-            for user in users:
-                user_id = user.id if hasattr(user, 'id') else user
+            batch_results = await asyncio.gather(*[
+                self._send_to_user(
+                    client,
+                    message,
+                    user.id if hasattr(user, 'id') else user
+                )
+                for user in users
+            ])
+            self._apply_batch_results(stats, batch_results, stale_user_ids)
 
-                try:
-                    if hasattr(message, 'copy'):
-                        await telegram_api.call_api(
-                            message.copy,
-                            user_id,
-                            chat_id=user_id
-                        )
-                    else:
-                        text_payload = getattr(message, 'text', None) or getattr(message, 'caption', None) or str(message)
-                        await telegram_api.call_api(
-                            client.send_message,
-                            user_id, text_payload,
-                            chat_id=user_id
-                        )
-
-                    stats['success'] += 1
-
-                except Exception as e:
-                    error_msg = str(e).lower()
-                    if "blocked" in error_msg or "forbidden" in error_msg:
-                        stats['blocked'] += 1
-                    elif "user not found" in error_msg or "chat not found" in error_msg:
-                        stats['deleted'] += 1
-                        stale_user_ids.add(user_id)
-                    else:
-                        stats['failed'] += 1
-
-            # Progress callback - update more frequently
             processed_count = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
-            if progress_callback and (processed_count - last_progress_update) >= 10:  # Update every 10 users
+            if progress_callback and (processed_count - last_progress_update) >= self.progress_update_interval:
                 await progress_callback(stats)
                 last_progress_update = processed_count
 
-            # Adaptive delay
-            if stats['total'] > 0:
-                success_rate = stats['success'] / stats['total']
-                await asyncio.sleep(self.delay_between_batches * (2 if success_rate < 0.5 else 1))
+            if processed_count > 0:
+                success_rate = stats['success'] / processed_count
+                delay = self.delay_between_batches * (2 if success_rate < 0.5 else 1)
+                await asyncio.sleep(delay)
             else:
                 await asyncio.sleep(self.delay_between_batches)
 
