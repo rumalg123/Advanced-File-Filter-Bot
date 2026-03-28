@@ -2,7 +2,6 @@ import asyncio
 from typing import Dict
 
 from core.cache.redis_cache import CacheManager
-from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
 from core.utils.telegram_api import telegram_api
@@ -57,8 +56,9 @@ class BroadcastService:
 
         # Get all users in batches
         offset = 0
+        last_user_id = None
         last_progress_update = 0
-        processed_users = 0
+        stale_user_ids = set()
 
         while True:
             if target_users:
@@ -66,53 +66,38 @@ class BroadcastService:
                     break
                 users = target_users[offset:offset + self.batch_size]
             else:
+                user_filter = {'status': {'$ne': UserStatus.BANNED.value}}
+                if last_user_id is not None:
+                    user_filter['_id'] = {'$gt': last_user_id}
+
                 users = await self.user_repo.find_many(
-                    {'status': {'$ne': UserStatus.BANNED.value}},
+                    user_filter,
                     limit=self.batch_size,
-                    skip=offset
+                    sort=[('_id', 1)]
                 )
 
             if not users:
                 break
 
+            if not target_users and hasattr(users[-1], 'id'):
+                last_user_id = users[-1].id
+
             # Process batch
             for user in users:
                 user_id = user.id if hasattr(user, 'id') else user
-                processed_users += 1
 
                 try:
-                    # telegram_api.call_api already uses semaphore_manager internally
                     if hasattr(message, 'copy'):
-                        # Check if it's a text message or media with caption
-                        if message.text:
-                            # For text messages, send with HTML parse mode
-                            await telegram_api.call_api(
-                                client.send_message,
-                                user_id, message.text,
-                                parse_mode=CaptionFormatter.get_parse_mode(),
-                                chat_id=user_id
-                            )
-                        elif message.caption:
-                            # For media with caption, copy and set parse mode for caption
-                            await telegram_api.call_api(
-                                message.copy,
-                                user_id,
-                                parse_mode=CaptionFormatter.get_parse_mode(),
-                                chat_id=user_id
-                            )
-                        else:
-                            # For media without caption, just copy
-                            await telegram_api.call_api(
-                                message.copy,
-                                user_id,
-                                chat_id=user_id
-                            )
+                        await telegram_api.call_api(
+                            message.copy,
+                            user_id,
+                            chat_id=user_id
+                        )
                     else:
-                        # Fallback: send as text message with HTML parse mode
+                        text_payload = getattr(message, 'text', None) or getattr(message, 'caption', None) or str(message)
                         await telegram_api.call_api(
                             client.send_message,
-                            user_id, str(message),
-                            parse_mode=CaptionFormatter.get_parse_mode(),
+                            user_id, text_payload,
                             chat_id=user_id
                         )
 
@@ -124,9 +109,7 @@ class BroadcastService:
                         stats['blocked'] += 1
                     elif "user not found" in error_msg or "chat not found" in error_msg:
                         stats['deleted'] += 1
-                        # Remove deleted user
-                        if hasattr(user, 'id'):
-                            await self.user_repo.delete(user.id)
+                        stale_user_ids.add(user_id)
                     else:
                         stats['failed'] += 1
 
@@ -143,7 +126,11 @@ class BroadcastService:
             else:
                 await asyncio.sleep(self.delay_between_batches)
 
-            offset += self.batch_size
+            if target_users:
+                offset += self.batch_size
+
+        for stale_user_id in stale_user_ids:
+            await self.user_repo.delete(stale_user_id)
 
         if progress_callback:
             await progress_callback(stats)

@@ -35,25 +35,49 @@ class AdminCommandHandler(BaseCommandHandler):
         self.broadcasting_in_progress = False
         self.broadcast_task = None
         self.broadcast_state_key = CacheKeyGenerator.broadcast_state()
+        self.broadcast_state_ttl = 3600
+
+    def _get_active_broadcast_task(self):
+        """Return the active broadcast task if one is still running."""
+        task = self.broadcast_task
+        if task and not task.done():
+            return task
+
+        global_task = getattr(self.bot, '_active_broadcast_task', None)
+        if global_task and not global_task.done():
+            return global_task
+
+        return None
+
+    def _has_pending_broadcast(self) -> bool:
+        """Check whether a broadcast is awaiting confirmation."""
+        return bool(getattr(self.bot, '_pending_broadcast', None))
         
     async def _get_broadcast_state(self):
-        """Get broadcast state from Redis"""
+        """Get broadcast state from Redis and in-memory task tracking."""
         try:
             state = await self.bot.cache.get(self.broadcast_state_key)
-            is_active = state == "active" if state else False
-            logger.debug(f"Broadcast state check: {state} -> {is_active}")
-            # Sync memory state with Redis state
+            redis_active = state == "active" if state else False
+            task_active = self._get_active_broadcast_task() is not None
+            is_active = redis_active or task_active or self.broadcasting_in_progress
+            logger.debug(
+                "Broadcast state check: redis=%s task=%s memory=%s -> %s",
+                state,
+                task_active,
+                self.broadcasting_in_progress,
+                is_active
+            )
             self.broadcasting_in_progress = is_active
             return is_active
         except Exception as e:
             logger.error(f"Error getting broadcast state: {e}")
-            return self.broadcasting_in_progress  # Fallback to memory state
+            return self.broadcasting_in_progress or self._get_active_broadcast_task() is not None
     
     async def _set_broadcast_state(self, active: bool):
         """Set broadcast state in Redis"""
         try:
             if active:
-                await self.bot.cache.set(self.broadcast_state_key, "active", expire=3600)  # 1 hour TTL
+                await self.bot.cache.set(self.broadcast_state_key, "active", expire=self.broadcast_state_ttl)
                 logger.info("Broadcast state set to ACTIVE")
             else:
                 await self.bot.cache_invalidator.invalidate_broadcast_state(self.broadcast_state_key)
@@ -62,6 +86,15 @@ class AdminCommandHandler(BaseCommandHandler):
         except Exception as e:
             logger.error(f"Error setting broadcast state: {e}")
             self.broadcasting_in_progress = active  # Always update memory state
+
+    async def _refresh_broadcast_state(self):
+        """Keep the broadcast state key alive for long-running broadcasts."""
+        try:
+            refreshed = await self.bot.cache.expire(self.broadcast_state_key, self.broadcast_state_ttl)
+            if not refreshed:
+                await self.bot.cache.set(self.broadcast_state_key, "active", expire=self.broadcast_state_ttl)
+        except Exception as e:
+            logger.error(f"Error refreshing broadcast state: {e}")
 
     def _parse_quoted_command(self, text: str) -> List[str]:
         """Parse command with quoted arguments"""
@@ -115,6 +148,14 @@ class AdminCommandHandler(BaseCommandHandler):
         is_broadcasting = await self._get_broadcast_state()
         if is_broadcasting:
             await message.reply_text(ErrorMessageFormatter.format_warning("A broadcast is already in progress. Use /stop_broadcast to stop it."))
+            return
+
+        if self._has_pending_broadcast():
+            await message.reply_text(
+                ErrorMessageFormatter.format_warning(
+                    "A broadcast confirmation is already pending. Confirm or cancel it first."
+                )
+            )
             return
 
         # Rate limit check
@@ -210,11 +251,13 @@ class AdminCommandHandler(BaseCommandHandler):
             # Progress callback
             async def update_progress(stats: Dict[str, int]):
                 try:
-                    if stats['total'] > 0:
-                        processed = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
-                        progress_percent = (processed / stats['total']) * 100
+                    processed = stats['success'] + stats['blocked'] + stats['deleted'] + stats['failed']
+                    total = stats['total']
+                    progress_percent = (processed / total * 100) if total else 0.0
 
-                        text = (
+                    await self._refresh_broadcast_state()
+
+                    text = (
                             f"📡 <b>Broadcast Progress</b>\n\n"
                             f"👥 Total Users: {stats['total']:,}\n"
                             f"✅ Success: {stats['success']:,}\n"
@@ -225,7 +268,7 @@ class AdminCommandHandler(BaseCommandHandler):
                             f"⏳ Progress: {progress_percent:.1f}%"
                         )
 
-                        await telegram_api.call_api(
+                    await telegram_api.call_api(
                             callback_query.message.edit_text,
                             text,
                             parse_mode=CaptionFormatter.get_parse_mode()
@@ -252,6 +295,23 @@ class AdminCommandHandler(BaseCommandHandler):
 
                 # Final message
                 duration = datetime.now() - start_time
+                if final_stats['total'] == 0:
+                    await callback_query.message.edit_text(
+                        ErrorMessageFormatter.format_info("Broadcast completed", title="Broadcast Completed") + "\n\n"
+                        f"Duration: {duration}\n"
+                        "Total Users: 0\n"
+                        "Success: 0\n"
+                        "Blocked: 0\n"
+                        "Deleted: 0\n"
+                        "Failed: 0",
+                        parse_mode=CaptionFormatter.get_parse_mode()
+                    )
+                    await callback_query.answer()
+                    return
+                success_rate = (
+                    final_stats['success'] / final_stats['total'] * 100
+                    if final_stats['total'] else 0.0
+                )
                 final_text = (
                     ErrorMessageFormatter.format_success("Broadcast Completed!", title="Broadcast Completed") + "\n\n"
                     f"⏱ Duration: {duration}\n"
