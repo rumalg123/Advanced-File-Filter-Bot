@@ -26,7 +26,11 @@ class RateLimiter:
         self.configs: Dict[str, RateLimitConfig] = {
             'search': RateLimitConfig(max_requests=30, time_window=self.ttl.RATE_LIMIT_WINDOW),
             'file_request': RateLimitConfig(max_requests=10, time_window=60),
-            'broadcast': RateLimitConfig(max_requests=1, time_window=3600),
+            'broadcast': RateLimitConfig(
+                max_requests=1,
+                time_window=3600,
+                cooldown_time=self.ttl.RATE_LIMIT_COOLDOWN
+            ),
             'inline_query': RateLimitConfig(max_requests=50, time_window=60),
         }
 
@@ -76,13 +80,21 @@ class RateLimiter:
 
         # Check if limit exceeded AFTER incrementing
         if new_count > config.max_requests:
-            # Apply cooldown
+            window_ttl = await self.cache.ttl(key)
+            if window_ttl <= 0:
+                window_ttl = config.time_window
+                await self.cache.expire(key, config.time_window)
+
+            cooldown_seconds = max(window_ttl, config.cooldown_time)
+
+            # Apply cooldown based on the remaining window so long-lived limits
+            # like broadcast report and enforce the real retry time.
             await self.cache.set(
                 cooldown_key,
-                config.cooldown_time,
-                expire=config.cooldown_time
+                cooldown_seconds,
+                expire=cooldown_seconds
             )
-            return False, config.cooldown_time
+            return False, cooldown_seconds
 
         return True, None
 

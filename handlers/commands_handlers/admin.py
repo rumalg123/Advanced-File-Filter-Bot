@@ -71,6 +71,17 @@ class AdminCommandHandler(BaseCommandHandler):
             # Fallback to simple split if shlex fails
             return text.split()
 
+    @staticmethod
+    def _truncate_message_preview(text: str, limit: int = 200) -> str:
+        """
+        Build a safe preview string from Pyrogram rich text objects.
+
+        Pyrogram's rich string wrapper can raise on direct slicing when emoji
+        land on a surrogate boundary, so convert to a plain Python string first.
+        """
+        plain_text = str(text)
+        return plain_text[:limit] + ("..." if len(plain_text) > limit else "")
+
     async def _notify_user(self, client: Client, user_id: int, message: str) -> bool:
         """Send notification to user, return True if successful"""
         try:
@@ -127,11 +138,11 @@ class AdminCommandHandler(BaseCommandHandler):
         
         if broadcast_msg.text:
             # Show text preview (limit to 200 chars)
-            text_preview = broadcast_msg.text[:200] + ("..." if len(broadcast_msg.text) > 200 else "")
+            text_preview = self._truncate_message_preview(broadcast_msg.text)
             preview_text += f"<i>{text_preview}</i>"
         elif broadcast_msg.caption:
             # Show caption preview for media
-            caption_preview = broadcast_msg.caption[:200] + ("..." if len(broadcast_msg.caption) > 200 else "")
+            caption_preview = self._truncate_message_preview(broadcast_msg.caption)
             preview_text += f"<i>{caption_preview}</i>"
         elif broadcast_msg.document:
             preview_text += f"📄 <i>Document: {broadcast_msg.document.file_name}</i>"
