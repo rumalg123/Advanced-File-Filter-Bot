@@ -61,7 +61,7 @@ Snapshot date: February 14, 2026.
 
 ## Stack
 
-- Language/runtime: Python 3.9+
+- Language/runtime: Python 3.13+
 - Telegram framework: Pyrofork/Pyrogram-compatible API usage
 - Datastore: MongoDB (single or multi-database mode)
 - Cache/session/rate limiting: Redis
