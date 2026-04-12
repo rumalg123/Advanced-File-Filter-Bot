@@ -68,7 +68,13 @@ class MediaMetadataMigration:
         
         try:
             for db_index, db_pool in enumerate(self.db_pools, start=1):
-                await self._run_for_pool(db_index, db_pool, dry_run, limit)
+                db_limit = None
+                if limit is not None:
+                    db_limit = limit - self.stats['processed']
+                    if db_limit <= 0:
+                        break
+
+                await self._run_for_pool(db_index, db_pool, dry_run, db_limit)
             
             # Final summary
             logger.info("=" * 60)
