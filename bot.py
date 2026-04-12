@@ -636,6 +636,31 @@ class MediaSearchBot(Client):
     async def invalidate_user_cache(self, user_id: int):
         """Invalidate all cache for a user"""
         await self.cache_invalidator.invalidate_user_cache(user_id)
+
+    async def _create_multi_database_media_indexes(self):
+        """Create media indexes on secondary media databases."""
+        if not self.multi_db_manager:
+            return
+
+        for db_index, db_info in enumerate(self.multi_db_manager.databases):
+            if db_index == 0 or not db_info.is_active or not db_info.pool:
+                continue
+
+            try:
+                media_repo = MediaRepository(db_info.pool, self.cache)
+                await media_repo.create_indexes()
+
+                index_optimizer = IndexOptimizer(db_info.pool)
+                index_results = await index_optimizer.create_media_indexes()
+                successful_indexes = sum(1 for success in index_results.values() if success)
+                total_indexes = len(index_results)
+                logger.info(
+                    f"Database {db_index + 1} media indexes optimized: "
+                    f"{successful_indexes}/{total_indexes} created successfully"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create media indexes for database {db_index + 1}: {e}")
+
     async def start(self):
         """Start the bot with all dependencies"""
         try:
@@ -723,6 +748,9 @@ class MediaSearchBot(Client):
             except Exception as e:
                 logger.warning(f"Failed to create some optimized indexes: {e}")
                 # Continue startup even if index creation fails
+
+            await self._create_multi_database_media_indexes()
+
             await self.user_repo.create_index([('premium_expire', 1)])  # For expired premium checks
             await self.connection_repo.create_index([('user_id', 1)])
             await self.filter_repo.create_index([('group_id', 1), ('text', 1)])
@@ -879,6 +907,8 @@ class MediaSearchBot(Client):
         await super().stop()
 
         # Close database connections
+        if self.multi_db_manager:
+            await self.multi_db_manager.close()
         await self.db_pool.close()
 
         # Close Redis connection

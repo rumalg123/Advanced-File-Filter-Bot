@@ -15,6 +15,10 @@ class IndexOptimizer:
     
     def __init__(self, db_pool):
         self.db_pool = db_pool
+
+    async def create_media_indexes(self) -> Dict[str, bool]:
+        """Create optimized indexes for the media collection only."""
+        return await self._create_media_indexes()
         
     async def create_all_indexes(self) -> Dict[str, bool]:
         """Create all optimized indexes"""
