@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import Dict, Optional, Tuple, List, Union
+from typing import Dict, Optional, Tuple, List
 
 from pyrogram import Client, enums
 from pyrogram.errors import ChannelInvalid, UsernameInvalid, UsernameNotModified
@@ -376,7 +376,7 @@ class IndexRequestService:
             self,
             client: Client,
             user_id: int,
-            chat_id: Union[str, int],
+            chat_id: str | int,
             last_msg_id: int,
             message_id: int
     ) -> bool:

@@ -1,6 +1,6 @@
 # handlers/commands_handlers/base.py
 import asyncio
-from typing import Optional, Tuple
+from typing import Tuple
 
 from core.utils.logger import get_logger
 
@@ -39,6 +39,6 @@ class BaseCommandHandler:
         owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
         return await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
-    def get_owner_id(self) -> Optional[int]:
+    def get_owner_id(self) -> int | None:
         """Get the primary admin/owner ID from config."""
         return self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
