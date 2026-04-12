@@ -21,7 +21,7 @@ Options:
 import asyncio
 import argparse
 import sys
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 
 # Add project root to path
@@ -38,9 +38,15 @@ logger = get_logger(__name__)
 class MediaMetadataMigration:
     """Migration script for backfilling media metadata fields"""
     
-    def __init__(self, db_pool: DatabaseConnectionPool, batch_size: int = 1000):
-        self.db_pool = db_pool
+    def __init__(
+            self,
+            db_pools: Union[DatabaseConnectionPool, List[DatabaseConnectionPool]],
+            batch_size: int = 1000,
+            collection_name: str = 'media_files'
+    ):
+        self.db_pools = db_pools if isinstance(db_pools, list) else [db_pools]
         self.batch_size = batch_size
+        self.collection_name = collection_name
         self.stats = {
             'total': 0,
             'processed': 0,
@@ -61,56 +67,8 @@ class MediaMetadataMigration:
         logger.info("=" * 60)
         
         try:
-            collection = await self.db_pool.get_collection('media_files')
-            
-            # Count total documents
-            total_count = await self.db_pool.execute_with_retry(
-                collection.count_documents, {}
-            )
-            self.stats['total'] = total_count
-            logger.info(f"Total documents in media_files: {total_count}")
-            
-            if limit:
-                total_count = min(total_count, limit)
-                logger.info(f"Processing limited to: {total_count} documents")
-            
-            # Process in batches
-            processed = 0
-            skip = 0
-            
-            while processed < total_count:
-                batch_limit = min(self.batch_size, total_count - processed)
-                
-                # Fetch batch
-                cursor = collection.find({}).skip(skip).limit(batch_limit)
-                batch = await self.db_pool.execute_with_retry(
-                    cursor.to_list, length=batch_limit
-                )
-                
-                if not batch:
-                    break
-                
-                # Process batch
-                batch_updated = await self._process_batch(
-                    collection, batch, dry_run
-                )
-                
-                processed += len(batch)
-                skip += len(batch)
-                self.stats['processed'] = processed
-                self.stats['updated'] += batch_updated
-                
-                # Progress update
-                progress_pct = (processed / total_count) * 100
-                logger.info(
-                    f"Progress: {processed}/{total_count} ({progress_pct:.1f}%) | "
-                    f"Updated: {self.stats['updated']} | "
-                    f"Skipped: {self.stats['skipped']} | "
-                    f"Errors: {self.stats['errors']}"
-                )
-                
-                # Small delay to avoid overwhelming the database
-                await asyncio.sleep(0.1)
+            for db_index, db_pool in enumerate(self.db_pools, start=1):
+                await self._run_for_pool(db_index, db_pool, dry_run, limit)
             
             # Final summary
             logger.info("=" * 60)
@@ -126,9 +84,71 @@ class MediaMetadataMigration:
         except Exception as e:
             logger.error(f"Migration failed: {e}", exc_info=True)
             raise
-    
+
+    async def _run_for_pool(
+            self,
+            db_index: int,
+            db_pool: DatabaseConnectionPool,
+            dry_run: bool = False,
+            limit: Optional[int] = None
+    ):
+        """Run the migration for a single database pool."""
+        collection = await db_pool.get_collection(self.collection_name)
+        db_name = db_pool.database.name
+        logger.info(f"Processing database {db_index}: {db_name}")
+
+        # Count total documents
+        total_count = await db_pool.execute_with_retry(
+            collection.count_documents, {}
+        )
+        self.stats['total'] += total_count
+        logger.info(f"Total documents in {self.collection_name}: {total_count}")
+
+        if limit:
+            total_count = min(total_count, limit)
+            logger.info(f"Processing limited to: {total_count} documents")
+
+        # Process in batches
+        processed = 0
+        skip = 0
+
+        while processed < total_count:
+            batch_limit = min(self.batch_size, total_count - processed)
+
+            # Fetch batch
+            cursor = collection.find({}).skip(skip).limit(batch_limit)
+            batch = await db_pool.execute_with_retry(
+                cursor.to_list, length=batch_limit
+            )
+
+            if not batch:
+                break
+
+            # Process batch
+            batch_updated = await self._process_batch(
+                db_pool, collection, batch, dry_run
+            )
+
+            processed += len(batch)
+            skip += len(batch)
+            self.stats['processed'] += len(batch)
+            self.stats['updated'] += batch_updated
+
+            # Progress update
+            progress_pct = (processed / total_count) * 100
+            logger.info(
+                f"Database {db_index} progress: {processed}/{total_count} ({progress_pct:.1f}%) | "
+                f"Updated: {self.stats['updated']} | "
+                f"Skipped: {self.stats['skipped']} | "
+                f"Errors: {self.stats['errors']}"
+            )
+
+            # Small delay to avoid overwhelming the database
+            await asyncio.sleep(0.1)
+
     async def _process_batch(
         self,
+        db_pool: DatabaseConnectionPool,
         collection,
         batch: list,
         dry_run: bool
@@ -212,9 +232,9 @@ class MediaMetadataMigration:
                     UpdateOne(item['filter'], item['update'])
                     for item in updates
                 ]
-                
+
                 if operations:
-                    result = await self.db_pool.execute_with_retry(
+                    result = await db_pool.execute_with_retry(
                         collection.bulk_write, operations
                     )
                     logger.debug(
@@ -258,21 +278,32 @@ async def main():
     # Make sure .env file is loaded or environment variables are set
     try:
         from config.settings import settings
-        
-        db_pool = DatabaseConnectionPool()
-        await db_pool.initialize(
-            settings.database.uri,
-            settings.database.name
-        )
-        logger.info("Database connection initialized")
-        
+
+        uris = [settings.database.uri]
+        for uri in settings.database.get_additional_uris():
+            if uri and uri not in uris:
+                uris.append(uri)
+
+        names = [settings.database.name]
+        names.extend(settings.database.get_additional_names())
+        while len(names) < len(uris):
+            names.append(settings.database.name)
+        names = names[:len(uris)]
+
+        db_pools = []
+        for db_index, (uri, name) in enumerate(zip(uris, names)):
+            db_pool = DatabaseConnectionPool() if db_index == 0 else DatabaseConnectionPool.create_isolated()
+            await db_pool.initialize(uri, name)
+            db_pools.append(db_pool)
+            logger.info(f"Database connection {db_index + 1} initialized: {name}")
+
         # Initialize cache (not strictly needed for migration, but for consistency)
         cache = CacheManager(settings.redis.uri if settings.redis.uri else None)
         await cache.initialize()
         logger.info("Cache initialized")
-        
+
         # Run migration
-        migration = MediaMetadataMigration(db_pool, batch_size=args.batch_size)
+        migration = MediaMetadataMigration(db_pools, batch_size=args.batch_size)
         await migration.run(dry_run=args.dry_run, limit=args.limit)
         
         logger.info("Migration script completed successfully")
@@ -285,8 +316,9 @@ async def main():
         sys.exit(1)
     finally:
         # Cleanup
-        if 'db_pool' in locals():
-            await db_pool.close()
+        if 'db_pools' in locals():
+            for db_pool in db_pools:
+                await db_pool.close()
         if 'cache' in locals():
             await cache.close()
 
