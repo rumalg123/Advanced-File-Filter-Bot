@@ -151,7 +151,7 @@ class SecureUpdater:
         # Files to backup (exclude temp files, logs, etc.)
         important_files = [
             "*.py", "requirements.txt", "Dockerfile", "docker-compose.yml",
-            "redis.conf", "start.sh", "core/", "handlers/", "repositories/", 
+            "redis.conf", "start.sh", "config/", "core/", "handlers/", "repositories/",
             "README.md", "CLAUDE.md", ".env.example", "sample.env"
         ]
         
@@ -251,7 +251,7 @@ class SecureUpdater:
         update_items = [
             "bot.py", "requirements.txt", "Dockerfile", "docker-compose.yml",
             "redis.conf", "start.sh", "update.py",
-            "core/", "handlers/", "repositories/"
+            "config/", "core/", "handlers/", "repositories/"
         ]
         
         # Add Docker-specific handling
