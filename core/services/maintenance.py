@@ -148,7 +148,18 @@ class MaintenanceService:
     async def get_database_storage_stats(self, include_error: bool = False) -> Dict[str, Any]:
         """Get MongoDB database storage statistics"""
         try:
-            # Access database through media repository's db_pool
+            main_collections = [
+                self.media_repo.collection_name,
+                'users',
+                'indexed_channels',
+                'connections',
+                'filters'
+            ]
+
+            if self.media_repo.is_multi_db and self.media_repo.multi_db_manager:
+                return await self._get_multi_database_storage_stats(main_collections, include_error)
+
+            # Access database through media repository's primary db_pool
             db_pool = self.media_repo.db_pool
             db = db_pool.database
 
@@ -157,7 +168,6 @@ class MaintenanceService:
 
             # Get collection stats for main collections
             collections_stats = {}
-            main_collections = ['media_files', 'users', 'indexed_channels', 'connections', 'filters']
 
             for collection_name in main_collections:
                 try:
@@ -201,6 +211,93 @@ class MaintenanceService:
             if include_error:
                 fallback['_error'] = str(e)
             return fallback
+
+    async def _get_multi_database_storage_stats(
+            self,
+            main_collections,
+            include_error: bool = False
+    ) -> Dict[str, Any]:
+        """Get aggregated MongoDB storage statistics across all active media databases."""
+        storage_stats = {
+            'database_size': 0,
+            'storage_size': 0,
+            'index_size': 0,
+            'total_size': 0,
+            'collections': {},
+            'avg_obj_size': 0,
+            'objects_count': 0,
+            'databases': []
+        }
+        errors = []
+
+        for db_info in self.media_repo.multi_db_manager.databases:
+            if not db_info.is_active or not db_info.pool:
+                continue
+
+            try:
+                db_pool = db_info.pool
+                db = db_pool.database
+                db_stats = await db_pool.execute_with_retry(db.command, "dbStats")
+
+                db_data_size = db_stats.get('dataSize', 0)
+                db_storage_size = db_stats.get('storageSize', 0)
+                db_index_size = db_stats.get('indexSize', 0)
+                db_objects = db_stats.get('objects', 0)
+
+                storage_stats['database_size'] += db_data_size
+                storage_stats['storage_size'] += db_storage_size
+                storage_stats['index_size'] += db_index_size
+                storage_stats['total_size'] += db_storage_size
+                storage_stats['objects_count'] += db_objects
+
+                database_entry = {
+                    'name': db_info.name,
+                    'database_size': db_data_size,
+                    'storage_size': db_storage_size,
+                    'index_size': db_index_size,
+                    'objects_count': db_objects,
+                    'collections': {}
+                }
+
+                for collection_name in main_collections:
+                    try:
+                        coll_stats = await db_pool.execute_with_retry(
+                            db.command, "collStats", collection_name
+                        )
+                        collection_entry = {
+                            'count': coll_stats.get('count', 0),
+                            'size': coll_stats.get('size', 0),
+                            'storage_size': coll_stats.get('storageSize', 0),
+                            'total_index_size': coll_stats.get('totalIndexSize', 0)
+                        }
+                        database_entry['collections'][collection_name] = collection_entry
+
+                        aggregate_entry = storage_stats['collections'].setdefault(
+                            collection_name,
+                            {'count': 0, 'size': 0, 'storage_size': 0, 'total_index_size': 0}
+                        )
+                        aggregate_entry['count'] += collection_entry['count']
+                        aggregate_entry['size'] += collection_entry['size']
+                        aggregate_entry['storage_size'] += collection_entry['storage_size']
+                        aggregate_entry['total_index_size'] += collection_entry['total_index_size']
+                    except Exception as e:
+                        logger.warning(f"Could not get stats for collection {collection_name} in {db_info.name}: {e}")
+                        database_entry['collections'][collection_name] = {
+                            'count': 0, 'size': 0, 'storage_size': 0, 'total_index_size': 0
+                        }
+
+                storage_stats['databases'].append(database_entry)
+            except Exception as e:
+                logger.error(f"Error getting database storage stats for {db_info.name}: {e}")
+                errors.append(f"{db_info.name}: {e}")
+
+        if storage_stats['objects_count']:
+            storage_stats['avg_obj_size'] = storage_stats['database_size'] / storage_stats['objects_count']
+
+        if errors and include_error:
+            storage_stats['_error'] = "; ".join(errors)
+
+        return storage_stats
 
     async def _get_last_counter_reset_date(self) -> Optional[date]:
         """Get the last counter reset date from database (persistent storage)"""
