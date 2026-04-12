@@ -148,12 +148,19 @@ class BatchOptimizations:
         pipeline = [
             {"$match": {"file_unique_id": {"$in": unique_ids}}},
             {"$project": {
+                "_id": 1,
                 "file_unique_id": 1,
-                "file_id": 1,
+                "file_ref": 1,
                 "file_name": 1,
                 "file_size": 1,
                 "file_type": 1,
-                "created_at": 1
+                "mime_type": 1,
+                "caption": 1,
+                "indexed_at": 1,
+                "updated_at": 1,
+                "resolution": 1,
+                "episode": 1,
+                "season": 1,
             }}
         ]
         
@@ -164,22 +171,25 @@ class BatchOptimizations:
 
             # Build lookup map
             existing_map = {}
+            from core.utils.file_type import get_file_type_from_value
+            from repositories.media import FileType, MediaFile
+
             for result in results:
                 unique_id = result["file_unique_id"]
-                # Convert back to MediaFile object (dynamic import to avoid circular dependency)
-                from repositories.media import MediaFile
                 existing_file = MediaFile(
-                    file_id=result["file_id"],
+                    file_id=result.get("_id") or result.get("file_id"),
                     file_unique_id=result["file_unique_id"],
-                    file_ref="",  # Not needed for duplicate check
+                    file_ref=result.get("file_ref") or "",
                     file_name=result["file_name"],
                     file_size=result["file_size"],
-                    file_type=result["file_type"],
-                    resolution=None,
-                    episode=None,
-                    season=None,
+                    file_type=get_file_type_from_value(result.get("file_type")) or FileType.DOCUMENT,
+                    resolution=result.get("resolution"),
+                    episode=result.get("episode"),
+                    season=result.get("season"),
                     mime_type=result.get("mime_type", ""),
-                    caption=result.get("caption", "")
+                    caption=result.get("caption", ""),
+                    indexed_at=result.get("indexed_at"),
+                    updated_at=result.get("updated_at"),
                 )
                 existing_map[unique_id] = existing_file
             
