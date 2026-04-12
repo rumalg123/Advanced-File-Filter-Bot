@@ -222,18 +222,18 @@ run_secure_update() {
     log_info "Branch: $UPDATE_BRANCH"
     log_info "Backup on update: $BACKUP_ON_UPDATE"
     
-    # Prepare update command
-    local update_cmd="python3 \"$SCRIPT_DIR/update.py\" --repo \"$UPDATE_REPO\" --branch \"$UPDATE_BRANCH\""
+    # Prepare update command as argv so repo/branch are not interpreted by the shell.
+    local -a update_cmd=(python3 "$SCRIPT_DIR/update.py" --repo "$UPDATE_REPO" --branch "$UPDATE_BRANCH")
     
     # Skip backup if disabled
     if [ "$BACKUP_ON_UPDATE" = "false" ]; then
-        update_cmd="$update_cmd --skip-backup"
+        update_cmd+=(--skip-backup)
         log_warn "Backup creation disabled - no rollback will be possible"
     fi
     
     # Run the secure update script
     log_info "Executing update command..."
-    if eval "$update_cmd"; then
+    if "${update_cmd[@]}"; then
         log_info "✅ Update completed successfully"
         
         # Reinstall dependencies if requirements changed
