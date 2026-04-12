@@ -210,18 +210,22 @@ class SecureUpdater:
                 logger.error(f"Required file missing: {file_name}")
                 return False
                 
-        # Validate Python syntax of main files
-        python_files = ["bot.py"]
-        for file_name in python_files:
+        # Validate Python syntax for all tracked runtime Python files before copying.
+        python_files = [
+            path for path in source_dir.rglob("*.py")
+            if "__pycache__" not in path.parts
+        ]
+        for file_path in python_files:
+            relative_name = str(file_path.relative_to(source_dir))
             try:
-                with open(source_dir / file_name, 'r', encoding='utf-8') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     # Use ast.parse instead of compile for safer syntax validation
-                    ast.parse(f.read(), filename=file_name)
+                    ast.parse(f.read(), filename=relative_name)
             except SyntaxError as e:
-                logger.error(f"Syntax error in {file_name}: {e}")
+                logger.error(f"Syntax error in {relative_name}: {e}")
                 return False
             except Exception as e:
-                logger.error(f"Error validating {file_name}: {e}")
+                logger.error(f"Error validating {relative_name}: {e}")
                 return False
                 
         # Check requirements.txt format
