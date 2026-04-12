@@ -97,7 +97,7 @@ class HandlerManager:
             logger.error(f"Error removing handler {type(handler).__name__}: {e}")
             self.stats['handlers_removal_failed'] += 1
 
-    def create_background_task(self, coro, name: Optional[str] = None) -> asyncio.Task|None:
+    def create_background_task(self, coro, name: Optional[str] = None) -> Optional[asyncio.Task]:
         """Create and track a long-running background task"""
         if self._shutdown_event.is_set():
             logger.warning(f"Attempted to create task '{name}' during shutdown")
@@ -131,7 +131,7 @@ class HandlerManager:
         logger.debug(f"Created background task: {name or 'unnamed'}")
         return task
 
-    def create_auto_delete_task(self, coro) -> asyncio.Task|None:
+    def create_auto_delete_task(self, coro) -> Optional[asyncio.Task]:
         """Create a task that auto-cleans up (for short-lived tasks)"""
         if self._shutdown_event.is_set():
             logger.debug("Shutdown in progress, not creating auto-delete task")
