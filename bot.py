@@ -200,13 +200,22 @@ class BotConfig:
         self.SUPPORT_GROUP_NAME = self._settings.messages.support_group_name
         self.PAYMENT_LINK = self._settings.messages.payment_link
     
-    def _parse_auth_channel(self) -> Optional[int]:
+    def _parse_auth_channel(self) -> Optional[Union[int, str]]:
         """Parse auth channel from settings"""
-        if self._settings.channels.auth_channel:
-            auth_channel = self._settings.channels.auth_channel
-            if auth_channel.lstrip('-').isdigit():
-                return int(auth_channel)
-        return None
+        auth_channel = self._settings.channels.auth_channel
+        if not auth_channel:
+            return None
+
+        if isinstance(auth_channel, int):
+            return auth_channel if auth_channel != 0 else None
+
+        auth_channel = str(auth_channel).strip()
+        if not auth_channel or auth_channel == '0':
+            return None
+
+        if auth_channel.lstrip('-').isdigit():
+            return int(auth_channel)
+        return auth_channel
     
     def _parse_database_uris(self) -> List[str]:
         """Parse multiple database URIs from settings"""

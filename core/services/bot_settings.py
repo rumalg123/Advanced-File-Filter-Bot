@@ -50,8 +50,8 @@ class BotSettingsService:
             'category': 'access'
         },
         'AUTH_CHANNEL': {
-            'type': 'int',
-            'default': 0,
+            'type': 'str',
+            'default': '',
             'description': 'Channel ID for force subscription',
             'category': 'subscription'
         },
