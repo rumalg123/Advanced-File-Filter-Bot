@@ -710,6 +710,15 @@ class MediaSearchBot(Client):
             self.config.sync_settings_from_db(db_settings)
             logger.info("Loaded and synced settings from database")
 
+            if self.multi_db_manager:
+                self.multi_db_manager.apply_runtime_settings(
+                    size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
+                    auto_switch=self.config.DATABASE_AUTO_SWITCH,
+                    max_failures=self.config.DATABASE_MAX_FAILURES,
+                    recovery_timeout=self.config.DATABASE_RECOVERY_TIMEOUT,
+                    half_open_calls=self.config.DATABASE_HALF_OPEN_CALLS
+                )
+
             # Initialize concurrency limits from settings
             concurrency_limits = settings.get_concurrency_limits()
             for domain, limit in concurrency_limits.items():

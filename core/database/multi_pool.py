@@ -121,6 +121,26 @@ class MultiDatabaseManager:
             
             logger.info(f"Multi-database manager initialized with {len(self.databases)} databases")
 
+    def apply_runtime_settings(
+        self,
+        size_limit_gb: float,
+        auto_switch: bool,
+        max_failures: int,
+        recovery_timeout: int,
+        half_open_calls: int
+    ) -> None:
+        """Apply database settings loaded after manager initialization."""
+        self.size_limit_gb = size_limit_gb
+        self.auto_switch = auto_switch
+        self.max_failures = max_failures
+        self.timeout_duration = timedelta(seconds=recovery_timeout)
+        self.half_open_max_calls = half_open_calls
+        logger.info(
+            "Applied multi-database runtime settings: "
+            f"size_limit_gb={size_limit_gb}, auto_switch={auto_switch}, "
+            f"max_failures={max_failures}, recovery_timeout={recovery_timeout}, "
+            f"half_open_calls={half_open_calls}"
+        )
 
     async def _handle_all_databases_full(self) -> None:
         """Handle emergency scenario when all databases are at capacity"""
