@@ -13,6 +13,7 @@ from core.utils.button_builder import ButtonBuilder
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.caption import CaptionFormatter
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.utils.pagination import create_search_query_reference
 from repositories.media import FileType
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
@@ -479,10 +480,15 @@ class UserCommandHandler(BaseCommandHandler):
                 for query in recommendations['similar_queries'][:6]:  # Show up to 6 queries
                     # Truncate long queries for display
                     display_query = query[:30] + "..." if len(query) > 30 else query
+                    query_reference = await create_search_query_reference(
+                        self.bot.cache,
+                        query,
+                        user_id
+                    )
                     query_buttons.append(
                         ButtonBuilder.action_button(
                             f"🔍 {display_query}",
-                            callback_data=f"search#page#{query}#0#0#{user_id}"
+                            callback_data=f"search#page#{query_reference}#0#0#{user_id}"
                         )
                     )
                 if query_buttons:

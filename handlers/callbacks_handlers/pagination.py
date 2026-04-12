@@ -8,7 +8,12 @@ from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
-from core.utils.pagination import PaginationBuilder, PaginationHelper
+from core.utils.pagination import (
+    PaginationBuilder,
+    PaginationHelper,
+    make_search_query_reference,
+    resolve_search_query_reference,
+)
 from core.utils.validators import is_private_chat
 from handlers.commands_handlers.base import BaseCommandHandler
 
@@ -39,6 +44,14 @@ class PaginationCallbackHandler(BaseCommandHandler):
         if original_user_id and callback_user_id != original_user_id:
             await query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this message", plain_text=True), show_alert=True)
             return
+
+        search_query = await resolve_search_query_reference(
+            self.bot.cache,
+            search_query,
+            result_owner_id
+        )
+        if not search_query:
+            return await query.answer("Search expired. Please search again.", show_alert=True)
 
         page_size = self.bot.config.MAX_BTN_SIZE
         user_id = callback_user_id
@@ -105,13 +118,14 @@ class PaginationCallbackHandler(BaseCommandHandler):
             {'files': files_data, 'query': search_query, 'user_id': result_owner_id},
             expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
         )
+        query_reference = make_search_query_reference(session_id)
 
         # Build response with new pagination builder
         pagination = PaginationBuilder(
             total_items=total,
             page_size=page_size,
             current_offset=new_offset,
-            query=search_query,
+            query=query_reference,
             user_id=result_owner_id,
             callback_prefix="search"
         )

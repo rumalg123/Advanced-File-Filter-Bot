@@ -1,8 +1,61 @@
 # core/utils/pagination.py
+import uuid
+from string import hexdigits
 from typing import List, Optional, Tuple
 from pyrogram.types import InlineKeyboardButton
 
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.button_builder import ButtonBuilder
+
+QUERY_REFERENCE_PREFIX = "@"
+
+
+def make_search_query_reference(session_id: str) -> str:
+    """Build a short callback-safe reference to a cached search session."""
+    return f"{QUERY_REFERENCE_PREFIX}{session_id}"
+
+
+def parse_search_query_reference(query: str) -> Optional[str]:
+    """Return the cached search session id if the query is a reference."""
+    if query and query.startswith(QUERY_REFERENCE_PREFIX):
+        session_id = query[len(QUERY_REFERENCE_PREFIX):]
+        if len(session_id) == 8 and all(char in hexdigits for char in session_id):
+            return session_id
+    return None
+
+
+async def create_search_query_reference(cache, query: str, user_id: int) -> str:
+    """Cache a query and return a compact reference for Telegram callback_data."""
+    session_id = uuid.uuid4().hex[:8]
+    search_key = CacheKeyGenerator.search_session(user_id, session_id)
+    await cache.set(
+        search_key,
+        {'files': [], 'query': query, 'user_id': user_id},
+        expire=CacheTTLConfig.SEARCH_SESSION
+    )
+    return make_search_query_reference(session_id)
+
+
+async def resolve_search_query_reference(cache, query: str, user_id: int) -> Optional[str]:
+    """Resolve a callback query reference, preserving old raw-query callbacks."""
+    session_id = parse_search_query_reference(query)
+    if not session_id:
+        return query
+
+    search_key = CacheKeyGenerator.search_session(user_id, session_id)
+    cached_data = await cache.get(search_key)
+    if not cached_data:
+        return None
+
+    cached_user_id = cached_data.get('user_id')
+    if cached_user_id is not None:
+        try:
+            if int(cached_user_id) != int(user_id):
+                return None
+        except (TypeError, ValueError):
+            return None
+
+    return cached_data.get('query')
 
 
 class PaginationBuilder:

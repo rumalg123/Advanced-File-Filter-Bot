@@ -28,7 +28,7 @@ from core.utils.validators import (
     is_bot_user, get_special_channels, is_special_channel, is_private_chat
 )
 from repositories.user import UserStatus
-from core.utils.pagination import PaginationBuilder
+from core.utils.pagination import create_search_query_reference
 
 logger = get_logger(__name__)
 
@@ -589,10 +589,15 @@ class SearchHandler:
                     did_you_mean_text = "💡 <b>Did you mean?</b>\n\n"
                     query_buttons = []
                     for similar_query in similar_queries:
+                        query_reference = await create_search_query_reference(
+                            self.bot.cache,
+                            similar_query,
+                            user_id
+                        )
                         query_buttons.append(
                             ButtonBuilder.action_button(
                                 f"🔍 {similar_query}",
-                                callback_data=f"search#page#{similar_query}#0#0#{user_id}"
+                                callback_data=f"search#page#{query_reference}#0#0#{user_id}"
                             )
                         )
                     # Add 2 queries per row

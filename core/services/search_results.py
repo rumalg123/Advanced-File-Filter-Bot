@@ -12,7 +12,11 @@ from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
-from core.utils.pagination import PaginationBuilder
+from core.utils.pagination import (
+    PaginationBuilder,
+    create_search_query_reference,
+    make_search_query_reference,
+)
 from repositories.media import MediaFile
 
 logger = get_logger(__name__)
@@ -109,6 +113,7 @@ class SearchResultsService:
                 search_data,
                 expire=self.ttl.SEARCH_SESSION
             )
+            query_reference = make_search_query_reference(session_id)
             
             # Store user's last search for recommendation tracking
             recent_search_key = CacheKeyGenerator.user_last_search(user_id)
@@ -136,7 +141,7 @@ class SearchResultsService:
                 total_items=total,
                 page_size=page_size,
                 current_offset=current_offset,
-                query=query,
+                query=query_reference,
                 user_id=user_id,
                 callback_prefix=callback_prefix
             )
@@ -268,10 +273,15 @@ class SearchResultsService:
                 text_parts.append("💡 <b>Similar Searches:</b>")
                 query_buttons = []
                 for similar_query in similar_queries[:3]:
+                    query_reference = await create_search_query_reference(
+                        self.cache,
+                        similar_query,
+                        user_id
+                    )
                     query_buttons.append(
                         ButtonBuilder.action_button(
                             f"🔍 {similar_query[:20]}...",
-                            callback_data=f"search#page#{similar_query}#0#0#{user_id}"
+                            callback_data=f"search#page#{query_reference}#0#0#{user_id}"
                         )
                     )
                 if query_buttons:
