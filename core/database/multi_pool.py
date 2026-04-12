@@ -434,6 +434,98 @@ class MultiDatabaseManager:
             logger.error(f"Error finding documents in database {db_info.name}: {e}")
             return []
 
+    async def update_one_across_databases(
+        self,
+        collection_name: str,
+        query: Dict[str, Any],
+        update: Dict[str, Any],
+        upsert: bool = False
+    ) -> bool:
+        """Update the first matching document in active databases."""
+        tasks = []
+        for db_info in self.databases:
+            if db_info.is_active and db_info.pool:
+                tasks.append(self._update_one_in_database(db_info, collection_name, query, update, upsert))
+
+        if not tasks:
+            return False
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if result is True:
+                return True
+            if isinstance(result, Exception):
+                logger.error(f"Error updating document across databases: {result}")
+        return False
+
+    async def _update_one_in_database(
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
+        query: Dict[str, Any],
+        update: Dict[str, Any],
+        upsert: bool = False
+    ) -> bool:
+        """Update one document in a specific database with circuit breaker protection."""
+        try:
+            async def update_operation():
+                collection = await db_info.pool.get_collection(collection_name)
+                result = await db_info.pool.execute_with_retry(
+                    collection.update_one, query, update, upsert=upsert
+                )
+                return result.modified_count > 0 or (upsert and result.upserted_id)
+
+            return await self._execute_with_circuit_breaker(
+                db_info, "update_one", update_operation
+            )
+        except Exception as e:
+            logger.error(f"Error updating document in database {db_info.name}: {e}")
+            return False
+
+    async def delete_one_across_databases(
+        self,
+        collection_name: str,
+        query: Dict[str, Any]
+    ) -> int:
+        """Delete a matching document from each active database."""
+        tasks = []
+        for db_info in self.databases:
+            if db_info.is_active and db_info.pool:
+                tasks.append(self._delete_one_in_database(db_info, collection_name, query))
+
+        deleted_count = 0
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, int):
+                    deleted_count += result
+                elif isinstance(result, Exception):
+                    logger.error(f"Error deleting document across databases: {result}")
+
+        return deleted_count
+
+    async def _delete_one_in_database(
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
+        query: Dict[str, Any]
+    ) -> int:
+        """Delete one document in a specific database with circuit breaker protection."""
+        try:
+            async def delete_operation():
+                collection = await db_info.pool.get_collection(collection_name)
+                result = await db_info.pool.execute_with_retry(
+                    collection.delete_one, query
+                )
+                return result.deleted_count
+
+            return await self._execute_with_circuit_breaker(
+                db_info, "delete_one", delete_operation
+            )
+        except Exception as e:
+            logger.error(f"Error deleting document in database {db_info.name}: {e}")
+            return 0
+
     async def count_across_all_databases(
         self, 
         collection_name: str, 

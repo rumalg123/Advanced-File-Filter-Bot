@@ -276,12 +276,20 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             if not file:
                 return False
 
-            collection = await self.collection()
+            if self.is_multi_db:
+                deleted_count = await self.multi_db_manager.delete_one_across_databases(
+                    self.collection_name,
+                    {"file_unique_id": file.file_unique_id}
+                )
+            else:
+                collection = await self.collection()
 
-            result = await self.db_pool.execute_with_retry(
-                collection.delete_one, {"file_unique_id": id}
-            )
-            if result.deleted_count > 0:
+                result = await self.db_pool.execute_with_retry(
+                    collection.delete_one, {"file_unique_id": file.file_unique_id}
+                )
+                deleted_count = result.deleted_count
+
+            if deleted_count > 0:
                 # Invalidate all file-related caches
                 await self.cache_invalidator.invalidate_file_cache(file)
                 await self.cache_invalidator.invalidate_all_search_results()
@@ -574,6 +582,21 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
     async def update(self, id: Any, update_data: Dict[str, Any], upsert: bool = False) -> bool:
         """Update entity and invalidate cache properly"""
+        if self.is_multi_db:
+            file = await self.find_file(id)
+            success = await self.multi_db_manager.update_one_across_databases(
+                self.collection_name,
+                {"_id": id},
+                {"$set": update_data},
+                upsert=upsert
+            )
+            if success:
+                if file:
+                    await self.cache_invalidator.invalidate_file_cache(file)
+                else:
+                    await self.cache_invalidator.invalidate_media_entry(id)
+            return success
+
         success = await super().update(id, update_data, upsert)
 
         if success:
