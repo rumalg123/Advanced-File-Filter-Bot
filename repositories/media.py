@@ -210,7 +210,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         try:
             if self.is_multi_db:
                 # Search across all databases using $in
-                for db_pool in await self.multi_db_manager.get_all_pools():
+                for db_pool in await self.multi_db_manager.get_all_databases():
+                    if not cache_misses:
+                        break
                     collection = await db_pool.get_collection(self.collection_name)
                     docs = await db_pool.execute_with_retry(
                         collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
@@ -350,6 +352,38 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """
         if not media_files:
             return {}
+
+        if self.is_multi_db:
+            unique_ids = [media.file_unique_id for media in media_files]
+            existing_docs = await self.multi_db_manager.find_many_in_all_databases(
+                self.collection_name,
+                {"file_unique_id": {"$in": unique_ids}},
+                projection={
+                    "file_unique_id": 1,
+                    "_id": 1,
+                    "file_name": 1,
+                    "file_size": 1,
+                    "file_type": 1,
+                    "file_ref": 1,
+                    "mime_type": 1,
+                    "caption": 1,
+                    "indexed_at": 1,
+                    "updated_at": 1,
+                    "resolution": 1,
+                    "episode": 1,
+                    "season": 1,
+                }
+            )
+            existing_by_unique_id = {doc["file_unique_id"]: doc for doc in existing_docs}
+
+            return {
+                media.file_unique_id: (
+                    self._dict_to_entity(existing_by_unique_id[media.file_unique_id])
+                    if media.file_unique_id in existing_by_unique_id
+                    else None
+                )
+                for media in media_files
+            }
 
         # Use batch optimization if available
         if self.batch_ops:

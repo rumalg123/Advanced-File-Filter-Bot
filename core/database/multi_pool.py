@@ -384,6 +384,56 @@ class MultiDatabaseManager:
                 
         return None, None
 
+    async def find_many_in_all_databases(
+        self,
+        collection_name: str,
+        query: Dict[str, Any],
+        projection: Optional[Dict[str, Any]] = None,
+        sort: Optional[List[Tuple[str, int]]] = None
+    ) -> List[Dict[str, Any]]:
+        """Find matching documents across all active databases."""
+        tasks = []
+        for db_info in self.databases:
+            if db_info.is_active and db_info.pool:
+                tasks.append(self._find_many_in_database(db_info, collection_name, query, projection, sort))
+
+        documents: List[Dict[str, Any]] = []
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, list):
+                    documents.extend(result)
+                elif isinstance(result, Exception):
+                    logger.error(f"Error finding documents across databases: {result}")
+
+        return documents
+
+    async def _find_many_in_database(
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
+        query: Dict[str, Any],
+        projection: Optional[Dict[str, Any]] = None,
+        sort: Optional[List[Tuple[str, int]]] = None
+    ) -> List[Dict[str, Any]]:
+        """Find matching documents in a specific database with circuit breaker protection."""
+        try:
+            async def find_many_operation():
+                collection = await db_info.pool.get_collection(collection_name)
+                cursor = collection.find(query, projection) if projection is not None else collection.find(query)
+                if sort:
+                    cursor = cursor.sort(sort)
+                return await db_info.pool.execute_with_retry(
+                    cursor.to_list, length=None
+                )
+
+            return await self._execute_with_circuit_breaker(
+                db_info, "find_many", find_many_operation
+            )
+        except Exception as e:
+            logger.error(f"Error finding documents in database {db_info.name}: {e}")
+            return []
+
     async def count_across_all_databases(
         self, 
         collection_name: str, 
