@@ -201,6 +201,24 @@ class MultiDatabaseManager:
             
             if len(self.databases) <= 1:
                 return self.databases[0].pool if self.databases else None
+
+            if not self.auto_switch:
+                current_db = self.databases[self.current_write_db_index]
+                if current_db.is_active:
+                    logger.debug(f"Auto-switch disabled; using current DB{self.current_write_db_index + 1}")
+                    return current_db.pool
+
+                for i, db_info in enumerate(self.databases):
+                    if db_info.is_active:
+                        logger.warning(
+                            f"Auto-switch disabled, but current DB{self.current_write_db_index + 1} "
+                            f"is inactive. Falling back to active DB{i + 1}."
+                        )
+                        self.current_write_db_index = i
+                        return db_info.pool
+
+                logger.error("No active databases available for write operation")
+                return current_db.pool
                 
             best_score = -1
             best_db_index = self.current_write_db_index
@@ -229,12 +247,13 @@ class MultiDatabaseManager:
             
             # Switch if a significantly better database is found
             if best_db_index != self.current_write_db_index:
+                old_index = self.current_write_db_index
                 old_db = self.databases[self.current_write_db_index]
                 new_db = self.databases[best_db_index]
                 self.current_write_db_index = best_db_index
                 
                 logger.info(
-                    f"🎯 Smart switch: DB{self.current_write_db_index + 1} -> DB{best_db_index + 1} "
+                    f"🎯 Smart switch: DB{old_index + 1} -> DB{best_db_index + 1} "
                     f"({old_db.name} -> {new_db.name}) - Score improved: {best_score:.3f}"
                 )
             else:
