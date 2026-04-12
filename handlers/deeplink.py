@@ -498,12 +498,27 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_not_found("Files"))
             return
 
-        # Send files
-        await message.reply_text(f"📤 Sending {len(files)} {file_type or 'all'} files...")
-
         # Pre-compute user info and access context (avoid repeated lookups in loop)
         user = await self.bot.user_repo.get_user(user_id)
         access_ctx = UserAccessContext.from_config(user_id, user, self.bot.config)
+        reserved_count = 0
+
+        if access_ctx.should_track_retrieval:
+            reserve_ok, reserved_count, reserve_message = await self.bot.user_repo.reserve_quota_atomic(
+                user_id,
+                len(files),
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT
+            )
+            if not reserve_ok:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_error(
+                        f"{reserve_message}. Upgrade to premium for unlimited access!"
+                    )
+                )
+                return
+
+        # Send files
+        await message.reply_text(f"📤 Sending {len(files)} {file_type or 'all'} files...")
 
         success_count = 0
         for file in files:
@@ -539,9 +554,11 @@ class DeepLinkHandler(BaseCommandHandler):
                 logger.error(f"Error sending file: {e}")
                 continue
 
-        # Batch increment retrieval count after loop (more efficient than per-file)
-        if access_ctx.should_track_retrieval and success_count > 0:
-            await self.bot.user_repo.increment_retrieval_count_batch(user_id, success_count)
+        if access_ctx.should_track_retrieval and reserved_count > success_count:
+            await self.bot.user_repo.release_quota(
+                user_id,
+                reserved_count - success_count
+            )
 
         sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
         # Schedule auto-delete for completion message
