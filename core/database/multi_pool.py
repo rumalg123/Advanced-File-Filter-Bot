@@ -102,10 +102,7 @@ class MultiDatabaseManager:
 
             # Initialize database connections
             for i, (uri, name) in enumerate(zip(uris, names)):
-                # FIXED: Create truly separate pool instances by bypassing singleton behavior
-                pool = DatabaseConnectionPool.__new__(DatabaseConnectionPool)
-                pool.__dict__.clear()  # Clear any singleton state
-                pool.__init__()  # Initialize fresh instance
+                pool = DatabaseConnectionPool.create_isolated()
                 
                 await pool.initialize(uri, name)
                 

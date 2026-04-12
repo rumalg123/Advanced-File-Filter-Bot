@@ -25,14 +25,27 @@ class DatabaseConnectionPool:
     def __init__(self):
         if not hasattr(self, '_initialized'):
             self._initialized = True
-            self._client: Optional[AsyncIOMotorClient] = None
-            self._database: Optional[AsyncIOMotorDatabase] = None
-            if 'uvloop' in sys.modules:
-                self._pool_size = 200  # Can handle more with uvloop
-                self._max_idle_time = 600000  # 10 minutes
-            else:
-                self._pool_size = 100
-                self._max_idle_time = 300000  # 5 minutes
+            self._initialize_state()
+
+    @classmethod
+    def create_isolated(cls) -> 'DatabaseConnectionPool':
+        """Create a non-singleton pool for multi-database mode."""
+        instance = object.__new__(cls)
+        instance._initialized = True
+        instance._initialize_state()
+        return instance
+
+    def _initialize_state(self) -> None:
+        """Initialize per-instance pool state."""
+        self._lock = asyncio.Lock()
+        self._client: Optional[AsyncIOMotorClient] = None
+        self._database: Optional[AsyncIOMotorDatabase] = None
+        if 'uvloop' in sys.modules:
+            self._pool_size = 200  # Can handle more with uvloop
+            self._max_idle_time = 600000  # 10 minutes
+        else:
+            self._pool_size = 100
+            self._max_idle_time = 300000  # 5 minutes
 
     async def initialize(self, uri: str, database_name: str) -> None:
         """Initialize the connection pool"""
