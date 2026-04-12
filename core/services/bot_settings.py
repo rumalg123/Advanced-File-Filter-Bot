@@ -75,7 +75,7 @@ class BotSettingsService:
         },
         'MAX_BTN_SIZE': {
             'type': 'int',
-            'default': 10,
+            'default': 12,
             'description': 'Maximum buttons per page',
             'category': 'ui'
         },
@@ -189,7 +189,7 @@ class BotSettingsService:
         },
         'USE_ORIGINAL_CAPTION_FOR_BATCH': {
             'type': 'bool',
-            'default': False,
+            'default': True,
             'description': 'Use original caption for batch files instead of batch template',
             'category': 'customization'
         },
