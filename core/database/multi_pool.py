@@ -713,18 +713,23 @@ class MultiDatabaseManager:
         Search across all databases and return properly paginated combined results
         
         FIXED: This method now correctly handles cross-database pagination by:
-        1. Getting ALL matching results from each database first
-        2. Combining and sorting ALL results together  
+        1. Getting enough sorted results from each database to satisfy the requested page
+        2. Combining and sorting those results together
         3. THEN applying skip/limit to the final sorted list
         """
         all_results = []
+        query_limit = skip + limit if sort else None
         
-        # Get ALL matching results from each database (no individual limits)
         tasks = []
         for db_info in self.databases:
             if db_info.is_active and db_info.pool:
-                # Get all matching results from this database (for proper sorting)
-                task = self._get_all_matching_from_database(db_info, collection_name, query, sort)
+                task = self._get_all_matching_from_database(
+                    db_info,
+                    collection_name,
+                    query,
+                    sort,
+                    query_limit
+                )
                 tasks.append(task)
         
         if tasks:
@@ -737,34 +742,56 @@ class MultiDatabaseManager:
         
         # Sort the COMBINED results properly
         if sort and all_results:
-            for sort_field, sort_direction in reversed(sort):
-                all_results.sort(
-                    key=lambda x: x.get(sort_field, 0), 
-                    reverse=(sort_direction == -1)
-                )
+            self._sort_documents(all_results, sort)
         
         # NOW apply pagination to the final sorted results  
         return all_results[skip:skip + limit]
+
+    @staticmethod
+    def _normalize_sort_value(value: Any) -> Tuple[int, Any]:
+        """Normalize mixed MongoDB values so Python sorting stays stable."""
+        if isinstance(value, datetime):
+            return 0, value.timestamp()
+        if isinstance(value, (int, float)):
+            return 0, value
+        if isinstance(value, str):
+            try:
+                return 0, datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                return 1, value
+        return 2, str(value)
+
+    def _sort_documents(self, documents: List[Dict[str, Any]], sort: List[Tuple[str, int]]) -> None:
+        """Sort documents while keeping missing sort values at the end."""
+        for sort_field, sort_direction in reversed(sort):
+            present = [document for document in documents if document.get(sort_field) is not None]
+            missing = [document for document in documents if document.get(sort_field) is None]
+            present.sort(
+                key=lambda document: self._normalize_sort_value(document.get(sort_field)),
+                reverse=(sort_direction == -1)
+            )
+            documents[:] = present + missing
 
     async def _get_all_matching_from_database(
         self,
         db_info: DatabaseInfo,
         collection_name: str,
         query: Dict[str, Any],
-        sort: Optional[List[Tuple[str, int]]] = None
+        sort: Optional[List[Tuple[str, int]]] = None,
+        limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Get ALL matching results from a specific database (no limit for proper cross-DB sorting)"""
+        """Get matching results from a specific database for cross-database sorting."""
         try:
             collection = await db_info.pool.get_collection(collection_name)
             cursor = collection.find(query)
 
             if sort:
                 cursor = cursor.sort(sort)
+            if limit:
+                cursor = cursor.limit(limit)
 
-            # Get ALL matching results (no limit) for proper cross-database sorting
-            # We'll apply the overall limit after combining all results
             return await db_info.pool.execute_with_retry(
-                cursor.to_list, length=None
+                cursor.to_list, length=limit
             )
 
         except Exception as e:
