@@ -700,8 +700,8 @@ class BotSettingsHandler(BaseHandler):
 
             try:
                 # Force pull from upstream (overwrites local changes)
-                subprocess.run(["git", "fetch", "--all"], capture_output=True, text=True, check=True)
-                subprocess.run(["git", "reset", "--hard", f"origin/{upstream_branch}"], capture_output=True, text=True, check=True)
+                subprocess.run(["git", "fetch", upstream_repo, upstream_branch], capture_output=True, text=True, check=True)
+                subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], capture_output=True, text=True, check=True)
                 
                 # Try git clean with error handling for Docker environments
                 try:

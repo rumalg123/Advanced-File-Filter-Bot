@@ -81,13 +81,13 @@ class BotSettingsService:
         },
         'UPSTREAM_REPO': {
             'type': 'str',
-            'default': 'https://github.com/yourusername/yourrepo',
+            'default': 'https://github.com/rumalg123/Advanced-File-Filter-Bot.git',
             'description': 'Upstream repository URL',
             'category': 'deployment'
         },
         'UPSTREAM_BRANCH': {
             'type': 'str',
-            'default': 'master',
+            'default': 'main',
             'description': 'Upstream branch name',
             'category': 'deployment'
         },
@@ -329,6 +329,13 @@ class BotSettingsService:
             if not existing:
                 # Get from environment or use default
                 env_value = os.environ.get(key)
+                if env_value is None:
+                    env_aliases = {
+                        'UPSTREAM_REPO': 'UPDATE_REPO',
+                        'UPSTREAM_BRANCH': 'UPDATE_BRANCH',
+                    }
+                    alias = env_aliases.get(key)
+                    env_value = os.environ.get(alias) if alias else None
 
                 if env_value is not None:
                     value = self._parse_value(env_value, metadata['type'])
