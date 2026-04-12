@@ -612,22 +612,39 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         search_filter = self._build_search_filter(keyword, None, True)
 
         # Get files to delete
-        files = await self.find_many(search_filter)
+        if self.is_multi_db:
+            files_data = await self.multi_db_manager.find_many_in_all_databases(
+                self.collection_name,
+                search_filter
+            )
+            files = [self._dict_to_entity(data) for data in files_data]
+        else:
+            files = await self.find_many(search_filter)
 
         if not files:
             return 0
 
-        # Build bulk delete operations
-        operations = [DeleteOne({'file_unique_id': f.file_unique_id}) for f in files]
+        if self.is_multi_db:
+            deleted_count = await self.multi_db_manager.delete_many_across_databases(
+                self.collection_name,
+                search_filter
+            )
+            success = deleted_count > 0
+        else:
+            # Build bulk delete operations
+            operations = [DeleteOne({'file_unique_id': f.file_unique_id}) for f in files]
 
-        # Execute bulk delete
-        success = await self.bulk_write(operations)
+            # Execute bulk delete
+            success = await self.bulk_write(operations)
+            deleted_count = len(files) if success else 0
 
         # Clear cache for deleted files
         for file in files:
             await self.cache_invalidator.invalidate_file_cache(file)
+        if success:
+            await self.cache_invalidator.invalidate_all_search_results()
 
-        return len(files) if success else 0
+        return deleted_count if success else 0
 
     async def get_file_stats(self) -> Dict[str, Any]:
         """Get file statistics"""
@@ -654,20 +671,32 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             }}
         ]
 
-        results = await self.aggregate(pipeline, limit=None)  # Stats need unlimited results
+        if self.is_multi_db:
+            results = await self.multi_db_manager.aggregate_across_all_databases(
+                self.collection_name,
+                pipeline,
+                limit=None
+            )
+        else:
+            results = await self.aggregate(pipeline, limit=None)  # Stats need unlimited results
+
         if results:
-            facets = results[0]
             stats = {
-                'total_files': facets['total'][0]['count'] if facets['total'] else 0,
-                'total_size': facets['total_size'][0]['size'] if facets['total_size'] else 0,
+                'total_files': 0,
+                'total_size': 0,
                 'by_type': {}
             }
 
-            for type_stat in facets.get('by_type', []):
-                stats['by_type'][type_stat['_id']] = {
-                    'count': type_stat['count'],
-                    'size': type_stat['size']
-                }
+            for facets in results:
+                stats['total_files'] += facets['total'][0]['count'] if facets['total'] else 0
+                stats['total_size'] += facets['total_size'][0]['size'] if facets['total_size'] else 0
+
+                for type_stat in facets.get('by_type', []):
+                    file_type = type_stat['_id']
+                    current = stats['by_type'].setdefault(file_type, {'count': 0, 'size': 0})
+                    current['count'] += type_stat['count']
+                    current['size'] += type_stat['size']
+
             await self.cache.set(cache_key, stats, expire=self.ttl.FILE_STATS)
             return stats
 

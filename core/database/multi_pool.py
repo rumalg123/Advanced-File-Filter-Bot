@@ -526,6 +526,95 @@ class MultiDatabaseManager:
             logger.error(f"Error deleting document in database {db_info.name}: {e}")
             return 0
 
+    async def delete_many_across_databases(
+        self,
+        collection_name: str,
+        query: Dict[str, Any]
+    ) -> int:
+        """Delete matching documents from all active databases."""
+        tasks = []
+        for db_info in self.databases:
+            if db_info.is_active and db_info.pool:
+                tasks.append(self._delete_many_in_database(db_info, collection_name, query))
+
+        deleted_count = 0
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, int):
+                    deleted_count += result
+                elif isinstance(result, Exception):
+                    logger.error(f"Error deleting documents across databases: {result}")
+
+        return deleted_count
+
+    async def _delete_many_in_database(
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
+        query: Dict[str, Any]
+    ) -> int:
+        """Delete matching documents in a specific database with circuit breaker protection."""
+        try:
+            async def delete_operation():
+                collection = await db_info.pool.get_collection(collection_name)
+                result = await db_info.pool.execute_with_retry(
+                    collection.delete_many, query
+                )
+                return result.deleted_count
+
+            return await self._execute_with_circuit_breaker(
+                db_info, "delete_many", delete_operation
+            )
+        except Exception as e:
+            logger.error(f"Error deleting documents in database {db_info.name}: {e}")
+            return 0
+
+    async def aggregate_across_all_databases(
+        self,
+        collection_name: str,
+        pipeline: List[Dict[str, Any]],
+        limit: Optional[int] = 1000
+    ) -> List[Dict[str, Any]]:
+        """Run an aggregation pipeline across all active databases."""
+        tasks = []
+        for db_info in self.databases:
+            if db_info.is_active and db_info.pool:
+                tasks.append(self._aggregate_in_database(db_info, collection_name, pipeline, limit))
+
+        documents: List[Dict[str, Any]] = []
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, list):
+                    documents.extend(result)
+                elif isinstance(result, Exception):
+                    logger.error(f"Error aggregating across databases: {result}")
+
+        return documents
+
+    async def _aggregate_in_database(
+        self,
+        db_info: DatabaseInfo,
+        collection_name: str,
+        pipeline: List[Dict[str, Any]],
+        limit: Optional[int] = 1000
+    ) -> List[Dict[str, Any]]:
+        """Run an aggregation pipeline in a specific database with circuit breaker protection."""
+        try:
+            async def aggregate_operation():
+                collection = await db_info.pool.get_collection(collection_name)
+                return await db_info.pool.execute_with_retry(
+                    collection.aggregate(pipeline).to_list, length=limit
+                )
+
+            return await self._execute_with_circuit_breaker(
+                db_info, "aggregate", aggregate_operation
+            )
+        except Exception as e:
+            logger.error(f"Error aggregating in database {db_info.name}: {e}")
+            return []
+
     async def count_across_all_databases(
         self, 
         collection_name: str, 
