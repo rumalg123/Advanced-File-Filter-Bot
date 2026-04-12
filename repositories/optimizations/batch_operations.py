@@ -127,8 +127,7 @@ class BatchOptimizations:
             
         except Exception as e:
             logger.error(f"Batch premium status check failed: {e}")
-            # Fallback to individual checks
-            return {user_id: (False, None) for user_id in user_ids}
+            raise
     
     async def batch_duplicate_check(
         self, 
@@ -203,7 +202,7 @@ class BatchOptimizations:
             
         except Exception as e:
             logger.error(f"Batch duplicate check failed: {e}")
-            return {media.file_unique_id: None for media in media_files}
+            raise
     
     async def batch_user_activity_aggregation(
         self, 
