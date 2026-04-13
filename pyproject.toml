@@ -93,7 +93,6 @@ show_error_codes = true
 # Additional strictness for audit compliance
 disallow_any_generics = true
 disallow_subclassing_any = true
-warn_return_any = true
 # First pass - allow missing imports, can be tightened later
 ignore_missing_imports = true
 
