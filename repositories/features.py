@@ -311,6 +311,43 @@ class FeatureRepository:
         )
         return refreshed, state
 
+    async def remove_from_collection_by_token(
+        self, user_id: int, token: str, file_unique_id: str
+    ) -> tuple[dict[str, Any] | None, str]:
+        """Remove one member through an owner-scoped compact callback token."""
+        document = await self.get_collection_by_token(user_id, token)
+        if not document:
+            return None, 'not_found'
+        if file_unique_id not in document.get('file_ids', []):
+            return document, 'not_member'
+
+        collection = await self._collection("user_collections")
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {
+                '_id': document['_id'],
+                'user_id': user_id,
+                'file_ids': file_unique_id,
+            },
+            {
+                '$pull': {'file_ids': file_unique_id},
+                '$set': {'updated_at': datetime.now(UTC)},
+            }
+        )
+        if result.modified_count:
+            document['file_ids'] = [
+                item for item in document.get('file_ids', [])
+                if item != file_unique_id
+            ]
+            return document, 'removed'
+
+        refreshed = await self.db_pool.execute_with_retry(
+            collection.find_one, {'_id': document['_id'], 'user_id': user_id}
+        )
+        if not refreshed:
+            return None, 'not_found'
+        return refreshed, 'not_member'
+
     async def rename_collection(
         self, user_id: int, current_name: str, new_name: str
     ) -> tuple[dict[str, Any] | None, str]:

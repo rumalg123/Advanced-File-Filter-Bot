@@ -292,19 +292,41 @@ sequenceDiagram
     Repo->>Mongo: Owner-scoped user_collections query
     Mongo-->>Repo: Collection plus stable callback token
     Repo-->>Handler: Owned collection state
-    Handler-->>User: Open, Clear, Delete, and file-removal controls
+    Handler-->>Delivery: Render Open, Clear, Delete, and file-removal controls
+
+    User->>Handler: Clear/delete/cancel callback
+    Handler-->>Delivery: Edit same message to confirmation
+    Handler->>Repo: Owner-scoped mutation, then list current collections
+    Repo->>Mongo: Clear/delete plus fresh list query
+    Mongo-->>Repo: Current collection snapshot
+    Repo-->>Handler: Existing rows and current counts
+    Handler-->>Delivery: Edit same message with refreshed collection list
 
     User->>Delivery: Add to Collection
     Delivery->>Handler: feature#col_pick#file_id
     Handler->>Repo: List collections for clicking user_id
     Repo-->>Handler: Names and compact tokens
-    Handler-->>User: Transient collection picker
-    User->>Handler: feature#col_add#file_id#token
-    Handler->>Repo: Conditional add by user_id plus token
-    Repo->>Mongo: addToSet while member count is below 100
-    Mongo-->>Repo: Added, duplicate, full, or not found
-    Repo-->>Handler: Membership result
-    Handler-->>User: Callback alert
+    Handler-->>Delivery: Transient picker with plus/check membership markers
+    User->>Handler: feature#col_add or col_remove#file_id#token
+    Handler->>Repo: Conditional owner-scoped membership mutation
+    Repo->>Mongo: addToSet below 100, or pull member
+    Handler->>Repo: Re-read clicking user's collections
+    Repo-->>Handler: Current membership snapshot
+    Handler-->>Delivery: Edit same picker with current toggles
+
+    opt Favorite, recommendation feedback, or report enabled
+        User->>Handler: Favorite, More/less/reset, or report reason
+        Handler->>Repo: Persist owner-scoped state
+        Repo->>Mongo: Feature mutation
+        Handler-->>Delivery: Edit action labels or report row with state marker
+    end
+
+    opt Saved-search management enabled
+        User->>Handler: Pause, resume, or delete saved search
+        Handler->>Repo: Owner-scoped mutation, then re-read list
+        Repo->>Mongo: Write plus current-list query
+        Handler-->>Delivery: Edit same menu with current rows and status
+    end
 
     opt Recent-file history enabled
         User->>Handler: Remove one recent entry
@@ -324,10 +346,11 @@ Collection callbacks carry an eight-character stable token rather than a full
 name or document ID. Repository lookups always combine that token with the
 clicking `user_id`, and destructive callback operations require a confirmation.
 Legacy collections derive the same token from their existing `_id`, so no data
-migration is required. Saved searches already expose create/list, pause-resume,
-and delete; their Run action reuses the normal user-owned search session.
-Reports and content requests are lifecycle/audit records and are resolved rather
-than hard-deleted by users.
+migration is required. Interactive mutations follow a persist, re-read, and edit
+cycle; best-effort Telegram edits never roll back an authoritative database
+write. Saved searches expose create/list, pause-resume, and delete; their Run
+action reuses the normal user-owned search session. Reports and content requests
+are lifecycle/audit records and are resolved rather than hard-deleted by users.
 
 ## 9. Cache ownership and invalidation
 

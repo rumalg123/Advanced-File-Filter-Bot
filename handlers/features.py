@@ -348,6 +348,285 @@ class FeatureHandler(BaseHandler):
         except Exception as error:
             logger.debug(f"Could not refresh feature menu after removal: {error}")
 
+    @staticmethod
+    def _feature_button_action(button) -> str:
+        callback_data = str(getattr(button, 'callback_data', '') or '')
+        parts = callback_data.split('#', 2)
+        if len(parts) >= 2 and parts[0] == 'feature':
+            return parts[1]
+        return ''
+
+    async def _update_delivery_markers(
+        self, message: Message | None, selected_action: str
+    ) -> bool:
+        """Reflect favorite/recommendation state on an existing file keyboard."""
+        if not message:
+            return False
+        markup = getattr(message, 'reply_markup', None)
+        rows = list(getattr(markup, 'inline_keyboard', None) or [])
+        if not rows:
+            return False
+
+        labels = {
+            'fav': '⭐ Favorite',
+            'more': '👍 More like this',
+            'less': '👎 Not interested',
+        }
+        if selected_action == 'fav':
+            labels['fav'] = '✅ Favorited'
+        elif selected_action == 'more':
+            labels['more'] = '✅ More like this'
+        elif selected_action == 'less':
+            labels['less'] = '✅ Not interested'
+
+        changed = False
+        updated_rows = []
+        for row in rows:
+            updated_row = []
+            for button in row:
+                action = self._feature_button_action(button)
+                label = labels.get(action)
+                if label and getattr(button, 'text', None) != label:
+                    updated_row.append(ButtonBuilder.action_button(
+                        label, callback_data=button.callback_data
+                    ))
+                    changed = True
+                else:
+                    updated_row.append(button)
+            updated_rows.append(updated_row)
+        if not changed:
+            return True
+        try:
+            await message.edit_reply_markup(InlineKeyboardMarkup(updated_rows))
+            return True
+        except Exception as error:
+            logger.debug(f"Could not update delivered-file state marker: {error}")
+            return False
+
+    @staticmethod
+    def _collections_view(collections: list[dict]) -> tuple[str, InlineKeyboardMarkup | None]:
+        if not collections:
+            return (
+                "You have no collections yet. Use "
+                "<code>/collection_create name</code> to create one.",
+                None,
+            )
+        lines = ["⭐ <b>Your collections</b>"]
+        buttons = []
+        for collection in collections:
+            lines.append(
+                f"• <code>{html.escape(collection['name'])}</code> "
+                f"({len(collection.get('file_ids', []))} files)"
+            )
+            token = collection['callback_token']
+            buttons.append([
+                ButtonBuilder.action_button(
+                    f"📂 {collection['name'][:24]}",
+                    callback_data=f"feature#col_open#{token}"
+                ),
+                ButtonBuilder.action_button(
+                    "🧹 Clear", callback_data=f"feature#col_clear#{token}"
+                ),
+                ButtonBuilder.action_button(
+                    "🗑 Delete", callback_data=f"feature#col_delete#{token}"
+                ),
+            ])
+        lines.append(
+            "\nRename with <code>/collection_rename \"Old name\" "
+            "\"New name\"</code>."
+        )
+        return "\n".join(lines), InlineKeyboardMarkup(buttons)
+
+    async def _refresh_collections_message(
+        self, message: Message | None, user_id: int
+    ) -> bool:
+        if not message:
+            return False
+        collections = await self.repository.list_collections(user_id)
+        text, markup = self._collections_view(collections)
+        try:
+            await message.edit_text(text, reply_markup=markup)
+            return True
+        except Exception as error:
+            logger.debug(f"Could not refresh collection menu: {error}")
+            return False
+
+    @staticmethod
+    def _collection_picker_view(file, collections: list[dict]) -> tuple[str, InlineKeyboardMarkup]:
+        buttons = []
+        for collection in collections:
+            is_member = file.file_unique_id in collection.get('file_ids', [])
+            action = 'col_remove' if is_member else 'col_add'
+            callback_data = (
+                f"feature#{action}#{file.file_unique_id}#"
+                f"{collection['callback_token']}"
+            )
+            if len(callback_data.encode('utf-8')) <= 64:
+                marker = '✅' if is_member else '➕'  # noqa: RUF001
+                buttons.append([ButtonBuilder.action_button(
+                    f"{marker} {collection['name'][:40]}",
+                    callback_data=callback_data
+                )])
+        close_callback = f"feature#col_picker_close#{file.file_unique_id}"
+        if len(close_callback.encode('utf-8')) <= 64:
+            buttons.append([ButtonBuilder.action_button(
+                "✅ Done", callback_data=close_callback
+            )])
+        text = (
+            f"Manage collections for <code>{html.escape(file.file_name)}</code>:"
+            if collections else
+            "You have no collections. Use <code>/collection_create name</code>."
+        )
+        return text, InlineKeyboardMarkup(buttons)
+
+    async def _refresh_collection_picker(
+        self, message: Message | None, user_id: int, file
+    ) -> bool:
+        if not message:
+            return False
+        collections = await self.repository.list_collections(user_id)
+        text, markup = self._collection_picker_view(file, collections)
+        try:
+            await message.edit_text(text, reply_markup=markup)
+            return True
+        except Exception as error:
+            logger.debug(f"Could not refresh collection picker: {error}")
+            return False
+
+    async def _saved_searches_view(
+        self, user_id: int
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        searches = await self.repository.list_saved_searches(user_id)
+        if not searches:
+            return (
+                "You have no saved searches. Use /save_search first.",
+                None,
+            )
+        lines = ["🔔 <b>Saved searches</b>"]
+        buttons = []
+        for saved in searches:
+            icon = "✅" if saved.get('active', True) else "⏸"
+            lines.append(f"{icon} <code>{html.escape(saved['query'])}</code>")
+            action = 'pause' if saved.get('active', True) else 'resume'
+            reference = await create_search_query_reference(
+                self.bot.cache, saved['query'], user_id
+            )
+            buttons.append([
+                ButtonBuilder.action_button(
+                    "🔍 Run",
+                    callback_data=f"search#page#{reference}#0#0#{user_id}"
+                ),
+                ButtonBuilder.action_button(
+                    "⏸ Pause" if action == 'pause' else "▶️ Resume",
+                    callback_data=f"feature#saved_{action}#{saved['_id']}"
+                ),
+                ButtonBuilder.action_button(
+                    "🗑 Delete",
+                    callback_data=f"feature#saved_delete#{saved['_id']}"
+                ),
+            ])
+        return "\n".join(lines), InlineKeyboardMarkup(buttons)
+
+    async def _refresh_saved_searches_message(
+        self, message: Message | None, user_id: int
+    ) -> bool:
+        if not message:
+            return False
+        text, markup = await self._saved_searches_view(user_id)
+        try:
+            await message.edit_text(text, reply_markup=markup)
+            return True
+        except Exception as error:
+            logger.debug(f"Could not refresh saved-search menu: {error}")
+            return False
+
+    async def _open_report_reasons(
+        self, message: Message | None, file_id: str, display_name: str
+    ) -> Message | None:
+        if not message:
+            return None
+        reason_rows = [
+            [ButtonBuilder.action_button(
+                label,
+                callback_data=f"feature#reason_{reason}#{file_id}"
+            )]
+            for reason, label in self.REPORT_REASONS.items()
+        ]
+        markup = getattr(message, 'reply_markup', None)
+        rows = list(getattr(markup, 'inline_keyboard', None) or [])
+        updated_rows = []
+        replaced = False
+        for row in rows:
+            if any(self._feature_button_action(button) == 'report' for button in row):
+                updated_rows.extend(reason_rows)
+                replaced = True
+            else:
+                updated_rows.append(row)
+        if replaced:
+            try:
+                await message.edit_reply_markup(InlineKeyboardMarkup(updated_rows))
+                return message
+            except Exception as error:
+                logger.debug(f"Could not open report reasons in place: {error}")
+
+        try:
+            menu = await message.reply_text(
+                f"Report <code>{html.escape(display_name)}</code> as:",
+                reply_markup=InlineKeyboardMarkup(reason_rows)
+            )
+        except Exception as error:
+            logger.debug(f"Could not open fallback report menu: {error}")
+            return None
+        self._schedule_feature_cleanup(menu)
+        return menu
+
+    async def _mark_report_state(
+        self,
+        message: Message | None,
+        file_id: str,
+        reason: str,
+        state: str,
+    ) -> bool:
+        if not message:
+            return False
+        markup = getattr(message, 'reply_markup', None)
+        rows = list(getattr(markup, 'inline_keyboard', None) or [])
+        if not rows:
+            return False
+        state_label = {
+            'created': 'Reported',
+            'subscribed': 'Report subscribed',
+            'duplicate': 'Already reported',
+        }.get(state, 'Reported')
+        marker_row = [
+            ButtonBuilder.action_button(
+                f"✅ {self.REPORT_REASONS[reason]} — {state_label}",
+                callback_data="noop"
+            ),
+            ButtonBuilder.action_button(
+                "🚩 Report another issue",
+                callback_data=f"feature#report#{file_id}"
+            ),
+        ]
+        updated_rows = []
+        inserted = False
+        for row in rows:
+            actions = {self._feature_button_action(button) for button in row}
+            if any(action.startswith('reason_') for action in actions) or 'report' in actions:
+                if not inserted:
+                    updated_rows.append(marker_row)
+                    inserted = True
+            else:
+                updated_rows.append(row)
+        if not inserted:
+            updated_rows.append(marker_row)
+        try:
+            await message.edit_reply_markup(InlineKeyboardMarkup(updated_rows))
+            return True
+        except Exception as error:
+            logger.debug(f"Could not update report state marker: {error}")
+            return False
+
     @check_ban()
     @require_subscription()
     async def save_search_command(self, client: Client, message: Message):
@@ -371,35 +650,9 @@ class FeatureHandler(BaseHandler):
     @check_ban()
     @require_subscription()
     async def saved_searches_command(self, client: Client, message: Message):
-        searches = await self.repository.list_saved_searches(message.from_user.id)
-        if not searches:
-            return await message.reply_text("You have no saved searches. Use /save_search first.")
-        lines = ["🔔 <b>Saved searches</b>"]
-        buttons = []
-        for saved in searches:
-            icon = "✅" if saved.get('active', True) else "⏸"
-            lines.append(f"{icon} <code>{html.escape(saved['query'])}</code>")
-            action = 'pause' if saved.get('active', True) else 'resume'
-            reference = await create_search_query_reference(
-                self.bot.cache, saved['query'], message.from_user.id
-            )
-            buttons.append([
-                ButtonBuilder.action_button(
-                    "🔍 Run",
-                    callback_data=(
-                        f"search#page#{reference}#0#0#{message.from_user.id}"
-                    )
-                ),
-                ButtonBuilder.action_button(
-                    "⏸ Pause" if action == 'pause' else "▶️ Resume",
-                    callback_data=f"feature#saved_{action}#{saved['_id']}"
-                ),
-                ButtonBuilder.action_button(
-                    "🗑 Delete", callback_data=f"feature#saved_delete#{saved['_id']}"
-                ),
-            ])
+        text, markup = await self._saved_searches_view(message.from_user.id)
         sent_message = await message.reply_text(
-            "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons)
+            text, reply_markup=markup
         )
         self._schedule_feature_cleanup(sent_message)
 
@@ -468,33 +721,9 @@ class FeatureHandler(BaseHandler):
     @require_subscription()
     async def collections_command(self, client: Client, message: Message):
         collections = await self.repository.list_collections(message.from_user.id)
-        if not collections:
-            return await message.reply_text("You have no collections yet.")
-        lines = ["⭐ <b>Your collections</b>"]
-        buttons = []
-        for collection in collections:
-            lines.append(
-                f"• <code>{html.escape(collection['name'])}</code> "
-                f"({len(collection.get('file_ids', []))} files)"
-            )
-            token = collection['callback_token']
-            buttons.append([
-                ButtonBuilder.action_button(
-                    f"📂 {collection['name'][:24]}",
-                    callback_data=f"feature#col_open#{token}"
-                ),
-                ButtonBuilder.action_button(
-                    "🧹 Clear", callback_data=f"feature#col_clear#{token}"
-                ),
-                ButtonBuilder.action_button(
-                    "🗑 Delete", callback_data=f"feature#col_delete#{token}"
-                ),
-            ])
-        lines.append(
-            "\nRename with <code>/collection_rename \"Old name\" \"New name\"</code>."
-        )
+        text, markup = self._collections_view(collections)
         sent_message = await message.reply_text(
-            "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons)
+            text, reply_markup=markup
         )
         self._schedule_feature_cleanup(sent_message)
 
@@ -686,8 +915,15 @@ class FeatureHandler(BaseHandler):
             file = await self.bot.media_repo.find_file(value)
             if not file:
                 return await query.answer("File is no longer available.", show_alert=True)
-            await self.repository.add_to_collection(user_id, file.file_unique_id)
-            return await query.answer("⭐ Added to Favorites", show_alert=True)
+            added = await self.repository.add_to_collection(
+                user_id, file.file_unique_id
+            )
+            if added:
+                await self._update_delivery_markers(query.message, 'fav')
+                return await query.answer("⭐ Added to Favorites", show_alert=True)
+            return await query.answer(
+                "Favorites could not be updated.", show_alert=True
+            )
 
         if (
             action in {'unfav', 'unfavlist'}
@@ -703,7 +939,11 @@ class FeatureHandler(BaseHandler):
                 )
                 if action == 'unfavlist' and query.message:
                     await self._remove_feature_menu_row(query.message, query.data)
+                elif action == 'unfav':
+                    await self._update_delivery_markers(query.message, 'unfav')
                 return
+            if action == 'unfav':
+                await self._update_delivery_markers(query.message, 'unfav')
             return await query.answer(
                 f"File is not in {collection_name}.", show_alert=True
             )
@@ -718,52 +958,65 @@ class FeatureHandler(BaseHandler):
                     "Create a collection with /collection_create first.",
                     show_alert=True
                 )
-            buttons = []
-            for collection in collections:
-                callback_data = (
-                    f"feature#col_add#{file.file_unique_id}#"
-                    f"{collection['callback_token']}"
-                )
-                if len(callback_data.encode('utf-8')) <= 64:
-                    buttons.append([ButtonBuilder.action_button(
-                        f"📁 {collection['name'][:40]}",
-                        callback_data=callback_data
-                    )])
-            if not buttons:
+            text, markup = self._collection_picker_view(file, collections)
+            if len(markup.inline_keyboard) <= 1:
                 return await query.answer(
                     "This file identifier is too long for a collection action.",
                     show_alert=True
                 )
             await query.answer()
             picker = await query.message.reply_text(
-                f"Add <code>{html.escape(file.file_name)}</code> to:",
-                reply_markup=InlineKeyboardMarkup(buttons)
+                text, reply_markup=markup
             )
             self._schedule_feature_cleanup(picker)
             return
 
-        if action == 'col_add' and self.service.enabled('FEATURE_FAVORITES'):
+        if (
+            action in {'col_add', 'col_remove'}
+            and self.service.enabled('FEATURE_FAVORITES')
+        ):
             token = parts[3] if len(parts) == 4 else ''
             file = await self.bot.media_repo.find_file(value)
             if not file:
                 return await query.answer("File is no longer available.", show_alert=True)
-            collection, state = await self.repository.add_to_collection_by_token(
-                user_id, token, file.file_unique_id
-            )
-            if state == 'added':
-                text = f"Added to {collection['name']}."
-            elif state == 'duplicate':
-                text = f"Already in {collection['name']}."
-            elif state == 'full':
-                text = f"{collection['name']} is full (100 files)."
+            if action == 'col_add':
+                collection, state = await self.repository.add_to_collection_by_token(
+                    user_id, token, file.file_unique_id
+                )
+                if state == 'added':
+                    text = f"Added to {collection['name']}."
+                elif state == 'duplicate':
+                    text = f"Already in {collection['name']}."
+                elif state == 'full':
+                    text = f"{collection['name']} is full (100 files)."
+                else:
+                    text = "Collection not found. Picker refreshed."
             else:
-                text = "Collection not found. Refresh /collections."
+                collection, state = (
+                    await self.repository.remove_from_collection_by_token(
+                        user_id, token, file.file_unique_id
+                    )
+                )
+                if state == 'removed':
+                    text = f"Removed from {collection['name']}."
+                elif state == 'not_member':
+                    text = f"File is not in {collection['name']}."
+                else:
+                    text = "Collection not found. Picker refreshed."
             await query.answer(text, show_alert=True)
-            if state in {'added', 'duplicate'} and query.message:
+            await self._refresh_collection_picker(query.message, user_id, file)
+            return
+
+        if (
+            action == 'col_picker_close'
+            and self.service.enabled('FEATURE_FAVORITES')
+        ):
+            await query.answer("Collection changes saved.")
+            if query.message:
                 try:
                     await query.message.delete()
                 except Exception as error:
-                    logger.debug(f"Could not remove collection picker: {error}")
+                    logger.debug(f"Could not close collection picker: {error}")
             return
 
         if action == 'col_open' and self.service.enabled('FEATURE_FAVORITES'):
@@ -785,22 +1038,28 @@ class FeatureHandler(BaseHandler):
         ):
             collection = await self.repository.get_collection_by_token(user_id, value)
             if not collection:
+                await self._refresh_collections_message(query.message, user_id)
                 return await query.answer("Collection not found.", show_alert=True)
             operation = 'clear' if action == 'col_clear' else 'delete'
             callback_data = f"feature#col_{operation}_confirm#{value}"
             await query.answer()
-            confirmation = await query.message.reply_text(
-                f"Confirm {operation} of <b>{html.escape(collection['name'])}</b>?",
-                reply_markup=InlineKeyboardMarkup([[
-                    ButtonBuilder.action_button(
-                        f"✅ Confirm {operation}", callback_data=callback_data
-                    ),
-                    ButtonBuilder.action_button(
-                        "❌ Cancel", callback_data=f"feature#col_cancel#{value}"
-                    ),
-                ]])
-            )
-            self._schedule_feature_cleanup(confirmation)
+            try:
+                await query.message.edit_text(
+                    f"Confirm {operation} of "
+                    f"<b>{html.escape(collection['name'])}</b>?",
+                    reply_markup=InlineKeyboardMarkup([[
+                        ButtonBuilder.action_button(
+                            f"✅ Confirm {operation}",
+                            callback_data=callback_data
+                        ),
+                        ButtonBuilder.action_button(
+                            "❌ Cancel",
+                            callback_data=f"feature#col_cancel#{value}"
+                        ),
+                    ]])
+                )
+            except Exception as error:
+                logger.debug(f"Could not show collection confirmation: {error}")
             return
 
         if (
@@ -821,20 +1080,12 @@ class FeatureHandler(BaseHandler):
                 )
                 text = "Collection deleted." if deleted else "Collection not found."
             await query.answer(text, show_alert=True)
-            if query.message:
-                try:
-                    await query.message.delete()
-                except Exception as error:
-                    logger.debug(f"Could not remove collection confirmation: {error}")
+            await self._refresh_collections_message(query.message, user_id)
             return
 
         if action == 'col_cancel' and self.service.enabled('FEATURE_FAVORITES'):
             await query.answer("Cancelled.")
-            if query.message:
-                try:
-                    await query.message.delete()
-                except Exception as error:
-                    logger.debug(f"Could not remove cancelled collection prompt: {error}")
+            await self._refresh_collections_message(query.message, user_id)
             return
 
         if action == 'recent_remove' and self.service.enabled('FEATURE_RECENT_FILES'):
@@ -851,9 +1102,17 @@ class FeatureHandler(BaseHandler):
             file = await self.bot.media_repo.find_file(value)
             if not file:
                 return await query.answer("File is no longer available.", show_alert=True)
-            await self.repository.set_recommendation_feedback(user_id, file.file_unique_id, action)
+            saved = await self.repository.set_recommendation_feedback(
+                user_id, file.file_unique_id, action
+            )
+            if not saved:
+                return await query.answer(
+                    "Recommendation preference could not be updated.",
+                    show_alert=True
+                )
             await self.bot.recommendation_service.invalidate_user_recommendations(user_id)
             text = "Show more like this" if action == 'more' else "Hidden from recommendations"
+            await self._update_delivery_markers(query.message, action)
             return await query.answer(text, show_alert=True)
 
         if (
@@ -874,24 +1133,15 @@ class FeatureHandler(BaseHandler):
             )
             if removed and action == 'rec_reset_list' and query.message:
                 await self._remove_feature_menu_row(query.message, query.data)
+            elif action == 'rec_reset':
+                await self._update_delivery_markers(query.message, 'rec_reset')
             return
 
         if action == 'report' and self.service.enabled('FEATURE_FILE_REPORTS'):
             file = await self.bot.media_repo.find_file(value)
             display_name = file.file_name if file else value
-            buttons = [
-                [ButtonBuilder.action_button(
-                    label,
-                    callback_data=f"feature#reason_{reason}#{value}"
-                )]
-                for reason, label in self.REPORT_REASONS.items()
-            ]
             await query.answer()
-            menu = await query.message.reply_text(
-                f"Report <code>{html.escape(display_name)}</code> as:",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-            self._schedule_feature_cleanup(menu)
+            await self._open_report_reasons(query.message, value, display_name)
             return
 
         if action.startswith('reason_') and self.service.enabled('FEATURE_FILE_REPORTS'):
@@ -918,11 +1168,9 @@ class FeatureHandler(BaseHandler):
                     "it is resolved."
                 )
             await query.answer(text, show_alert=True)
-            if query.message:
-                try:
-                    await query.message.delete()
-                except Exception as error:
-                    logger.debug(f"Could not remove selected report menu: {error}")
+            await self._mark_report_state(
+                query.message, value, reason, state
+            )
             if state != 'duplicate':
                 await self._log_report_submission(
                     client, report, file, query.from_user, state
@@ -940,11 +1188,12 @@ class FeatureHandler(BaseHandler):
             else:
                 changed = False
             if changed:
-                try:
-                    await query.message.delete()
-                except Exception as e:
-                    logger.debug(f"Could not remove stale saved-search menu: {e}")
+                await self._refresh_saved_searches_message(query.message, user_id)
                 return await query.answer("Saved search updated.")
+            await self._refresh_saved_searches_message(query.message, user_id)
+            return await query.answer(
+                "Saved search was not found. Menu refreshed.", show_alert=True
+            )
 
         await query.answer("Feature action unavailable.", show_alert=True)
 

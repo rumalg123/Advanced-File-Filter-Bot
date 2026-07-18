@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pyrogram.errors import UserIsBlocked
+from pyrogram.types import InlineKeyboardMarkup
 
 from config.settings import FeatureConfig
 from core.cache.config import CacheKeyGenerator
@@ -12,6 +13,7 @@ from core.services.features import FeatureService
 from core.services.file_access import FileAccessService
 from core.services.recommendation import RecommendationService
 from core.services.search_results import SearchResultsService
+from core.utils.button_builder import ButtonBuilder
 from core.utils.feature_search import (
     group_media_variants,
     parse_advanced_search_query,
@@ -485,7 +487,7 @@ async def test_feature_callbacks_mutate_only_the_clicking_users_data():
 
 
 @pytest.mark.asyncio
-async def test_report_menu_cleanup_and_log_channel_include_file_details():
+async def test_report_menu_updates_in_place_and_log_channel_includes_file_details():
     file = make_file('reported', 'Glory.E24.AMZN.1080p.mkv')
     report = {
         '_id': 'report-1',
@@ -500,9 +502,16 @@ async def test_report_menu_cleanup_and_log_channel_include_file_details():
     service = SimpleNamespace(
         enabled=lambda flag: flag == 'FEATURE_FILE_REPORTS'
     )
-    report_menu = SimpleNamespace(delete=AsyncMock())
+    report_markup = InlineKeyboardMarkup([[
+        ButtonBuilder.action_button(
+            '🚩 Report',
+            callback_data=f'feature#report#{file.file_unique_id}'
+        )
+    ]])
     source_message = SimpleNamespace(
-        reply_text=AsyncMock(return_value=report_menu),
+        reply_markup=report_markup,
+        edit_reply_markup=AsyncMock(),
+        reply_text=AsyncMock(),
         delete=AsyncMock()
     )
     query = SimpleNamespace(
@@ -525,13 +534,21 @@ async def test_report_menu_cleanup_and_log_channel_include_file_details():
     callback = FeatureHandler.feature_callback.__wrapped__.__wrapped__
 
     await callback(handler, client, query)
-    handler._schedule_auto_delete.assert_called_once_with(report_menu, 45)
+    handler._schedule_auto_delete.assert_not_called()
+    source_message.reply_text.assert_not_awaited()
+    reason_markup = source_message.edit_reply_markup.await_args.args[0]
+    assert reason_markup.inline_keyboard[-1][0].callback_data == (
+        f'feature#reason_quality#{file.file_unique_id}'
+    )
 
     query.data = f"feature#reason_quality#{file.file_unique_id}"
-    query.message = report_menu
+    source_message.reply_markup = reason_markup
     await callback(handler, client, query)
 
-    report_menu.delete.assert_awaited_once()
+    state_markup = source_message.edit_reply_markup.await_args.args[0]
+    assert 'Poor quality' in state_markup.inline_keyboard[-1][0].text
+    assert 'Reported' in state_markup.inline_keyboard[-1][0].text
+    source_message.delete.assert_not_awaited()
     log_text = client.send_message.await_args.args[1]
     assert file.file_name in log_text
     assert file.file_unique_id in log_text

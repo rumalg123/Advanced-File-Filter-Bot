@@ -4,7 +4,7 @@ This document is the source of truth for user-managed collection CRUD and the
 related optional-feature CRUD audit. All mutations are scoped by the clicking or
 commanding Telegram user, and all feature flags remain authoritative.
 
-Implementation status: verified on 2026-07-18 with 84 passing tests.
+Implementation status: verified on 2026-07-18 with 86 passing tests.
 
 ## CRUD coverage matrix
 
@@ -29,7 +29,8 @@ Implementation status: verified on 2026-07-18 with 84 passing tests.
   collection.
 - `/collection_delete collection name` remains an explicit command deletion.
 - Delivered files expose an Add to Collection action. It opens a transient picker
-  containing only the clicking user's collections.
+  containing only the clicking user's collections, marks current memberships,
+  and supports add/remove toggles without closing.
 - Picker callbacks carry a stable eight-character collection token rather than a
   name or full document ID, keeping callback data below Telegram's 64-byte limit.
 - Collection lookup always includes `user_id`; a callback token can never access
@@ -56,8 +57,9 @@ Implementation status: verified on 2026-07-18 with 84 passing tests.
   normal reads/writes.
 - Renames do not change `_id`, so existing callbacks remain valid. Collection
   creation first checks normalized names so renamed documents are not duplicated.
-- Destructive callback operations use confirmations; stale callbacks return a
-  not-found alert without touching other data.
+- Destructive callback operations use the collection-list message for
+  confirmation, then re-read and render current collections after confirm or
+  cancel. Stale callbacks return a not-found alert without touching other data.
 - Interactive menus follow `MESSAGE_DELETE_SECONDS`; `0` preserves persistent
   behavior.
 - No destructive migration, Redis flush, or MongoDB rewrite is required.

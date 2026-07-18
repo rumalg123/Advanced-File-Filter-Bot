@@ -189,6 +189,17 @@ async def test_collection_repository_supports_owned_full_crud_and_membership():
     )
     assert duplicate_state == 'duplicate'
 
+    collection, remove_state = await repository.remove_from_collection_by_token(
+        7, token, 'file-1'
+    )
+    assert remove_state == 'removed'
+    assert collection['file_ids'] == []
+    _, missing_state = await repository.remove_from_collection_by_token(
+        7, token, 'file-1'
+    )
+    assert missing_state == 'not_member'
+    await repository.add_to_collection_by_token(7, token, 'file-1')
+
     assert await repository.clear_collection_by_token(7, token) == 1
     assert await repository.delete_collection_by_token(8, token) is False
     assert await repository.delete_collection_by_token(7, token) is True
@@ -206,7 +217,8 @@ async def test_delivered_file_collection_picker_adds_only_by_owned_token():
         'callback_token': 'deadbeef',
         'file_ids': [],
     }
-    picker = SimpleNamespace(delete=AsyncMock())
+    member_collection = {**collection, 'file_ids': [file.file_unique_id]}
+    picker = SimpleNamespace(edit_text=AsyncMock(), delete=AsyncMock())
     source_message = SimpleNamespace(reply_text=AsyncMock(return_value=picker))
     query = SimpleNamespace(
         data=f'feature#col_pick#{file.file_unique_id}',
@@ -215,8 +227,13 @@ async def test_delivered_file_collection_picker_adds_only_by_owned_token():
         answer=AsyncMock(),
     )
     repository = SimpleNamespace(
-        list_collections=AsyncMock(return_value=[collection]),
+        list_collections=AsyncMock(side_effect=[
+            [collection], [member_collection], [collection]
+        ]),
         add_to_collection_by_token=AsyncMock(return_value=(collection, 'added')),
+        remove_from_collection_by_token=AsyncMock(
+            return_value=(member_collection, 'removed')
+        ),
     )
     handler = object.__new__(FeatureHandler)
     handler.service = SimpleNamespace(enabled=lambda flag: flag == 'FEATURE_FAVORITES')
@@ -243,7 +260,21 @@ async def test_delivered_file_collection_picker_adds_only_by_owned_token():
     repository.add_to_collection_by_token.assert_awaited_once_with(
         7, 'deadbeef', file.file_unique_id
     )
-    picker.delete.assert_awaited_once()
+    picker.delete.assert_not_awaited()
+    refreshed_markup = picker.edit_text.await_args.kwargs['reply_markup']
+    remove_button = refreshed_markup.inline_keyboard[0][0]
+    assert remove_button.text.startswith('✅')
+    assert remove_button.callback_data == (
+        f'feature#col_remove#{file.file_unique_id}#deadbeef'
+    )
+
+    query.data = remove_button.callback_data
+    await callback(handler, None, query)
+    repository.remove_from_collection_by_token.assert_awaited_once_with(
+        7, 'deadbeef', file.file_unique_id
+    )
+    add_button = picker.edit_text.await_args.kwargs['reply_markup'].inline_keyboard[0][0]
+    assert add_button.text.startswith('➕')  # noqa: RUF001
 
 
 @pytest.mark.asyncio
@@ -255,11 +286,11 @@ async def test_collection_delete_callback_requires_confirmation():
         'callback_token': 'deadbeef',
         'file_ids': [],
     }
-    confirmation = SimpleNamespace(delete=AsyncMock())
-    source = SimpleNamespace(reply_text=AsyncMock(return_value=confirmation))
+    source = SimpleNamespace(edit_text=AsyncMock(), delete=AsyncMock())
     repository = SimpleNamespace(
         get_collection_by_token=AsyncMock(return_value=collection),
         delete_collection_by_token=AsyncMock(return_value=True),
+        list_collections=AsyncMock(return_value=[]),
     )
     handler = object.__new__(FeatureHandler)
     handler.service = SimpleNamespace(enabled=lambda flag: flag == 'FEATURE_FAVORITES')
@@ -276,15 +307,17 @@ async def test_collection_delete_callback_requires_confirmation():
 
     await callback(handler, None, query)
     repository.delete_collection_by_token.assert_not_awaited()
-    markup = source.reply_text.await_args.kwargs['reply_markup']
+    markup = source.edit_text.await_args.kwargs['reply_markup']
     confirm_callback = markup.inline_keyboard[0][0].callback_data
     assert confirm_callback == 'feature#col_delete_confirm#deadbeef'
 
     query.data = confirm_callback
-    query.message = confirmation
     await callback(handler, None, query)
     repository.delete_collection_by_token.assert_awaited_once_with(7, 'deadbeef')
-    confirmation.delete.assert_awaited_once()
+    assert source.edit_text.await_count == 2
+    assert 'no collections' in source.edit_text.await_args.args[0].lower()
+    assert source.edit_text.await_args.kwargs['reply_markup'] is None
+    source.delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -384,3 +417,123 @@ async def test_recommendation_preferences_lists_names_and_reset_actions():
         f'feature#rec_reset_list#{file.file_unique_id}'
     )
     handler._schedule_auto_delete.assert_called_once_with(sent_menu, 25)
+
+
+@pytest.mark.asyncio
+async def test_delivered_file_actions_show_current_favorite_and_feedback_state():
+    file = make_file('stateful-file')
+    message = SimpleNamespace(
+        reply_markup=InlineKeyboardMarkup([
+            [
+                ButtonBuilder.action_button(
+                    '⭐ Favorite', callback_data=f'feature#fav#{file.file_unique_id}'
+                ),
+                ButtonBuilder.action_button(
+                    '💔 Remove', callback_data=f'feature#unfav#{file.file_unique_id}'
+                ),
+            ],
+            [
+                ButtonBuilder.action_button(
+                    '👍 More like this',
+                    callback_data=f'feature#more#{file.file_unique_id}'
+                ),
+                ButtonBuilder.action_button(
+                    '👎 Not interested',
+                    callback_data=f'feature#less#{file.file_unique_id}'
+                ),
+                ButtonBuilder.action_button(
+                    '↩ Reset',
+                    callback_data=f'feature#rec_reset#{file.file_unique_id}'
+                ),
+            ],
+        ]),
+        edit_reply_markup=AsyncMock(),
+    )
+    repository = SimpleNamespace(
+        add_to_collection=AsyncMock(return_value=True),
+        remove_from_collection=AsyncMock(return_value=True),
+        set_recommendation_feedback=AsyncMock(return_value=True),
+        delete_recommendation_feedback=AsyncMock(return_value=True),
+    )
+    handler = object.__new__(FeatureHandler)
+    handler.service = SimpleNamespace(
+        enabled=lambda flag: flag in {
+            'FEATURE_FAVORITES', 'FEATURE_RECOMMENDATION_FEEDBACK'
+        }
+    )
+    handler.repository = repository
+    handler.bot = SimpleNamespace(
+        media_repo=SimpleNamespace(find_file=AsyncMock(return_value=file)),
+        recommendation_service=SimpleNamespace(
+            invalidate_user_recommendations=AsyncMock()
+        ),
+    )
+    query = SimpleNamespace(
+        data=f'feature#fav#{file.file_unique_id}',
+        from_user=SimpleNamespace(id=7),
+        message=message,
+        answer=AsyncMock(),
+    )
+    callback = FeatureHandler.feature_callback.__wrapped__.__wrapped__
+
+    await callback(handler, None, query)
+    message.reply_markup = message.edit_reply_markup.await_args.args[0]
+    assert message.reply_markup.inline_keyboard[0][0].text == '✅ Favorited'
+
+    query.data = f'feature#unfav#{file.file_unique_id}'
+    await callback(handler, None, query)
+    message.reply_markup = message.edit_reply_markup.await_args.args[0]
+    assert message.reply_markup.inline_keyboard[0][0].text == '⭐ Favorite'
+
+    query.data = f'feature#less#{file.file_unique_id}'
+    await callback(handler, None, query)
+    message.reply_markup = message.edit_reply_markup.await_args.args[0]
+    feedback_row = message.reply_markup.inline_keyboard[1]
+    assert feedback_row[0].text == '👍 More like this'
+    assert feedback_row[1].text == '✅ Not interested'
+
+    query.data = f'feature#rec_reset#{file.file_unique_id}'
+    await callback(handler, None, query)
+    reset_row = message.edit_reply_markup.await_args.args[0].inline_keyboard[1]
+    assert reset_row[0].text == '👍 More like this'
+    assert reset_row[1].text == '👎 Not interested'
+
+
+@pytest.mark.asyncio
+async def test_saved_search_callbacks_rerender_same_message():
+    paused = {'_id': 'saved-1', 'query': 'glory', 'active': False}
+    repository = SimpleNamespace(
+        set_saved_search_active=AsyncMock(return_value=True),
+        delete_saved_search=AsyncMock(return_value=True),
+        list_saved_searches=AsyncMock(side_effect=[[paused], []]),
+    )
+    message = SimpleNamespace(edit_text=AsyncMock(), delete=AsyncMock())
+    handler = object.__new__(FeatureHandler)
+    handler.service = SimpleNamespace(
+        enabled=lambda flag: flag == 'FEATURE_SAVED_SEARCH_ALERTS'
+    )
+    handler.repository = repository
+    handler.bot = SimpleNamespace(cache=SimpleNamespace(set=AsyncMock()))
+    query = SimpleNamespace(
+        data='feature#saved_pause#saved-1',
+        from_user=SimpleNamespace(id=7),
+        message=message,
+        answer=AsyncMock(),
+    )
+    callback = FeatureHandler.feature_callback.__wrapped__.__wrapped__
+
+    await callback(handler, None, query)
+    repository.set_saved_search_active.assert_awaited_once_with(7, 'saved-1', False)
+    paused_text = message.edit_text.await_args.args[0]
+    paused_markup = message.edit_text.await_args.kwargs['reply_markup']
+    assert '⏸' in paused_text
+    assert paused_markup.inline_keyboard[0][1].callback_data == (
+        'feature#saved_resume#saved-1'
+    )
+
+    query.data = 'feature#saved_delete#saved-1'
+    await callback(handler, None, query)
+    repository.delete_saved_search.assert_awaited_once_with(7, 'saved-1')
+    assert 'no saved searches' in message.edit_text.await_args.args[0].lower()
+    assert message.edit_text.await_args.kwargs['reply_markup'] is None
+    message.delete.assert_not_awaited()

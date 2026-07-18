@@ -4,7 +4,7 @@ This document is the source of truth for the file-reporting and favorites
 lifecycle. Changes must preserve the normal search and file-delivery flows and
 remain inert when their feature flags are disabled.
 
-Implementation status: verified on 2026-07-18 with 79 passing tests.
+Implementation status: verified on 2026-07-18 with 86 passing tests.
 
 ## Required behavior
 
@@ -26,13 +26,18 @@ Implementation status: verified on 2026-07-18 with 79 passing tests.
   access check. Blocked, deleted, or inaccessible users are skipped safely and
   reported in the admin result instead of failing the resolution.
 - Notification outcomes are stored on the report for operational auditing.
-- Report reason menus use `MESSAGE_DELETE_SECONDS` and are removed immediately
-  after a reason is selected.
+- Report reasons replace the Report row on the delivered-file keyboard when
+  possible. Selection replaces the reasons with a submitted, subscribed, or
+  already-reported marker and retains a Report another issue action.
+- A fallback reason message is used only if Telegram cannot edit the originating
+  keyboard; it follows `MESSAGE_DELETE_SECONDS`.
 
 ### Favorites
 
 - Delivered files expose both add-to-favorites and remove-from-favorites
   actions when `FEATURE_FAVORITES` is enabled.
+- A successful Favorite action changes its delivered-file label to
+  `✅ Favorited`; removal restores the normal label.
 - `/favorites` file rows expose a remove action. Named collections use a compact
   callback when it fits Telegram's 64-byte callback limit; `/unfavorite`
   remains the fallback for long collection names.

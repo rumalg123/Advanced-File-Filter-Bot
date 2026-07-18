@@ -500,14 +500,14 @@ Recommended rollout order:
 | Order | Flag | Minimal smoke test |
 |---:|---|---|
 | 1 | `FEATURE_RECENT_FILES` | Deliver files, run `/recent`, remove one entry, then `/clear_recent`. |
-| 2 | `FEATURE_FAVORITES` | Create, open, rename, clear, and delete a collection; add/remove files through commands and buttons. |
+| 2 | `FEATURE_FAVORITES` | Create, open, rename, clear, and delete a collection; verify lists and membership markers update in place. |
 | 3 | `FEATURE_SEARCH_AUTOCOMPLETE` | Build search history, then run `/suggest partial`. |
 | 4 | `FEATURE_ADVANCED_SEARCH` | Run `/search_help`, then test type/year/size filters. |
 | 5 | `FEATURE_DUPLICATE_GROUPING` | Search a title with multiple quality variants and verify every file remains accessible. |
 | 6 | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Build search/click history and inspect `/recommendations`. |
-| 7 | `FEATURE_RECOMMENDATION_FEEDBACK` | Use more/less/reset buttons, inspect `/recommendation_preferences`, and refresh recommendations. |
+| 7 | `FEATURE_RECOMMENDATION_FEEDBACK` | Use more/less/reset buttons, verify the selected marker, inspect `/recommendation_preferences`, and refresh recommendations. |
 | 8 | `FEATURE_REQUEST_TRACKING` | Submit a missing `#request`, verify `/myrequests`, and test duplicate prevention. |
-| 9 | `FEATURE_FILE_REPORTS` | Report a result, review `/file_reports`, then resolve it. |
+| 9 | `FEATURE_FILE_REPORTS` | Open reasons on a delivered file, submit a report, verify its marker, review `/file_reports`, then resolve it. |
 | 10 | `FEATURE_SAVED_SEARCH_ALERTS` | Save a query, index a new matching file, confirm exactly one alert. |
 | 11 | `FEATURE_CONTENT_DASHBOARD` | Cause a zero-result search and review `/content_dashboard`. |
 
@@ -546,19 +546,33 @@ Send ordinary text with at least two characters to search. In inline mode, type 
 | Request tracking | `/myrequests` |
 
 For `/favorite`, reply to a delivered file, or use `/favorite file_unique_id [collection name]`.
-Delivered files expose Favorite, Remove, and Add to Collection buttons. The
-collection picker uses a compact owner-scoped token, so a callback cannot access
-another user's collection. `/collections` provides Open, Clear, and Delete
-buttons; destructive buttons require confirmation. `/favorites` and named
+Delivered files expose Favorite, Remove, and Add to Collection buttons. Favorite
+and recommendation actions mark their selected state on the delivered message.
+The collection picker shows `➕`/`✅` membership, supports add/remove toggles
+without closing, and uses a compact owner-scoped token so a callback cannot
+access another user's collection. `/collections` provides Open, Clear, and
+Delete buttons; destructive buttons use the same message for confirmation and
+re-read current collections after confirm or cancel. `/favorites` and named
 collection views provide per-file removal when the callback fits Telegram's
 64-byte limit. `/unfavorite file_unique_id [collection name]` remains the
 fallback for long collection names. Collections accept at most 100 distinct
 files.
 
 Saved-search management includes a Run button that enters the normal owned
-search/pagination flow. `/recent` can remove one history entry without clearing
-the list. `/recommendation_preferences` displays stored More/less signals and
-allows each one to be reset; resets invalidate cached personalized results.
+search/pagination flow. Pause, resume, and delete re-render the same menu from
+MongoDB. `/recent` can remove one history entry without clearing the list.
+`/recommendation_preferences` displays stored More/less signals and allows each
+one to be reset; resets invalidate cached personalized results. File-report
+reason buttons open on the delivered-file keyboard and become a visible report
+status after submission, avoiding detached menus in the user's chat.
+
+Interactive feature messages follow a state-consistency rule: persist the
+owner-scoped mutation, re-read list state where needed, and edit the originating
+message. Telegram edit failures are non-fatal—the stored mutation and callback
+result remain authoritative. Existing cleanup timers continue to apply to an
+edited message and are not duplicated. See the
+[real-time UX source of truth](docs/features/realtime_ux.md) for the full state
+matrix and compatibility rules.
 
 ### Group filters and connections
 
@@ -795,7 +809,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The repository currently contains 70 focused tests covering access/quota behavior, batch links, cache correctness, configuration/packaging, feature rollout, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
+The repository currently contains 86 focused tests covering access/quota behavior, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
 
 Useful additional checks:
 
