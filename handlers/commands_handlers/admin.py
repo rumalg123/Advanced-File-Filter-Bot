@@ -30,6 +30,8 @@ logger = get_logger(__name__)
 class AdminCommandHandler(BaseCommandHandler):
     """Handler for admin-only commands"""
 
+    MAX_PREMIUM_OVERRIDE_DAYS = 36500
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.broadcasting_in_progress = False
@@ -562,9 +564,14 @@ class AdminCommandHandler(BaseCommandHandler):
 
     @admin_only
     async def add_premium_command(self, client: Client, message: Message):
-        """Add premium status to user"""
-        if len(message.command) < 2:
-            await message.reply_text("<b>Usage:</b> <code>/addpremium &lt;user_id&gt;</code>", parse_mode=CaptionFormatter.get_parse_mode())
+        """Add premium status using the configured or an optional day duration."""
+        if len(message.command) < 2 or len(message.command) > 3:
+            await message.reply_text(
+                "<b>Usage:</b> "
+                "<code>/addpremium &lt;user_id&gt; [duration]</code>\n"
+                "Example: <code>/addpremium 123456789 100d</code>",
+                parse_mode=CaptionFormatter.get_parse_mode()
+            )
             return
 
         try:
@@ -573,9 +580,48 @@ class AdminCommandHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_invalid("user ID format"))
             return
 
-        # Add premium status
-        success, msg, user_data = await self.bot.user_repo.update_premium_status(target_user_id, True)
+        duration_days = int(self.bot.config.PREMIUM_DURATION_DAYS)
+        has_override = len(message.command) == 3
+        if has_override:
+            duration_match = re.fullmatch(
+                r'([1-9]\d*)d', str(message.command[2]).strip().lower()
+            )
+            if not duration_match:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_invalid(
+                        "premium duration; use a positive day value such as 100d"
+                    )
+                )
+                return
+            duration_days = int(duration_match.group(1))
+            if duration_days > self.MAX_PREMIUM_OVERRIDE_DAYS:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_invalid(
+                        "premium duration; maximum override is 36500d"
+                    )
+                )
+                return
 
+        # Add premium status
+        if has_override:
+            success, msg, user_data = (
+                await self.bot.user_repo.update_premium_status(
+                    target_user_id, True, duration_days=duration_days
+                )
+            )
+        else:
+            success, msg, user_data = (
+                await self.bot.user_repo.update_premium_status(
+                    target_user_id, True
+                )
+            )
+
+        if success and user_data and user_data.premium_expiry_date:
+            msg += (
+                f"\n<b>Duration:</b> {duration_days} days"
+                f"\n<b>Expires:</b> "
+                f"{user_data.premium_expiry_date.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            )
         await message.reply_text(msg)
 
         if success and user_data:
@@ -587,7 +633,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 f"• Unlimited file downloads\n"
                 f"• Priority support\n"
                 f"• Advanced features\n"
-                f"• Valid for {self.bot.config.PREMIUM_DURATION_DAYS} days\n\n"
+                f"• Valid for {duration_days} days\n\n"
                 f"<b>Activated on:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                 "Enjoy your premium access! 🌟"
             )
@@ -600,7 +646,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     log_text = (
                         f"#PremiumAdded\n\n"
                         f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
-                        f"<b>Duration:</b> {self.bot.config.PREMIUM_DURATION_DAYS} days\n"
+                        f"<b>Duration:</b> {duration_days} days\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"

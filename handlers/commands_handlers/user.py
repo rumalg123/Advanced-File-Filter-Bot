@@ -188,7 +188,7 @@ class UserCommandHandler(BaseCommandHandler):
                 "• /broadcast - Broadcast message\n"
                 "• /ban <user_id> - Ban user\n"
                 "• /unban <user_id> - Unban user\n"
-                "• /addpremium <user_id> - Add premium\n"
+                "• /addpremium <user_id> [Nd] - Add premium (optional duration)\n"
                 "• /removepremium <user_id> - Remove premium\n"
                 "• /setskip <number> - Set indexing skip\n"
                 "• /performance - View bot performance metrics\n"

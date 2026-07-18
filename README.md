@@ -397,7 +397,7 @@ The bot must be a member and usually an administrator in each configured channel
 | `PUBLIC_FILE_STORE` | `false` | Allow non-admin users to create file-store links. |
 | `KEEP_ORIGINAL_CAPTION` | `true` | Prefer an indexed file's original caption during delivery. |
 | `USE_ORIGINAL_CAPTION_FOR_BATCH` | `true` | Prefer original captions for batch delivery. |
-| `PREMIUM_DURATION_DAYS` | `30` | Number of days granted by `/addpremium`. |
+| `PREMIUM_DURATION_DAYS` | `30` | Default days granted by `/addpremium`; `/addpremium user_id Nd` overrides it for one grant. |
 | `NON_PREMIUM_DAILY_LIMIT` | `10` | Daily successful-file quota for free users. |
 | `PREMIUM_PRICE` | `$1` | Display value used by `/plans`. |
 | `MESSAGE_DELETE_SECONDS` | `300` | Delay before temporary result/file, report, favorites, saved-search, suggestion, and recommendation messages are auto-deleted. `0` disables cleanup. |
@@ -609,7 +609,7 @@ Both batch endpoints must refer to the same source channel and the bot must be a
 
 | Area | Commands |
 |---|---|
-| Users/access | `/users`, `/ban user_id [reason]`, `/unban user_id`, `/addpremium user_id`, `/removepremium user_id` |
+| Users/access | `/users`, `/ban user_id [reason]`, `/unban user_id`, `/addpremium user_id [Nd]`, `/removepremium user_id` |
 | Broadcast | `/broadcast` by replying to a message, `/stop_broadcast`, `/reset_broadcast_limit` |
 | Channels/indexing | `/add_channel`, `/remove_channel`, `/list_channels`, `/toggle_channel`, `/setskip number` |
 | Files | `/delete` by replying to media, `/deleteall keyword` |
@@ -618,6 +618,11 @@ Both batch endpoints must refer to the same source channel and the bot must be a
 | Multi-database | `/dbstats`, `/dbinfo`, `/dbswitch` |
 | Optional reports | `/file_reports [open|resolved|all]`, `/resolve_report report_id` |
 | Optional dashboard | `/content_dashboard` |
+
+`/addpremium user_id` uses `PREMIUM_DURATION_DAYS`. Add a positive day token
+to override only that grant, for example `/addpremium 123456789 100d`. The `d`
+suffix is required (case-insensitive), and per-grant overrides are limited to
+`36500d`; the configured default is not changed.
 
 Primary-admin-only commands:
 
@@ -809,7 +814,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The repository currently contains 86 focused tests covering access/quota behavior, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
+The repository currently contains 96 focused tests covering access/quota and premium-duration behavior, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
 
 Useful additional checks:
 

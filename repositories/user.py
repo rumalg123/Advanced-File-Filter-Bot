@@ -295,8 +295,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         logger.debug(f"Refreshed banned users cache: {len(banned_ids)} users")
         return banned_ids
 
-    async def update_premium_status(self, user_id: int, is_premium: bool) -> Tuple[bool, str, Optional[User]]:
-        """Update user premium status"""
+    async def update_premium_status(
+        self,
+        user_id: int,
+        is_premium: bool,
+        duration_days: int | None = None,
+    ) -> Tuple[bool, str, Optional[User]]:
+        """Update premium status, optionally overriding the configured duration."""
         # Check if user exists
         user = await self.get_user(user_id)
         if not user:
@@ -309,10 +314,33 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.cache_invalidator.invalidate_premium_status(user_id)
             status_text = "premium" if is_premium else "non-premium"
             return False, ErrorMessageFormatter.format_error(f"User is already {status_text}!"), user
+
+        effective_duration_days = self.premium_duration_days
+        if is_premium and duration_days is not None:
+            if isinstance(duration_days, bool) or not isinstance(duration_days, int):
+                return False, ErrorMessageFormatter.format_invalid(
+                    "premium duration"
+                ), user
+            effective_duration_days = duration_days
+        if is_premium and effective_duration_days <= 0:
+            return False, ErrorMessageFormatter.format_invalid(
+                "premium duration"
+            ), user
+
+        activation_date = datetime.now(UTC) if is_premium else None
+        try:
+            expiry_date = (
+                activation_date + timedelta(days=effective_duration_days)
+                if activation_date else None
+            )
+        except OverflowError:
+            return False, ErrorMessageFormatter.format_invalid(
+                "premium duration"
+            ), user
         update_data: Dict[str, Any] = {
             'is_premium': is_premium,
-            'premium_activation_date': datetime.now(UTC) if is_premium else None,
-            'premium_expiry_date': datetime.now(UTC) + timedelta(days=self.premium_duration_days) if is_premium else None,
+            'premium_activation_date': activation_date,
+            'premium_expiry_date': expiry_date,
             'updated_at': datetime.now(UTC)
         }
 
@@ -322,9 +350,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if success:
             # Update user object
             user.is_premium = is_premium
-            user.premium_activation_date = datetime.now(UTC) if is_premium else None
+            user.premium_activation_date = activation_date
             user.updated_at = datetime.now(UTC)
-            user.premium_expiry_date = datetime.now(UTC) + timedelta(days=self.premium_duration_days) if is_premium else None
+            user.premium_expiry_date = expiry_date
             if not is_premium:
                 user.daily_retrieval_count = 0
             await self.cache_invalidator.invalidate_user_data(user_id)

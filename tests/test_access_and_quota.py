@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -6,6 +6,7 @@ import pytest
 
 from core.services.file_access import FileAccessService
 from handlers.callbacks_handlers.file import FileCallbackHandler
+from handlers.commands_handlers.admin import AdminCommandHandler
 from handlers.deeplink import DeepLinkHandler
 from repositories.user import User, UserRepository
 
@@ -29,6 +30,113 @@ class CapturingPool:
     async def execute_with_retry(self, func, *args, **kwargs):
         self.calls.append((func, args, kwargs))
         return self.result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('override_days', 'expected_days'),
+    [(None, 30), (100, 100)],
+)
+async def test_premium_repository_uses_default_or_per_grant_duration(
+    monkeypatch, override_days, expected_days
+):
+    repo = UserRepository(CapturingPool(None), MemoryCache(), premium_duration_days=30)
+    user = User(id=42, name='Premium User')
+    update = AsyncMock(return_value=True)
+    monkeypatch.setattr(repo, 'get_user', AsyncMock(return_value=user))
+    monkeypatch.setattr(repo, 'update', update)
+    repo.cache_invalidator = SimpleNamespace(
+        invalidate_user_data=AsyncMock(),
+        invalidate_premium_status=AsyncMock(),
+    )
+
+    started_at = datetime.now(UTC)
+    if override_days is None:
+        success, _message, updated_user = await repo.update_premium_status(
+            42, True
+        )
+    else:
+        success, _message, updated_user = await repo.update_premium_status(
+            42, True, duration_days=override_days
+        )
+
+    assert success is True
+    update_data = update.await_args.args[1]
+    duration = (
+        update_data['premium_expiry_date']
+        - update_data['premium_activation_date']
+    )
+    assert duration == timedelta(days=expected_days)
+    assert update_data['premium_activation_date'] >= started_at
+    assert updated_user.premium_expiry_date == update_data['premium_expiry_date']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('duration_token', 'expected_days'),
+    [(None, 30), ('100d', 100), ('45D', 45)],
+)
+async def test_addpremium_accepts_optional_day_override(
+    duration_token, expected_days
+):
+    expiry = datetime.now(UTC) + timedelta(days=expected_days)
+    user = User(
+        id=42,
+        name='Premium User',
+        is_premium=True,
+        premium_expiry_date=expiry,
+    )
+    user_repo = SimpleNamespace(
+        update_premium_status=AsyncMock(return_value=(True, 'Premium added.', user))
+    )
+    handler = object.__new__(AdminCommandHandler)
+    handler.bot = SimpleNamespace(
+        config=SimpleNamespace(PREMIUM_DURATION_DAYS=30, LOG_CHANNEL=0),
+        user_repo=user_repo,
+        cache_invalidator=SimpleNamespace(invalidate_user_cache=AsyncMock()),
+    )
+    handler._notify_user = AsyncMock(return_value=True)
+    command = ['addpremium', '42']
+    if duration_token:
+        command.append(duration_token)
+    message = SimpleNamespace(
+        command=command,
+        reply_text=AsyncMock(),
+        from_user=SimpleNamespace(mention='Admin'),
+    )
+    callback = AdminCommandHandler.add_premium_command.__wrapped__
+
+    await callback(handler, SimpleNamespace(), message)
+
+    if duration_token:
+        user_repo.update_premium_status.assert_awaited_once_with(
+            42, True, duration_days=expected_days
+        )
+    else:
+        user_repo.update_premium_status.assert_awaited_once_with(42, True)
+    assert f'Duration:</b> {expected_days} days' in message.reply_text.await_args.args[0]
+    assert f'Valid for {expected_days} days' in handler._notify_user.await_args.args[2]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('duration_token', ['0d', '-1d', '100', '10h', '36501d'])
+async def test_addpremium_rejects_invalid_duration_override(duration_token):
+    user_repo = SimpleNamespace(update_premium_status=AsyncMock())
+    handler = object.__new__(AdminCommandHandler)
+    handler.bot = SimpleNamespace(
+        config=SimpleNamespace(PREMIUM_DURATION_DAYS=30),
+        user_repo=user_repo,
+    )
+    message = SimpleNamespace(
+        command=['addpremium', '42', duration_token],
+        reply_text=AsyncMock(),
+    )
+    callback = AdminCommandHandler.add_premium_command.__wrapped__
+
+    await callback(handler, SimpleNamespace(), message)
+
+    user_repo.update_premium_status.assert_not_awaited()
+    assert 'Invalid' in message.reply_text.await_args.args[0]
 
 
 @pytest.mark.asyncio
