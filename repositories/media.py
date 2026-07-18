@@ -1,6 +1,8 @@
 from dataclasses import dataclass, asdict
 from datetime import datetime, UTC
 from enum import Enum
+import json
+import re
 from typing import Dict, Any, Optional, List, Tuple
 
 from pymongo import DeleteOne
@@ -61,9 +63,26 @@ class MediaFile:
 class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
     """Repository for media file operations with multi-database support"""
 
-    def __init__(self, db_pool, cache_manager, multi_db_manager=None):
+    def __init__(
+            self,
+            db_pool,
+            cache_manager,
+            multi_db_manager=None,
+            search_cache_ttl: Optional[int] = None
+    ):
         super().__init__(db_pool, cache_manager, "media_files")
         self.ttl = CacheTTLConfig()
+        if search_cache_ttl is not None:
+            try:
+                configured_ttl = int(search_cache_ttl)
+                if configured_ttl <= 0:
+                    raise ValueError("CACHE_TIME must be positive")
+                self.ttl.SEARCH_RESULTS = configured_ttl
+            except (TypeError, ValueError):
+                logger.warning(
+                    f"Invalid CACHE_TIME {search_cache_ttl!r}; using "
+                    f"{self.ttl.SEARCH_RESULTS}s"
+                )
         self.cache_invalidator = CacheInvalidator(cache_manager)
         self.multi_db_manager = multi_db_manager
         self.is_multi_db = multi_db_manager is not None
@@ -124,7 +143,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         # Try cache first
         cache_key = CacheKeyGenerator.media(identifier)
         cached = await self.cache.get(cache_key)
-        if cached:
+        if cached is not None:
             try:
                 return self._dict_to_entity(cached)
             except (KeyError, TypeError, ValueError) as e:
@@ -191,7 +210,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         for uid in file_unique_ids:
             cache_key = CacheKeyGenerator.media(uid)
             cached = await self.cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 try:
                     result[uid] = self._dict_to_entity(cached)
                     cache_hits.append(uid)
@@ -325,11 +344,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 )
                 if result.inserted_id:
                     logger.info(f"Saved file to database: {media.file_name}")
+                    await self.cache_invalidator.invalidate_all_search_results()
+                    await self.cache_invalidator.invalidate_file_stats()
                     # Cache the new file as dict for proper serialization
                     cache_key = self._get_cache_key(media.file_unique_id)
                     await self.cache.set(cache_key, self._entity_to_dict(media), expire=self.ttl.MEDIA_FILE)
-                    # Invalidate search caches
-                    await self.cache_invalidator.invalidate_all_search_results()
                     return True, 1, None
                 else:
                     return False, 2, None
@@ -337,6 +356,14 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 # Single database mode - use existing create method
                 success = await self.create(media)
                 if success:
+                    await self.cache_invalidator.invalidate_all_search_results()
+                    await self.cache_invalidator.invalidate_file_stats()
+                    cache_key = self._get_cache_key(media.file_unique_id)
+                    await self.cache.set(
+                        cache_key,
+                        self._entity_to_dict(media),
+                        expire=self.ttl.MEDIA_FILE
+                    )
                     logger.info(f"Saved file: {media.file_name}")
                     return True, 1, None
                 else:
@@ -445,7 +472,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             file_type: Optional[FileType] = None,
             offset: int = 0,
             limit: int = 10,
-            use_caption: bool = True
+            use_caption: bool = True,
+            advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[MediaFile], int, int]:
         """
         Search for files across all databases
@@ -457,8 +485,14 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         # Generate versioned cache key
         normalized_query = normalize_query(query)
         # Include version in cache key - when version changes, old keys become stale
+        cache_query = query
+        if advanced_filters:
+            cache_query = (
+                f"{query}|advanced:"
+                f"{json.dumps(advanced_filters, sort_keys=True, separators=(',', ':'))}"
+            )
         cache_key = CacheKeyGenerator.search_results_versioned(
-            query,
+            cache_query,
             file_type.value if file_type else None,
             offset,
             limit,
@@ -467,15 +501,21 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         )
 
         cached = await self.cache.get(cache_key)
-        if cached:
-            return (
-                [self._dict_to_entity(f) for f in cached['files']],
-                cached['next_offset'],
-                cached['total']
-            )
+        if cached is not None:
+            try:
+                return (
+                    [self._dict_to_entity(f) for f in cached['files']],
+                    cached['next_offset'],
+                    cached['total']
+                )
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning(f"Invalid search cache entry {cache_key}: {e}")
+                await self.cache.delete(cache_key)
 
         # Build search filter
-        search_filter = self._build_search_filter(normalized_query, file_type, use_caption)
+        search_filter = self._build_search_filter(
+            normalized_query, file_type, use_caption, advanced_filters
+        )
 
         if self.is_multi_db:
             # Multi-database search
@@ -518,7 +558,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             self,
             query: str,
             file_type: Optional[FileType],
-            use_caption: bool
+            use_caption: bool,
+            advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Build MongoDB search filter with support for season/episode/resolution parsing"""
         # Parse query to extract season, episode, resolution
@@ -578,12 +619,94 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             else:
                 search_filter['file_type'] = file_type.value
 
+        if advanced_filters:
+            clauses = [search_filter] if search_filter else []
+
+            if advanced_filters.get('season'):
+                season_number = int(advanced_filters['season'])
+                season_regex = {
+                    '$regex': rf"\bs0?{season_number}\b",
+                    '$options': 'i'
+                }
+                clauses.append({
+                    '$or': [
+                        {'season': advanced_filters['season']},
+                        {'file_name': season_regex},
+                        {'caption': season_regex},
+                    ]
+                })
+            if advanced_filters.get('episode'):
+                episode_number = int(advanced_filters['episode'])
+                episode_regex = {
+                    '$regex': rf"\be0?{episode_number}\b",
+                    '$options': 'i'
+                }
+                clauses.append({
+                    '$or': [
+                        {'episode': advanced_filters['episode']},
+                        {'file_name': episode_regex},
+                        {'caption': episode_regex},
+                    ]
+                })
+
+            if advanced_filters.get('year'):
+                year_regex = {
+                    '$regex': rf"\b{int(advanced_filters['year'])}\b",
+                    '$options': 'i'
+                }
+                clauses.append({
+                    '$or': [
+                        {'file_name': year_regex},
+                        {'caption': year_regex},
+                    ]
+                })
+
+            if advanced_filters.get('language'):
+                language = re.escape(str(advanced_filters['language']))
+                language_regex = {
+                    '$regex': rf"\b{language}\b",
+                    '$options': 'i'
+                }
+                clauses.append({
+                    '$or': [
+                        {'file_name': language_regex},
+                        {'caption': language_regex},
+                    ]
+                })
+
+            if advanced_filters.get('resolution'):
+                resolution = re.escape(str(advanced_filters['resolution']))
+                resolution_regex = {'$regex': resolution, '$options': 'i'}
+                clauses.append({
+                    '$or': [
+                        {'resolution': resolution_regex},
+                        {'file_name': resolution_regex},
+                        {'caption': resolution_regex},
+                    ]
+                })
+
+            size_filter = {}
+            if advanced_filters.get('min_size') is not None:
+                size_filter['$gte'] = int(advanced_filters['min_size'])
+            if advanced_filters.get('max_size') is not None:
+                size_filter['$lte'] = int(advanced_filters['max_size'])
+            if size_filter:
+                clauses.append({'file_size': size_filter})
+
+            if not file_type and advanced_filters.get('file_type'):
+                clauses.append({'file_type': advanced_filters['file_type']})
+
+            if len(clauses) == 1:
+                search_filter = clauses[0]
+            elif clauses:
+                search_filter = {'$and': clauses}
+
         return search_filter
 
     async def update(self, id: Any, update_data: Dict[str, Any], upsert: bool = False) -> bool:
         """Update entity and invalidate cache properly"""
+        old_file = await self.find_file(id)
         if self.is_multi_db:
-            file = await self.find_file(id)
             success = await self.multi_db_manager.update_one_across_databases(
                 self.collection_name,
                 {"_id": id},
@@ -591,19 +714,24 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 upsert=upsert
             )
             if success:
-                if file:
-                    await self.cache_invalidator.invalidate_file_cache(file)
+                if old_file:
+                    await self.cache_invalidator.invalidate_file_cache(old_file)
                 else:
                     await self.cache_invalidator.invalidate_media_entry(id)
+                await self.cache_invalidator.invalidate_file_stats()
+                await self.cache_invalidator.invalidate_all_search_results()
             return success
 
         success = await super().update(id, update_data, upsert)
 
         if success:
-            # Get the file to invalidate all its cache entries
-            file = await self.find_file(id)
-            if file:
-                await self.cache_invalidator.invalidate_file_cache(file)
+            if old_file:
+                await self.cache_invalidator.invalidate_file_cache(old_file)
+            new_file = await self.find_file(id)
+            if new_file:
+                await self.cache_invalidator.invalidate_file_cache(new_file)
+            await self.cache_invalidator.invalidate_file_stats()
+            await self.cache_invalidator.invalidate_all_search_results()
 
         return success
 
@@ -650,8 +778,10 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """Get file statistics"""
         cache_key = CacheKeyGenerator.file_stats()
         cached = await self.cache.get(cache_key)
-        if cached:
+        if isinstance(cached, dict):
             return cached
+        if cached is not None:
+            await self.cache_invalidator.invalidate_file_stats()
         pipeline = [
             {"$facet": {
                 "total": [{"$count": "count"}],

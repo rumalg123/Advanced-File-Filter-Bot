@@ -17,6 +17,17 @@ class RecommendationService:
         self.cache = cache_manager
         self.ttl = CacheTTLConfig()
 
+    @staticmethod
+    def _as_text(value) -> str:
+        return value.decode('utf-8') if isinstance(value, bytes) else str(value)
+
+    async def invalidate_user_recommendations(self, user_id: int) -> None:
+        """Force the next recommendation read to recompute the user's ranking."""
+        try:
+            await self.cache.delete(CacheKeyGenerator.user_recommendations_cache(user_id))
+        except Exception as e:
+            logger.debug(f"Error invalidating recommendations for user {user_id}: {e}")
+
     async def track_file_click(
         self, 
         user_id: int, 
@@ -31,25 +42,24 @@ class RecommendationService:
             query: Search query that led to this file
             file_unique_id: Unique ID of the file clicked
         """
-        if not query or not file_unique_id:
+        if not file_unique_id:
             return
         
         try:
-            normalized_query = query.lower().strip()
-            
-            # Track query-to-files mapping (which files are clicked from which queries)
-            query_files_key = CacheKeyGenerator.query_files_mapping(normalized_query)
-            await self.cache.zincrby(query_files_key, 1.0, file_unique_id)
-            await self.cache.expire(query_files_key, self.ttl.QUERY_FILES_MAPPING)
+            normalized_query = query.lower().strip() if query else ""
+
+            # Only session-backed clicks may influence a query-to-file relationship.
+            if normalized_query:
+                query_files_key = CacheKeyGenerator.query_files_mapping(normalized_query)
+                await self.cache.zincrby(query_files_key, 1.0, file_unique_id)
+                await self.cache.expire(query_files_key, self.ttl.QUERY_FILES_MAPPING)
             
             # Track user file interactions
             user_interactions_key = CacheKeyGenerator.user_file_interactions(user_id)
             await self.cache.zincrby(user_interactions_key, 1.0, file_unique_id)
             await self.cache.expire(user_interactions_key, self.ttl.USER_SEARCH_HISTORY)
-            
-            # Track file co-occurrence (files clicked together)
-            # This will be updated when we track multiple files from same query
-            # For now, we'll track it when we have query context
+
+            await self.invalidate_user_recommendations(user_id)
             
         except Exception as e:
             logger.error(f"Error tracking file click for user {user_id}, query {query}, file {file_unique_id}: {e}")
@@ -77,23 +87,50 @@ class RecommendationService:
             # Track user search pattern
             if previous_query:
                 normalized_prev = previous_query.lower().strip()
-                pattern_key = CacheKeyGenerator.user_search_pattern(user_id)
-                pattern = f"{normalized_prev}->{normalized_current}"
-                await self.cache.zincrby(pattern_key, 1.0, pattern)
-                await self.cache.expire(pattern_key, self.ttl.USER_SEARCH_HISTORY)
-                
-                # Track query co-occurrence (queries searched together)
-                cooccur_key = CacheKeyGenerator.query_cooccurrence(normalized_prev)
-                await self.cache.zincrby(cooccur_key, 1.0, normalized_current)
-                await self.cache.expire(cooccur_key, self.ttl.QUERY_COOCCURRENCE)
-                
-                # Also track reverse (bidirectional)
-                cooccur_reverse_key = CacheKeyGenerator.query_cooccurrence(normalized_current)
-                await self.cache.zincrby(cooccur_reverse_key, 1.0, normalized_prev)
-                await self.cache.expire(cooccur_reverse_key, self.ttl.QUERY_COOCCURRENCE)
+                if normalized_prev and normalized_prev != normalized_current:
+                    pattern_key = CacheKeyGenerator.user_search_pattern(user_id)
+                    pattern = f"{normalized_prev}->{normalized_current}"
+                    await self.cache.zincrby(pattern_key, 1.0, pattern)
+                    await self.cache.expire(pattern_key, self.ttl.USER_SEARCH_HISTORY)
+
+                    # Track query co-occurrence (queries searched together)
+                    cooccur_key = CacheKeyGenerator.query_cooccurrence(normalized_prev)
+                    await self.cache.zincrby(cooccur_key, 1.0, normalized_current)
+                    await self.cache.expire(cooccur_key, self.ttl.QUERY_COOCCURRENCE)
+
+                    # Also track reverse (bidirectional)
+                    cooccur_reverse_key = CacheKeyGenerator.query_cooccurrence(normalized_current)
+                    await self.cache.zincrby(cooccur_reverse_key, 1.0, normalized_prev)
+                    await self.cache.expire(cooccur_reverse_key, self.ttl.QUERY_COOCCURRENCE)
+
+            await self.invalidate_user_recommendations(user_id)
             
         except Exception as e:
             logger.error(f"Error tracking search sequence for user {user_id}: {e}")
+
+    async def track_successful_search(self, user_id: int, current_query: str) -> None:
+        """Persist and sequence a successful search within the configured time window."""
+        if not current_query or len(current_query.strip()) < 2:
+            return
+
+        last_search_key = CacheKeyGenerator.user_last_search(user_id)
+        try:
+            previous_state = await self.cache.get(last_search_key)
+            if isinstance(previous_state, dict):
+                previous_query = previous_state.get('query')
+            elif isinstance(previous_state, (str, bytes)):
+                previous_query = self._as_text(previous_state)
+            else:
+                previous_query = None
+
+            await self.track_search_sequence(user_id, previous_query, current_query)
+            await self.cache.set(
+                last_search_key,
+                {'query': current_query.lower().strip()},
+                expire=self.ttl.USER_LAST_SEARCH
+            )
+        except Exception as e:
+            logger.error(f"Error persisting successful search for user {user_id}: {e}")
 
     async def track_files_from_query(
         self, 
@@ -111,8 +148,6 @@ class RecommendationService:
             return
         
         try:
-            normalized_query = query.lower().strip()
-            
             # Track files shown together (co-occurrence)
             for i, file_id1 in enumerate(file_unique_ids):
                 for file_id2 in file_unique_ids[i+1:]:
@@ -153,10 +188,9 @@ class RecommendationService:
             # Convert bytes to strings if needed
             similar_queries = []
             for result in results:
-                if isinstance(result, bytes):
-                    similar_queries.append(result.decode('utf-8'))
-                else:
-                    similar_queries.append(str(result))
+                candidate = self._as_text(result)
+                if candidate.lower().strip() != normalized_query and candidate not in similar_queries:
+                    similar_queries.append(candidate)
             
             # If we don't have enough co-occurrence data, try fuzzy matching as fallback
             if len(similar_queries) < limit and hasattr(self, 'search_history_service') and self.search_history_service:
@@ -262,14 +296,64 @@ class RecommendationService:
             # Check cache first
             cache_key = CacheKeyGenerator.user_recommendations_cache(user_id)
             cached = await self.cache.get(cache_key)
-            if cached:
+            if isinstance(cached, dict):
                 return cached
+            if cached is not None:
+                await self.cache.delete(cache_key)
             
             recommendations = {
                 'similar_queries': [],
                 'trending_files': [],
                 'based_on_history': []
             }
+            recommendation_reasons = {}
+
+            feedback = {'more': [], 'less': []}
+            feature_service = getattr(self, 'feature_service', None)
+            if (
+                feature_service
+                and feature_service.enabled('FEATURE_RECOMMENDATION_FEEDBACK')
+            ):
+                try:
+                    feedback = await feature_service.repository.get_recommendation_feedback(
+                        user_id
+                    )
+                except Exception as e:
+                    logger.debug(f"Could not load recommendation feedback for {user_id}: {e}")
+
+            # Use clicked files as the primary profile signal, then recommend
+            # related files that appeared alongside them. Do not recommend files
+            # the user has already interacted with.
+            interaction_key = CacheKeyGenerator.user_file_interactions(user_id)
+            interaction_values = await self.cache.zrevrange(
+                interaction_key, 0, 4, with_scores=False
+            )
+            interacted_file_ids = [self._as_text(value) for value in interaction_values]
+            interacted_file_set = set(interacted_file_ids)
+            interacted_file_set.update(feedback.get('more', []))
+            negative_file_set = set(feedback.get('less', []))
+            profile_sources = list(dict.fromkeys(
+                feedback.get('more', []) + interacted_file_ids
+            ))
+
+            for file_id in profile_sources:
+                related_values = await self.cache.zrevrange(
+                    CacheKeyGenerator.file_cooccurrence(file_id),
+                    0,
+                    limit - 1,
+                    with_scores=False
+                )
+                for related in related_values:
+                    related_id = self._as_text(related)
+                    if (
+                        related_id not in interacted_file_set
+                        and related_id not in negative_file_set
+                    ):
+                        recommendations['based_on_history'].append(related_id)
+                        recommendation_reasons.setdefault(
+                            related_id,
+                            "Related to a file you liked or downloaded"
+                        )
             
             # Get user's recent searches
             if hasattr(self, 'search_history_service') and self.search_history_service:
@@ -285,6 +369,10 @@ class RecommendationService:
                     for keyword in user_keywords[:2]:
                         files = await self.get_recommended_files_from_query(keyword, limit=3)
                         recommendations['based_on_history'].extend(files)
+                        for file_id in files:
+                            recommendation_reasons.setdefault(
+                                file_id, f"Because you searched for {keyword}"
+                            )
                 else:
                     # New user with no search history - use global trends as fallback
                     logger.debug(f"User {user_id} has no search history, using global trends")
@@ -294,6 +382,8 @@ class RecommendationService:
                 for keyword in global_keywords:
                     files = await self.get_recommended_files_from_query(keyword, limit=2)
                     recommendations['trending_files'].extend(files)
+                    for file_id in files:
+                        recommendation_reasons.setdefault(file_id, "Trending with users")
                     
                     # If user has no history, also add global keywords as similar queries
                     if not user_keywords:
@@ -301,8 +391,28 @@ class RecommendationService:
             
             # Remove duplicates and limit
             recommendations['similar_queries'] = list(dict.fromkeys(recommendations['similar_queries']))[:limit]
-            recommendations['trending_files'] = list(dict.fromkeys(recommendations['trending_files']))[:limit]
-            recommendations['based_on_history'] = list(dict.fromkeys(recommendations['based_on_history']))[:limit]
+            recommendations['trending_files'] = [
+                file_id for file_id in dict.fromkeys(recommendations['trending_files'])
+                if file_id not in interacted_file_set and file_id not in negative_file_set
+            ][:limit]
+            recommendations['based_on_history'] = [
+                file_id for file_id in dict.fromkeys(recommendations['based_on_history'])
+                if file_id not in interacted_file_set and file_id not in negative_file_set
+            ][:limit]
+
+            if (
+                feature_service
+                and feature_service.enabled('FEATURE_RECOMMENDATION_EXPLANATIONS')
+            ):
+                returned_file_ids = set(
+                    recommendations['trending_files']
+                    + recommendations['based_on_history']
+                )
+                recommendations['reasons'] = {
+                    file_id: reason
+                    for file_id, reason in recommendation_reasons.items()
+                    if file_id in returned_file_ids
+                }
             
             # Cache recommendations
             await self.cache.set(cache_key, recommendations, expire=self.ttl.USER_RECOMMENDATIONS)

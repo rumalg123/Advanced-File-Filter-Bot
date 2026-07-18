@@ -817,20 +817,26 @@ class AdminCommandHandler(BaseCommandHandler):
         status_msg = await message.reply_text("🔍 Analyzing cache usage...")
 
         try:
-            # Check for duplicates
-            duplicates = await monitor.find_duplicate_data()
+            # Classify intentional aliases and identify stale alias keys.
+            alias_groups = await monitor.find_duplicate_data()
 
             # Analyze usage
             analysis = await monitor.analyze_cache_usage()
 
             text = "🔍 <b>Cache Analysis</b>\n\n"
 
-            if duplicates:
-                text += ErrorMessageFormatter.format_warning(f"Found {len(duplicates)} duplicate entries:", include_prefix=False) + "\n"
-                for dup in duplicates[:5]:  # Show first 5
-                    text += f"├ File {dup['file_id'][:10]}... has {dup['count']} cache entries\n"
-                if len(duplicates) > 5:
-                    text += f"└ ... and {len(duplicates) - 5} more\n"
+            if alias_groups:
+                stale_count = sum(len(group['stale_cache_keys']) for group in alias_groups)
+                text += f"<b>Media alias groups:</b> {len(alias_groups)}\n"
+                text += f"<b>Safely removable stale aliases:</b> {stale_count}\n"
+                for group in alias_groups[:5]:
+                    text += (
+                        f"├ File {str(group['file_id'])[:10]}...: "
+                        f"{group['count']} known aliases, "
+                        f"{len(group['stale_cache_keys'])} stale\n"
+                    )
+                if len(alias_groups) > 5:
+                    text += f"└ ... and {len(alias_groups) - 5} more\n"
                 text += "\n"
 
             if analysis['large_values']:
@@ -864,11 +870,11 @@ class AdminCommandHandler(BaseCommandHandler):
 
     @admin_only
     async def cache_cleanup_command(self, client: Client, message: Message):
-        """Clean up duplicate cache entries"""
+        """Clean up only media aliases proven stale."""
         if len(message.command) < 2 or message.command[1] != "confirm":
             await message.reply_text(
                 ErrorMessageFormatter.format_warning("Cache Cleanup", title="Cache Cleanup") + "\n\n"
-                "This will remove duplicate cache entries.\n"
+                "This removes only stale media alias keys. Valid file ID, unique ID, and reference aliases are preserved.\n"
                 "Use <code>/cache_cleanup confirm</code> to proceed."
             )
             return
@@ -877,24 +883,28 @@ class AdminCommandHandler(BaseCommandHandler):
         status_msg = await message.reply_text("🧹 Cleaning up cache...")
 
         try:
-            # Find duplicates
-            duplicates = await monitor.find_duplicate_data()
+            alias_groups = await monitor.find_duplicate_data()
+            stale_keys = list(dict.fromkeys(
+                key
+                for group in alias_groups
+                for key in group['stale_cache_keys']
+            ))
 
-            if not duplicates:
-                await status_msg.edit_text(ErrorMessageFormatter.format_success("No duplicate entries found!"))
+            if not stale_keys:
+                await status_msg.edit_text(
+                    ErrorMessageFormatter.format_success("No stale media aliases found!")
+                )
                 return
 
             cleaned = 0
-            for dup in duplicates:
-                # Keep the first entry, delete others
-                for key in dup['cache_keys'][1:]:
-                    await self.bot.cache.redis.delete(key)
+            for key in stale_keys:
+                if await self.bot.cache.delete(key):
                     cleaned += 1
 
             await status_msg.edit_text(
                 ErrorMessageFormatter.format_success("Cache Cleanup Complete", title="Cache Cleanup Complete") + "\n\n"
-                f"Removed {cleaned} duplicate entries\n"
-                f"Freed up memory from {len(duplicates)} files"
+                f"Removed {cleaned} stale alias entries\n"
+                "Preserved all recognized media identifier aliases"
             )
 
         except Exception as e:

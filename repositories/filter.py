@@ -133,13 +133,15 @@ class FilterRepository(BaseRepository[Filter]):
 
         # Try cache first
         cached = await self.cache.get(cache_key)
-        if cached:
-            return (
-                cached.get('reply'),
-                cached.get('btn'),
-                cached.get('alert'),
-                cached.get('file')
-            )
+        if cached is not None:
+            if isinstance(cached, dict):
+                return (
+                    cached.get('reply'),
+                    cached.get('btn'),
+                    cached.get('alert'),
+                    cached.get('file')
+                )
+            await self.cache_invalidator.invalidate_filter_entry(group_id, text)
 
         collection = await self.get_collection(group_id)
 
@@ -174,8 +176,10 @@ class FilterRepository(BaseRepository[Filter]):
 
         # Try cache first
         cached = await self.cache.get(cache_key)
-        if cached:
-            return cached
+        if cached is not None:
+            if isinstance(cached, list):
+                return cached
+            await self.cache.delete(cache_key)
 
         collection = await self.get_collection(group_id)
         texts = []

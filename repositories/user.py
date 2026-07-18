@@ -142,11 +142,26 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """Generate cache key for user"""
         return CacheKeyGenerator.user(user_id)
 
+    async def update(
+            self,
+            id: Any,
+            update_data: Dict[str, Any],
+            upsert: bool = False
+    ) -> bool:
+        """Update a user and invalidate entity plus aggregate projections."""
+        success = await super().update(id, update_data, upsert)
+        if success:
+            await self.cache_invalidator.invalidate_user_stats()
+        return success
+
     async def create_user(self, user_id: int, name: str) -> bool:
         """Create new user. Idempotent on duplicate key."""
         user = User(id=user_id, name=name)
         try:
-            return await self.create(user)
+            success = await self.create(user)
+            if success:
+                await self.cache_invalidator.invalidate_user_stats()
+            return success
         except Exception as e:
             # Treat duplicate key as success to make user creation idempotent
             from pymongo.errors import DuplicateKeyError
@@ -164,8 +179,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Try cache first
         cached = await self.cache.get(cache_key)
-        if cached:
-            return self._dict_to_entity(cached)
+        if cached is not None:
+            try:
+                return self._dict_to_entity(cached)
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning(f"Invalid cached user entity for {user_id}: {e}")
+                await self.cache_invalidator.invalidate_user_data(user_id)
 
         # Fetch from database
         user = await self.find_by_id(user_id, use_cache=False)
@@ -285,6 +304,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # Check if already has the same premium status
         if user.is_premium == is_premium:
+            # Clear decisions cached by an older process/deployment even when
+            # the database already has the requested value.
+            await self.cache_invalidator.invalidate_premium_status(user_id)
             status_text = "premium" if is_premium else "non-premium"
             return False, ErrorMessageFormatter.format_error(f"User is already {status_text}!"), user
         update_data: Dict[str, Any] = {
@@ -306,6 +328,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             if not is_premium:
                 user.daily_retrieval_count = 0
             await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_premium_status(user_id)
 
         action = "added" if is_premium else "removed"
         return success, ErrorMessageFormatter.format_success(f"Premium status {action} successfully!") if success else ErrorMessageFormatter.format_failed(f"to {action.replace('ed', '')} premium status"), user
@@ -445,6 +468,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             # Invalidate cache for all affected users
             for user_id in user_ids:
                 await self.cache_invalidator.invalidate_user_data(user_id)
+                await self.cache_invalidator.invalidate_premium_status(user_id)
+            await self.cache_invalidator.invalidate_user_stats()
 
             logger.info(f"Batch expired premium for {len(user_ids)} users")
         except Exception as e:
@@ -481,6 +506,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 }
             )
             await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_user_stats()
             return 1
 
         # Use atomic increment for same day to prevent race conditions
@@ -499,6 +525,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         )
 
         await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
 
         if result:
             return result.get('daily_retrieval_count', 0)
@@ -540,6 +567,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 }
             )
             await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_user_stats()
             return count
 
         # Use atomic increment for same day with batch count
@@ -558,6 +586,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         )
 
         await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
 
         if result:
             return result.get('daily_retrieval_count', 0)
@@ -577,8 +606,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if requested_count <= 0:
             return True, 0, "No quota needed"
 
-        today = date.today()
-        today_str = today.isoformat()
+        if requested_count > daily_limit:
+            return False, 0, f"Requested {requested_count} exceeds daily limit of {daily_limit}"
+
+        today_str = date.today().isoformat()
 
         # Get user to check current state
         user = await self.get_user(user_id)
@@ -588,69 +619,54 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             if not user:
                 return False, 0, "Failed to create user"
 
-        # If it's a new day, reset count first
         collection = await self.get_collection()
 
-        if user.last_retrieval_date != today:
-            # New day - reset and set to requested_count atomically
-            if requested_count > daily_limit:
-                return False, 0, f"Requested {requested_count} exceeds daily limit of {daily_limit}"
-
-            result = await self.db_pool.execute_with_retry(
-                collection.find_one_and_update,
-                {'_id': user_id},
-                {
-                    '$set': {
-                        'daily_retrieval_count': requested_count,
-                        'last_retrieval_date': today_str,
-                        'updated_at': datetime.now(UTC)
-                    }
-                },
-                return_document=True
-            )
-
-            if result:
-                await self.cache_invalidator.invalidate_user_data(user_id)
-                return True, requested_count, f"Reserved {requested_count} quota (new day)"
-            return False, 0, "Failed to reserve quota"
-
-        # Same day - atomically increment and check
-        # First, calculate what the new total would be
-        current_count = user.daily_retrieval_count
-        projected_total = current_count + requested_count
-
-        if projected_total > daily_limit:
-            remaining = daily_limit - current_count
-            if remaining <= 0:
-                return False, 0, "Daily limit reached"
-            return False, 0, f"Can only retrieve {remaining} more files today"
-
-        # Atomically increment
+        # A single guarded update handles both the first request of a new day
+        # and same-day increments.  The conditional update is evaluated against
+        # the current document, so concurrent callers cannot overwrite/reset one
+        # another or reserve beyond the limit.
         result = await self.db_pool.execute_with_retry(
             collection.find_one_and_update,
             {
                 '_id': user_id,
-                'daily_retrieval_count': {'$lte': daily_limit - requested_count}  # Guard condition
+                '$or': [
+                    {'last_retrieval_date': {'$ne': today_str}},
+                    {
+                        'last_retrieval_date': today_str,
+                        'daily_retrieval_count': {'$lte': daily_limit - requested_count}
+                    }
+                ]
             },
-            {
-                '$inc': {'daily_retrieval_count': requested_count},
+            [{
                 '$set': {
+                    'daily_retrieval_count': {
+                        '$cond': [
+                            {'$eq': ['$last_retrieval_date', today_str]},
+                            {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, requested_count]},
+                            requested_count
+                        ]
+                    },
                     'last_retrieval_date': today_str,
                     'updated_at': datetime.now(UTC)
                 }
-            },
+            }],
             return_document=True
         )
 
         if result:
             new_count = result.get('daily_retrieval_count', 0)
             await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_user_stats()
             logger.info(f"Reserved {requested_count} quota for user {user_id}, new total: {new_count}")
             return True, requested_count, f"Reserved {requested_count} quota"
 
-        # Guard condition failed - someone else took the quota
-        logger.warning(f"Quota reservation failed for user {user_id} - concurrent access detected")
-        return False, 0, "Quota changed during reservation, please try again"
+        # The guard failed because another caller consumed the remaining quota.
+        fresh_user = await self.find_by_id(user_id, use_cache=False)
+        current_count = fresh_user.daily_retrieval_count if fresh_user else daily_limit
+        remaining = max(0, daily_limit - current_count)
+        if remaining == 0:
+            return False, 0, "Daily limit reached"
+        return False, 0, f"Can only retrieve {remaining} more files today"
 
     async def release_quota(self, user_id: int, count: int) -> bool:
         """
@@ -663,7 +679,11 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         collection = await self.get_collection()
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
-            {'_id': user_id, 'daily_retrieval_count': {'$gte': count}},
+            {
+                '_id': user_id,
+                'last_retrieval_date': date.today().isoformat(),
+                'daily_retrieval_count': {'$gte': count}
+            },
             {'$inc': {'daily_retrieval_count': -count}}
         )
 
@@ -719,8 +739,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """Get user statistics"""
         cache_key = CacheKeyGenerator.user_stats()
         cached = await self.cache.get(cache_key)
-        if cached:
+        if isinstance(cached, dict):
             return cached
+        if cached is not None:
+            await self.cache_invalidator.invalidate_user_stats()
         pipeline = [
             {"$facet": {
                 "total": [{"$count": "count"}],
@@ -825,6 +847,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
         today = date.today()
+        today_str = today.isoformat()
 
         # Use validator utility for premium check
         user_premium_valid = is_premium_valid(user.is_premium, user.premium_expiry_date)
@@ -841,11 +864,6 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 False  # Don't log as warning - this is not abuse
             )
 
-        # Reset daily count if new day
-        if user.last_request_date != today:
-            user.daily_request_count = 0
-            user.last_request_date = today
-
         # Check if user has warnings that should be reset (30 days old)
         if user.warning_count > 0 and user.last_warning_date:
             days_since_warning = (datetime.now(UTC) - user.last_warning_date).days
@@ -854,48 +872,105 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 user.warning_count = 0
                 user.last_warning_date = None
 
-        # Check warning limit first
-        if user.warning_count >= REQUEST_WARNING_LIMIT:
+        collection = await self.get_collection()
+
+        async def record_allowed_request():
+            """Atomically consume one request slot, resetting only on a new day."""
+            return await self.db_pool.execute_with_retry(
+                collection.find_one_and_update,
+                {
+                    '_id': user_id,
+                    'status': {'$ne': UserStatus.BANNED.value},
+                    'warning_count': {'$lt': REQUEST_WARNING_LIMIT},
+                    '$or': [
+                        {'last_request_date': {'$ne': today_str}},
+                        {
+                            'last_request_date': today_str,
+                            'daily_request_count': {'$lt': REQUEST_PER_DAY}
+                        }
+                    ]
+                },
+                [{
+                    '$set': {
+                        'daily_request_count': {
+                            '$cond': [
+                                {'$eq': ['$last_request_date', today_str]},
+                                {'$add': [{'$ifNull': ['$daily_request_count', 0]}, 1]},
+                                1
+                            ]
+                        },
+                        'last_request_date': today_str,
+                        'total_requests': {'$add': [{'$ifNull': ['$total_requests', 0]}, 1]},
+                        'updated_at': datetime.now(UTC)
+                    }
+                }],
+                return_document=True
+            )
+
+        recorded = await record_allowed_request()
+        if recorded:
+            await self.cache_invalidator.invalidate_user_data(user_id)
+            daily_count = recorded.get('daily_request_count', 1)
+            remaining = max(0, REQUEST_PER_DAY - daily_count)
+            return True, f"Request recorded ({daily_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False, False
+
+        # The allowance guard failed. Read the current database state rather
+        # than the potentially stale cached object before deciding whether this
+        # request should create a warning.
+        fresh_user = await self.find_by_id(user_id, use_cache=False)
+        if not fresh_user:
+            return False, "Unable to record request. Please try again.", False, False
+
+        if fresh_user.status == UserStatus.BANNED or fresh_user.warning_count >= REQUEST_WARNING_LIMIT:
             return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
 
-        # Check daily limit
-        if user.daily_request_count >= REQUEST_PER_DAY:
-            # Issue a warning
-            user.warning_count += 1
-            user.last_warning_date = datetime.now(UTC)
+        # If a concurrent request changed the day/count but did not fill the
+        # allowance, retry the guarded consume once.
+        if fresh_user.last_request_date != today or fresh_user.daily_request_count < REQUEST_PER_DAY:
+            recorded = await record_allowed_request()
+            if recorded:
+                await self.cache_invalidator.invalidate_user_data(user_id)
+                daily_count = recorded.get('daily_request_count', 1)
+                remaining = max(0, REQUEST_PER_DAY - daily_count)
+                return True, f"Request recorded ({daily_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False, False
 
-            update_data = {
-                'warning_count': user.warning_count,
-                'last_warning_date': user.last_warning_date,
-                'updated_at': datetime.now(UTC)
-            }
-            await self.update(user_id, update_data)
-            await self.cache_invalidator.invalidate_user_data(user_id)
+        warning_time = datetime.now(UTC)
+        warned = await self.db_pool.execute_with_retry(
+            collection.find_one_and_update,
+            {
+                '_id': user_id,
+                'last_request_date': today_str,
+                'daily_request_count': {'$gte': REQUEST_PER_DAY},
+                'warning_count': {'$lt': REQUEST_WARNING_LIMIT}
+            },
+            {
+                '$inc': {'warning_count': 1},
+                '$set': {
+                    'last_warning_date': warning_time,
+                    'updated_at': warning_time
+                }
+            },
+            return_document=True
+        )
 
-            remaining_warnings = REQUEST_WARNING_LIMIT - user.warning_count
-
-            if user.warning_count >= REQUEST_WARNING_LIMIT:
-                # Auto-ban the user
-                return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
-            else:
-                return False, ErrorMessageFormatter.format_warning(f"Daily request limit ({REQUEST_PER_DAY}) exceeded! Warning {user.warning_count}/{REQUEST_WARNING_LIMIT}. You have {remaining_warnings} warnings left before ban."), False, True  # Log this as warning - actual abuse
-
-        # Allow the request and increment counters
-        user.daily_request_count += 1
-        user.total_requests += 1
-
-        update_data = {
-            'daily_request_count': user.daily_request_count,
-            'last_request_date': today.isoformat(),
-            'total_requests': user.total_requests,
-            'updated_at': datetime.now(UTC)
-        }
-
-        await self.update(user_id, update_data)
         await self.cache_invalidator.invalidate_user_data(user_id)
+        if not warned:
+            latest_user = await self.find_by_id(user_id, use_cache=False)
+            if latest_user and latest_user.warning_count >= REQUEST_WARNING_LIMIT:
+                return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
+            return False, "Request limit changed. Please try again.", False, False
 
-        remaining = REQUEST_PER_DAY - user.daily_request_count
-        return True, f"Request recorded ({user.daily_request_count}/{REQUEST_PER_DAY}). {remaining} requests remaining today.", False, False
+        warning_count = warned.get('warning_count', 0)
+        if warning_count >= REQUEST_WARNING_LIMIT:
+            return False, f"You have been banned for exceeding warning limit ({REQUEST_WARNING_LIMIT} warnings)", True, False
+
+        remaining_warnings = REQUEST_WARNING_LIMIT - warning_count
+        warning_message = (
+            f"Daily request limit ({REQUEST_PER_DAY}) exceeded! "
+            f"Warning {warning_count}/{REQUEST_WARNING_LIMIT}. "
+            f"You have {remaining_warnings} warnings left before ban."
+        )
+        return False, ErrorMessageFormatter.format_warning(warning_message), False, True
 
     async def reset_warnings(self, user_id: int) -> bool:
         """Reset warnings for a user"""

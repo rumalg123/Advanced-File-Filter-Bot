@@ -1,5 +1,4 @@
 from typing import Optional, List, Tuple
-from datetime import date
 
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
@@ -36,11 +35,11 @@ class FileAccessService:
             file_identifier: str,
             increment: bool = True,
             owner_id: Optional[int] = None
-    ) -> Tuple[bool, str, Optional[MediaFile]]:
+    ) -> Tuple[bool, str, Optional[MediaFile], int]:
         """
         Check if user can access file and grant access if allowed
         Now uses unified lookup that works with both file_id and file_ref
-        Returns: (allowed, message, file_object)
+        Returns: (allowed, message, file_object, reserved_quota)
         """
         logger.info(f"check_and_grant_access: user_id={user_id}, file={file_identifier}, increment={increment}, owner_id={owner_id}")
 
@@ -49,61 +48,47 @@ class FileAccessService:
             user_id, 'file_request'
         )
         if not is_allowed:
-            return False, f"Rate limit exceeded. Try again in {cooldown} seconds.", None
+            return False, f"Rate limit exceeded. Try again in {cooldown} seconds.", None, 0
 
         # Get file details using unified lookup
         file = await self.media_repo.find_file(file_identifier)
         if not file:
-            return False, "File not found.", None
+            return False, "File not found.", None, 0
 
         # Check user access
         logger.info(f"Checking user access for user_id={user_id}, owner_id={owner_id}")
         can_access, reason = await self.user_repo.can_retrieve_file(user_id, owner_id)
 
         logger.info(f"can_access={can_access}, increment={increment}")
+        if not can_access:
+            return False, reason, None, 0
 
-        # For non-premium users, check if they would exceed limit AFTER incrementing
-        if can_access and increment and not self.config.DISABLE_PREMIUM:
-            user = await self.user_repo.get_user(user_id)
-            is_admin = user_id in self.config.ADMINS if self.config.ADMINS else False
-
-            if user and not user.is_premium and user_id != owner_id and not is_admin:
-                # Check if incrementing would exceed the limit
-                today = date.today()
-                current_count = user.daily_retrieval_count if user.last_retrieval_date == today else 0
-
-                if current_count >= self.user_repo.daily_limit:
-                    return False, f"Daily limit reached ({current_count}/{self.user_repo.daily_limit})", None
-
-        if can_access and increment:
-            # Increment retrieval count for non-premium users when premium is enabled
-            # Use the config passed to the service, not a new instance
+        reserved_quota = 0
+        if increment:
             if not self.config:
-                logger.error("FileAccessService config is None, cannot check premium settings")
-                return can_access, reason, file if can_access else None
+                logger.error("FileAccessService config is None, cannot enforce retrieval quota")
+                return False, "File access configuration is unavailable.", None, 0
 
-            logger.info(f"DISABLE_PREMIUM={self.config.DISABLE_PREMIUM}")
-            # Only increment if premium system is enabled
             if not self.config.DISABLE_PREMIUM:
                 user = await self.user_repo.get_user(user_id)
-                logger.info(f"User found: {user is not None}")
-                if user:
-                    logger.info(f"User {user_id}: is_premium={user.is_premium}, daily_count={user.daily_retrieval_count}")
-
-                # Check if user is admin
                 is_admin = user_id in self.config.ADMINS if self.config.ADMINS else False
-                logger.info(f"Is admin: {is_admin}, Is owner: {user_id == owner_id}")
+                needs_quota = (
+                    user is not None
+                    and not user.is_premium
+                    and user_id != owner_id
+                    and not is_admin
+                )
 
-                if user and not user.is_premium and user_id != owner_id and not is_admin:
-                    logger.info(f"Incrementing retrieval count for user {user_id}")
-                    count = await self.user_repo.increment_retrieval_count(user_id)
-                    logger.info(f"New retrieval count for user {user_id}: {count}")
-                else:
-                    logger.info(f"Not incrementing: user_premium={user.is_premium if user else 'no_user'}, is_owner={user_id == owner_id}, is_admin={is_admin}")
-            else:
-                logger.info(f"Not incrementing: DISABLE_PREMIUM is True")
+                if needs_quota:
+                    success, reserved_quota, quota_message = await self.user_repo.reserve_quota_atomic(
+                        user_id,
+                        1,
+                        self.user_repo.daily_limit
+                    )
+                    if not success:
+                        return False, quota_message, None, 0
 
-        return can_access, reason, file if can_access else None
+        return True, reason, file, reserved_quota
 
 
     async def search_files_with_access_check(
@@ -139,13 +124,25 @@ class FileAccessService:
         if file_type:
             file_type_enum = get_file_type_from_string(file_type)
         use_caption_filter = self.config.USE_CAPTION_FILTER if self.config else True
+        advanced_filters = None
+        search_query = query
+        if self.config and getattr(self.config, 'FEATURE_ADVANCED_SEARCH', False):
+            from core.utils.feature_search import parse_advanced_search_query
+            try:
+                search_query, advanced_filters = parse_advanced_search_query(query)
+            except (TypeError, ValueError) as e:
+                return [], 0, 0, False, f"Invalid search filter: {e}"
+
+            if advanced_filters and not file_type_enum and advanced_filters.get('file_type'):
+                file_type_enum = get_file_type_from_string(str(advanced_filters['file_type']))
         # Search files
         files, next_offset, total = await self.media_repo.search_files(
-            query,
+            search_query,
             file_type_enum,
             offset,
             limit,
-            use_caption_filter
+            use_caption_filter,
+            advanced_filters=advanced_filters
         )
 
         return files, next_offset, total, True, None

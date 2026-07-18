@@ -282,7 +282,7 @@ class ChannelHandler:
 
         try:
             # Add to queue instead of processing directly
-            await self.message_queue.put({
+            self.message_queue.put_nowait({
                 'message': message,
                 'timestamp': time.time()
             })
@@ -404,6 +404,9 @@ class ChannelHandler:
             if status_code == 1:
                 logger.info(f"Successfully indexed: {media_file.file_name}")
                 await self.channel_repo.update_indexed_count(message.chat.id)
+                feature_service = getattr(self.bot, 'feature_service', None)
+                if feature_service:
+                    feature_service.schedule_new_media(media_file)
                 return "indexed"
             elif status_code == 0:
                 logger.debug(f"Duplicate file: {media_file.file_name}")

@@ -1,8 +1,8 @@
 import asyncio
+import html
 import random
 import re
 import uuid
-from typing import Dict
 from weakref import WeakSet
 
 from pyrogram import Client, filters, enums
@@ -50,7 +50,8 @@ class SearchHandler:
         self.search_results_service = SearchResultsService(
             cache_manager=bot.cache,
             config=bot.config,
-            recommendation_service=getattr(bot, 'recommendation_service', None)
+            recommendation_service=getattr(bot, 'recommendation_service', None),
+            media_repo=bot.media_repo
         )
         
         # Get search history service from bot
@@ -58,9 +59,6 @@ class SearchHandler:
         
         # Get recommendation service from bot
         self.recommendation_service = getattr(bot, 'recommendation_service', None)
-        
-        # Store last query per user for sequence tracking
-        self._user_last_query: Dict[int, str] = {}
         
         self.register_handlers()
 
@@ -76,7 +74,10 @@ class SearchHandler:
             'viewfilters', 'filters', 'del', 'delall', 'delallf', 'deleteallf',
             'delf', 'deletef', 'add', 'filter', 'bsetting', 'restart', 'shell',
             'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance', 'cancel', 'dbstats',
-            'dbinfo', 'dbswitch'
+            'dbinfo', 'dbswitch', 'save_search', 'saved_searches', 'favorite', 'unfavorite',
+            'favorites', 'collections', 'collection_create', 'collection_delete',
+            'recent', 'clear_recent', 'suggest', 'search_help', 'myrequests',
+            'file_reports', 'resolve_report', 'content_dashboard'
         ]
 
         # Register text search handler
@@ -513,10 +514,6 @@ class SearchHandler:
         filter_sent = False
 
         try:
-            # Track search query for history
-            if self.search_history_service:
-                await self.search_history_service.track_search(user_id, query)
-            
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
             files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
@@ -543,6 +540,16 @@ class SearchHandler:
                     )
                 await message.reply_text(limit_msg)
                 return
+            if not has_access and access_reason and access_reason.startswith("Invalid search filter:"):
+                await message.reply_text(
+                    ErrorMessageFormatter.format_invalid(
+                        "search filter",
+                        details=html.escape(
+                            access_reason.removeprefix("Invalid search filter: ").strip()
+                        )
+                    )
+                )
+                return
 
             if has_access and files:
                 # Send search results using centralized service
@@ -567,8 +574,20 @@ class SearchHandler:
                         client, message, query, str(active_group), user_id, is_private=True
                     )
 
+            if search_sent or filter_sent:
+                await self._track_successful_query(user_id, query)
+
             # Send "not found" message only if nothing was sent
             if not search_sent and not filter_sent:
+                feature_service = getattr(self.bot, 'feature_service', None)
+                if (
+                    feature_service
+                    and feature_service.enabled('FEATURE_CONTENT_DASHBOARD')
+                ):
+                    try:
+                        await self.bot.feature_repo.track_zero_result(user_id, query)
+                    except Exception as e:
+                        logger.debug(f"Could not track zero-result search: {e}")
                 no_results_buttons = []
                 
                 # Try to find similar queries using fuzzy matching
@@ -646,16 +665,6 @@ class SearchHandler:
     ):
         """Handle search in group chat - only show results, no 'not found' messages"""
         try:
-            # Track search query for history (both user and global)
-            if self.search_history_service:
-                await self.search_history_service.track_search(user_id, query, track_global=True)
-            
-            # Track search sequence for recommendations
-            if self.recommendation_service:
-                previous_query = self._user_last_query.get(user_id)
-                await self.recommendation_service.track_search_sequence(user_id, previous_query, query)
-                self._user_last_query[user_id] = query
-            
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
             files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
@@ -683,9 +692,10 @@ class SearchHandler:
                 await message.reply_text(limit_msg)
                 return
 
+            search_sent = False
             if has_access and files:
                 # Send search results using centralized service
-                await self.search_results_service.send_results(
+                search_sent = await self.search_results_service.send_results(
                     client=client,
                     message=message,
                     files=files,
@@ -698,16 +708,37 @@ class SearchHandler:
                 )
 
             # Check filters if enabled
+            filter_sent = False
             if not self.bot.config.DISABLE_FILTER:
                 group_id = str(message.chat.id)
                 # For groups, always check filters
-                await self._check_and_send_filter(
+                filter_sent = await self._check_and_send_filter(
                     client, message, query, group_id, user_id, is_private=False
                 )
+
+            if search_sent or filter_sent:
+                await self._track_successful_query(user_id, query)
+            else:
+                feature_service = getattr(self.bot, 'feature_service', None)
+                if (
+                    feature_service
+                    and feature_service.enabled('FEATURE_CONTENT_DASHBOARD')
+                ):
+                    try:
+                        await self.bot.feature_repo.track_zero_result(user_id, query)
+                    except Exception as e:
+                        logger.debug(f"Could not track group zero-result search: {e}")
 
         except Exception as e:
             logger.error(f"Error in group search: {e}")
             # Don't send error messages in groups to avoid spam
+
+    async def _track_successful_query(self, user_id: int, query: str) -> None:
+        """Track valid private/group searches through the same persisted path."""
+        if self.search_history_service:
+            await self.search_history_service.track_search(user_id, query, track_global=True)
+        if self.recommendation_service:
+            await self.recommendation_service.track_successful_search(user_id, query)
 
 
     async def _check_and_send_filter(

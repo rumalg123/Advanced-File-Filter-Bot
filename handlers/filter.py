@@ -36,8 +36,8 @@ class FilterHandler(BaseHandler):
             (self.add_filter_command, filters.command(["add", "filter"]) & (filters.private | filters.group)),
             (self.view_filters_command,
              filters.command(["filters", "viewfilters"]) & (filters.private | filters.group)),
-            (self.delete_filter_command, filters.command(["delf", "deletef"]) & (filters.private | filters.group)),
-            (self.delete_all_command, filters.command(["delallf", "deleteallf"]) & (filters.private | filters.group))
+            (self.delete_filter_command, filters.command(["del", "delf", "deletef"]) & (filters.private | filters.group)),
+            (self.delete_all_command, filters.command(["delall", "delallf", "deleteallf"]) & (filters.private | filters.group))
         ])
 
         logger.info(f"FilterHandler registered {len(self._handlers)} handlers")
@@ -95,12 +95,15 @@ class FilterHandler(BaseHandler):
                 suggestion_text = "\n".join([f"• <code>{s}</code>" for s in suggestions])
                 warning_msg = (
                     f"⚠️ <b>Similar filter(s) already exist:</b>\n{suggestion_text}\n\n"
-                    f"Are you sure you want to add <code>{keyword}</code>?\n"
-                    f"This might create duplicate filters."
+                    f"The new filter <code>{keyword}</code> was not added.\n"
+                    f"Near-duplicate filters are blocked automatically; rename the keyword "
+                    f"or delete the existing filter first."
                 )
-                # Still allow adding, but warn the user
-                # Could add a confirmation step here if needed
-                pass  # For now, just continue (could add confirmation callback)
+                return await message.reply_text(
+                    warning_msg,
+                    quote=True,
+                    parse_mode=CaptionFormatter.get_parse_mode()
+                )
 
         # Extract filter content
         filter_data = await self._extract_filter_data(message, extracted, keyword)

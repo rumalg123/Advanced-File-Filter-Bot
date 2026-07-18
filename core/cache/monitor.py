@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Dict, List, Any
 
 from core.cache.config import CacheKeyGenerator, CachePatterns
@@ -15,7 +14,11 @@ class CacheMonitor:
     def __init__(self, cache_manager: CacheManager):
         self.cache = cache_manager
 
-    async def get_cache_stats(self) -> Dict[str, any]:
+    @staticmethod
+    def _key_text(key: Any) -> str:
+        return key.decode('utf-8', errors='replace') if isinstance(key, bytes) else str(key)
+
+    async def get_cache_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics"""
         if not self.cache.redis:
             return {"error": "Redis not connected"}
@@ -39,6 +42,11 @@ class CacheMonitor:
             # Get serialization stats
             serialization_stats = get_serialization_stats()
 
+            database_number = int(
+                self.cache.redis.connection_pool.connection_kwargs.get('db', 0) or 0
+            )
+            keyspace = info.get(f'db{database_number}', {})
+
             return {
                 "status": "connected",
                 "memory": {
@@ -55,8 +63,9 @@ class CacheMonitor:
                     "keyspace_misses": misses,
                 },
                 "keys": {
-                    "total_keys": info.get('db0', {}).get('keys', 0),
-                    "expires": info.get('db0', {}).get('expires', 0),
+                    "database": database_number,
+                    "total_keys": keyspace.get('keys', 0),
+                    "expires": keyspace.get('expires', 0),
                     "by_pattern": key_counts
                 },
                 "server": {
@@ -80,6 +89,7 @@ class CacheMonitor:
             "filters": CachePatterns.ALL_FILTERS,
             "filter_lists": CachePatterns.ALL_FILTER_LISTS,
             "search_results": CachePatterns.ALL_SEARCH_CACHE,
+            "delivery_sessions": CachePatterns.ALL_SEARCH_RESULTS,
             "rate_limits": CachePatterns.ALL_RATE_LIMITS,
             "bot_settings": CachePatterns.ALL_BOT_SETTINGS,
             "sessions": CachePatterns.ANY_SESSION
@@ -94,41 +104,51 @@ class CacheMonitor:
 
         return counts
 
-    async def find_duplicate_data(self) -> List[Dict[str, any]]:
-        """Find potential duplicate cached data"""
-        duplicates = []
+    async def find_duplicate_data(self) -> List[Dict[str, Any]]:
+        """Classify intentional media aliases and identify only stale aliases."""
+        if not self.cache.redis:
+            return []
 
-        # Check for media files with multiple cache entries
-        media_keys = []
+        media_keys: List[str] = []
         async for key in self.cache.redis.scan_iter(match=CachePatterns.ALL_MEDIA):
-            media_keys.append(key.decode())
+            media_keys.append(self._key_text(key))
 
-        # Group by potential duplicates
-        file_cache_map = {}  # file_id -> list of cache keys
-        media_prefix = "media:"
+        file_cache_map: Dict[str, Dict[str, Any]] = {}
 
         for key in media_keys:
-            data = await self.cache.get(key.replace(media_prefix, ""))
+            data = await self.cache.get(key)
             if data and isinstance(data, dict):
-                file_id = data.get('file_id') or data.get('_id')
-                if file_id:
-                    if file_id not in file_cache_map:
-                        file_cache_map[file_id] = []
-                    file_cache_map[file_id].append(key)
+                canonical_id = data.get('file_unique_id') or data.get('_id') or data.get('file_id')
+                if canonical_id is None:
+                    continue
+                group = file_cache_map.setdefault(str(canonical_id), {
+                    'cache_keys': [],
+                    'valid_cache_keys': set(),
+                })
+                group['cache_keys'].append(key)
+                for field in ('file_unique_id', '_id', 'file_id', 'file_ref'):
+                    identifier = data.get(field)
+                    if identifier:
+                        group['valid_cache_keys'].add(CacheKeyGenerator.media(str(identifier)))
 
-        # Find files with multiple cache entries
-        for file_id, keys in file_cache_map.items():
-            if len(keys) > 1:
-                duplicates.append({
-                    "type": "media_file",
+        aliases = []
+        for file_id, group in file_cache_map.items():
+            cache_keys = list(dict.fromkeys(group['cache_keys']))
+            valid_keys = group['valid_cache_keys']
+            stale_keys = [key for key in cache_keys if key not in valid_keys]
+            if len(cache_keys) > 1 or stale_keys:
+                aliases.append({
+                    "type": "media_alias_group",
                     "file_id": file_id,
-                    "cache_keys": keys,
-                    "count": len(keys)
+                    "cache_keys": cache_keys,
+                    "valid_cache_keys": sorted(key for key in cache_keys if key in valid_keys),
+                    "stale_cache_keys": stale_keys,
+                    "count": len(cache_keys),
                 })
 
-        return duplicates
+        return aliases
 
-    async def analyze_cache_usage(self, sample_size: int = 100) -> Dict[str, any]:
+    async def analyze_cache_usage(self, sample_size: int = 100) -> Dict[str, Any]:
         """Analyze cache usage patterns"""
         analysis = {
             "large_values": [],
@@ -136,6 +156,9 @@ class CacheMonitor:
             "no_ttl": [],
             "key_size_distribution": {}
         }
+        if not self.cache.redis:
+            analysis['error'] = 'Redis not connected'
+            return analysis
 
         # Sample keys
         sampled = 0
@@ -143,16 +166,16 @@ class CacheMonitor:
             if sampled >= sample_size:
                 break
 
-            key_str = key.decode()
+            key_str = self._key_text(key)
 
             try:
                 # Get value size (some Redis versions might not support memory_usage)
                 try:
-                    value_size = self.cache.redis.memory_usage(key)
-                except (AttributeError, Exception):
+                    value_size = await self.cache.redis.memory_usage(key)
+                except Exception:
                     # Fallback: estimate size by getting the actual value
                     value = await self.cache.redis.get(key)
-                    value_size = len(str(value)) if value else 0
+                    value_size = len(value) if value else 0
 
                 # Get TTL
                 ttl = await self.cache.redis.ttl(key)
@@ -208,7 +231,8 @@ class CacheMonitor:
 
                 try:
                     # Get the cached value
-                    value = await self.cache.get(key.decode())
+                    key_text = self._key_text(key)
+                    value = await self.cache.get(key_text)
                     if value is None or not isinstance(value, (dict, list)):
                         continue
 
@@ -229,7 +253,7 @@ class CacheMonitor:
 
                         if best_size < current_size:
                             analysis["method_comparison"].append({
-                                "key": key.decode()[:40],
+                                "key": key_text[:40],
                                 "current_size": current_size,
                                 "best_method": best_method,
                                 "best_size": best_size,

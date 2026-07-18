@@ -770,6 +770,17 @@ class BotSettingsHandler(BaseHandler):
         # Map long names to shorter versions
         display_map = {
             'USE_CAPTION_FILTER': 'Caption Filter',
+            'FEATURE_SAVED_SEARCH_ALERTS': 'Saved Alerts',
+            'FEATURE_FAVORITES': 'Favorites',
+            'FEATURE_ADVANCED_SEARCH': 'Advanced Search',
+            'FEATURE_RECOMMENDATION_FEEDBACK': 'Rec Feedback',
+            'FEATURE_FILE_REPORTS': 'File Reports',
+            'FEATURE_SEARCH_AUTOCOMPLETE': 'Autocomplete',
+            'FEATURE_DUPLICATE_GROUPING': 'Group Variants',
+            'FEATURE_REQUEST_TRACKING': 'Request Tracking',
+            'FEATURE_RECENT_FILES': 'Recent Files',
+            'FEATURE_RECOMMENDATION_EXPLANATIONS': 'Rec Reasons',
+            'FEATURE_CONTENT_DASHBOARD': 'Content Dashboard',
             'DISABLE_PREMIUM': 'Disable Premium',
             'DISABLE_FILTER': 'Disable Filter',
             'PUBLIC_FILE_STORE': 'Public Store',

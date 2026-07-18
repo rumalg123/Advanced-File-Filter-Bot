@@ -3,7 +3,7 @@ import sys
 from typing import Optional, Any, Union, List, Callable
 from functools import wraps
 import redis.asyncio as aioredis
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.serialization import serialize, deserialize, get_serialization_stats
@@ -13,6 +13,22 @@ logger = get_logger(__name__)
 
 class CacheManager:
     """Redis cache manager with automatic serialization/deserialization"""
+
+    _INCREMENT_WITH_EXPIRY_SCRIPT = """
+    local count = redis.call('INCRBY', KEYS[1], ARGV[1])
+    local ttl = redis.call('TTL', KEYS[1])
+    if ttl < 0 then
+        redis.call('EXPIRE', KEYS[1], ARGV[2])
+    end
+    return count
+    """
+
+    _DELETE_IF_VALUE_SCRIPT = """
+    if redis.call('GET', KEYS[1]) == ARGV[1] then
+        return redis.call('DEL', KEYS[1])
+    end
+    return 0
+    """
 
     def __init__(self, redis_url: str = "redis://localhost:6379"):
         self.redis_url = redis_url
@@ -26,7 +42,7 @@ class CacheManager:
         """Initialize Redis connection"""
         async with self._lock:
             if self.redis is None:
-                self.redis = aioredis.from_url(
+                client = aioredis.from_url(
                     self.redis_url,
                     decode_responses=False,
                     max_connections=self._max_connections,
@@ -34,8 +50,20 @@ class CacheManager:
                     socket_connect_timeout=10.0,  # Timeout for initial connection
                 )
 
-                # Test connection
-                await self.redis.ping()
+                try:
+                    # Do not publish a client until its initial connection is
+                    # known to work. This keeps a retry from seeing a partial
+                    # initialization as a healthy manager.
+                    await client.ping()
+                except Exception:
+                    try:
+                        await client.aclose()
+                    except Exception as close_error:
+                        logger.debug(f"Error closing failed Redis client: {close_error}")
+                    self.redis = None
+                    raise
+
+                self.redis = client
                 if 'uvloop' in sys.modules:
                     logger.info(
                         f"Redis initialized with uvloop optimizations (max connections: {self._max_connections})")
@@ -45,17 +73,18 @@ class CacheManager:
     async def close(self) -> None:
         """Close Redis connection properly"""
         if self.redis:
+            client = self.redis
+            self.redis = None
             try:
-                await self.redis.close()
+                await client.aclose()
                 # Safely disconnect connection pool
                 try:
-                    await self.redis.connection_pool.disconnect()
+                    await client.connection_pool.disconnect()
                 except Exception as pool_error:
                     logger.warning(f"Error disconnecting connection pool: {pool_error}")
             except Exception as e:
                 logger.error(f"Error closing Redis connection: {e}")
             finally:
-                self.redis = None
                 logger.info("Redis connection closed")
 
     async def get(self, key: str) -> Optional[Any]:
@@ -91,7 +120,11 @@ class CacheManager:
                 expire = int(expire.total_seconds())
 
             # Set with expiration if provided
-            if expire:
+            if expire is not None:
+                expire = int(expire)
+                if expire <= 0:
+                    logger.warning(f"Refusing cache write with non-positive TTL for key {key}")
+                    return False
                 await self.redis.setex(key, expire, serialized)
             else:
                 await self.redis.set(key, serialized)
@@ -125,6 +158,8 @@ class CacheManager:
 
     async def mget(self, keys: List[str]) -> List[Optional[Any]]:
         """Get multiple values from cache with optimized deserialization"""
+        if not keys:
+            return []
         if not self.redis:
             return [None] * len(keys)
 
@@ -152,9 +187,55 @@ class CacheManager:
             logger.error(f"Cache increment error for key {key}: {e}")
             return None
 
+    async def increment_with_expiry(
+            self,
+            key: str,
+            amount: int,
+            seconds: int
+    ) -> Optional[int]:
+        """Atomically increment a raw Redis counter and ensure it has a TTL."""
+        if not self.redis:
+            return None
+        if seconds <= 0:
+            logger.warning(f"Refusing counter increment with non-positive TTL for key {key}")
+            return None
+
+        try:
+            return int(await self.redis.eval(
+                self._INCREMENT_WITH_EXPIRY_SCRIPT,
+                1,
+                key,
+                amount,
+                seconds
+            ))
+        except Exception as e:
+            logger.error(f"Atomic cache increment error for key {key}: {e}")
+            return None
+
+    async def delete_if_value(self, key: str, expected_value: Any) -> bool:
+        """Atomically delete a serialized key only if it still has an expected value."""
+        if not self.redis:
+            return False
+
+        try:
+            expected = serialize(expected_value)
+            deleted = await self.redis.eval(
+                self._DELETE_IF_VALUE_SCRIPT,
+                1,
+                key,
+                expected
+            )
+            return bool(deleted)
+        except Exception as e:
+            logger.error(f"Conditional cache delete error for key {key}: {e}")
+            return False
+
     async def expire(self, key: str, seconds: int) -> bool:
         """Set expiration time for a key"""
         if not self.redis:
+            return False
+        if seconds <= 0:
+            logger.warning(f"Refusing non-positive expiration for key {key}")
             return False
 
         try:
@@ -177,28 +258,40 @@ class CacheManager:
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching pattern"""
         if not self.redis:
-            return 0
+            return -1
 
         try:
             deleted = 0
             failed = 0
-            keys_to_delete = []
-            
-            # Collect all keys first
-            async for key in self.redis.scan_iter(match=pattern):
-                keys_to_delete.append(key)
-            
-            # Delete in batches for better performance
             batch_size = 100
-            for i in range(0, len(keys_to_delete), batch_size):
-                batch = keys_to_delete[i:i + batch_size]
+
+            # Stream scan results into bounded batches. Repeat a small number
+            # of passes because Redis SCAN may move while keys are deleted.
+            for _ in range(3):
+                matched = 0
+                batch = []
+                async for key in self.redis.scan_iter(match=pattern, count=batch_size):
+                    matched += 1
+                    batch.append(key)
+                    if len(batch) < batch_size:
+                        continue
+
+                    try:
+                        deleted += await self.redis.delete(*batch)
+                    except Exception as batch_error:
+                        failed += len(batch)
+                        logger.warning(f"Failed to delete batch of {len(batch)} keys: {batch_error}")
+                    batch = []
+
                 try:
                     if batch:
-                        result = await self.redis.delete(*batch)
-                        deleted += result
+                        deleted += await self.redis.delete(*batch)
                 except Exception as batch_error:
                     failed += len(batch)
                     logger.warning(f"Failed to delete batch of {len(batch)} keys: {batch_error}")
+
+                if matched == 0:
+                    break
             
             if failed > 0:
                 logger.warning(f"Pattern {pattern}: {deleted} deleted, {failed} failed")
@@ -206,7 +299,7 @@ class CacheManager:
             return deleted
         except Exception as e:
             logger.error(f"Error deleting pattern {pattern}: {e}")
-            return 0
+            return -1
 
     async def get_cache_stats(self) -> dict:
         """Get comprehensive cache statistics"""
@@ -308,17 +401,30 @@ def cache_premium_status(ttl: int = 600) -> Callable:
                 if hasattr(self, 'cache') and self.cache:
                     cached_result = await self.cache.get(cache_key)
                     if cached_result is not None:
-                        return cached_result
+                        # MessagePack represents tuples as arrays. Restore the
+                        # decorated method's tuple contract on cache hits.
+                        return tuple(cached_result) if isinstance(cached_result, list) else cached_result
             except Exception as e:
                 logger.warning(f"Cache get error for premium status: {e}")
 
             # Call original function
             result = await func(self, user, *args, **kwargs)
 
-            # Cache the result
+            # Cache the result, but never cache a positive premium decision
+            # beyond the subscription's actual expiry time.
             try:
                 if hasattr(self, 'cache') and self.cache:
-                    await self.cache.set(cache_key, result, expire=ttl)
+                    cache_ttl = ttl
+                    is_premium = bool(result[0]) if isinstance(result, (tuple, list)) and result else False
+                    expiry = getattr(user, 'premium_expiry_date', None)
+                    if is_premium and expiry:
+                        if expiry.tzinfo is None:
+                            expiry = expiry.replace(tzinfo=UTC)
+                        remaining = int((expiry - datetime.now(UTC)).total_seconds())
+                        if remaining <= 0:
+                            return result
+                        cache_ttl = min(cache_ttl, remaining)
+                    await self.cache.set(cache_key, result, expire=cache_ttl)
             except Exception as e:
                 logger.warning(f"Cache set error for premium status: {e}")
 

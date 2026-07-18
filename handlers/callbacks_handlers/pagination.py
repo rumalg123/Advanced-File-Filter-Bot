@@ -147,7 +147,8 @@ class PaginationCallbackHandler(BaseCommandHandler):
         file_buttons = ButtonBuilder.file_buttons_row(
             files=files,
             user_id=result_owner_id,
-            is_private=is_private
+            is_private=is_private,
+            query_reference=query_reference
         )
         buttons.extend(file_buttons)
 

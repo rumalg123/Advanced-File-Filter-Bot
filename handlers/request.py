@@ -1,4 +1,5 @@
 import random
+import html
 import re
 import uuid
 from datetime import datetime
@@ -34,7 +35,8 @@ class RequestHandler(BaseHandler):
         self.search_results_service = SearchResultsService(
             cache_manager=bot.cache,
             config=bot.config,
-            recommendation_service=getattr(bot, 'recommendation_service', None)
+            recommendation_service=getattr(bot, 'recommendation_service', None),
+            media_repo=bot.media_repo
         )
         
         self.register_handlers()
@@ -94,6 +96,24 @@ class RequestHandler(BaseHandler):
 
         keyword = match.group(1).strip()
         user_id = message.from_user.id
+
+        feature_service = getattr(self.bot, 'feature_service', None)
+        if (
+            feature_service
+            and feature_service.enabled('FEATURE_REQUEST_TRACKING')
+        ):
+            try:
+                pending = await self.bot.feature_repo.find_pending_content_request(
+                    user_id, keyword
+                )
+                if pending:
+                    return await message.reply_text(
+                        "📮 You already have a pending request for "
+                        f"<code>{html.escape(pending['query'])}</code>. "
+                        "Use /myrequests to check it."
+                    )
+            except Exception as e:
+                logger.warning(f"Could not check duplicate tracked requests: {e}")
 
         # Check request limits
         is_allowed, limit_message, should_ban, should_log_warning = await self.bot.user_repo.track_request(user_id,message.from_user.first_name)
@@ -173,6 +193,25 @@ class RequestHandler(BaseHandler):
         if search_results:
             logger.debug(f"Search results found for request: {keyword}")
         else:
+            tracked_request = None
+            if (
+                feature_service
+                and feature_service.enabled('FEATURE_REQUEST_TRACKING')
+            ):
+                try:
+                    tracked_request, created = await self.bot.feature_repo.create_content_request(
+                        user_id, message.id, keyword
+                    )
+                    if not created:
+                        return await message.reply_text(
+                            "📮 You already have a pending request for "
+                            f"<code>{html.escape(tracked_request['query'])}</code>. "
+                            "Use /myrequests to check it."
+                        )
+                except Exception as e:
+                    # Tracking is additive and must not block the established request flow.
+                    logger.warning(f"Could not persist request tracking data: {e}")
+
             # No results, forward to admins if possible
             forwarded = await self._forward_request_to_admins(client, message, keyword)
             if forwarded:
@@ -181,6 +220,13 @@ class RequestHandler(BaseHandler):
                     "Admins will process it as soon as possible."
                 )
             else:
+                if tracked_request:
+                    try:
+                        await self.bot.feature_repo.update_content_request(
+                            user_id, message.id, 'forward_failed', 0
+                        )
+                    except Exception:
+                        pass
                 await message.reply_text(
                     ErrorMessageFormatter.format_error(
                         "Your request could not be forwarded to admins right now. Please try again later."
@@ -310,7 +356,40 @@ class RequestHandler(BaseHandler):
             'reject': ErrorMessageFormatter.format_access_denied("Your request has been rejected by admins.")
         }
 
-        response_msg = action_messages.get(action, "Your request has been processed.")
+        if action not in action_messages:
+            return await query.answer("Invalid request action.", show_alert=True)
+
+        response_msg = action_messages[action]
+        status_map = {
+            'unavail': 'unavailable',
+            'avail': 'available',
+            'done': 'completed',
+            'reject': 'rejected',
+        }
+        target_status = status_map[action]
+
+        feature_service = getattr(self.bot, 'feature_service', None)
+        tracking_enabled = bool(
+            feature_service
+            and feature_service.enabled('FEATURE_REQUEST_TRACKING')
+        )
+        transition_claimed = False
+        if tracking_enabled:
+            try:
+                tracked_request = await self.bot.feature_repo.get_content_request(
+                    user_id, msg_id
+                )
+                if tracked_request:
+                    transition_claimed = await self.bot.feature_repo.claim_content_request_transition(
+                        user_id, msg_id, target_status, query.from_user.id
+                    )
+                    if not transition_claimed:
+                        return await query.answer(
+                            "This request has already been handled.", show_alert=True
+                        )
+            except Exception as e:
+                # Legacy request processing remains available if optional storage fails.
+                logger.warning(f"Could not claim tracked request transition: {e}")
 
         # Try to send PM first
         notification_sent = False
@@ -351,6 +430,13 @@ class RequestHandler(BaseHandler):
                 logger.error(f"Failed to send to group: {e}")
 
         if not notification_sent:
+            if transition_claimed:
+                try:
+                    await self.bot.feature_repo.rollback_content_request_transition(
+                        user_id, msg_id, target_status
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not roll back request transition: {e}")
             await query.answer(
                 ErrorMessageFormatter.format_error(
                     "Failed to notify the requester. The action was not marked as complete.",
@@ -359,6 +445,14 @@ class RequestHandler(BaseHandler):
                 show_alert=True
             )
             return
+
+        if transition_claimed:
+            try:
+                await self.bot.feature_repo.finish_content_request_transition(
+                    user_id, msg_id, target_status
+                )
+            except Exception as e:
+                logger.warning(f"Could not finish tracked request transition: {e}")
 
         # Update admin message
         await query.message.edit_reply_markup(None)

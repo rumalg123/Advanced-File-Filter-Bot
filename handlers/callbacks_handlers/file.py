@@ -4,12 +4,14 @@ from typing import Set
 
 from pyrogram import Client
 from pyrogram.errors import FloodWait, UserIsBlocked, QueryIdInvalid
-from pyrogram.types import CallbackQuery
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
+from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.messages import MessageHelper
+from core.utils.pagination import resolve_search_query_reference
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import (
     is_original_requester, is_private_chat, skip_subscription_check,
@@ -36,6 +38,65 @@ class FileCallbackHandler(BaseCommandHandler):
         task.add_done_callback(self._pending_delete_tasks.discard)
         return task
 
+    def _feature_file_markup(self, file):
+        """Build opt-in post-delivery actions without changing default delivery."""
+        config = self.bot.config
+        rows = []
+        identifier = file.file_unique_id
+
+        def callback(action: str):
+            value = f"feature#{action}#{identifier}"
+            return value if len(value.encode('utf-8')) <= 64 else None
+
+        favorite_callback = callback('fav')
+        if getattr(config, 'FEATURE_FAVORITES', False) and favorite_callback:
+            rows.append([
+                ButtonBuilder.action_button(
+                    "⭐ Favorite", callback_data=favorite_callback
+                )
+            ])
+        if getattr(config, 'FEATURE_RECOMMENDATION_FEEDBACK', False):
+            feedback_buttons = []
+            more_callback = callback('more')
+            less_callback = callback('less')
+            if more_callback:
+                feedback_buttons.append(ButtonBuilder.action_button(
+                    "👍 More like this", callback_data=more_callback
+                ))
+            if less_callback:
+                feedback_buttons.append(ButtonBuilder.action_button(
+                    "👎 Not interested", callback_data=less_callback
+                ))
+            if feedback_buttons:
+                rows.append(feedback_buttons)
+        report_callback = callback('report')
+        longest_reason_callback = callback('reason_incorrect')
+        if (
+            getattr(config, 'FEATURE_FILE_REPORTS', False)
+            and report_callback
+            and longest_reason_callback
+        ):
+            rows.append([
+                ButtonBuilder.action_button(
+                    "🚩 Report", callback_data=report_callback
+                )
+            ])
+        return InlineKeyboardMarkup(rows) if rows else None
+
+    def _broken_file_report_markup(self, file):
+        """Offer a report action when Telegram rejects an indexed file."""
+        if not getattr(self.bot.config, 'FEATURE_FILE_REPORTS', False) or not file:
+            return None
+        report_data = f"feature#report#{file.file_unique_id}"
+        reason_data = f"feature#reason_incorrect#{file.file_unique_id}"
+        if max(len(report_data.encode()), len(reason_data.encode())) > 64:
+            return None
+        return InlineKeyboardMarkup([[
+            ButtonBuilder.action_button(
+                "🚩 Report broken file", callback_data=report_data
+            )
+        ]])
+
     async def cancel_pending_tasks(self):
         """Cancel all pending auto-delete tasks (call during shutdown)"""
         if self._pending_delete_tasks:
@@ -54,20 +115,39 @@ class FileCallbackHandler(BaseCommandHandler):
         string = prefix + file_identifier
         return base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
 
+    @staticmethod
+    def parse_file_callback(data: str, callback_user_id: int):
+        """Parse legacy and session-aware file callback data."""
+        parts = data.split('#', 3)
+        if len(parts) < 2 or parts[0] != 'file' or not parts[1]:
+            raise ValueError("invalid file callback")
+
+        file_identifier = parts[1]
+        original_user_id = callback_user_id
+        query_reference = None
+
+        if len(parts) >= 3 and parts[2]:
+            if parts[2].startswith('@'):
+                query_reference = parts[2]
+            else:
+                original_user_id = int(parts[2])
+
+        if len(parts) == 4 and parts[3]:
+            query_reference = parts[3]
+
+        return file_identifier, original_user_id, query_reference
+
     @check_ban()
     async def handle_file_callback(self, client: Client, query: CallbackQuery):
         """Handle file request callbacks - redirect to PM from groups"""
         callback_user_id = query.from_user.id
 
-        # Extract file identifier and original user_id
+        # Extract the file, owner, and immutable originating search reference.
         try:
-            parts = query.data.split('#', 2)
-            if len(parts) < 2:
-                await query.answer(ErrorMessageFormatter.format_invalid("callback data", plain_text=True), show_alert=True)
-                return
-
-            file_identifier = parts[1]
-            original_user_id = int(parts[2]) if len(parts) >= 3 else callback_user_id
+            file_identifier, original_user_id, query_reference = self.parse_file_callback(
+                query.data,
+                callback_user_id
+            )
         except (ValueError, IndexError) as e:
             logger.warning(f"Invalid callback data format: {query.data}, error: {e}")
             await query.answer(ErrorMessageFormatter.format_invalid("request format", plain_text=True), show_alert=True)
@@ -127,7 +207,7 @@ class FileCallbackHandler(BaseCommandHandler):
             pass
 
         # Check access
-        can_access, reason, file = await self.bot.file_service.check_and_grant_access(
+        can_access, reason, file, reserved_quota = await self.bot.file_service.check_and_grant_access(
             callback_user_id,
             file_identifier,
             increment=True,
@@ -154,19 +234,6 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(ErrorMessageFormatter.format_not_found("File", plain_text=True), show_alert=True)
             return
         
-        # Track file click for recommendations (if recommendation service available)
-        if hasattr(self.bot, 'recommendation_service') and self.bot.recommendation_service:
-            # Try to get query from search_key if available in callback data
-            # The query is stored in search session cache, we'll track it after file is sent
-            # For now, we'll track it asynchronously without blocking
-            try:
-                # Extract search_key from callback if it exists (for file buttons from search results)
-                # The search_key format is stored in cache with query info
-                # We'll track this after successful file send
-                pass  # Will track after file is successfully sent
-            except Exception as e:
-                logger.debug(f"Could not extract query for recommendation tracking: {e}")
-        
         query_answered = False
         try:
             await query.answer("⏳ Sending file...", show_alert=False)
@@ -179,7 +246,9 @@ class FileCallbackHandler(BaseCommandHandler):
             logger.warning(f"Could not answer query for user {callback_user_id}: {e}")
             query_answered = False
 
-        # Send file to PM
+        # Send file to PM. The access service has atomically reserved one quota
+        # slot when needed; return it unless Telegram confirms delivery.
+        delivery_succeeded = False
         try:
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
             delete_minutes = delete_time // 60
@@ -201,8 +270,10 @@ class FileCallbackHandler(BaseCommandHandler):
                 file.file_id,
                 caption=caption,
                 parse_mode=CaptionFormatter.get_parse_mode(),
+                reply_markup=self._feature_file_markup(file),
                 chat_id=callback_user_id  # for call_api rate limiting
             )
+            delivery_succeeded = True
             # Schedule deletion with task tracking for cleanup
             self._track_task(
                 self._auto_delete_message(sent_msg, delete_time)
@@ -211,28 +282,27 @@ class FileCallbackHandler(BaseCommandHandler):
             # Track file click for recommendations (non-blocking)
             if hasattr(self.bot, 'recommendation_service') and self.bot.recommendation_service:
                 try:
-                    # Try to find query from recent search sessions for this user
-                    # We'll look for search sessions that contain this file
-                    query = ""
-                    # Search for recent search sessions (last 10 minutes worth)
-                    # This is a best-effort approach - if we can't find it, we still track the click
-                    try:
-                        from core.cache.config import CacheKeyGenerator
-                        # Try to get from user's recent search (stored separately)
-                        recent_search_key = CacheKeyGenerator.user_last_search(callback_user_id)
-                        recent_search = await self.bot.cache.get(recent_search_key)
-                        if recent_search and isinstance(recent_search, dict):
-                            query = recent_search.get('query', '')
-                    except Exception:
-                        pass
-                    
+                    originating_query = ""
+                    if query_reference:
+                        originating_query = await resolve_search_query_reference(
+                            self.bot.cache,
+                            query_reference,
+                            original_user_id
+                        ) or ""
+
                     await self.bot.recommendation_service.track_file_click(
                         callback_user_id,
-                        query,
+                        originating_query,
                         file.file_unique_id
                     )
                 except Exception as e:
                     logger.debug(f"Error tracking file click for recommendations: {e}")
+
+            feature_service = getattr(self.bot, 'feature_service', None)
+            if feature_service:
+                await feature_service.record_recent_file(
+                    callback_user_id, file.file_unique_id
+                )
 
 
         except UserIsBlocked:
@@ -278,6 +348,8 @@ class FileCallbackHandler(BaseCommandHandler):
 
                     ErrorMessageFormatter.format_error("Error sending file. Please try again."),
 
+                    reply_markup=self._broken_file_report_markup(file),
+
                     chat_id=callback_user_id
 
                 )
@@ -285,6 +357,12 @@ class FileCallbackHandler(BaseCommandHandler):
             except Exception as msg_error:
 
                 logger.error(f"Could not send error message to user {callback_user_id}: {msg_error}")
+
+        finally:
+            if reserved_quota and not delivery_succeeded:
+                await asyncio.shield(
+                    self.bot.user_repo.release_quota(callback_user_id, reserved_quota)
+                )
 
     @check_ban()
     async def handle_sendall_callback(self, client: Client, query: CallbackQuery):
@@ -413,8 +491,14 @@ class FileCallbackHandler(BaseCommandHandler):
                 )
                 return
 
-        # Start sending files to PM
-        await query.answer(f"📤 Sending {len(files_data)} files...", show_alert=False)
+        # Start sending files to PM. If setup fails, no file was delivered and
+        # the entire reservation must be returned.
+        try:
+            await query.answer(f"📤 Sending {len(files_data)} files...", show_alert=False)
+        except BaseException:
+            if needs_quota and reserved_count:
+                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
+            raise
 
         # Send status message to PM
         try:
@@ -428,12 +512,18 @@ class FileCallbackHandler(BaseCommandHandler):
                 chat_id=user_id  # for call_api rate limiting
             )
         except UserIsBlocked:
+            if needs_quota and reserved_count:
+                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
             await query.answer(
                 ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )
             return
+        except BaseException:
+            if needs_quota and reserved_count:
+                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
+            raise
 
         success_count = 0
         failed_count = 0
@@ -472,11 +562,18 @@ class FileCallbackHandler(BaseCommandHandler):
                     file.file_id,
                     caption=caption,
                     parse_mode=CaptionFormatter.get_parse_mode(),
+                    reply_markup=self._feature_file_markup(file),
                     chat_id=user_id  # for call_api rate limiting
                 )
 
                 sent_messages.append(sent_msg)
                 success_count += 1
+
+                feature_service = getattr(self.bot, 'feature_service', None)
+                if feature_service:
+                    await feature_service.record_recent_file(
+                        user_id, file.file_unique_id
+                    )
 
                 # Note: We'll increment all at once after the loop to avoid race conditions
 
@@ -497,6 +594,15 @@ class FileCallbackHandler(BaseCommandHandler):
                 # Small delay to avoid flooding
                 await asyncio.sleep(1)
 
+            except asyncio.CancelledError:
+                if needs_quota and reserved_count > success_count:
+                    await asyncio.shield(
+                        self.bot.user_repo.release_quota(
+                            user_id,
+                            reserved_count - success_count
+                        )
+                    )
+                raise
             except Exception as e:
                 logger.error(f"Error sending file: {e}")
                 failed_count += 1
@@ -507,7 +613,9 @@ class FileCallbackHandler(BaseCommandHandler):
         if needs_quota and reserved_count > 0:
             unused_quota = reserved_count - success_count
             if unused_quota > 0:
-                await self.bot.user_repo.release_quota(user_id, unused_quota)
+                await asyncio.shield(
+                    self.bot.user_repo.release_quota(user_id, unused_quota)
+                )
 
         # Final status
         final_text = (

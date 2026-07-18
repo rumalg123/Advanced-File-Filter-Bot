@@ -99,21 +99,10 @@ class ConnectionRepository(BaseRepository[UserConnection]):
             return success
 
     async def get_active_connection(self, user_id: str) -> Optional[str]:
-        """Get active connection with proper caching"""
-        cache_key = CacheKeyGenerator.user_connections(user_id)
-        cached = await self.cache.get(cache_key)
-        if cached:
-            return cached.get('active_group')
-
+        """Get the active group from the stable, full connection entity cache."""
+        user_id = str(user_id)
         user_conn = await self.find_by_id(user_id)
-        if user_conn:
-            await self.cache.set(
-                cache_key,
-                {'active_group': user_conn.active_group},
-                expire=self.ttl.USER_CONNECTIONS
-            )
-            return user_conn.active_group
-        return None
+        return user_conn.active_group if user_conn else None
 
     async def get_all_connections(self, user_id: str) -> Optional[List[str]]:
         """Get all connections for user"""

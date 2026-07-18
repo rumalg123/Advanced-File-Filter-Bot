@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
+from repositories.batch_link import BatchLinkRepository
 from repositories.media import MediaRepository
 from repositories.user import UserRepository
 
@@ -15,11 +16,13 @@ class MaintenanceService:
             self,
             user_repo: UserRepository,
             media_repo: MediaRepository,
-            cache_manager: CacheManager
+            cache_manager: CacheManager,
+            batch_link_repo: Optional[BatchLinkRepository] = None
     ):
         self.user_repo = user_repo
         self.media_repo = media_repo
         self.cache = cache_manager
+        self.batch_link_repo = batch_link_repo
 
     async def run_daily_maintenance(self) -> Dict[str, Any]:
         """Run daily maintenance tasks"""
@@ -34,6 +37,16 @@ class MaintenanceService:
         except Exception as e:
             logger.error(f"Error cleaning up expired premium: {e}")
             results['premium_cleanup'] = {'expired_count': 0, 'checked_count': 0, 'still_active_count': 0}
+
+        # MongoDB TTL removes new BSON-datetime records automatically. This
+        # cleanup also removes legacy records whose expiry was stored as an ISO
+        # string before BUG-012 was fixed.
+        if self.batch_link_repo:
+            try:
+                results['expired_batch_links'] = await self.batch_link_repo.cleanup_expired_links()
+            except Exception as e:
+                logger.error(f"Error cleaning up expired batch links: {e}")
+                results['expired_batch_links'] = 0
 
         # Reset daily counters for users (only once per day)
         try:

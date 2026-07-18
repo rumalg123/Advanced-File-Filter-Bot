@@ -89,12 +89,25 @@ def find_similar_queries(
             return []
         
         normalized_query = query.lower().strip()
+        filtered_candidates = []
+        seen_candidates = set()
+        for candidate in candidate_queries:
+            if not candidate:
+                continue
+            normalized_candidate = str(candidate).lower().strip()
+            if normalized_candidate == normalized_query or normalized_candidate in seen_candidates:
+                continue
+            seen_candidates.add(normalized_candidate)
+            filtered_candidates.append(candidate)
+
+        if not filtered_candidates:
+            return []
         
         # Use rapidfuzz.process.extract for efficient batch matching
         # Returns list of (choice, score, index) tuples
         results = process.extract(
             normalized_query,
-            candidate_queries,
+            filtered_candidates,
             limit=max_results,
             score_cutoff=threshold
         )
@@ -115,6 +128,8 @@ def find_similar_queries(
         similarities = []
         for candidate in candidate_queries:
             if not candidate:
+                continue
+            if str(candidate).lower().strip() == normalized_query:
                 continue
             
             similarity = calculate_similarity(normalized_query, candidate)

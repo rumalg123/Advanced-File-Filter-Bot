@@ -2,7 +2,6 @@
 *.session
 *.session-journal
 .vscode
-*test*.py
 setup.cfg
 Logs.txt
 # Byte-compiled / optimized / DLL files

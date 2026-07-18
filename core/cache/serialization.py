@@ -95,7 +95,7 @@ class OptimizedSerializer:
                 return {'__datetime__': obj.isoformat()}
             elif isinstance(obj, Enum):
                 return obj.value
-            return obj
+            raise TypeError(f"Object of type {type(obj)} is not MessagePack serializable")
         
         return msgpack.packb(data, default=msgpack_encoder, use_bin_type=True)
     
@@ -122,6 +122,15 @@ class OptimizedSerializer:
             
             original_size = len(serialized)
             
+            base_method = {
+                SerializationMethod.JSON: SerializationMethod.JSON,
+                SerializationMethod.COMPRESSED_JSON: SerializationMethod.JSON,
+                SerializationMethod.PICKLE: SerializationMethod.PICKLE,
+                SerializationMethod.COMPRESSED_PICKLE: SerializationMethod.PICKLE,
+                SerializationMethod.MSGPACK: SerializationMethod.MSGPACK,
+                SerializationMethod.COMPRESSED_MSGPACK: SerializationMethod.MSGPACK,
+            }[method]
+
             # Apply compression if beneficial
             if (method.value.startswith('compressed') or 
                 original_size >= self.COMPRESSION_THRESHOLD):
@@ -130,16 +139,16 @@ class OptimizedSerializer:
                 
                 # Only use compression if it actually saves space
                 if len(compressed) < original_size * 0.9:  # At least 10% savings
-                    method_prefix = f"c{method.value[:1]}".encode('ascii')  # 'cj', 'cp', 'cm'
+                    method_prefix = f"c{base_method.value[:1]}".encode('ascii')
                     result = method_prefix + compressed
                     self._stats['compressions'] += 1
                     self._stats['bytes_saved'] += original_size - len(result)
                 else:
                     # Compression not beneficial
-                    method_prefix = method.value[:1].encode('ascii')  # 'j', 'p', 'm'
+                    method_prefix = base_method.value[:1].encode('ascii')
                     result = method_prefix + serialized
             else:
-                method_prefix = method.value[:1].encode('ascii')  # 'j', 'p', 'm'
+                method_prefix = base_method.value[:1].encode('ascii')
                 result = method_prefix + serialized
             
             # Update stats
@@ -151,14 +160,10 @@ class OptimizedSerializer:
             
         except Exception as e:
             logger.error(f"Serialization failed: {e}")
-            # Fallback to msgpack (safer than pickle)
-            try:
-                fallback = b'm' + self._serialize_msgpack(data)
-            except Exception:
-                # Last resort: JSON with string conversion
-                fallback = b'j' + json.dumps(str(data)).encode('utf-8')
-            self._stats['serializations'] += 1
-            return fallback
+            # A cache miss is safe; storing a stringified replacement is not.
+            # Let CacheManager reject this write so authoritative storage keeps
+            # the original value and type.
+            raise TypeError(f"Cache value is not serializable: {type(data)}") from e
     
     def _deserialize_json(self, data: bytes) -> Any:
         """Deserialize JSON with datetime parsing"""

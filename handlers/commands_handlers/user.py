@@ -1,4 +1,5 @@
 import asyncio
+import html
 import random
 import uuid
 
@@ -517,7 +518,11 @@ class UserCommandHandler(BaseCommandHandler):
                         emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                         # Truncate long filenames
                         display_name = file.file_name[:35] + "..." if len(file.file_name) > 35 else file.file_name
-                        file_names.append(f"{emoji} <code>{display_name}</code>")
+                        reason = recommendations.get('reasons', {}).get(file.file_unique_id)
+                        reason_suffix = f" <i>({html.escape(reason)})</i>" if reason else ""
+                        file_names.append(
+                            f"{emoji} <code>{html.escape(display_name)}</code>{reason_suffix}"
+                        )
                         # Create clickable file button
                         file_buttons.append(
                             ButtonBuilder.file_button(file, user_id=user_id, is_private=True)
@@ -550,7 +555,11 @@ class UserCommandHandler(BaseCommandHandler):
                         emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
                         # Truncate long filenames
                         display_name = file.file_name[:35] + "..." if len(file.file_name) > 35 else file.file_name
-                        file_names.append(f"{emoji} <code>{display_name}</code>")
+                        reason = recommendations.get('reasons', {}).get(file.file_unique_id)
+                        reason_suffix = f" <i>({html.escape(reason)})</i>" if reason else ""
+                        file_names.append(
+                            f"{emoji} <code>{html.escape(display_name)}</code>{reason_suffix}"
+                        )
                         # Create clickable file button
                         file_buttons.append(
                             ButtonBuilder.file_button(file, user_id=user_id, is_private=True)

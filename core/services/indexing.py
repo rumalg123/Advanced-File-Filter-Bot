@@ -157,15 +157,18 @@ class IndexingService:
         }
 
         async with self._lock:
-            self.reset_indexing()
-            current = self.current_index
+            # Preserve the offset configured by /setskip for this run. Only the
+            # cancellation flag is reset when a new run begins.
+            start_index = self.current_index
+            self.cancel_indexing = False
+            current = 0
             message_batch: List[Message] = []
 
             try:
                 async for message in bot.iter_messages(
                         chat_id,
                         last_msg_id,
-                        self.current_index
+                        start_index
                 ):
                     if self.cancel_indexing:
                         logger.info("Indexing cancelled by user")
@@ -173,6 +176,7 @@ class IndexingService:
                         if message_batch:
                             batch_stats = await self._process_message_batch(message_batch)
                             self._merge_stats(stats, batch_stats)
+                            message_batch = []
                         break
 
                     current += 1
@@ -201,6 +205,9 @@ class IndexingService:
             except Exception as e:
                 logger.error(f"Error during indexing: {e}")
                 raise
+            finally:
+                # A skip applies to one indexing run only.
+                self.current_index = 0
 
         return stats
 
@@ -310,6 +317,9 @@ class IndexingService:
             async with semaphore_manager.acquire('database_write'):
                 success, status_code, existing = await self.media_repo.save_media(media_file)
                 if status_code == 1:
+                    feature_service = getattr(self, 'feature_service', None)
+                    if feature_service:
+                        feature_service.schedule_new_media(media_file)
                     return "saved"
                 elif status_code == 0:
                     return "duplicate"
@@ -343,6 +353,9 @@ class IndexingService:
                             success, status_code, _ = await self.media_repo.save_media(media_file)
                             if status_code == 1:
                                 saved_count += 1
+                                feature_service = getattr(self, 'feature_service', None)
+                                if feature_service:
+                                    feature_service.schedule_new_media(media_file)
                                 # Cache invalidation handled by repository
                             else:
                                 error_count += 1

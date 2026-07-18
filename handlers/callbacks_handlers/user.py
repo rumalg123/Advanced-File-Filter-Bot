@@ -204,6 +204,10 @@ class UserCallbackHandler(BaseCommandHandler):
     async def handle_refresh_recommendations_callback(self, client: Client, query: CallbackQuery):
         """Handle refresh recommendations callback"""
         await query.answer("🔄 Refreshing recommendations...")
+        if getattr(self.bot, 'recommendation_service', None):
+            await self.bot.recommendation_service.invalidate_user_recommendations(
+                query.from_user.id
+            )
         # Re-run recommendations command
         from handlers.commands_handlers.user import UserCommandHandler
         user_handler = UserCommandHandler(self.bot)

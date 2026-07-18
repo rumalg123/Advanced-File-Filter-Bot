@@ -179,6 +179,20 @@ class FeatureConfig(BaseSettings):
     keep_original_caption: bool = Field(default=True, description="Keep original file captions")
     use_original_caption_for_batch: bool = Field(default=True, description="Use original captions in batch mode")
 
+    # Additive feature rollout flags. These intentionally default off so a code
+    # deployment cannot change live behavior until each capability is enabled.
+    feature_saved_search_alerts: bool = Field(default=False, description="Enable saved searches and new-file alerts")
+    feature_favorites: bool = Field(default=False, description="Enable favorites and named collections")
+    feature_advanced_search: bool = Field(default=False, description="Enable structured advanced-search filters")
+    feature_recommendation_feedback: bool = Field(default=False, description="Enable recommendation feedback controls")
+    feature_file_reports: bool = Field(default=False, description="Enable user file reports")
+    feature_search_autocomplete: bool = Field(default=False, description="Enable search autocomplete commands")
+    feature_duplicate_grouping: bool = Field(default=False, description="Group likely file variants in search results")
+    feature_request_tracking: bool = Field(default=False, description="Persist content request status")
+    feature_recent_files: bool = Field(default=False, description="Enable recent successful-delivery history")
+    feature_recommendation_explanations: bool = Field(default=False, description="Show recommendation reasons")
+    feature_content_dashboard: bool = Field(default=False, description="Enable the admin content dashboard")
+
     # Premium system
     premium_duration_days: int = Field(default=30, description="Premium subscription duration in days")
     non_premium_daily_limit: int = Field(default=10, description="Daily file limit for free users")
@@ -255,8 +269,8 @@ class ChannelConfig(BaseSettings):
     def get_channel_list(self) -> List[int]:
         """Parse channel IDs - handles both string and list input"""
         if isinstance(self.channels, list):
-            return [int(x) for x in self.channels if str(x).strip().isdigit()]
-        return [int(x.strip()) for x in self.channels.split(',') if x.strip().isdigit()]
+            return [int(x) for x in self.channels if str(x).strip().lstrip('-').isdigit()]
+        return [int(x.strip()) for x in self.channels.split(',') if x.strip().lstrip('-').isdigit()]
 
     def get_pics_list(self) -> List[str]:
         """Parse picture URLs - handles both string and list input"""

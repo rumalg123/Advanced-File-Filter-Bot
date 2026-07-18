@@ -77,10 +77,15 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
             description=description
         )
 
+        # `_id` belongs in the selector. MongoDB rejects attempts to include
+        # the immutable field in `$set`, even when the value is unchanged.
+        update_data = self._entity_to_dict(setting)
+        update_data.pop('_id', None)
+
         # Use upsert to create or update
         success = await self.update(
             key,
-            self._entity_to_dict(setting),
+            update_data,
             upsert=True
         )
 
@@ -120,10 +125,12 @@ class BotSettingsRepository(BaseRepository[BotSetting]):
                 default_value=data['default'],
                 description=data.get('description', '')
             )
+            update_data = self._entity_to_dict(setting)
+            update_data.pop('_id', None)
             operations.append(
                 UpdateOne(
                     {'_id': key},
-                    {'$set': self._entity_to_dict(setting)},
+                    {'$set': update_data},
                     upsert=True
                 )
             )

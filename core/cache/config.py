@@ -301,7 +301,8 @@ class CachePatterns:
     ALL_FILTER_LISTS = "filters_list:*"
     ALL_USERS = "user:*"
     ALL_CHANNELS = "channel:*"
-    ALL_SUBSCRIPTIONS = "subscription:*"
+    ALL_SUBSCRIPTIONS = "checksub_session:*"
+    ALL_DEEPLINK_SESSIONS = "deeplink_*"
     ALL_FILESTORE = "filestore:*"
     ALL_SEARCH_CACHE = "search:*"
     ALL_MEDIA = "media:*"
@@ -320,6 +321,25 @@ class CachePatterns:
         return f"search_results_{user_id}_*"
 
     @staticmethod
+    def filter_entries_pattern(group_id: str) -> str:
+        """Pattern for every cached filter entry owned by a group."""
+        return f"filter:{group_id}:*"
+
+    @staticmethod
+    def user_sessions_pattern(user_id: int) -> str:
+        """Pattern for full session documents owned by a user."""
+        return f"session:*:{user_id}:*"
+
+    @staticmethod
+    def user_session_pointers_pattern(user_id: int) -> str:
+        """Pattern for per-type session pointers owned by a user."""
+        return f"session:*:{user_id}"
+
+    @staticmethod
+    def user_deeplink_sessions_pattern(user_id: int) -> str:
+        return f"deeplink_{user_id}_*"
+
+    @staticmethod
     def user_related(user_id: int) -> List[str]:
         """Get all cache keys related to a user"""
         return [
@@ -327,6 +347,15 @@ class CachePatterns:
             CacheKeyGenerator.user_connections(str(user_id)),
             CachePatterns.rate_limit_pattern(user_id),
             CachePatterns.search_results_pattern(user_id),
-            CacheKeyGenerator.recent_settings_edit(user_id)
+            CacheKeyGenerator.recent_settings_edit(user_id),
+            CacheKeyGenerator.premium_status(user_id),
+            CacheKeyGenerator.user_search_history(user_id),
+            CacheKeyGenerator.user_file_interactions(user_id),
+            CacheKeyGenerator.user_search_pattern(user_id),
+            CacheKeyGenerator.user_recommendations_cache(user_id),
+            CacheKeyGenerator.user_last_search(user_id),
+            CachePatterns.user_sessions_pattern(user_id),
+            CachePatterns.user_session_pointers_pattern(user_id),
+            CachePatterns.user_deeplink_sessions_pattern(user_id),
         ]
 

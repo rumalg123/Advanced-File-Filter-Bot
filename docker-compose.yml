@@ -41,7 +41,7 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:${PORT:-8000}/health >/dev/null"]
       interval: 30s
       timeout: 10s
       retries: 3

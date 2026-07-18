@@ -122,8 +122,12 @@ class ChannelRepository(BaseRepository[Channel]):
         # Try cache first
         cache_key = CacheKeyGenerator.active_channels()
         cached = await self.cache.get(cache_key)
-        if cached:
-            return [self._dict_to_entity(ch) for ch in cached]
+        if cached is not None:
+            try:
+                return [self._dict_to_entity(ch) for ch in cached]
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning(f"Invalid active-channel cache entry: {e}")
+                await self.cache_invalidator.invalidate_channels_cache()
 
         # Fetch from database
         channels = await self.find_many(
@@ -166,7 +170,7 @@ class ChannelRepository(BaseRepository[Channel]):
             logger.warning(f"Cannot update indexed count: channel {channel_id} not found")
             return False
 
-        return await self.update(
+        success = await self.update(
             channel_id,
             {
                 'indexed_count': channel.indexed_count + 1,
@@ -174,6 +178,9 @@ class ChannelRepository(BaseRepository[Channel]):
                 'updated_at': datetime.now(UTC)
             }
         )
+        if success:
+            await self.cache_invalidator.invalidate_channels_cache()
+        return success
 
     async def get_channel_stats(self) -> Dict[str, Any]:
         """Get channel statistics"""

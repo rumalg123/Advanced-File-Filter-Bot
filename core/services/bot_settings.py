@@ -22,7 +22,7 @@ class BotSettingsService:
         'CACHE_TIME': {
             'type': 'int',
             'default': 300,
-            'description': 'Cache expiration time in seconds',
+            'description': 'Search-result cache expiration in seconds (restart required)',
             'category': 'performance'
         },
         'USE_CAPTION_FILTER': {
@@ -30,6 +30,50 @@ class BotSettingsService:
             'default': True,
             'description': 'Enable caption filter for search',
             'category': 'features'
+        },
+        'FEATURE_SAVED_SEARCH_ALERTS': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable saved searches and new-file alerts', 'category': 'features'
+        },
+        'FEATURE_FAVORITES': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable favorites and named collections', 'category': 'features'
+        },
+        'FEATURE_ADVANCED_SEARCH': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable structured advanced-search filters', 'category': 'features'
+        },
+        'FEATURE_RECOMMENDATION_FEEDBACK': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable recommendation feedback controls', 'category': 'features'
+        },
+        'FEATURE_FILE_REPORTS': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable user file reports', 'category': 'features'
+        },
+        'FEATURE_SEARCH_AUTOCOMPLETE': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable search autocomplete', 'category': 'features'
+        },
+        'FEATURE_DUPLICATE_GROUPING': {
+            'type': 'bool', 'default': False,
+            'description': 'Group likely file variants in results', 'category': 'features'
+        },
+        'FEATURE_REQUEST_TRACKING': {
+            'type': 'bool', 'default': False,
+            'description': 'Persist content request status', 'category': 'features'
+        },
+        'FEATURE_RECENT_FILES': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable recent successful-delivery history', 'category': 'features'
+        },
+        'FEATURE_RECOMMENDATION_EXPLANATIONS': {
+            'type': 'bool', 'default': False,
+            'description': 'Show recommendation reasons', 'category': 'features'
+        },
+        'FEATURE_CONTENT_DASHBOARD': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable the admin content dashboard', 'category': 'features'
         },
         'ADMINS': {
             'type': 'list',

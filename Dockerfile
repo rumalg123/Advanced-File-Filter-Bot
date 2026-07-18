@@ -58,7 +58,7 @@ RUN git config --global --add safe.directory /usr/src/app && \
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python3 -c "import requests; requests.get('http://localhost:8000/health', timeout=5)" || exit 1
+    CMD curl --fail --silent --show-error "http://localhost:${PORT:-8000}/health" >/dev/null || exit 1
 
 # Default environment variables for auto-update
 ENV AUTO_UPDATE=${AUTO_UPDATE:-false}

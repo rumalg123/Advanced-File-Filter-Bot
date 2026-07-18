@@ -10,7 +10,6 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
-from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.pagination import (
     PaginationBuilder,
@@ -25,7 +24,7 @@ logger = get_logger(__name__)
 class SearchResultsService:
     """Service for sending search results with unified formatting and pagination"""
 
-    def __init__(self, cache_manager, config, recommendation_service=None):
+    def __init__(self, cache_manager, config, recommendation_service=None, media_repo=None):
         """
         Initialize SearchResultsService
         
@@ -33,11 +32,13 @@ class SearchResultsService:
             cache_manager: Cache manager instance for storing search sessions
             config: Bot configuration object
             recommendation_service: Optional recommendation service for tracking
+            media_repo: Optional media repository used to resolve recommended files
         """
         self.cache = cache_manager
         self.config = config
         self.ttl = CacheTTLConfig()
         self.recommendation_service = recommendation_service
+        self.media_repo = media_repo
 
     async def send_results(
         self,
@@ -115,14 +116,6 @@ class SearchResultsService:
             )
             query_reference = make_search_query_reference(session_id)
             
-            # Store user's last search for recommendation tracking
-            recent_search_key = CacheKeyGenerator.user_last_search(user_id)
-            await self.cache.set(
-                recent_search_key,
-                {'query': query, 'search_key': search_key},
-                expire=self.ttl.USER_LAST_SEARCH
-            )
-            
             # Track files shown for this query (for recommendations)
             if hasattr(self, 'recommendation_service') and self.recommendation_service:
                 try:
@@ -154,7 +147,8 @@ class SearchResultsService:
                 is_private=is_private,
                 pagination=pagination,
                 total=total,
-                page_size=page_size
+                page_size=page_size,
+                query_reference=query_reference
             )
 
             # Build caption using centralized formatter
@@ -201,7 +195,8 @@ class SearchResultsService:
                         import asyncio
                         asyncio.create_task(
                             self._send_recommendations(
-                                client, message, query, recommended_file_ids, similar_queries, user_id
+                                client, message, query, recommended_file_ids, similar_queries,
+                                user_id, query_reference
                             )
                         )
                 except Exception as e:
@@ -221,7 +216,8 @@ class SearchResultsService:
         is_private: bool,
         pagination: PaginationBuilder,
         total: int,
-        page_size: int
+        page_size: int,
+        query_reference: str
     ) -> List[List[InlineKeyboardButton]]:
         """Build inline keyboard buttons for search results"""
         buttons = []
@@ -236,13 +232,36 @@ class SearchResultsService:
             )
             buttons.append([send_all_button])
 
-        # Add individual file buttons
-        file_buttons = ButtonBuilder.file_buttons_row(
-            files=files,
-            user_id=user_id,
-            is_private=is_private
-        )
-        buttons.extend(file_buttons)
+        # Add individual file buttons. Variant grouping is presentation-only and
+        # never drops a file from the existing result page.
+        if getattr(self.config, 'FEATURE_DUPLICATE_GROUPING', False):
+            from core.utils.feature_search import group_media_variants
+
+            for canonical_title, variants in group_media_variants(files):
+                if len(variants) > 1:
+                    buttons.append([
+                        ButtonBuilder.action_button(
+                            f"🎞 {canonical_title[:32]} ({len(variants)} variants)",
+                            callback_data="noop"
+                        )
+                    ])
+                buttons.extend(
+                    ButtonBuilder.file_buttons_row(
+                        files=variants,
+                        user_id=user_id,
+                        is_private=is_private,
+                        query_reference=query_reference
+                    )
+                )
+        else:
+            buttons.extend(
+                ButtonBuilder.file_buttons_row(
+                    files=files,
+                    user_id=user_id,
+                    is_private=is_private,
+                    query_reference=query_reference
+                )
+            )
 
         # Add pagination buttons if needed
         if total > page_size:
@@ -258,15 +277,34 @@ class SearchResultsService:
         query: str,
         recommended_file_ids: List[str],
         similar_queries: List[str],
-        user_id: int
+        user_id: int,
+        query_reference: str
     ):
         """Send recommendations as a separate message (non-blocking)"""
         try:
-            from core.utils.error_formatter import ErrorMessageFormatter
             from core.utils.button_builder import ButtonBuilder
             
             text_parts = []
             buttons = []
+
+            # Resolve file IDs so file-only recommendations still produce a useful message.
+            if recommended_file_ids and self.media_repo:
+                files_by_id = await self.media_repo.find_files_batch(recommended_file_ids[:3])
+                recommended_files = [
+                    files_by_id[file_id]
+                    for file_id in recommended_file_ids[:3]
+                    if files_by_id.get(file_id) is not None
+                ]
+                if recommended_files:
+                    text_parts.append("ðŸ“š <b>Recommended Files:</b>")
+                    buttons.extend(
+                        ButtonBuilder.file_buttons_row(
+                            files=recommended_files,
+                            user_id=user_id,
+                            is_private=True,
+                            query_reference=query_reference
+                        )
+                    )
             
             # Add similar queries as buttons
             if similar_queries:
@@ -286,10 +324,6 @@ class SearchResultsService:
                     )
                 if query_buttons:
                     buttons.append(query_buttons)
-            
-            # Note: File recommendations would require fetching files from DB
-            # For now, we'll just show query recommendations
-            # File recommendations can be added later when files are fetched
             
             if buttons:
                 text = "\n".join(text_parts) if text_parts else "💡 <b>Recommendations</b>"

@@ -4,7 +4,7 @@ Consolidates duplicate session tracking implementations
 """
 
 import asyncio
-import time
+import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, UTC
 from enum import Enum
@@ -97,8 +97,15 @@ class UnifiedSessionManager:
         self.cache_invalidator = CacheInvalidator(cache_manager)
         
     async def start_cleanup_task(self):
-        """Start the background cleanup task"""
+        """Start the session lifecycle task.
+
+        Redis expires session keys using the TTL assigned when each session is
+        created.  The lifecycle task therefore only needs to wait for shutdown;
+        deleting the shared ``session:*`` namespace would also delete live
+        sessions whose TTL has not elapsed.
+        """
         if not self._cleanup_task:
+            self._shutdown_event.clear()
             self._cleanup_task = asyncio.create_task(self._cleanup_expired_sessions())
     
     async def stop_cleanup_task(self):
@@ -116,6 +123,19 @@ class UnifiedSessionManager:
     def _generate_cache_key(self, session_type: SessionType, user_id: int, session_id: Optional[str] = None) -> str:
         """Generate cache key for session"""
         return CacheKeyGenerator.session(session_type.value, user_id, session_id)
+
+    async def _delete_pointer_if_owned(self, pointer_key: str, session_id: str) -> None:
+        """Delete a user session pointer only while it still owns session_id."""
+        conditional_delete = getattr(self.cache, 'delete_if_value', None)
+        if conditional_delete:
+            await conditional_delete(pointer_key, session_id)
+            return
+
+        # Compatibility path for test/alternate cache implementations. The
+        # production CacheManager uses an atomic Lua comparison above.
+        current_session_id = await self.cache.get(pointer_key)
+        if current_session_id == session_id:
+            await self.cache_invalidator.invalidate_session(pointer_key)
     
     async def create_session(
         self,
@@ -130,13 +150,24 @@ class UnifiedSessionManager:
         Returns: session_id
         """
         if not session_id:
-            session_id = f"{user_id}_{int(time.time())}_{session_type.value}"
+            session_id = f"{user_id}_{uuid.uuid4().hex[:12]}_{session_type.value}"
+
+        default_ttl = self.DEFAULT_TTL.get(session_type, 300)
+        try:
+            ttl = default_ttl if ttl_override is None else int(ttl_override)
+            if ttl <= 0:
+                raise ValueError("session TTL must be positive")
+        except (TypeError, ValueError):
+            logger.warning(
+                f"Invalid TTL override {ttl_override!r} for {session_type.value}; "
+                f"using {default_ttl}s"
+            )
+            ttl = default_ttl
         
         # Cancel any existing session of the same type for this user
         await self.cancel_session(user_id, session_type)
         
         # Calculate expiration time
-        ttl = ttl_override or self.DEFAULT_TTL.get(session_type, 300)
         now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=ttl)
         
@@ -271,22 +302,20 @@ class UnifiedSessionManager:
     ) -> bool:
         """Cancel/delete a session"""
         try:
+            user_cache_key = self._generate_cache_key(session_type, user_id)
             if not session_id:
                 # Get session ID from cache
-                user_cache_key = self._generate_cache_key(session_type, user_id)
                 session_id = await self.cache.get(user_cache_key)
                 if not session_id:
                     return True  # Already gone
-                # Delete user cache key
-                await self.cache_invalidator.invalidate_session(user_cache_key)
 
             # Delete full session data
             cache_key = self._generate_cache_key(session_type, user_id, session_id)
             await self.cache_invalidator.invalidate_session(cache_key)
 
-            # Also delete user cache key if not done already
-            user_cache_key = self._generate_cache_key(session_type, user_id)
-            await self.cache_invalidator.invalidate_session(user_cache_key)
+            # A stale callback may cancel an older session after a newer one
+            # was created. Do not remove the newer session's pointer.
+            await self._delete_pointer_if_owned(user_cache_key, session_id)
             
             logger.debug(f"Cancelled {session_type.value} session {session_id} for user {user_id}")
             return True
@@ -345,25 +374,8 @@ class UnifiedSessionManager:
         return stats
     
     async def _cleanup_expired_sessions(self):
-        """Background task to cleanup expired sessions"""
-        while not self._shutdown_event.is_set():
-            try:
-                # Wait for either shutdown or cleanup interval
-                cleanup_interval = 300  # 5 minutes
-                await asyncio.wait_for(
-                    self._shutdown_event.wait(),
-                    timeout=cleanup_interval
-                )
-                break  # Shutdown requested
-                
-            except asyncio.TimeoutError:
-                # Time to cleanup
-                try:
-                    # Use pattern deletion to clean up expired sessions
-                    await self.cache_invalidator.invalidate_all_sessions()
-                    logger.debug("Cleaned up expired session cache entries")
-                except Exception as e:
-                    logger.error(f"Error during session cleanup: {e}")
+        """Wait for shutdown while Redis expires individual sessions by TTL."""
+        await self._shutdown_event.wait()
     
     # Backward compatibility methods for existing code
     

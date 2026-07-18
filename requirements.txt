@@ -1,5 +1,5 @@
 # Core dependencies
-git+https://github.com/rjriajul/wzgram.git
+wzgram @ git+https://github.com/rjriajul/wzgram.git@1b3dd187c448d6d9daca0a2d3b131ad1323fcb8e
 tgcrypto; platform_system == "Linux"
 sqlalchemy
 

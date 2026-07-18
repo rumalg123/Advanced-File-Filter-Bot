@@ -46,6 +46,7 @@ from core.services.connection import ConnectionService
 from core.services.file_access import FileAccessService
 from core.services.filestore import FileStoreService
 from core.services.filter import FilterService
+from core.services.features import FeatureService
 from core.services.indexing import IndexingService, IndexRequestService
 from core.services.maintenance import MaintenanceService
 from core.utils.rate_limiter import RateLimiter
@@ -57,6 +58,7 @@ from repositories.batch_link import BatchLinkRepository
 from repositories.channel import ChannelRepository
 from repositories.connection import ConnectionRepository
 from repositories.filter import FilterRepository
+from repositories.features import FeatureRepository
 from repositories.media import MediaRepository
 from repositories.user import UserRepository
 from core.cache.invalidation import CacheInvalidator
@@ -82,6 +84,17 @@ class BotConfig:
         'PUBLIC_FILE_STORE': ('features', 'public_file_store'),
         'KEEP_ORIGINAL_CAPTION': ('features', 'keep_original_caption'),
         'USE_ORIGINAL_CAPTION_FOR_BATCH': ('features', 'use_original_caption_for_batch'),
+        'FEATURE_SAVED_SEARCH_ALERTS': ('features', 'feature_saved_search_alerts'),
+        'FEATURE_FAVORITES': ('features', 'feature_favorites'),
+        'FEATURE_ADVANCED_SEARCH': ('features', 'feature_advanced_search'),
+        'FEATURE_RECOMMENDATION_FEEDBACK': ('features', 'feature_recommendation_feedback'),
+        'FEATURE_FILE_REPORTS': ('features', 'feature_file_reports'),
+        'FEATURE_SEARCH_AUTOCOMPLETE': ('features', 'feature_search_autocomplete'),
+        'FEATURE_DUPLICATE_GROUPING': ('features', 'feature_duplicate_grouping'),
+        'FEATURE_REQUEST_TRACKING': ('features', 'feature_request_tracking'),
+        'FEATURE_RECENT_FILES': ('features', 'feature_recent_files'),
+        'FEATURE_RECOMMENDATION_EXPLANATIONS': ('features', 'feature_recommendation_explanations'),
+        'FEATURE_CONTENT_DASHBOARD': ('features', 'feature_content_dashboard'),
         'PREMIUM_DURATION_DAYS': ('features', 'premium_duration_days'),
         'NON_PREMIUM_DAILY_LIMIT': ('features', 'non_premium_daily_limit'),
         'PREMIUM_PRICE': ('features', 'premium_price'),
@@ -149,6 +162,9 @@ class BotConfig:
         
         # Redis settings
         self.REDIS_URI = self._settings.redis.uri
+        # Database-backed runtime setting; synchronized before repositories are
+        # constructed. It controls search-result cache entries specifically.
+        self.CACHE_TIME = CacheTTLConfig.SEARCH_RESULTS
         
         # Server settings
         self.PORT = self._settings.server.port
@@ -162,6 +178,17 @@ class BotConfig:
         self.KEEP_ORIGINAL_CAPTION = self._settings.features.keep_original_caption
         self.USE_ORIGINAL_CAPTION_FOR_BATCH = self._settings.features.use_original_caption_for_batch
         self.REQUEST_ONLY_FOR_PREMIUM = self._settings.features.request_only_for_premium
+        self.FEATURE_SAVED_SEARCH_ALERTS = self._settings.features.feature_saved_search_alerts
+        self.FEATURE_FAVORITES = self._settings.features.feature_favorites
+        self.FEATURE_ADVANCED_SEARCH = self._settings.features.feature_advanced_search
+        self.FEATURE_RECOMMENDATION_FEEDBACK = self._settings.features.feature_recommendation_feedback
+        self.FEATURE_FILE_REPORTS = self._settings.features.feature_file_reports
+        self.FEATURE_SEARCH_AUTOCOMPLETE = self._settings.features.feature_search_autocomplete
+        self.FEATURE_DUPLICATE_GROUPING = self._settings.features.feature_duplicate_grouping
+        self.FEATURE_REQUEST_TRACKING = self._settings.features.feature_request_tracking
+        self.FEATURE_RECENT_FILES = self._settings.features.feature_recent_files
+        self.FEATURE_RECOMMENDATION_EXPLANATIONS = self._settings.features.feature_recommendation_explanations
+        self.FEATURE_CONTENT_DASHBOARD = self._settings.features.feature_content_dashboard
 
         # Limits
         self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days
@@ -333,6 +360,7 @@ class MediaSearchBot(Client):
         self.filter_repo: Optional[FilterRepository] = None
         self.batch_link_repo: Optional[BatchLinkRepository] = None
         self.bot_settings_repo: Optional[BotSettingsRepository] = None
+        self.feature_repo: Optional[FeatureRepository] = None
 
         # Initialize services
         self.file_service: Optional[FileAccessService] = None
@@ -344,6 +372,7 @@ class MediaSearchBot(Client):
         self.filter_service: Optional[FilterService] = None
         self.filestore_service: Optional[FileStoreService] = None
         self.bot_settings_service: Optional[BotSettingsService] = None
+        self.feature_service: Optional[FeatureService] = None
 
         # Handler references
         self.command_handler = None
@@ -416,6 +445,7 @@ class MediaSearchBot(Client):
         from handlers.indexing import IndexingHandler
         from handlers.channel import ChannelHandler
         from handlers.filestore import FileStoreHandler
+        from handlers.features import FeatureHandler
         from handlers.search import SearchHandler
         from handlers.delete import DeleteHandler
         from handlers.commands_handlers.database import DatabaseCommandHandler
@@ -429,6 +459,7 @@ class MediaSearchBot(Client):
                 ('indexing', IndexingHandler(self, self.indexing_service, self.index_request_service)),
                 ('channel', ChannelHandler(self, self.channel_repo)),
                 ('request', RequestHandler(self)),
+                ('features', FeatureHandler(self)),
                 ('search', SearchHandler(self)),
                 ('database', DatabaseCommandHandler(self))
             ]
@@ -479,6 +510,41 @@ class MediaSearchBot(Client):
                 BotCommand("popular_keywords", "🔥 Top 10 popular searches"),
                 BotCommand("recommendations", "💡 Personalized recommendations"),
             ]
+
+            feature_commands = []
+            if self.config.FEATURE_SAVED_SEARCH_ALERTS:
+                feature_commands.extend([
+                    BotCommand("save_search", "🔔 Alert on new matching files"),
+                    BotCommand("saved_searches", "📋 Manage saved searches"),
+                ])
+            if self.config.FEATURE_FAVORITES:
+                feature_commands.extend([
+                    BotCommand("favorites", "⭐ View favorite files"),
+                    BotCommand("collections", "📚 View file collections"),
+                    BotCommand("collection_create", "➕ Create a collection"),
+                ])
+            if self.config.FEATURE_RECENT_FILES:
+                feature_commands.extend([
+                    BotCommand("recent", "🕘 Recently downloaded files"),
+                    BotCommand("clear_recent", "🧹 Clear recent history"),
+                ])
+            if self.config.FEATURE_SEARCH_AUTOCOMPLETE:
+                feature_commands.append(BotCommand("suggest", "💡 Suggest valid searches"))
+            if self.config.FEATURE_ADVANCED_SEARCH:
+                feature_commands.append(BotCommand("search_help", "🔎 Advanced search syntax"))
+            if self.config.FEATURE_REQUEST_TRACKING:
+                feature_commands.append(BotCommand("myrequests", "📮 Track content requests"))
+
+            admin_feature_commands = []
+            if self.config.FEATURE_FILE_REPORTS:
+                admin_feature_commands.extend([
+                    BotCommand("file_reports", "🚩 Review file reports"),
+                    BotCommand("resolve_report", "✅ Resolve a file report"),
+                ])
+            if self.config.FEATURE_CONTENT_DASHBOARD:
+                admin_feature_commands.append(
+                    BotCommand("content_dashboard", "📊 Content health dashboard")
+                )
 
             # Connection commands (if filters enabled)
             connection_commands = []
@@ -591,6 +657,7 @@ class MediaSearchBot(Client):
 
             # 1. Default commands for all users in private chats
             all_private_commands = basic_commands.copy()
+            all_private_commands.extend(feature_commands)
             all_private_commands.extend(connection_commands)
             all_private_commands.extend(filestore_commands)
 
@@ -608,6 +675,8 @@ class MediaSearchBot(Client):
             for admin_id in self.config.ADMINS:
                 try:
                     admin_commands = basic_commands.copy()
+                    admin_commands.extend(feature_commands)
+                    admin_commands.extend(admin_feature_commands)
                     admin_commands.extend(connection_commands)
                     admin_commands.extend(admin_basic_commands)
                     admin_commands.extend(channel_commands)
@@ -743,12 +812,14 @@ class MediaSearchBot(Client):
             self.media_repo = MediaRepository(
                 self.db_pool, 
                 self.cache, 
-                multi_db_manager=self.multi_db_manager
+                multi_db_manager=self.multi_db_manager,
+                search_cache_ttl=self.config.CACHE_TIME,
             )
             self.channel_repo = ChannelRepository(self.db_pool, self.cache)
             self.connection_repo = ConnectionRepository(self.db_pool, self.cache)
             self.filter_repo = FilterRepository(self.db_pool, self.cache, collection_name=self.config.COLLECTION_NAME)
             self.batch_link_repo = BatchLinkRepository(self.db_pool, self.cache)
+            self.feature_repo = FeatureRepository(self.db_pool)
 
 
             # Create basic indexes (existing)
@@ -792,7 +863,8 @@ class MediaSearchBot(Client):
             self.maintenance_service = MaintenanceService(
                 self.user_repo,
                 self.media_repo,
-                self.cache
+                self.cache,
+                self.batch_link_repo
             )
 
             self.indexing_service = IndexingService(
@@ -840,6 +912,27 @@ class MediaSearchBot(Client):
             self.recommendation_service = RecommendationService(self.cache)
             # Link search history service for recommendations
             self.recommendation_service.search_history_service = self.search_history_service
+
+            # Additive features remain inert unless at least one rollout flag is enabled.
+            self.feature_service = FeatureService(
+                self.feature_repo,
+                self.media_repo,
+                self.search_history_service,
+                self.config,
+                bot=self
+            )
+            try:
+                feature_indexes = await self.feature_service.initialize()
+                if feature_indexes:
+                    successful = sum(1 for result in feature_indexes.values() if result)
+                    logger.info(
+                        f"Feature indexes initialized: {successful}/{len(feature_indexes)}"
+                    )
+            except Exception as e:
+                logger.warning(f"Optional feature initialization failed; continuing safely: {e}")
+            self.recommendation_service.feature_service = self.feature_service
+            self.indexing_service.feature_service = self.feature_service
+            self.filestore_service.feature_service = self.feature_service
             
             logger.info("Services initialized")
             logger.info("Services initialized with database settings")
@@ -1250,16 +1343,13 @@ class MediaSearchBot(Client):
                 await asyncio.sleep(300)  # Wait 5 minutes before retry
 
     async def _cleanup_old_cache(self):
-        """Clean up old cache entries"""
-        try:
-            # Clear old search results
-            await self.cache_invalidator.invalidate_search_sessions()
-            logger.info("Cleaned up old search result caches")
+        """Leave TTL-managed cache entries to Redis expiration.
 
-            # Session cleanup is now handled by unified session manager
-
-        except Exception as e:
-            logger.error(f"Error cleaning cache: {e}")
+        Search-result and unified-session keys each receive an explicit TTL at
+        creation. Bulk deletion here used to expire still-live Telegram
+        pagination and send-all buttons during startup/daily maintenance.
+        """
+        logger.debug("Cache cleanup skipped: session entries are TTL-managed")
 
 
 async def initialize_bot() -> MediaSearchBot:

@@ -7,17 +7,17 @@ name = "auto-file-filter-bot"
 version = "2.0.0"
 description = "Advanced Telegram Auto File Filter Bot with Premium Batch Links"
 authors = [{name = "AutoFileFilterBot Team"}]
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
-    "pyrofork",
-    "tgcrypto", 
+    "wzgram @ git+https://github.com/rjriajul/wzgram.git@1b3dd187c448d6d9daca0a2d3b131ad1323fcb8e",
+    "tgcrypto; platform_system == 'Linux'",
     "pymongo",
     "motor",
     "redis",
     "aiohttp",
     "python-dotenv",
-    "uvloop",
+    "uvloop; platform_system == 'Linux'",
     "psutil",
     "msgpack",
     "pillow",
@@ -30,8 +30,18 @@ dependencies = [
     "sqlalchemy",
     "pydantic",
     "vulture",
-    "pydantic_settings"
+    "pydantic_settings",
+    "rapidfuzz"
 ]
+
+[tool.setuptools]
+py-modules = ["bot", "update", "migrate_media_metadata", "vulture_whitelist"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["config*", "core*", "handlers*", "repositories*"]
+exclude = ["tests*", "logs*", "Railway_deployment_steps*"]
+namespaces = true
 
 [project.optional-dependencies]
 dev = [
@@ -44,8 +54,10 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py313"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings  
@@ -70,7 +82,7 @@ ignore = [
     "N806",  # Variable in function should be lowercase (API response naming)
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["B011"]
 

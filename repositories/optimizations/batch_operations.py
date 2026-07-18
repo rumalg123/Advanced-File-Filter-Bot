@@ -10,6 +10,7 @@ from datetime import datetime, UTC, timedelta
 from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
+from core.cache.invalidation import CacheInvalidator
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.logger import get_logger
 
@@ -27,6 +28,14 @@ class BatchOptimizations:
     def __init__(self, db_pool, cache_manager):
         self.db_pool = db_pool
         self.cache = cache_manager
+        self.cache_invalidator = CacheInvalidator(cache_manager)
+
+    async def _invalidate_premium_caches(self, user_ids: List[int]) -> None:
+        """Clear access decisions after any batch premium mutation attempt."""
+        for user_id in user_ids:
+            await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_premium_status(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
     
     async def batch_premium_status_check(
         self, 
@@ -311,13 +320,20 @@ class BatchOptimizations:
                 result = await self.db_pool.execute_with_retry(
                     collection.bulk_write, operations, ordered=False
                 )
+            if result.modified_count:
+                await self._invalidate_premium_caches(user_ids)
             logger.info(f"Batch expired {result.modified_count} premium users")
             return result.modified_count > 0
             
         except BulkWriteError as e:
+            # Unordered bulk writes may have partially succeeded.
+            await self._invalidate_premium_caches(user_ids)
             logger.error(f"Batch premium expiration failed: {e.details}")
             return False
         except Exception as e:
+            # The server may have applied writes before a network error was
+            # observed, so evict potentially stale access decisions.
+            await self._invalidate_premium_caches(user_ids)
             logger.error(f"Batch premium expiration error: {e}")
             return False
 

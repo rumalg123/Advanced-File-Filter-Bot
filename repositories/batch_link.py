@@ -50,8 +50,8 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
         data = asdict(batch_link)
         data['_id'] = data.pop('id')
         data['created_at'] = data['created_at'].isoformat()
-        if data.get('expires_at'):
-            data['expires_at'] = data['expires_at'].isoformat()
+        # Keep expires_at as a BSON datetime. MongoDB TTL indexes ignore string
+        # values, while the cache serializer already supports datetime objects.
         return data
 
     def _dict_to_entity(self, data: Dict[str, Any]) -> BatchLink:
@@ -77,6 +77,27 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
         """Get cache key for batch link"""
         return CacheKeyGenerator.batch_link(batch_id)
 
+    @staticmethod
+    def _is_expired(batch_link: BatchLink) -> bool:
+        """Return whether a link's explicit expiry has elapsed."""
+        if not batch_link.expires_at:
+            return False
+        expires_at = batch_link.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        return expires_at <= datetime.now(UTC)
+
+    def _cache_ttl(self, batch_link: BatchLink) -> int:
+        """Limit cache lifetime to the link's remaining lifetime."""
+        ttl = self.ttl.BATCH_LINK
+        if not batch_link.expires_at:
+            return ttl
+        expires_at = batch_link.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        remaining = int((expires_at - datetime.now(UTC)).total_seconds())
+        return max(0, min(ttl, remaining))
+
     async def create_batch_link(self, batch_link: BatchLink) -> bool:
         """Create a new batch link with validation"""
         try:
@@ -93,7 +114,9 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             
             # Cache the batch link as dict (not dataclass) for proper serialization
             cache_key = self._get_cache_key(batch_link.id)
-            await self.cache.set(cache_key, self._entity_to_dict(batch_link), expire=self.ttl.BATCH_LINK)
+            cache_ttl = self._cache_ttl(batch_link)
+            if cache_ttl > 0:
+                await self.cache.set(cache_key, self._entity_to_dict(batch_link), expire=cache_ttl)
             
             logger.info(f"Created batch link: {batch_link.id}")
             return True
@@ -121,6 +144,10 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             
         if batch_link.from_msg_id >= batch_link.to_msg_id:
             logger.error("Invalid message range")
+            return False
+
+        if self._is_expired(batch_link):
+            logger.error("Batch link expiry must be in the future")
             return False
             
         # Check reasonable batch size using config limit
@@ -175,8 +202,16 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
         # Try cache first
         cache_key = self._get_cache_key(batch_id)
         cached = await self.cache.get(cache_key)
-        if cached:
-            return cached if isinstance(cached, BatchLink) else self._dict_to_entity(cached)
+        if cached is not None:
+            try:
+                batch_link = cached if isinstance(cached, BatchLink) else self._dict_to_entity(cached)
+                if self._is_expired(batch_link):
+                    await self.delete_batch_link(batch_id)
+                    return None
+                return batch_link
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning(f"Invalid batch-link cache entry for {batch_id}: {e}")
+                await self.cache_invalidator.invalidate_batch_link_cache(batch_id)
 
         # Try database
         try:
@@ -187,8 +222,13 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             
             if data:
                 batch_link = self._dict_to_entity(data)
+                if self._is_expired(batch_link):
+                    await self.delete_batch_link(batch_id)
+                    return None
                 # Cache as dict for proper serialization
-                await self.cache.set(cache_key, self._entity_to_dict(batch_link), expire=self.ttl.BATCH_LINK)
+                cache_ttl = self._cache_ttl(batch_link)
+                if cache_ttl > 0:
+                    await self.cache.set(cache_key, self._entity_to_dict(batch_link), expire=cache_ttl)
                 return batch_link
                 
         except Exception as e:
@@ -221,9 +261,15 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             now = datetime.now(UTC)
 
             # First, get the IDs of expired links for cache invalidation
+            expiry_filter = {
+                "$or": [
+                    {"expires_at": {"$type": "date", "$lt": now}},
+                    {"expires_at": {"$type": "string", "$lt": now.isoformat()}}
+                ]
+            }
             expired_docs = await self.db_pool.execute_with_retry(
                 collection.find(
-                    {"expires_at": {"$lt": now.isoformat()}},
+                    expiry_filter,
                     {"_id": 1}
                 ).to_list,
                 length=1000
@@ -238,7 +284,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             async with semaphore_manager.acquire('database_write'):
                 result = await self.db_pool.execute_with_retry(
                     collection.delete_many,
-                    {"expires_at": {"$lt": now.isoformat()}}
+                    expiry_filter
                 )
 
             deleted_count = result.deleted_count
@@ -263,7 +309,8 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
                 length=limit
             )
 
-            return [self._dict_to_entity(doc) for doc in docs]
+            links = [self._dict_to_entity(doc) for doc in docs]
+            return [link for link in links if not self._is_expired(link)]
 
         except Exception as e:
             logger.error(f"Error getting user batch links for {user_id}: {e}")

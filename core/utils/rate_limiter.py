@@ -55,28 +55,29 @@ class RateLimiter:
         if cooldown_ttl and cooldown_ttl > 0:
             return False, cooldown_ttl
 
-        # ATOMIC: Increment first, then check value
-        # This prevents race conditions where multiple requests pass the check
-        new_count = await self.cache.increment(key)
+        # Increment and attach the window TTL in one Redis operation. This
+        # avoids leaving a permanent limiter key if the process stops between
+        # separate INCR and EXPIRE commands.
+        increment_with_expiry = getattr(self.cache, 'increment_with_expiry', None)
+        if increment_with_expiry:
+            new_count = await increment_with_expiry(key, 1, config.time_window)
+        else:
+            # Backward-compatible fallback for alternate cache implementations.
+            new_count = await self.cache.increment(key)
 
         # Handle Redis unavailability - allow request but log warning
         if new_count is None:
             logger.warning(f"Rate limit check failed for user {user_id}, action {action} - Redis unavailable")
             return True, None
 
-        # Set expiration on first request (when count becomes 1)
-        # Use expire() which is safe even if key already exists
-        if new_count == 1:
-            # Set expiration - if this fails, log warning but continue
-            expire_result = await self.cache.expire(key, config.time_window)
-            if not expire_result:
-                logger.warning(f"Failed to set expiration for rate limit key {key}, but continuing")
-        elif new_count > 1:
-            # Ensure expiration is set even if it wasn't set on first request
-            # This handles race conditions where multiple requests increment before expire is set
+        # Alternate cache implementations may still use separate commands;
+        # repair their TTL without changing the real Redis atomic path.
+        if not increment_with_expiry:
             current_ttl = await self.cache.ttl(key)
-            if current_ttl == -1:  # Key exists but has no expiration
-                await self.cache.expire(key, config.time_window)
+            if current_ttl < 0:
+                expire_result = await self.cache.expire(key, config.time_window)
+                if not expire_result:
+                    logger.warning(f"Failed to set expiration for rate limit key {key}")
 
         # Check if limit exceeded AFTER incrementing
         if new_count > config.max_requests:

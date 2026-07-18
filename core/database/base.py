@@ -69,8 +69,15 @@ class BaseRepository(ABC, Generic[T]):
         # Try cache first
         if use_cache:
             cached = await self.cache.get(cache_key)
-            if cached:
-                return self._dict_to_entity(cached)
+            if cached is not None:
+                try:
+                    return self._dict_to_entity(cached)
+                except (KeyError, TypeError, ValueError) as e:
+                    # Old deployments may have used the same key for a partial
+                    # projection. Discard an incompatible shape and rebuild it
+                    # from the authoritative collection.
+                    logger.warning(f"Invalid cached {self.collection_name} entity for {id}: {e}")
+                    await self._base_cache_invalidator.invalidate_cache_key(cache_key)
 
         # Fetch from database
         try:

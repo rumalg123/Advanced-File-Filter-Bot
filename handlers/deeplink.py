@@ -112,7 +112,7 @@ class DeepLinkHandler(BaseCommandHandler):
             return
 
         # Check user access using unified lookup
-        can_access, reason, file = await self.bot.file_service.check_and_grant_access(
+        can_access, reason, file, reserved_quota = await self.bot.file_service.check_and_grant_access(
             user_id,
             file_identifier,
             increment=True,
@@ -129,7 +129,9 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_not_found("File"))
             return
 
-        # Send file directly using file_id
+        # Send file directly using file_id. Quota is reserved before delivery and
+        # returned if Telegram rejects the send.
+        delivery_succeeded = False
         try:
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
             delete_minutes = delete_time // 60
@@ -155,6 +157,11 @@ class DeepLinkHandler(BaseCommandHandler):
                 parse_mode=CaptionFormatter.get_parse_mode(),
                 chat_id=user_id
             )
+            delivery_succeeded = True
+
+            feature_service = getattr(self.bot, 'feature_service', None)
+            if feature_service:
+                await feature_service.record_recent_file(user_id, file.file_unique_id)
 
             logger.info(f"File sent successfully to user {user_id}")
 
@@ -168,6 +175,9 @@ class DeepLinkHandler(BaseCommandHandler):
         except Exception as e:
             logger.error(f"Error sending file to user {user_id}: {e}", exc_info=True)
             await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to send file"))
+        finally:
+            if reserved_quota and not delivery_succeeded:
+                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_quota))
 
     async def _send_dstore_files(self, client: Client, message: Message, encoded: str):
         """Send files directly from channel"""
@@ -357,6 +367,10 @@ class DeepLinkHandler(BaseCommandHandler):
                 if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
+
+                feature_service = getattr(self.bot, 'feature_service', None)
+                if feature_service:
+                    await feature_service.record_recent_file(user_id, file.file_unique_id)
 
                 # Note: We'll increment all at once after the loop to avoid race conditions
 
@@ -548,6 +562,10 @@ class DeepLinkHandler(BaseCommandHandler):
                     asyncio.create_task(self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS))
                 success_count += 1
 
+                feature_service = getattr(self.bot, 'feature_service', None)
+                if feature_service:
+                    await feature_service.record_recent_file(user_id, file.file_unique_id)
+
                 await asyncio.sleep(1)  # Avoid flooding
 
             except Exception as e:
@@ -588,10 +606,11 @@ class DeepLinkHandler(BaseCommandHandler):
 
         # Check premium access with precedence rules
         global_premium_enabled = not self.bot.config.DISABLE_PREMIUM
+        user_is_premium, _ = await self.bot.user_repo.check_and_update_premium_status(user)
         can_access, reason = await self.bot.filestore_service.check_premium_batch_access(
             batch_link, 
             user_id, 
-            user.is_premium, 
+            user_is_premium,
             global_premium_enabled
         )
 

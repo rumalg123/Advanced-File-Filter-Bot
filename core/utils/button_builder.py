@@ -20,6 +20,7 @@ class ButtonBuilder:
         file: MediaFile,
         user_id: Optional[int] = None,
         is_private: bool = True,
+        query_reference: Optional[str] = None,
         max_filename_length: int = MAX_FILENAME_LENGTH
     ) -> InlineKeyboardButton:
         """
@@ -47,10 +48,17 @@ class ButtonBuilder:
         # Build callback data
         if is_private:
             callback_data = f"file#{file_identifier}"
+            if query_reference:
+                callback_data += f"#{query_reference}"
         else:
             if user_id is None:
                 raise ValueError("user_id is required for non-private chats")
             callback_data = f"file#{file_identifier}#{user_id}"
+            if query_reference:
+                callback_data += f"#{query_reference}"
+
+        if len(callback_data.encode("utf-8")) > 64:
+            raise ValueError("File callback data exceeds Telegram's 64-byte limit")
         
         # Get file emoji
         file_emoji = get_file_emoji(file.file_type, file.file_name, file.mime_type)
@@ -114,6 +122,7 @@ class ButtonBuilder:
         files: List[MediaFile],
         user_id: Optional[int] = None,
         is_private: bool = True,
+        query_reference: Optional[str] = None,
         max_filename_length: int = MAX_FILENAME_LENGTH
     ) -> List[List[InlineKeyboardButton]]:
         """
@@ -138,6 +147,7 @@ class ButtonBuilder:
                 file=file,
                 user_id=user_id,
                 is_private=is_private,
+                query_reference=query_reference,
                 max_filename_length=max_filename_length
             )
             buttons.append([button])
