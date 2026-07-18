@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from pyrogram.types import InlineKeyboardButton
 
+from core.utils.feature_search import group_media_variants
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from repositories.media import MediaFile
@@ -152,6 +153,50 @@ class ButtonBuilder:
             )
             buttons.append([button])
         
+        return buttons
+
+    @staticmethod
+    def search_file_buttons(
+        files: List[MediaFile],
+        user_id: Optional[int] = None,
+        is_private: bool = True,
+        query_reference: Optional[str] = None,
+        group_variants: bool = False,
+        max_filename_length: int = MAX_FILENAME_LENGTH
+    ) -> List[List[InlineKeyboardButton]]:
+        """Build search-result rows with optional variant group headings.
+
+        Keeping this presentation logic here ensures initial results and every
+        paginated result use the same grouping behavior without dropping files.
+        """
+        if not group_variants:
+            return ButtonBuilder.file_buttons_row(
+                files=files,
+                user_id=user_id,
+                is_private=is_private,
+                query_reference=query_reference,
+                max_filename_length=max_filename_length
+            )
+
+        buttons = []
+        for canonical_title, variants in group_media_variants(files):
+            if len(variants) > 1:
+                buttons.append([
+                    ButtonBuilder.action_button(
+                        f"🎞 {canonical_title[:32]} ({len(variants)} variants)",
+                        callback_data="noop"
+                    )
+                ])
+            buttons.extend(
+                ButtonBuilder.file_buttons_row(
+                    files=variants,
+                    user_id=user_id,
+                    is_private=is_private,
+                    query_reference=query_reference,
+                    max_filename_length=max_filename_length
+                )
+            )
+
         return buttons
 
     @staticmethod

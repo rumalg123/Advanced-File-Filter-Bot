@@ -87,3 +87,43 @@ def test_callback_and_inline_answers_do_not_receive_html_formatter_output():
                 violations.append(f"{path.relative_to(ROOT)}:{node.lineno}:literal-html")
 
     assert violations == []
+
+
+def test_callback_answers_are_always_awaited():
+    violations = []
+
+    for path in (ROOT / "handlers").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            receiver = node.func.value
+            if (
+                node.func.attr != "answer"
+                or not isinstance(receiver, ast.Name)
+                or receiver.id not in {"query", "callback_query", "q"}
+            ):
+                continue
+
+            current = node
+            is_awaited = False
+            while current in parents:
+                current = parents[current]
+                if isinstance(current, ast.Await):
+                    is_awaited = True
+                    break
+                if isinstance(
+                    current,
+                    (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+                ):
+                    break
+
+            if not is_awaited:
+                violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+
+    assert violations == []

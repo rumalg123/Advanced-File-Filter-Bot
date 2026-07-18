@@ -168,7 +168,7 @@ class CommandHandler:
         )
         self.bot.add_handler(
             CallbackQueryHandler(
-                lambda c, q: q.answer(),
+                self.handle_noop_callback,
                 filters.regex(r"^noop(?:#\d+)?$")
             )
         )
@@ -380,6 +380,10 @@ class CommandHandler:
 
 
         logger.info("All command handlers registered successfully")
+
+    async def handle_noop_callback(self, client, query):
+        """Acknowledge inert headings and pagination indicators."""
+        await query.answer()
 
     async def handle_close_data_callback(self, client, query):
         """Dismiss simple callback prompts."""

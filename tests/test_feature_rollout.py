@@ -15,6 +15,7 @@ from core.utils.feature_search import (
     parse_advanced_search_query,
 )
 from handlers.callbacks_handlers.file import FileCallbackHandler
+from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
 from handlers.features import FeatureHandler
 from repositories.features import FeatureRepository
 from repositories.media import FileType, MediaFile, MediaRepository
@@ -216,6 +217,60 @@ def test_advanced_mongo_filter_and_variant_grouping_keep_every_file():
     callbacks = [button.callback_data for row in buttons for button in row]
     assert len([value for value in callbacks if value.startswith('file#')]) == 3
     assert 'noop' in callbacks
+
+
+@pytest.mark.asyncio
+async def test_variant_grouping_survives_forward_and_back_pagination():
+    page_two_files = [
+        make_file("p2-540", "Glory.E25.AMZN.540p.mkv"),
+        make_file("p2-720", "Glory.E25.AMZN.720p.mkv"),
+        make_file("p2-1080", "Glory.E25.AMZN.1080p.mkv"),
+    ]
+    page_one_files = [
+        make_file("p1-540", "Glory.E24.AMZN.540p.mkv"),
+        make_file("p1-720", "Glory.E24.AMZN.720p.mkv"),
+        make_file("p1-1080", "Glory.E24.AMZN.1080p.mkv"),
+    ]
+    search = AsyncMock(side_effect=[
+        (page_two_files, 20, 30, True, None),
+        (page_one_files, 10, 30, True, None),
+    ])
+    bot = SimpleNamespace(
+        cache=SortedCache(),
+        config=SimpleNamespace(
+            MAX_BTN_SIZE=10,
+            FEATURE_DUPLICATE_GROUPING=True
+        ),
+        file_service=SimpleNamespace(search_files_with_access_check=search),
+        user_repo=SimpleNamespace()
+    )
+    message = SimpleNamespace(photo=None, edit_text=AsyncMock())
+    query = SimpleNamespace(
+        data="search#next#glory#10#30#7",
+        from_user=SimpleNamespace(id=7),
+        message=message,
+        answer=AsyncMock()
+    )
+    handler = PaginationCallbackHandler(bot)
+
+    with patch("handlers.callbacks_handlers.pagination.is_private_chat", return_value=True):
+        await handler.handle_search_pagination(None, query)
+        query.data = "search#prev#glory#0#30#7"
+        await handler.handle_search_pagination(None, query)
+
+    markups = [
+        call.kwargs["reply_markup"]
+        for call in message.edit_text.await_args_list
+    ]
+    for markup in markups:
+        buttons = [button for row in markup.inline_keyboard for button in row]
+        assert any("(3 variants)" in button.text for button in buttons)
+        assert len([
+            button for button in buttons
+            if button.callback_data and button.callback_data.startswith("file#")
+        ]) == 3
+
+    assert query.answer.await_count == 2
 
 
 @pytest.mark.asyncio

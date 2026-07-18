@@ -232,36 +232,19 @@ class SearchResultsService:
             )
             buttons.append([send_all_button])
 
-        # Add individual file buttons. Variant grouping is presentation-only and
-        # never drops a file from the existing result page.
-        if getattr(self.config, 'FEATURE_DUPLICATE_GROUPING', False):
-            from core.utils.feature_search import group_media_variants
-
-            for canonical_title, variants in group_media_variants(files):
-                if len(variants) > 1:
-                    buttons.append([
-                        ButtonBuilder.action_button(
-                            f"🎞 {canonical_title[:32]} ({len(variants)} variants)",
-                            callback_data="noop"
-                        )
-                    ])
-                buttons.extend(
-                    ButtonBuilder.file_buttons_row(
-                        files=variants,
-                        user_id=user_id,
-                        is_private=is_private,
-                        query_reference=query_reference
-                    )
-                )
-        else:
-            buttons.extend(
-                ButtonBuilder.file_buttons_row(
-                    files=files,
-                    user_id=user_id,
-                    is_private=is_private,
-                    query_reference=query_reference
+        # Variant grouping is presentation-only and never drops a file from the
+        # existing result page. Pagination uses this same builder.
+        buttons.extend(
+            ButtonBuilder.search_file_buttons(
+                files=files,
+                user_id=user_id,
+                is_private=is_private,
+                query_reference=query_reference,
+                group_variants=getattr(
+                    self.config, 'FEATURE_DUPLICATE_GROUPING', False
                 )
             )
+        )
 
         # Add pagination buttons if needed
         if total > page_size:

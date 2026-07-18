@@ -143,12 +143,16 @@ class PaginationCallbackHandler(BaseCommandHandler):
             )
             buttons.append([send_all_button])
 
-        # Add individual file buttons
-        file_buttons = ButtonBuilder.file_buttons_row(
+        # Use the same result-row builder as the initial search so optional
+        # variant grouping survives page-forward and page-back callbacks.
+        file_buttons = ButtonBuilder.search_file_buttons(
             files=files,
             user_id=result_owner_id,
             is_private=is_private,
-            query_reference=query_reference
+            query_reference=query_reference,
+            group_variants=getattr(
+                self.bot.config, 'FEATURE_DUPLICATE_GROUPING', False
+            )
         )
         buttons.extend(file_buttons)
 
