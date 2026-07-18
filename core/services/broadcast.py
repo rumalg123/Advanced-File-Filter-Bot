@@ -1,8 +1,10 @@
 import asyncio
+import re
 from typing import Dict, List, Tuple
 
 from core.cache.redis_cache import CacheManager
 from core.concurrency.semaphore_manager import semaphore_manager
+from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
 from core.utils.rate_limiter import RateLimiter
 from core.utils.telegram_api import telegram_api
@@ -13,6 +15,12 @@ logger = get_logger(__name__)
 
 class BroadcastService:
     """Service for handling broadcasts"""
+
+    HTML_TAG_PATTERN = re.compile(
+        r"</?(?:b|strong|i|em|u|ins|s|strike|del|code|pre|a|blockquote|"
+        r"tg-spoiler|tg-emoji)(?:\s+[^<>]*)?>",
+        re.IGNORECASE
+    )
 
     def __init__(
             self,
@@ -31,14 +39,44 @@ class BroadcastService:
         """Deliver the broadcast to a single user under the broadcast semaphore."""
         try:
             async with semaphore_manager.acquire('broadcast', f"broadcast_{user_id}"):
-                if hasattr(message, 'copy'):
+                text_payload = getattr(message, 'text', None)
+                caption_payload = getattr(message, 'caption', None)
+
+                if text_payload and self.HTML_TAG_PATTERN.search(str(text_payload)):
+                    send_kwargs = {
+                        'parse_mode': CaptionFormatter.get_parse_mode()
+                    }
+                    reply_markup = getattr(message, 'reply_markup', None)
+                    if reply_markup is not None:
+                        send_kwargs['reply_markup'] = reply_markup
+
+                    await telegram_api.call_api(
+                        client.send_message,
+                        user_id,
+                        str(text_payload),
+                        chat_id=user_id,
+                        **send_kwargs
+                    )
+                elif (
+                    caption_payload
+                    and self.HTML_TAG_PATTERN.search(str(caption_payload))
+                    and hasattr(message, 'copy')
+                ):
+                    await telegram_api.call_api(
+                        message.copy,
+                        user_id,
+                        caption=str(caption_payload),
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                        chat_id=user_id
+                    )
+                elif hasattr(message, 'copy'):
                     await telegram_api.call_api(
                         message.copy,
                         user_id,
                         chat_id=user_id
                     )
                 else:
-                    text_payload = getattr(message, 'text', None) or getattr(message, 'caption', None) or str(message)
+                    text_payload = text_payload or caption_payload or str(message)
                     await telegram_api.call_api(
                         client.send_message,
                         user_id,

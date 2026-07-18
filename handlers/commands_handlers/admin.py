@@ -1,4 +1,5 @@
 import asyncio
+import html
 import os
 import re
 import shlex
@@ -54,6 +55,30 @@ class AdminCommandHandler(BaseCommandHandler):
     def _has_pending_broadcast(self) -> bool:
         """Check whether a broadcast is awaiting confirmation."""
         return bool(getattr(self.bot, '_pending_broadcast', None))
+
+    async def _clear_pending_broadcast(self, *, reset_rate_limit: bool) -> bool:
+        """Clear a pending confirmation and optionally release its limiter."""
+        pending = getattr(self.bot, '_pending_broadcast', None)
+        self.bot._pending_broadcast = None
+
+        if not pending:
+            return False
+
+        if reset_rate_limit:
+            admin_id = pending.get('admin_id')
+            if admin_id:
+                try:
+                    await self.bot.app_rate_limiter.reset_rate_limit(
+                        admin_id, 'broadcast'
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Could not reset broadcast rate limit for admin %s: %s",
+                        admin_id,
+                        e
+                    )
+
+        return True
         
     async def _get_broadcast_state(self):
         """Get broadcast state from Redis and in-memory task tracking."""
@@ -137,10 +162,10 @@ class AdminCommandHandler(BaseCommandHandler):
             await message.reply_text(
                 ErrorMessageFormatter.format_warning("Reply to a message to broadcast it.") + "\n\n"
                 "<b>Features:</b>\n"
-                "• HTML formatting support\n"
+                "• Preserves Telegram message formatting\n"
+                "• Parses supported HTML tags in plain text and captions\n"
                 "• Preview before sending\n"
                 "• Can broadcast text, photos, videos, documents\n"
-                "• Use HTML tags: <b>bold</b>, <i>italic</i>, <code>code</code>\n"
                 "• Confirmation buttons for safety",
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
@@ -181,14 +206,19 @@ class AdminCommandHandler(BaseCommandHandler):
         
         if broadcast_msg.text:
             # Show text preview (limit to 200 chars)
-            text_preview = self._truncate_message_preview(broadcast_msg.text)
+            text_preview = html.escape(
+                self._truncate_message_preview(broadcast_msg.text)
+            )
             preview_text += f"<i>{text_preview}</i>"
         elif broadcast_msg.caption:
             # Show caption preview for media
-            caption_preview = self._truncate_message_preview(broadcast_msg.caption)
+            caption_preview = html.escape(
+                self._truncate_message_preview(broadcast_msg.caption)
+            )
             preview_text += f"<i>{caption_preview}</i>"
         elif broadcast_msg.document:
-            preview_text += f"📄 <i>Document: {broadcast_msg.document.file_name}</i>"
+            file_name = html.escape(str(broadcast_msg.document.file_name or "Unnamed"))
+            preview_text += f"📄 <i>Document: {file_name}</i>"
         elif broadcast_msg.photo:
             preview_text += f"🖼 <i>Photo</i>"
         elif broadcast_msg.video:
@@ -198,7 +228,9 @@ class AdminCommandHandler(BaseCommandHandler):
         else:
             preview_text += f"📱 <i>Media message</i>"
 
-        preview_text += "\n\n" + ErrorMessageFormatter.format_warning("This will send the message with HTML formatting to all users.", title="Warning")
+        preview_text += "\n\n" + ErrorMessageFormatter.format_warning(
+            "This will send the message to all users.", title="Warning"
+        )
 
         # Confirmation buttons
         buttons = InlineKeyboardMarkup([
@@ -208,14 +240,33 @@ class AdminCommandHandler(BaseCommandHandler):
             ]
         ])
 
-        # Store broadcast message for callback
+        # Publish pending state only after Telegram accepts the preview. A
+        # failed preview must not leave a phantom confirmation or consumed
+        # broadcast limit behind.
+        try:
+            await message.reply_text(
+                preview_text,
+                reply_markup=buttons,
+                parse_mode=CaptionFormatter.get_parse_mode()
+            )
+        except Exception as e:
+            try:
+                await self.bot.app_rate_limiter.reset_rate_limit(
+                    message.from_user.id, 'broadcast'
+                )
+            except Exception as reset_error:
+                logger.warning(
+                    "Could not reset broadcast limit after preview failure: %s",
+                    reset_error
+                )
+            logger.error("Could not send broadcast preview: %s", e)
+            return
+
         self.bot._pending_broadcast = {
             'message': broadcast_msg,
             'admin_id': message.from_user.id,
             'admin_message_id': message.id
         }
-
-        await message.reply_text(preview_text, reply_markup=buttons, parse_mode=CaptionFormatter.get_parse_mode())
 
     async def handle_broadcast_confirmation(self, client: Client, callback_query):
         """Handle broadcast confirmation callback"""
@@ -229,11 +280,9 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         if callback_query.data == "cancel_broadcast":
+            await callback_query.answer("Broadcast cancelled")
+            await self._clear_pending_broadcast(reset_rate_limit=True)
             await callback_query.message.edit_text(ErrorMessageFormatter.format_info("Broadcast cancelled", title="Cancelled"))
-            # Reset rate limit when broadcast is cancelled
-            await self.bot.app_rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
-            self.bot._pending_broadcast = None
-            await callback_query.answer()
             return
 
         if callback_query.data == "confirm_broadcast":
@@ -244,16 +293,27 @@ class AdminCommandHandler(BaseCommandHandler):
                     ErrorMessageFormatter.format_warning(
                         "A broadcast is already in progress.",
                         plain_text=True
-                    )
+                    ),
+                    show_alert=True
                 )
                 return
+
+            # Callback queries expire quickly. Acknowledge the button before
+            # starting a potentially long-running delivery operation.
+            await callback_query.answer("Broadcast started")
 
             # Set broadcast state as active
             await self._set_broadcast_state(True)
             broadcast_msg = pending['message']
-            
+
             logger.info(f"Starting broadcast for admin {callback_query.from_user.id}")
-            await callback_query.message.edit_text("📡 Starting broadcast...")
+            try:
+                await callback_query.message.edit_text("📡 Starting broadcast...")
+            except Exception as e:
+                logger.error("Could not initialize broadcast status message: %s", e)
+                await self._set_broadcast_state(False)
+                await self._clear_pending_broadcast(reset_rate_limit=True)
+                return
 
             # Progress callback
             async def update_progress(stats: Dict[str, int]):
@@ -313,7 +373,6 @@ class AdminCommandHandler(BaseCommandHandler):
                         "Failed: 0",
                         parse_mode=CaptionFormatter.get_parse_mode()
                     )
-                    await callback_query.answer()
                     return
                 success_rate = (
                     final_stats['success'] / final_stats['total'] * 100
@@ -333,16 +392,19 @@ class AdminCommandHandler(BaseCommandHandler):
 
                 # Log broadcast
                 if self.bot.config.LOG_CHANNEL:
-                    await telegram_api.call_api(
-                        client.send_message,
-                        self.bot.config.LOG_CHANNEL,
-                        f"#Broadcast\n"
-                        f"Admin: {callback_query.from_user.mention}\n"
-                        f"Total: {final_stats['total']:,}\n"
-                        f"Success: {final_stats['success']:,}",
-                        parse_mode=CaptionFormatter.get_parse_mode(),
-                        chat_id=self.bot.config.LOG_CHANNEL
-                    )
+                    try:
+                        await telegram_api.call_api(
+                            client.send_message,
+                            self.bot.config.LOG_CHANNEL,
+                            f"#Broadcast\n"
+                            f"Admin: {callback_query.from_user.mention}\n"
+                            f"Total: {final_stats['total']:,}\n"
+                            f"Success: {final_stats['success']:,}",
+                            parse_mode=CaptionFormatter.get_parse_mode(),
+                            chat_id=self.bot.config.LOG_CHANNEL
+                        )
+                    except Exception as e:
+                        logger.warning("Could not write broadcast log: %s", e)
 
             except asyncio.CancelledError:
                 await callback_query.message.edit_text(
@@ -363,12 +425,10 @@ class AdminCommandHandler(BaseCommandHandler):
             finally:
                 await self._set_broadcast_state(False)
                 self.broadcast_task = None
-                self.bot._pending_broadcast = None
+                await self._clear_pending_broadcast(reset_rate_limit=False)
                 # Clear global reference
                 if hasattr(self.bot, '_active_broadcast_task'):
                     self.bot._active_broadcast_task = None
-
-            await callback_query.answer()
 
     @admin_only
     async def stop_broadcast_command(self, client: Client, message: Message):
@@ -382,8 +442,21 @@ class AdminCommandHandler(BaseCommandHandler):
         global_task_exists = hasattr(self.bot, '_active_broadcast_task') and self.bot._active_broadcast_task is not None
         
         logger.info(f"Stop broadcast check - Redis: {is_broadcasting}, Memory: {memory_state}, Task: {task_exists}, Global: {global_task_exists}")
-        
+
+        pending_cleared = await self._clear_pending_broadcast(
+            reset_rate_limit=True
+        )
+
         if not is_broadcasting and not memory_state and not task_exists and not global_task_exists:
+            if pending_cleared:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_info(
+                        "Pending broadcast confirmation cancelled.",
+                        title="Broadcast Cancelled"
+                    ),
+                    parse_mode=CaptionFormatter.get_parse_mode()
+                )
+                return
             await message.reply_text(ErrorMessageFormatter.format_not_found("Broadcast") + " currently in progress")
             return
 
@@ -424,10 +497,14 @@ class AdminCommandHandler(BaseCommandHandler):
         """Reset broadcast rate limit for admin (for testing/debugging)"""
         try:
             user_id = message.from_user.id
+            pending_cleared = await self._clear_pending_broadcast(
+                reset_rate_limit=True
+            )
             await self.bot.app_rate_limiter.reset_rate_limit(user_id, 'broadcast')
             await message.reply_text(
                 ErrorMessageFormatter.format_success("Broadcast Rate Limit Reset", title="Broadcast Rate Limit Reset") + "\n\n"
-                "You can now use the broadcast command again.",
+                "You can now use the broadcast command again."
+                + ("\nPending confirmation cleared." if pending_cleared else ""),
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
             logger.info(f"Admin {user_id} reset their broadcast rate limit")

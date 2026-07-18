@@ -38,6 +38,9 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-028 | Medium | Fixed | Transient feature messages | Report reason, favorites, saved-search, autocomplete, and post-search recommendation menus bypass `MESSAGE_DELETE_SECONDS` and remain after their parent results/files disappear. | Every transient feature menu uses the tracked cleanup scheduler when the configured interval is positive; selected report menus are removed immediately. |
 | BUG-029 | Medium | Fixed | Collections | Named collections expose create/list/delete commands, but no rename/clear operations or safe in-chat way to open, add, remove, and manage members; full names cannot be combined safely with Telegram callback data. | Collections support owner-scoped create/open/rename/clear/delete and membership controls, destructive callbacks require confirmation, and stable compact tokens keep callbacks within 64 bytes without migrating legacy documents. |
 | BUG-030 | Low | Fixed | User feature data | Recent history can only be cleared wholesale, recommendation feedback cannot be listed/reset, and saved searches cannot be run from their management menu. | Recent entries support individual removal, recommendation preferences support list/reset with cache invalidation, and saved-search rows enter the normal owned search flow through a Run action. |
+| BUG-031 | High | Fixed | Broadcast recovery | Broadcast pending state is stored before the confirmation preview is accepted; a preview failure consumes the rate limit and leaves every later `/broadcast` stuck, while stop/reset cannot clear the phantom confirmation. | Pending state is published only after a successful preview, preview failure releases the limiter, and both broadcast recovery commands clear pending state safely. |
+| BUG-032 | High | Fixed | Broadcast callbacks | The confirmation callback is acknowledged only after delivery to every user, so Telegram can expire the query and make Confirm appear unresponsive during a large broadcast. | Confirm and Cancel are acknowledged before slow work, each callback is answered exactly once, and delivery/status failures still clear active and pending state. |
+| BUG-033 | Medium | Fixed | Broadcast formatting | `/broadcast` advertises HTML support but always calls `Message.copy()`, so HTML tags typed into otherwise plain text or media captions are delivered literally. | Existing Telegram entities continue through `Message.copy()`; supported raw HTML text and captions are explicitly parsed during delivery; preview content is safely escaped. |
 
 ## Verification log
 
@@ -96,3 +99,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   search Run actions. Updated the README and architecture diagrams; all 84 tests,
   `compileall`, Ruff undefined-name checks, `pip check`, diagram fence checks,
   and `git diff --check` passed.
+- 2026-07-18: Fixed BUG-031 through BUG-033. Broadcast preview setup is now
+  transactional, confirmation callbacks are acknowledged before delivery,
+  stop/reset recover pending confirmations, and delivery supports raw HTML while
+  preserving existing Telegram formatting. Added 8 focused regressions; all 112
+  tests and Ruff fatal-error checks passed.
