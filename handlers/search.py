@@ -292,7 +292,7 @@ class SearchHandler:
             return
 
         # Check rate limit for inline queries
-        is_allowed, cooldown = await self.bot.rate_limiter.check_rate_limit(
+        is_allowed, cooldown = await self.bot.app_rate_limiter.check_rate_limit(
             user_id, 'inline_query'
         )
         if not is_allowed:

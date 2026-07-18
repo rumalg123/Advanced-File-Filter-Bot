@@ -346,7 +346,6 @@ class MediaSearchBot(Client):
         self.config = config
         self.db_pool = db_pool
         self.cache = cache_manager
-        self.rate_limiter = rate_limiter
         self.cache_invalidator = CacheInvalidator(cache_manager)
         
         # Multi-database manager (will be initialized if multi-DB is enabled)
@@ -396,6 +395,10 @@ class MediaSearchBot(Client):
             sleep_threshold=5,
             parse_mode=CaptionFormatter.get_parse_mode(),
         )
+        # Wzgram owns ``Client.rate_limiter`` for its Telegram transport. Keep
+        # the bot's Redis-backed domain limiter under a separate name so the
+        # client constructor cannot replace it with its incompatible limiter.
+        self.app_rate_limiter = rate_limiter
         self.handler_manager = HandlerManager(self)
         logger.info("HandlerManager initialized")
 
@@ -852,13 +855,13 @@ class MediaSearchBot(Client):
                 self.user_repo,
                 self.media_repo,
                 self.cache,
-                self.rate_limiter,
+                self.app_rate_limiter,
                 self.config
             )
             self.broadcast_service = BroadcastService(
                 self.user_repo,
                 self.cache,
-                self.rate_limiter
+                self.app_rate_limiter
             )
             self.maintenance_service = MaintenanceService(
                 self.user_repo,

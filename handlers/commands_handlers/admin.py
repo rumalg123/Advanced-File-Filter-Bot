@@ -159,7 +159,7 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         # Rate limit check
-        is_allowed, cooldown = await self.bot.rate_limiter.check_rate_limit(
+        is_allowed, cooldown = await self.bot.app_rate_limiter.check_rate_limit(
             message.from_user.id,
             'broadcast'
         )
@@ -229,7 +229,7 @@ class AdminCommandHandler(BaseCommandHandler):
         if callback_query.data == "cancel_broadcast":
             await callback_query.message.edit_text(ErrorMessageFormatter.format_info("Broadcast cancelled", title="Cancelled"))
             # Reset rate limit when broadcast is cancelled
-            await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
+            await self.bot.app_rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             self.bot._pending_broadcast = None
             await callback_query.answer()
             return
@@ -344,7 +344,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 # Reset rate limit when broadcast is cancelled
-                await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
+                await self.bot.app_rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             except Exception as e:
                 logger.error(f"Broadcast error: {e}")
                 await callback_query.message.edit_text(
@@ -352,7 +352,7 @@ class AdminCommandHandler(BaseCommandHandler):
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 # Reset rate limit when broadcast fails
-                await self.bot.rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
+                await self.bot.app_rate_limiter.reset_rate_limit(callback_query.from_user.id, 'broadcast')
             finally:
                 await self._set_broadcast_state(False)
                 self.broadcast_task = None
@@ -417,7 +417,7 @@ class AdminCommandHandler(BaseCommandHandler):
         """Reset broadcast rate limit for admin (for testing/debugging)"""
         try:
             user_id = message.from_user.id
-            await self.bot.rate_limiter.reset_rate_limit(user_id, 'broadcast')
+            await self.bot.app_rate_limiter.reset_rate_limit(user_id, 'broadcast')
             await message.reply_text(
                 ErrorMessageFormatter.format_success("Broadcast Rate Limit Reset", title="Broadcast Rate Limit Reset") + "\n\n"
                 "You can now use the broadcast command again.",

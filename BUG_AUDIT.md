@@ -30,6 +30,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-020 | Medium | Fixed | Recommendations | Post-search code calculates `recommended_file_ids`, but `_send_recommendations` ignores them; when only file recommendations exist, no recommendation message is sent. | Recommended file IDs are resolved and displayed, or are not used as a send condition until supported. |
 | BUG-021 | Medium | Fixed | Similar filters | Adding a near-duplicate filter builds `warning_msg` but immediately discards it with `pass`, so the administrator sees no warning. | Similar-filter warnings are shown and require an explicit confirmation or documented automatic policy. |
 | BUG-022 | Medium | Fixed | Personalization | File clicks increment `rec:user_interactions:{user_id}`, but no recommendation read path consumes that sorted set. | Personalized ranking uses the recorded user interaction profile or stops writing unused interaction data. |
+| BUG-023 | Critical | Fixed | Wzgram migration | `MediaSearchBot` assigns the application limiter to `Client.rate_limiter` before the wzgram constructor runs; wzgram replaces it with its transport limiter, which has no `check_rate_limit`, breaking every search and file-access request. | Wzgram retains ownership of `Client.rate_limiter`; all application search, file, inline, and broadcast limits use a separately named Redis-backed limiter, with a constructor regression test. |
 
 ## Verification log
 
@@ -60,3 +61,11 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 - 2026-07-18: Added 10 recommendation/similarity regression tests (29 total).
   `python -m pytest -q`, `compileall`, Ruff undefined-name checks, `pip check`,
   and `git diff --check` passed.
+- 2026-07-18: Production logs exposed BUG-023. Confirmed wzgram initializes its
+  own `Client.rate_limiter`, separated the application limiter as
+  `app_rate_limiter`, and added regression coverage that simulates the client
+  attribute overwrite.
+- 2026-07-18: Verified an unmocked client retains wzgram's transport limiter at
+  `Client.rate_limiter` while the application limiter exposes
+  `check_rate_limit` at `app_rate_limiter`. All 67 tests, `compileall`, Ruff
+  undefined-name checks, `pip check`, and `git diff --check` passed.
