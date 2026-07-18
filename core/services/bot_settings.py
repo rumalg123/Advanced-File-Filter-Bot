@@ -258,8 +258,10 @@ class BotSettingsService:
         'PREMIUM_DURATION_DAYS': {
             'type': 'int',
             'default': 30,
-            'description': 'Premium subscription duration in days',
-            'category': 'premium'
+            'description': 'Default premium subscription duration in days',
+            'category': 'premium',
+            'min': 1,
+            'max': 36500,
         },
         'NON_PREMIUM_DAILY_LIMIT': {
             'type': 'int',
@@ -405,8 +407,18 @@ class BotSettingsService:
         result = {}
         for key, metadata in self.SETTINGS_METADATA.items():
             if key in db_settings:
+                stored_value = db_settings[key].value
+                try:
+                    stored_value = self._validate_value_bounds(
+                        key, stored_value, metadata
+                    )
+                except ValueError as error:
+                    logger.warning(
+                        f"Ignoring invalid stored setting {key}: {error}"
+                    )
+                    stored_value = metadata['default']
                 result[key] = {
-                    'value': db_settings[key].value,
+                    'value': stored_value,
                     'type': metadata['type'],
                     'default': metadata['default'],
                     'description': metadata['description'],
@@ -445,6 +457,7 @@ class BotSettingsService:
 
         # Validate and parse value
         parsed_value = self._parse_value(value, metadata['type'])
+        parsed_value = self._validate_value_bounds(key, parsed_value, metadata)
 
         return await self.settings_repo.set_setting(
             key=key,
@@ -453,6 +466,19 @@ class BotSettingsService:
             default_value=metadata['default'],
             description=metadata['description']
         )
+
+    @staticmethod
+    def _validate_value_bounds(
+        key: str, value: Any, metadata: Dict[str, Any]
+    ) -> Any:
+        """Validate optional numeric setting bounds and return the value."""
+        minimum = metadata.get('min')
+        maximum = metadata.get('max')
+        if minimum is not None and value < minimum:
+            raise ValueError(f"{key} must be at least {minimum}")
+        if maximum is not None and value > maximum:
+            raise ValueError(f"{key} must be at most {maximum}")
+        return value
 
     async def reset_to_default(self, key: str) -> bool:
         """Reset a setting to its default value"""

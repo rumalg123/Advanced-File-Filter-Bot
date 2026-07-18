@@ -367,10 +367,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if not user.is_premium:
             return False, None
 
-        if not user.premium_activation_date:
-            return False, None
-
-        # Use validator utility for premium check
+        # Stored expiry is authoritative. Legacy grants may not have an
+        # activation date, but a future expiry still represents valid access.
         if not is_premium_valid(user.is_premium, user.premium_expiry_date):
             # Premium expired
             await self.update_premium_status(user.id, False)
@@ -429,17 +427,6 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 if not doc.get("is_premium", False):
                     result[user_id] = (False, None)
                     continue
-
-                # Check if premium is still active
-                activation_date = doc.get("premium_activation_date")
-                if not activation_date:
-                    result[user_id] = (False, "Premium subscription expired")
-                    expired_users.append(user_id)
-                    continue
-
-                # Parse activation date if needed
-                if isinstance(activation_date, str):
-                    activation_date = datetime.fromisoformat(activation_date)
 
                 expiry_date = doc.get("premium_expiry_date")
                 # Parse expiry date if needed
@@ -771,12 +758,37 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return cached
         if cached is not None:
             await self.cache_invalidator.invalidate_user_stats()
+        active_premium_match = {
+            "is_premium": True,
+            "$expr": {
+                "$gt": ["$premium_expiry_normalized", "$$NOW"]
+            },
+        }
         pipeline = [
+            {"$addFields": {
+                "premium_expiry_normalized": {
+                    "$convert": {
+                        "input": "$premium_expiry_date",
+                        "to": "date",
+                        "onError": None,
+                        "onNull": None,
+                    }
+                }
+            }},
             {"$facet": {
                 "total": [{"$count": "count"}],
                 "premium": [
-                    {"$match": {"is_premium": True}},
+                    {"$match": active_premium_match},
                     {"$count": "count"}
+                ],
+                "next_premium_expiry": [
+                    {"$match": active_premium_match},
+                    {"$sort": {"premium_expiry_normalized": 1}},
+                    {"$limit": 1},
+                    {"$project": {
+                        "_id": 0,
+                        "premium_expiry_normalized": 1,
+                    }},
                 ],
                 "banned": [
                     {"$match": {"status": UserStatus.BANNED.value}},
@@ -800,7 +812,20 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 'banned': facets['banned'][0]['count'] if facets['banned'] else 0,
                 'active_today': facets['active_today'][0]['count'] if facets['active_today'] else 0,
             }
-            await self.cache.set(cache_key, stats, expire=self.ttl.USER_STATS)
+            cache_ttl = self.ttl.USER_STATS
+            next_expiries = facets.get('next_premium_expiry') or []
+            if next_expiries:
+                next_expiry = next_expiries[0].get(
+                    'premium_expiry_normalized'
+                )
+                if next_expiry:
+                    next_expiry = normalize_expiry_date(next_expiry)
+                    seconds_until_expiry = int(
+                        (next_expiry - datetime.now(UTC)).total_seconds()
+                    )
+                    if seconds_until_expiry > 0:
+                        cache_ttl = min(cache_ttl, seconds_until_expiry)
+            await self.cache.set(cache_key, stats, expire=max(1, cache_ttl))
             return stats
         return {'total': 0, 'premium': 0, 'banned': 0, 'active_today': 0}
 

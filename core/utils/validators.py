@@ -1,3 +1,4 @@
+import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, UTC
@@ -470,7 +471,10 @@ class PremiumValidation:
         return is_valid, expiry
 
     @staticmethod
-    def get_days_remaining(premium_expiry_date: Optional[datetime]) -> int:
+    def get_days_remaining(
+        premium_expiry_date: Optional[datetime],
+        current_time: Optional[datetime] = None,
+    ) -> int:
         """
         Get the number of days remaining in premium subscription.
 
@@ -484,12 +488,13 @@ class PremiumValidation:
             return 0
 
         expiry = PremiumValidation.normalize_expiry_date(premium_expiry_date)
-        now = datetime.now(UTC)
+        now = current_time if current_time else datetime.now(UTC)
 
         if expiry <= now:
             return 0
 
-        return (expiry - now).days
+        remaining_seconds = (expiry - now).total_seconds()
+        return math.ceil(remaining_seconds / 86400)
 
 
 class InputValidation:
@@ -619,7 +624,10 @@ class UserAccessContext:
         is_admin = user_id in admins
         owner_id = admins[0] if admins else None
         is_owner = user_id == owner_id
-        is_premium = user.is_premium if user else False
+        is_premium = PremiumValidation.is_premium_valid(
+            getattr(user, 'is_premium', False),
+            getattr(user, 'premium_expiry_date', None),
+        ) if user else False
 
         should_track = (
             user is not None and

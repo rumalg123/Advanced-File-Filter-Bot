@@ -1,4 +1,5 @@
 import asyncio
+import math
 import sys
 from typing import Optional, Any, Union, List, Callable
 from functools import wraps
@@ -420,10 +421,20 @@ def cache_premium_status(ttl: int = 600) -> Callable:
                     if is_premium and expiry:
                         if expiry.tzinfo is None:
                             expiry = expiry.replace(tzinfo=UTC)
-                        remaining = int((expiry - datetime.now(UTC)).total_seconds())
-                        if remaining <= 0:
+                        remaining_seconds = (
+                            expiry - datetime.now(UTC)
+                        ).total_seconds()
+                        if remaining_seconds <= 0:
                             return result
-                        cache_ttl = min(cache_ttl, remaining)
+                        # The cached tuple includes a displayed remaining-day
+                        # count. Expire it at that count's next boundary as well
+                        # as at the actual subscription expiry.
+                        day_boundary = remaining_seconds % 86400 or 86400
+                        cache_ttl = min(
+                            cache_ttl,
+                            max(1, math.ceil(remaining_seconds)),
+                            max(1, math.ceil(day_boundary)),
+                        )
                     await self.cache.set(cache_key, result, expire=cache_ttl)
             except Exception as e:
                 logger.warning(f"Cache set error for premium status: {e}")

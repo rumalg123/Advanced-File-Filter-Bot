@@ -602,19 +602,11 @@ class AdminCommandHandler(BaseCommandHandler):
                 )
                 return
 
-        # Add premium status
-        if has_override:
-            success, msg, user_data = (
-                await self.bot.user_repo.update_premium_status(
-                    target_user_id, True, duration_days=duration_days
-                )
-            )
-        else:
-            success, msg, user_data = (
-                await self.bot.user_repo.update_premium_status(
-                    target_user_id, True
-                )
-            )
+        # Pass the effective value explicitly so storage, admin output, user
+        # notification, and logging cannot drift from one another.
+        success, msg, user_data = await self.bot.user_repo.update_premium_status(
+            target_user_id, True, duration_days=duration_days
+        )
 
         if success and user_data and user_data.premium_expiry_date:
             msg += (

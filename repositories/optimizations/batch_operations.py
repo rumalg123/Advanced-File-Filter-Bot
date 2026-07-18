@@ -4,6 +4,7 @@ Using MongoDB aggregation pipelines for efficient joins and lookups
 """
 
 import asyncio
+import math
 from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
 from datetime import datetime, UTC, timedelta
 
@@ -114,7 +115,9 @@ class BatchOptimizations:
                 
                 if result["is_premium"]:
                     if computed["is_active"]:
-                        days_remaining = max(0, int(computed["days_remaining"]))
+                        days_remaining = max(
+                            0, math.ceil(computed["days_remaining"])
+                        )
                         status_map[user_id] = (True, f"Premium active ({days_remaining} days remaining)")
                     else:
                         # Mark for batch expiration update

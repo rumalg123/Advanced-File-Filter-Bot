@@ -194,7 +194,12 @@ class FeatureConfig(BaseSettings):
     feature_content_dashboard: bool = Field(default=False, description="Enable the admin content dashboard")
 
     # Premium system
-    premium_duration_days: int = Field(default=30, description="Premium subscription duration in days")
+    premium_duration_days: int = Field(
+        default=30,
+        ge=1,
+        le=36500,
+        description="Default premium subscription duration in days",
+    )
     non_premium_daily_limit: int = Field(default=10, description="Daily file limit for free users")
     premium_price: str = Field(default="$1", description="Premium subscription price with currency")
 

@@ -15,7 +15,7 @@ from core.utils.pagination import resolve_search_query_reference
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import (
     is_original_requester, is_private_chat, skip_subscription_check,
-    is_admin, extract_user_id
+    is_admin, extract_user_id, is_premium_valid
 )
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import check_ban
@@ -493,7 +493,9 @@ class FileCallbackHandler(BaseCommandHandler):
         user = await self.bot.user_repo.get_user(user_id)
         needs_quota = (
             user and
-            not user.is_premium and
+            not is_premium_valid(
+                user.is_premium, user.premium_expiry_date
+            ) and
             not self.bot.config.DISABLE_PREMIUM and
             not user_is_admin and
             not user_is_owner

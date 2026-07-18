@@ -622,7 +622,12 @@ Both batch endpoints must refer to the same source channel and the bot must be a
 `/addpremium user_id` uses `PREMIUM_DURATION_DAYS`. Add a positive day token
 to override only that grant, for example `/addpremium 123456789 100d`. The `d`
 suffix is required (case-insensitive), and per-grant overrides are limited to
-`36500d`; the configured default is not changed.
+`36500d`; the configured default is not changed. Changing the default through
+`/bsetting` still requires the prompted restart and affects future default
+grants only. Existing users keep their stored expiry. `/plans` labels the
+configured value as the default and shows an active user's stored UTC expiry
+and rounded-up remaining days. See the
+[premium consistency rules](docs/features/premium_duration_consistency.md).
 
 Primary-admin-only commands:
 
@@ -814,7 +819,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The repository currently contains 96 focused tests covering access/quota and premium-duration behavior, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
+The repository currently contains 104 focused tests covering access/quota and premium-duration consistency, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
 
 Useful additional checks:
 

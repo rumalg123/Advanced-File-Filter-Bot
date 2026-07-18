@@ -15,6 +15,7 @@ from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.caption import CaptionFormatter
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.pagination import create_search_query_reference
+from core.utils.premium import format_user_plan_status
 from repositories.media import FileType
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
@@ -292,19 +293,21 @@ class UserCommandHandler(BaseCommandHandler):
             f"├ Unlimited file access\n"
             f"├ Priority support\n"
             f"├ Advanced features\n"
-            f"└ Duration: {self.bot.config.PREMIUM_DURATION_DAYS} days\n\n"
+            f"└ Default duration: {self.bot.config.PREMIUM_DURATION_DAYS} days\n\n"
         )
 
         # Add current status
         if user:
+            is_active = False
+            status_msg = None
             if user.is_premium:
                 is_active, status_msg = await self.bot.user_repo.check_and_update_premium_status(user)
-                text += f"✅ <b>Your Status:</b> {status_msg}\n"
-            else:
-                remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
-                text += f"📊 <b>Your Status:</b> Free Plan\n"
-                text += f"📁 Today's Usage: {user.daily_retrieval_count}/{self.bot.config.NON_PREMIUM_DAILY_LIMIT}\n"
-                text += f"📁 Remaining: {remaining}\n"
+            text += format_user_plan_status(
+                user,
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT,
+                is_premium_active=is_active,
+                status_message=status_msg,
+            )
 
         buttons = [[
             ButtonBuilder.action_button("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)

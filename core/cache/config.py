@@ -113,7 +113,8 @@ class CacheKeyGenerator:
 
     @staticmethod
     def user_stats() -> str:
-        return "user_stats"
+        # v2 counts only grants whose stored expiry is still in the future.
+        return "user_stats:v2"
 
     # Media keys
     @staticmethod

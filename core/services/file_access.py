@@ -6,6 +6,7 @@ from core.utils.rate_limiter import RateLimiter
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.user import UserRepository
 from core.cache.config import CacheTTLConfig
+from core.utils.validators import is_premium_valid
 
 logger = get_logger(__name__)
 
@@ -74,7 +75,9 @@ class FileAccessService:
                 is_admin = user_id in self.config.ADMINS if self.config.ADMINS else False
                 needs_quota = (
                     user is not None
-                    and not user.is_premium
+                    and not is_premium_valid(
+                        user.is_premium, user.premium_expiry_date
+                    )
                     and user_id != owner_id
                     and not is_admin
                 )

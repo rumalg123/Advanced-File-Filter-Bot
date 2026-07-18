@@ -468,8 +468,10 @@ erDiagram
         string name
         string status
         bool is_premium
+        datetime premium_activation_date
         datetime premium_expiry_date
         int daily_retrieval_count
+        date last_retrieval_date
         int daily_request_count
         int warning_count
     }
@@ -595,6 +597,12 @@ erDiagram
     MEDIA_FILES ||--o{ RECOMMENDATION_FEEDBACK : receives
     MEDIA_FILES ||--o{ FILE_REPORTS : receives
 ```
+
+For an existing premium grant, `USERS.premium_expiry_date` is authoritative;
+`PREMIUM_DURATION_DAYS` in `BOT_SETTINGS` is only the default for future grants.
+Remaining days are derived by rounding positive time-to-expiry up, while daily
+retrieval usage applies only when `last_retrieval_date` is today. Changing a
+default setting never rewrites existing user grant dates.
 
 Other additive collections include `saved_search_notifications` for alert deduplication and `search_analytics` for bounded zero-result analytics. Group filter documents are stored in `filters_<group_id>` collections, with `global_filters` used when no group is supplied.
 

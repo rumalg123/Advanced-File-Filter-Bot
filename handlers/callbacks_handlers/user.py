@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
 
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import MessageProxy, format_file_size
+from core.utils.premium import format_user_plan_status
 from core.utils.file_emoji import get_file_type_display_name
 from core.utils.button_builder import ButtonBuilder
 import core.utils.messages as config_messages
@@ -123,19 +124,21 @@ class UserCallbackHandler(BaseCommandHandler):
             f"├ Unlimited file access\n"
             f"├ Priority support\n"
             f"├ Advanced features\n"
-            f"└ Duration: {self.bot.config.PREMIUM_DURATION_DAYS} days\n\n"
+            f"└ Default duration: {self.bot.config.PREMIUM_DURATION_DAYS} days\n\n"
         )
 
         # Add current status
         if user:
+            is_active = False
+            status_msg = None
             if user.is_premium:
                 is_active, status_msg = await self.bot.user_repo.check_and_update_premium_status(user)
-                text += f"✅ <b>Your Status:</b> {status_msg}\n"
-            else:
-                remaining = self.bot.config.NON_PREMIUM_DAILY_LIMIT - user.daily_retrieval_count
-                text += f"📊 <b>Your Status:</b> Free Plan\n"
-                text += f"📁 Today's Usage: {user.daily_retrieval_count}/{self.bot.config.NON_PREMIUM_DAILY_LIMIT}\n"
-                text += f"📁 Remaining: {remaining}\n"
+            text += format_user_plan_status(
+                user,
+                self.bot.config.NON_PREMIUM_DAILY_LIMIT,
+                is_premium_active=is_active,
+                status_message=status_msg,
+            )
 
         buttons = [
             [ButtonBuilder.action_button("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)],
