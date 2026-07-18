@@ -75,8 +75,9 @@ class SearchHandler:
             'delf', 'deletef', 'add', 'filter', 'bsetting', 'restart', 'shell',
             'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance', 'cancel', 'dbstats',
             'dbinfo', 'dbswitch', 'save_search', 'saved_searches', 'favorite', 'unfavorite',
-            'favorites', 'collections', 'collection_create', 'collection_delete',
-            'recent', 'clear_recent', 'suggest', 'search_help', 'myrequests',
+            'favorites', 'collections', 'collection_create', 'collection_rename',
+            'collection_clear', 'collection_delete', 'recent', 'clear_recent',
+            'recommendation_preferences', 'suggest', 'search_help', 'myrequests',
             'file_reports', 'resolve_report', 'content_dashboard'
         ]
 

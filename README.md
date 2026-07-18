@@ -86,9 +86,10 @@ The bot can index media from Telegram channels, search it with typo-tolerant mat
 The following capabilities are implemented but disabled by default:
 
 - Saved searches with deduplicated new-file alerts.
-- Favorites and named collections.
+- Favorites and named collections with create, open, rename, clear, delete, and
+  per-file membership controls.
 - Structured advanced-search filters.
-- Recommendation “more like this” and “less like this” feedback.
+- User-manageable recommendation “more like this” and “less like this” feedback.
 - File reports and an admin resolution queue.
 - Search autocomplete from user/global history.
 - Conservative grouping of likely quality/encode variants.
@@ -411,14 +412,14 @@ Every value below defaults to `false`:
 | Variable | Capability |
 |---|---|
 | `FEATURE_SAVED_SEARCH_ALERTS` | `/save_search`, `/saved_searches`, and deduplicated alerts after new media is indexed. |
-| `FEATURE_FAVORITES` | Favorites, named collections, commands, and result-button actions. |
+| `FEATURE_FAVORITES` | Full named-collection CRUD, per-file membership, collection pickers, and favorites actions. |
 | `FEATURE_ADVANCED_SEARCH` | Structured `key:value` search filters and `/search_help`. |
-| `FEATURE_RECOMMENDATION_FEEDBACK` | More/less recommendation buttons and persisted feedback. |
+| `FEATURE_RECOMMENDATION_FEEDBACK` | More/less/reset controls, persisted feedback, and `/recommendation_preferences`. |
 | `FEATURE_FILE_REPORTS` | Deduplicated user report buttons, detailed `LOG_CHANNEL` events, `/file_reports`, resolution notifications, and `/resolve_report` for admins. |
 | `FEATURE_SEARCH_AUTOCOMPLETE` | `/suggest` using user and global search history. |
 | `FEATURE_DUPLICATE_GROUPING` | Group likely encode/quality variants without discarding files. |
 | `FEATURE_REQUEST_TRACKING` | Deduplicate/persist unresolved `#request` items and expose `/myrequests`. |
-| `FEATURE_RECENT_FILES` | Store successful deliveries and expose `/recent` and `/clear_recent`. |
+| `FEATURE_RECENT_FILES` | Store successful deliveries and expose `/recent`, per-file removal, and `/clear_recent`. |
 | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Show a reason beside recommended files. |
 | `FEATURE_CONTENT_DASHBOARD` | Persist zero-result analytics and expose `/content_dashboard` to admins. |
 
@@ -498,13 +499,13 @@ Recommended rollout order:
 
 | Order | Flag | Minimal smoke test |
 |---:|---|---|
-| 1 | `FEATURE_RECENT_FILES` | Deliver one file, run `/recent`, then `/clear_recent`. |
-| 2 | `FEATURE_FAVORITES` | Favorite a delivered file, list it, create/delete a named collection. |
+| 1 | `FEATURE_RECENT_FILES` | Deliver files, run `/recent`, remove one entry, then `/clear_recent`. |
+| 2 | `FEATURE_FAVORITES` | Create, open, rename, clear, and delete a collection; add/remove files through commands and buttons. |
 | 3 | `FEATURE_SEARCH_AUTOCOMPLETE` | Build search history, then run `/suggest partial`. |
 | 4 | `FEATURE_ADVANCED_SEARCH` | Run `/search_help`, then test type/year/size filters. |
 | 5 | `FEATURE_DUPLICATE_GROUPING` | Search a title with multiple quality variants and verify every file remains accessible. |
 | 6 | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Build search/click history and inspect `/recommendations`. |
-| 7 | `FEATURE_RECOMMENDATION_FEEDBACK` | Use more/less buttons and refresh recommendations. |
+| 7 | `FEATURE_RECOMMENDATION_FEEDBACK` | Use more/less/reset buttons, inspect `/recommendation_preferences`, and refresh recommendations. |
 | 8 | `FEATURE_REQUEST_TRACKING` | Submit a missing `#request`, verify `/myrequests`, and test duplicate prevention. |
 | 9 | `FEATURE_FILE_REPORTS` | Report a result, review `/file_reports`, then resolve it. |
 | 10 | `FEATURE_SAVED_SEARCH_ALERTS` | Save a query, index a new matching file, confirm exactly one alert. |
@@ -536,18 +537,28 @@ Send ordinary text with at least two characters to search. In inline mode, type 
 
 | Feature | Commands |
 |---|---|
-| Saved searches | `/save_search movie title`, `/saved_searches` |
-| Favorites | `/favorite`, `/unfavorite`, `/favorites [collection]`, `/collections`, `/collection_create name`, `/collection_delete name` |
-| Recent files | `/recent`, `/clear_recent` |
+| Saved searches | `/save_search movie title`, `/saved_searches` (Run, pause/resume, delete) |
+| Favorites and collections | `/favorite`, `/unfavorite`, `/favorites [collection]`, `/collections`, `/collection_create name`, `/collection_rename "old" "new"`, `/collection_clear name`, `/collection_delete name` |
+| Recent files | `/recent` (remove one), `/clear_recent` |
+| Recommendation feedback | `/recommendation_preferences` |
 | Autocomplete | `/suggest partial title` |
 | Advanced search | `/search_help` |
 | Request tracking | `/myrequests` |
 
 For `/favorite`, reply to a delivered file, or use `/favorite file_unique_id [collection name]`.
-Delivered files expose Favorite and Remove buttons. `/favorites` also provides a
-Remove action for each file when its callback fits Telegram's 64-byte limit;
-`/unfavorite file_unique_id [collection name]` remains available for every
-collection name.
+Delivered files expose Favorite, Remove, and Add to Collection buttons. The
+collection picker uses a compact owner-scoped token, so a callback cannot access
+another user's collection. `/collections` provides Open, Clear, and Delete
+buttons; destructive buttons require confirmation. `/favorites` and named
+collection views provide per-file removal when the callback fits Telegram's
+64-byte limit. `/unfavorite file_unique_id [collection name]` remains the
+fallback for long collection names. Collections accept at most 100 distinct
+files.
+
+Saved-search management includes a Run button that enters the normal owned
+search/pagination flow. `/recent` can remove one history entry without clearing
+the list. `/recommendation_preferences` displays stored More/less signals and
+allows each one to be reset; resets invalidate cached personalized results.
 
 ### Group filters and connections
 

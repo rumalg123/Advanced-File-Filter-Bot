@@ -36,6 +36,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-026 | Medium | Fixed | Search pagination | Variant grouping is applied only by the initial search-result renderer; pagination rebuilds plain file rows, so grouping disappears after moving forward or back. | Initial results and every pagination direction use one shared variant-aware row builder, preserving every file and group heading. |
 | BUG-027 | High | Fixed | File reports | Reports are keyed by reporter, contain only a file ID, are not sent to `LOG_CHANNEL`, and resolution neither knows nor notifies all affected users. | One open file/reason issue subscribes every distinct reporter, stores/displays filenames, logs detailed events, safely notifies reachable reporters on resolution, and records notification outcomes. |
 | BUG-028 | Medium | Fixed | Transient feature messages | Report reason, favorites, saved-search, autocomplete, and post-search recommendation menus bypass `MESSAGE_DELETE_SECONDS` and remain after their parent results/files disappear. | Every transient feature menu uses the tracked cleanup scheduler when the configured interval is positive; selected report menus are removed immediately. |
+| BUG-029 | Medium | Fixed | Collections | Named collections expose create/list/delete commands, but no rename/clear operations or safe in-chat way to open, add, remove, and manage members; full names cannot be combined safely with Telegram callback data. | Collections support owner-scoped create/open/rename/clear/delete and membership controls, destructive callbacks require confirmation, and stable compact tokens keep callbacks within 64 bytes without migrating legacy documents. |
+| BUG-030 | Low | Fixed | User feature data | Recent history can only be cleared wholesale, recommendation feedback cannot be listed/reset, and saved searches cannot be run from their management menu. | Recent entries support individual removal, recommendation preferences support list/reset with cache invalidation, and saved-search rows enter the normal owned search flow through a Run action. |
 
 ## Verification log
 
@@ -88,3 +90,9 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   favorites removal controls and tracked cleanup for report, favorites, recent,
   saved-search, suggestion, and recommendation menus. All 79 tests, `compileall`,
   Ruff undefined-name checks, `pip check`, and `git diff --check` passed.
+- 2026-07-18: Fixed BUG-029 and BUG-030. Added stable owner-scoped collection
+  tokens, complete collection and membership CRUD, destructive confirmations,
+  per-entry recent deletion, recommendation preference list/reset, and saved-
+  search Run actions. Updated the README and architecture diagrams; all 84 tests,
+  `compileall`, Ruff undefined-name checks, `pip check`, diagram fence checks,
+  and `git diff --check` passed.

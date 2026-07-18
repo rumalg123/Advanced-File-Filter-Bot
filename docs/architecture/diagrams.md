@@ -276,7 +276,60 @@ flowchart LR
 
 Query similarity first uses bidirectional co-occurrence and then fills gaps with RapidFuzz matching against user and global history. File recommendations combine query-to-file mappings, file co-occurrence, user interaction history, and global trends. Per-user recommendation output is cached for ten minutes and invalidated when new user signals arrive.
 
-## 8. Cache ownership and invalidation
+## 8. User-owned feature CRUD
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Delivery as Delivered file or feature menu
+    participant Handler as FeatureHandler
+    participant Repo as FeatureRepository
+    participant Mongo
+    participant Recs as RecommendationService
+
+    User->>Handler: /collection_create, /collections, rename, clear, or delete
+    Handler->>Repo: Mutation with commanding user_id
+    Repo->>Mongo: Owner-scoped user_collections query
+    Mongo-->>Repo: Collection plus stable callback token
+    Repo-->>Handler: Owned collection state
+    Handler-->>User: Open, Clear, Delete, and file-removal controls
+
+    User->>Delivery: Add to Collection
+    Delivery->>Handler: feature#col_pick#file_id
+    Handler->>Repo: List collections for clicking user_id
+    Repo-->>Handler: Names and compact tokens
+    Handler-->>User: Transient collection picker
+    User->>Handler: feature#col_add#file_id#token
+    Handler->>Repo: Conditional add by user_id plus token
+    Repo->>Mongo: addToSet while member count is below 100
+    Mongo-->>Repo: Added, duplicate, full, or not found
+    Repo-->>Handler: Membership result
+    Handler-->>User: Callback alert
+
+    opt Recent-file history enabled
+        User->>Handler: Remove one recent entry
+        Handler->>Repo: Delete user_id plus file_unique_id
+        Repo->>Mongo: Owner-scoped delete
+    end
+
+    opt Recommendation feedback enabled
+        User->>Handler: List or reset preference
+        Handler->>Repo: Read/delete user feedback
+        Repo->>Mongo: Owner-scoped recommendation_feedback query
+        Handler->>Recs: Invalidate personalized cache after reset
+    end
+```
+
+Collection callbacks carry an eight-character stable token rather than a full
+name or document ID. Repository lookups always combine that token with the
+clicking `user_id`, and destructive callback operations require a confirmation.
+Legacy collections derive the same token from their existing `_id`, so no data
+migration is required. Saved searches already expose create/list, pause-resume,
+and delete; their Run action reuses the normal user-owned search session.
+Reports and content requests are lifecycle/audit records and are resolved rather
+than hard-deleted by users.
+
+## 9. Cache ownership and invalidation
 
 ```mermaid
 flowchart TB
@@ -318,7 +371,7 @@ flowchart TB
 - Cache serialization uses JSON or MessagePack, optionally compressed; pickle is retained only for legacy reads.
 - MongoDB remains authoritative. Normal deployments should not flush Redis.
 
-## 9. Configuration lifecycle
+## 10. Configuration lifecycle
 
 ```mermaid
 flowchart LR
@@ -342,7 +395,7 @@ flowchart LR
 
 Environment changes do not overwrite an existing Mongo-backed setting. Use `/bsetting`, then restart, for managed runtime settings. Keep Telegram credentials and database/Redis connection details in the deployment environment because they are required before settings synchronization.
 
-## 10. Multi-database routing and circuit breaker
+## 11. Multi-database routing and circuit breaker
 
 ```mermaid
 flowchart TB
@@ -381,7 +434,7 @@ stateDiagram-v2
 
 Only media data is distributed. User/control collections continue to use the primary database pool. An unhealthy media database is isolated by its circuit breaker while healthy databases remain searchable.
 
-## 11. Core and additive data model
+## 12. Core and additive data model
 
 The relationships below are logical references; MongoDB does not enforce foreign keys.
 
@@ -456,8 +509,11 @@ erDiagram
     USER_COLLECTIONS {
         string _id
         int user_id
+        string name
         string normalized_name
+        string callback_token
         string file_ids
+        datetime created_at
         datetime updated_at
     }
 
@@ -481,14 +537,18 @@ erDiagram
         int user_id
         string file_unique_id
         string signal
+        datetime updated_at
     }
 
     FILE_REPORTS {
         string _id
         int user_id
+        string reporter_ids
         string file_unique_id
+        string file_name
         string reason
         string status
+        datetime resolved_at
     }
 
     CONTENT_REQUESTS {
@@ -515,7 +575,7 @@ erDiagram
 
 Other additive collections include `saved_search_notifications` for alert deduplication and `search_analytics` for bounded zero-result analytics. Group filter documents are stored in `filters_<group_id>` collections, with `global_filters` used when no group is supplied.
 
-## 12. Docker deployment topology
+## 13. Docker deployment topology
 
 ```mermaid
 flowchart LR

@@ -128,8 +128,8 @@ def test_enabled_feature_handler_registers_only_additive_routes():
 
     handler = FeatureHandler(bot)
 
-    assert len(handler._handlers) == 17
-    assert manager.add_handler.call_count == 17
+    assert len(handler._handlers) == 20
+    assert manager.add_handler.call_count == 20
 
 
 def test_advanced_search_parser_validates_and_extracts_all_filters():
@@ -403,7 +403,7 @@ def test_delivery_action_buttons_are_off_by_default_and_callback_safe_when_enabl
         for button in row
     ]
     assert {callback.split('#')[1] for callback in callbacks} == {
-        'fav', 'unfav', 'more', 'less', 'report'
+        'fav', 'unfav', 'col_pick', 'more', 'less', 'rec_reset', 'report'
     }
     assert all(len(callback.encode()) <= 64 for callback in callbacks)
 
@@ -866,6 +866,10 @@ async def test_saved_search_and_suggestion_menus_use_cleanup_timer():
     message.text = '/suggest glory'
     await suggest_callback(handler, None, message)
 
+    saved_markup = message.reply_text.await_args_list[0].kwargs['reply_markup']
+    assert saved_markup.inline_keyboard[0][0].callback_data.startswith(
+        'search#page#@'
+    )
     assert handler._schedule_auto_delete.call_args_list == [
         ((saved_menu, 35), {}),
         ((suggestion_menu, 35), {}),

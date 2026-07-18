@@ -3,6 +3,7 @@
 import hashlib
 import re
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,6 +23,19 @@ def collection_slug(value: str) -> str:
     normalized = normalize_feature_text(value)
     slug = re.sub(r"[^a-z0-9_-]+", "-", normalized).strip("-")[:32]
     return slug or "favorites"
+
+
+def collection_callback_token(document: dict[str, Any]) -> str:
+    """Return a stable compact token for collection callback data."""
+    stored = str(document.get('callback_token') or '').lower()
+    if re.fullmatch(r'[a-f0-9]{8}', stored):
+        return stored
+    document_id = str(document.get('_id') or '')
+    embedded = document_id.rsplit('-', 1)[-1].lower()
+    if re.fullmatch(r'[a-f0-9]{8}', embedded):
+        return embedded
+    normalized = document.get('normalized_name') or document.get('name') or document_id
+    return hashlib.sha256(normalize_feature_text(str(normalized)).encode()).hexdigest()[:8]
 
 
 class FeatureRepository:
@@ -125,22 +139,48 @@ class FeatureRepository:
         document_id = f"{user_id}:{slug[:16]}-{name_hash}"
         now = datetime.now(UTC)
         collection = await self._collection("user_collections")
-        await self.db_pool.execute_with_retry(
-            collection.update_one,
-            {'_id': document_id, 'user_id': user_id},
-            {
-                '$setOnInsert': {
-                    'user_id': user_id,
-                    'name': display_name,
-                    'normalized_name': normalized_name,
-                    'file_ids': [],
-                    'created_at': now,
-                },
-                '$set': {'updated_at': now},
-            },
-            upsert=True
+        existing = await self.db_pool.execute_with_retry(
+            collection.find_one,
+            {'user_id': user_id, 'normalized_name': normalized_name}
         )
-        return await self.db_pool.execute_with_retry(collection.find_one, {'_id': document_id})
+        if existing:
+            token = collection_callback_token(existing)
+            await self.db_pool.execute_with_retry(
+                collection.update_one,
+                {'_id': existing['_id'], 'user_id': user_id},
+                {'$set': {'callback_token': token, 'updated_at': now}}
+            )
+            existing['callback_token'] = token
+            existing['updated_at'] = now
+            return existing
+
+        # Concurrent creation with the same normalized name is idempotent.
+        with suppress(DuplicateKeyError):
+            await self.db_pool.execute_with_retry(
+                collection.update_one,
+                {'_id': document_id, 'user_id': user_id},
+                {
+                    '$setOnInsert': {
+                        'user_id': user_id,
+                        'name': display_name,
+                        'normalized_name': normalized_name,
+                        'callback_token': name_hash,
+                        'file_ids': [],
+                        'created_at': now,
+                    },
+                    '$set': {'updated_at': now},
+                },
+                upsert=True
+            )
+        document = await self.db_pool.execute_with_retry(
+            collection.find_one, {'_id': document_id, 'user_id': user_id}
+        )
+        if document:
+            return document
+        return await self.db_pool.execute_with_retry(
+            collection.find_one,
+            {'user_id': user_id, 'normalized_name': normalized_name}
+        )
 
     async def add_to_collection(
         self, user_id: int, file_unique_id: str, name: str = "Favorites"
@@ -192,7 +232,10 @@ class FeatureRepository:
     async def list_collections(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
         collection = await self._collection("user_collections")
         cursor = collection.find({'user_id': user_id}).sort('updated_at', -1).limit(limit)
-        return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
+        documents = await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
+        for document in documents:
+            document['callback_token'] = collection_callback_token(document)
+        return documents
 
     async def get_collection(self, user_id: int, name: str = "Favorites") -> dict[str, Any] | None:
         collection = await self._collection("user_collections")
@@ -201,11 +244,154 @@ class FeatureRepository:
             {'user_id': user_id, 'normalized_name': normalize_feature_text(name)}
         )
 
+    async def get_collection_by_token(
+        self, user_id: int, token: str
+    ) -> dict[str, Any] | None:
+        token = (token or '').lower()
+        if not re.fullmatch(r'[a-f0-9]{8}', token):
+            return None
+        collection = await self._collection("user_collections")
+        document = await self.db_pool.execute_with_retry(
+            collection.find_one,
+            {
+                'user_id': user_id,
+                '$or': [
+                    {'callback_token': token},
+                    {'_id': {'$regex': rf'-{token}$'}},
+                ],
+            }
+        )
+        if document and document.get('callback_token') != token:
+            await self.db_pool.execute_with_retry(
+                collection.update_one,
+                {'_id': document['_id'], 'user_id': user_id},
+                {'$set': {'callback_token': token}}
+            )
+            document['callback_token'] = token
+        return document
+
+    async def add_to_collection_by_token(
+        self, user_id: int, token: str, file_unique_id: str
+    ) -> tuple[dict[str, Any] | None, str]:
+        document = await self.get_collection_by_token(user_id, token)
+        if not document:
+            return None, 'not_found'
+        if file_unique_id in document.get('file_ids', []):
+            return document, 'duplicate'
+        if len(document.get('file_ids', [])) >= 100:
+            return document, 'full'
+
+        collection = await self._collection("user_collections")
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {
+                '_id': document['_id'],
+                'user_id': user_id,
+                'file_ids': {'$ne': file_unique_id},
+                '$expr': {
+                    '$lt': [{'$size': {'$ifNull': ['$file_ids', []]}}, 100]
+                },
+            },
+            {
+                '$addToSet': {'file_ids': file_unique_id},
+                '$set': {'updated_at': datetime.now(UTC)},
+            }
+        )
+        if result.modified_count:
+            document.setdefault('file_ids', []).append(file_unique_id)
+            return document, 'added'
+
+        refreshed = await self.db_pool.execute_with_retry(
+            collection.find_one, {'_id': document['_id'], 'user_id': user_id}
+        )
+        if not refreshed:
+            return None, 'not_found'
+        state = (
+            'duplicate' if file_unique_id in refreshed.get('file_ids', []) else 'full'
+        )
+        return refreshed, state
+
+    async def rename_collection(
+        self, user_id: int, current_name: str, new_name: str
+    ) -> tuple[dict[str, Any] | None, str]:
+        display_name = (new_name or '').strip()[:40]
+        normalized_name = normalize_feature_text(display_name)
+        if not normalized_name:
+            return None, 'invalid'
+        collection = await self._collection("user_collections")
+        current = await self.get_collection(user_id, current_name)
+        if not current:
+            return None, 'not_found'
+        if current.get('normalized_name') == normalized_name:
+            return current, 'unchanged'
+        conflict = await self.db_pool.execute_with_retry(
+            collection.find_one,
+            {'user_id': user_id, 'normalized_name': normalized_name}
+        )
+        if conflict:
+            return conflict, 'conflict'
+        try:
+            result = await self.db_pool.execute_with_retry(
+                collection.update_one,
+                {'_id': current['_id'], 'user_id': user_id},
+                {
+                    '$set': {
+                        'name': display_name,
+                        'normalized_name': normalized_name,
+                        'callback_token': collection_callback_token(current),
+                        'updated_at': datetime.now(UTC),
+                    }
+                }
+            )
+        except DuplicateKeyError:
+            return None, 'conflict'
+        if not result.matched_count:
+            return None, 'not_found'
+        current.update({'name': display_name, 'normalized_name': normalized_name})
+        current['callback_token'] = collection_callback_token(current)
+        return current, 'renamed'
+
+    async def clear_collection(self, user_id: int, name: str) -> int | None:
+        document = await self.get_collection(user_id, name)
+        if not document:
+            return None
+        removed_count = len(document.get('file_ids', []))
+        collection = await self._collection("user_collections")
+        await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {'_id': document['_id'], 'user_id': user_id},
+            {'$set': {'file_ids': [], 'updated_at': datetime.now(UTC)}}
+        )
+        return removed_count
+
+    async def clear_collection_by_token(self, user_id: int, token: str) -> int | None:
+        document = await self.get_collection_by_token(user_id, token)
+        if not document:
+            return None
+        removed_count = len(document.get('file_ids', []))
+        collection = await self._collection("user_collections")
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {'_id': document['_id'], 'user_id': user_id},
+            {'$set': {'file_ids': [], 'updated_at': datetime.now(UTC)}}
+        )
+        return removed_count if result.matched_count else None
+
     async def delete_collection(self, user_id: int, name: str) -> bool:
         collection = await self._collection("user_collections")
         result = await self.db_pool.execute_with_retry(
             collection.delete_one,
             {'user_id': user_id, 'normalized_name': normalize_feature_text(name)}
+        )
+        return bool(result.deleted_count)
+
+    async def delete_collection_by_token(self, user_id: int, token: str) -> bool:
+        document = await self.get_collection_by_token(user_id, token)
+        if not document:
+            return False
+        collection = await self._collection("user_collections")
+        result = await self.db_pool.execute_with_retry(
+            collection.delete_one, {'_id': document['_id'], 'user_id': user_id}
         )
         return bool(result.deleted_count)
 
@@ -253,6 +439,14 @@ class FeatureRepository:
             collection.delete_many, {'user_id': user_id}
         )
         return int(result.deleted_count)
+
+    async def remove_recent_file(self, user_id: int, file_unique_id: str) -> bool:
+        collection = await self._collection("recent_files")
+        result = await self.db_pool.execute_with_retry(
+            collection.delete_one,
+            {'_id': f"{user_id}:{file_unique_id}", 'user_id': user_id}
+        )
+        return bool(result.deleted_count)
 
     # Saved searches and alert claims
     async def create_saved_search(self, user_id: int, query: str) -> tuple[dict[str, Any], bool]:
@@ -371,6 +565,23 @@ class FeatureRepository:
             if signal in result:
                 result[signal].append(document['file_unique_id'])
         return result
+
+    async def list_recommendation_feedback(
+        self, user_id: int, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        collection = await self._collection("recommendation_feedback")
+        cursor = collection.find({'user_id': user_id}).sort('updated_at', -1).limit(limit)
+        return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
+
+    async def delete_recommendation_feedback(
+        self, user_id: int, file_unique_id: str
+    ) -> bool:
+        collection = await self._collection("recommendation_feedback")
+        result = await self.db_pool.execute_with_retry(
+            collection.delete_one,
+            {'_id': f"{user_id}:{file_unique_id}", 'user_id': user_id}
+        )
+        return bool(result.deleted_count)
 
     # File reports
     @staticmethod

@@ -53,6 +53,8 @@ class FeatureHandler(BaseHandler):
                 (self.favorites_command, filters.command('favorites') & filters.private),
                 (self.collections_command, filters.command('collections') & filters.private),
                 (self.collection_create_command, filters.command('collection_create') & filters.private),
+                (self.collection_rename_command, filters.command('collection_rename') & filters.private),
+                (self.collection_clear_command, filters.command('collection_clear') & filters.private),
                 (self.collection_delete_command, filters.command('collection_delete') & filters.private),
             ])
             callback_needed = True
@@ -62,6 +64,7 @@ class FeatureHandler(BaseHandler):
                 (self.recent_command, filters.command('recent') & filters.private),
                 (self.clear_recent_command, filters.command('clear_recent') & filters.private),
             ])
+            callback_needed = True
 
         if self.service.enabled('FEATURE_SEARCH_AUTOCOMPLETE'):
             user_handlers.append(
@@ -79,6 +82,10 @@ class FeatureHandler(BaseHandler):
             )
 
         if self.service.enabled('FEATURE_RECOMMENDATION_FEEDBACK'):
+            user_handlers.append((
+                self.recommendation_preferences_command,
+                filters.command('recommendation_preferences') & filters.private
+            ))
             callback_needed = True
         if self.service.enabled('FEATURE_FILE_REPORTS'):
             callback_needed = True
@@ -167,7 +174,8 @@ class FeatureHandler(BaseHandler):
         message: Message,
         title: str,
         file_ids: list[str],
-        collection_name: str | None = None
+        collection_name: str | None = None,
+        removal_action: str | None = None
     ) -> None:
         files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
         files = [
@@ -187,6 +195,14 @@ class FeatureHandler(BaseHandler):
             if collection_name:
                 remove_callback = (
                     f"feature#unfavlist#{file.file_unique_id}#{collection_name}"
+                )
+                if len(remove_callback.encode('utf-8')) <= 64:
+                    row.append(ButtonBuilder.action_button(
+                        "🗑 Remove", callback_data=remove_callback
+                    ))
+            elif removal_action:
+                remove_callback = (
+                    f"feature#{removal_action}#{file.file_unique_id}"
                 )
                 if len(remove_callback.encode('utf-8')) <= 64:
                     row.append(ButtonBuilder.action_button(
@@ -311,8 +327,8 @@ class FeatureHandler(BaseHandler):
         return results
 
     @staticmethod
-    async def _remove_collection_menu_row(message: Message, callback_data: str) -> None:
-        """Remove a deleted favorite from an already rendered collection menu."""
+    async def _remove_feature_menu_row(message: Message, callback_data: str) -> None:
+        """Remove a deleted item from an already rendered feature menu."""
         markup = getattr(message, 'reply_markup', None)
         rows = list(getattr(markup, 'inline_keyboard', None) or [])
         if not rows:
@@ -330,7 +346,7 @@ class FeatureHandler(BaseHandler):
             else:
                 await message.delete()
         except Exception as error:
-            logger.debug(f"Could not refresh favorites menu after removal: {error}")
+            logger.debug(f"Could not refresh feature menu after removal: {error}")
 
     @check_ban()
     @require_subscription()
@@ -364,7 +380,16 @@ class FeatureHandler(BaseHandler):
             icon = "✅" if saved.get('active', True) else "⏸"
             lines.append(f"{icon} <code>{html.escape(saved['query'])}</code>")
             action = 'pause' if saved.get('active', True) else 'resume'
+            reference = await create_search_query_reference(
+                self.bot.cache, saved['query'], message.from_user.id
+            )
             buttons.append([
+                ButtonBuilder.action_button(
+                    "🔍 Run",
+                    callback_data=(
+                        f"search#page#{reference}#0#0#{message.from_user.id}"
+                    )
+                ),
                 ButtonBuilder.action_button(
                     "⏸ Pause" if action == 'pause' else "▶️ Resume",
                     callback_data=f"feature#saved_{action}#{saved['_id']}"
@@ -446,13 +471,32 @@ class FeatureHandler(BaseHandler):
         if not collections:
             return await message.reply_text("You have no collections yet.")
         lines = ["⭐ <b>Your collections</b>"]
+        buttons = []
         for collection in collections:
             lines.append(
                 f"• <code>{html.escape(collection['name'])}</code> "
                 f"({len(collection.get('file_ids', []))} files)"
             )
-        lines.append("\nOpen one with <code>/favorites collection name</code>.")
-        await message.reply_text("\n".join(lines))
+            token = collection['callback_token']
+            buttons.append([
+                ButtonBuilder.action_button(
+                    f"📂 {collection['name'][:24]}",
+                    callback_data=f"feature#col_open#{token}"
+                ),
+                ButtonBuilder.action_button(
+                    "🧹 Clear", callback_data=f"feature#col_clear#{token}"
+                ),
+                ButtonBuilder.action_button(
+                    "🗑 Delete", callback_data=f"feature#col_delete#{token}"
+                ),
+            ])
+        lines.append(
+            "\nRename with <code>/collection_rename \"Old name\" \"New name\"</code>."
+        )
+        sent_message = await message.reply_text(
+            "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        self._schedule_feature_cleanup(sent_message)
 
     @check_ban()
     @require_subscription()
@@ -463,6 +507,44 @@ class FeatureHandler(BaseHandler):
         document = await self.repository.ensure_collection(message.from_user.id, name)
         await message.reply_text(
             f"Collection <b>{html.escape(document['name'])}</b> is ready."
+        )
+
+    @check_ban()
+    @require_subscription()
+    async def collection_rename_command(self, client: Client, message: Message):
+        arguments = self._arguments(message)
+        if len(arguments) != 2:
+            return await message.reply_text(
+                "Usage: <code>/collection_rename \"Old name\" \"New name\"</code>"
+            )
+        document, state = await self.repository.rename_collection(
+            message.from_user.id, arguments[0], arguments[1]
+        )
+        responses = {
+            'renamed': (
+                f"Collection renamed to <b>{html.escape(document['name'])}</b>."
+                if document else "Collection renamed."
+            ),
+            'unchanged': "The collection already has that name.",
+            'conflict': "Another collection already uses that name.",
+            'not_found': "Collection not found.",
+            'invalid': "The new collection name is invalid.",
+        }
+        await message.reply_text(responses.get(state, "Collection could not be renamed."))
+
+    @check_ban()
+    @require_subscription()
+    async def collection_clear_command(self, client: Client, message: Message):
+        name = " ".join(self._arguments(message)).strip()
+        if not name:
+            return await message.reply_text("Usage: <code>/collection_clear name</code>")
+        removed_count = await self.repository.clear_collection(
+            message.from_user.id, name
+        )
+        if removed_count is None:
+            return await message.reply_text("Collection not found.")
+        await message.reply_text(
+            f"Collection cleared. Removed {removed_count} file(s)."
         )
 
     @check_ban()
@@ -480,13 +562,58 @@ class FeatureHandler(BaseHandler):
     @require_subscription()
     async def recent_command(self, client: Client, message: Message):
         file_ids = await self.repository.get_recent_files(message.from_user.id)
-        await self._send_file_list(message, "🕘 <b>Recently downloaded</b>", file_ids)
+        await self._send_file_list(
+            message,
+            "🕘 <b>Recently downloaded</b>",
+            file_ids,
+            removal_action='recent_remove'
+        )
 
     @check_ban()
     @require_subscription()
     async def clear_recent_command(self, client: Client, message: Message):
         count = await self.repository.clear_recent_files(message.from_user.id)
         await message.reply_text(f"Cleared {count} recent file entr{'y' if count == 1 else 'ies'}.")
+
+    @check_ban()
+    @require_subscription()
+    async def recommendation_preferences_command(
+        self, client: Client, message: Message
+    ):
+        feedback = await self.repository.list_recommendation_feedback(
+            message.from_user.id
+        )
+        if not feedback:
+            return await message.reply_text("You have no recommendation preferences.")
+        file_ids = [item['file_unique_id'] for item in feedback]
+        files_by_id = await self.bot.media_repo.find_files_batch(file_ids)
+        lines = ["🎯 <b>Recommendation preferences</b>"]
+        buttons = []
+        for item in feedback:
+            file_id = item['file_unique_id']
+            file = files_by_id.get(file_id)
+            file_name = getattr(file, 'file_name', None) or file_id
+            signal = item.get('signal')
+            signal_text = "More like this" if signal == 'more' else "Not interested"
+            lines.append(
+                f"• <code>{html.escape(file_name[:80])}</code> — "
+                f"<b>{signal_text}</b>"
+            )
+            row = []
+            if file:
+                row.append(ButtonBuilder.file_button(file, is_private=True))
+            reset_callback = f"feature#rec_reset_list#{file_id}"
+            if len(reset_callback.encode('utf-8')) <= 64:
+                row.append(ButtonBuilder.action_button(
+                    "↩ Reset", callback_data=reset_callback
+                ))
+            if row:
+                buttons.append(row)
+        sent_message = await message.reply_text(
+            "\n".join(lines),
+            reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
+        )
+        self._schedule_feature_cleanup(sent_message)
 
     @check_ban()
     @require_subscription()
@@ -575,11 +702,150 @@ class FeatureHandler(BaseHandler):
                     f"Removed from {collection_name}.", show_alert=True
                 )
                 if action == 'unfavlist' and query.message:
-                    await self._remove_collection_menu_row(query.message, query.data)
+                    await self._remove_feature_menu_row(query.message, query.data)
                 return
             return await query.answer(
                 f"File is not in {collection_name}.", show_alert=True
             )
+
+        if action == 'col_pick' and self.service.enabled('FEATURE_FAVORITES'):
+            file = await self.bot.media_repo.find_file(value)
+            if not file:
+                return await query.answer("File is no longer available.", show_alert=True)
+            collections = await self.repository.list_collections(user_id)
+            if not collections:
+                return await query.answer(
+                    "Create a collection with /collection_create first.",
+                    show_alert=True
+                )
+            buttons = []
+            for collection in collections:
+                callback_data = (
+                    f"feature#col_add#{file.file_unique_id}#"
+                    f"{collection['callback_token']}"
+                )
+                if len(callback_data.encode('utf-8')) <= 64:
+                    buttons.append([ButtonBuilder.action_button(
+                        f"📁 {collection['name'][:40]}",
+                        callback_data=callback_data
+                    )])
+            if not buttons:
+                return await query.answer(
+                    "This file identifier is too long for a collection action.",
+                    show_alert=True
+                )
+            await query.answer()
+            picker = await query.message.reply_text(
+                f"Add <code>{html.escape(file.file_name)}</code> to:",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            self._schedule_feature_cleanup(picker)
+            return
+
+        if action == 'col_add' and self.service.enabled('FEATURE_FAVORITES'):
+            token = parts[3] if len(parts) == 4 else ''
+            file = await self.bot.media_repo.find_file(value)
+            if not file:
+                return await query.answer("File is no longer available.", show_alert=True)
+            collection, state = await self.repository.add_to_collection_by_token(
+                user_id, token, file.file_unique_id
+            )
+            if state == 'added':
+                text = f"Added to {collection['name']}."
+            elif state == 'duplicate':
+                text = f"Already in {collection['name']}."
+            elif state == 'full':
+                text = f"{collection['name']} is full (100 files)."
+            else:
+                text = "Collection not found. Refresh /collections."
+            await query.answer(text, show_alert=True)
+            if state in {'added', 'duplicate'} and query.message:
+                try:
+                    await query.message.delete()
+                except Exception as error:
+                    logger.debug(f"Could not remove collection picker: {error}")
+            return
+
+        if action == 'col_open' and self.service.enabled('FEATURE_FAVORITES'):
+            collection = await self.repository.get_collection_by_token(user_id, value)
+            if not collection:
+                return await query.answer("Collection not found.", show_alert=True)
+            await query.answer()
+            await self._send_file_list(
+                query.message,
+                f"📁 <b>{html.escape(collection['name'])}</b>",
+                collection.get('file_ids', []),
+                collection_name=collection['name']
+            )
+            return
+
+        if (
+            action in {'col_clear', 'col_delete'}
+            and self.service.enabled('FEATURE_FAVORITES')
+        ):
+            collection = await self.repository.get_collection_by_token(user_id, value)
+            if not collection:
+                return await query.answer("Collection not found.", show_alert=True)
+            operation = 'clear' if action == 'col_clear' else 'delete'
+            callback_data = f"feature#col_{operation}_confirm#{value}"
+            await query.answer()
+            confirmation = await query.message.reply_text(
+                f"Confirm {operation} of <b>{html.escape(collection['name'])}</b>?",
+                reply_markup=InlineKeyboardMarkup([[
+                    ButtonBuilder.action_button(
+                        f"✅ Confirm {operation}", callback_data=callback_data
+                    ),
+                    ButtonBuilder.action_button(
+                        "❌ Cancel", callback_data=f"feature#col_cancel#{value}"
+                    ),
+                ]])
+            )
+            self._schedule_feature_cleanup(confirmation)
+            return
+
+        if (
+            action in {'col_clear_confirm', 'col_delete_confirm'}
+            and self.service.enabled('FEATURE_FAVORITES')
+        ):
+            if action == 'col_clear_confirm':
+                removed_count = await self.repository.clear_collection_by_token(
+                    user_id, value
+                )
+                text = (
+                    f"Collection cleared. Removed {removed_count} file(s)."
+                    if removed_count is not None else "Collection not found."
+                )
+            else:
+                deleted = await self.repository.delete_collection_by_token(
+                    user_id, value
+                )
+                text = "Collection deleted." if deleted else "Collection not found."
+            await query.answer(text, show_alert=True)
+            if query.message:
+                try:
+                    await query.message.delete()
+                except Exception as error:
+                    logger.debug(f"Could not remove collection confirmation: {error}")
+            return
+
+        if action == 'col_cancel' and self.service.enabled('FEATURE_FAVORITES'):
+            await query.answer("Cancelled.")
+            if query.message:
+                try:
+                    await query.message.delete()
+                except Exception as error:
+                    logger.debug(f"Could not remove cancelled collection prompt: {error}")
+            return
+
+        if action == 'recent_remove' and self.service.enabled('FEATURE_RECENT_FILES'):
+            removed = await self.repository.remove_recent_file(user_id, value)
+            await query.answer(
+                "Removed from recent files." if removed else "Recent entry not found.",
+                show_alert=True
+            )
+            if removed and query.message:
+                await self._remove_feature_menu_row(query.message, query.data)
+            return
 
         if action in {'more', 'less'} and self.service.enabled('FEATURE_RECOMMENDATION_FEEDBACK'):
             file = await self.bot.media_repo.find_file(value)
@@ -589,6 +855,26 @@ class FeatureHandler(BaseHandler):
             await self.bot.recommendation_service.invalidate_user_recommendations(user_id)
             text = "Show more like this" if action == 'more' else "Hidden from recommendations"
             return await query.answer(text, show_alert=True)
+
+        if (
+            action in {'rec_reset', 'rec_reset_list'}
+            and self.service.enabled('FEATURE_RECOMMENDATION_FEEDBACK')
+        ):
+            removed = await self.repository.delete_recommendation_feedback(
+                user_id, value
+            )
+            if removed:
+                await self.bot.recommendation_service.invalidate_user_recommendations(
+                    user_id
+                )
+            await query.answer(
+                "Recommendation preference reset."
+                if removed else "Recommendation preference not found.",
+                show_alert=True
+            )
+            if removed and action == 'rec_reset_list' and query.message:
+                await self._remove_feature_menu_row(query.message, query.data)
+            return
 
         if action == 'report' and self.service.enabled('FEATURE_FILE_REPORTS'):
             file = await self.bot.media_repo.find_file(value)

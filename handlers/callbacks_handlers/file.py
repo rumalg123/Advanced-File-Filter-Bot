@@ -50,6 +50,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
         favorite_callback = callback('fav')
         unfavorite_callback = callback('unfav')
+        collection_callback = callback('col_pick')
         if getattr(config, 'FEATURE_FAVORITES', False):
             favorite_buttons = []
             if favorite_callback:
@@ -60,12 +61,17 @@ class FileCallbackHandler(BaseCommandHandler):
                 favorite_buttons.append(ButtonBuilder.action_button(
                     "💔 Remove", callback_data=unfavorite_callback
                 ))
+            if collection_callback:
+                favorite_buttons.append(ButtonBuilder.action_button(
+                    "📁 Collections", callback_data=collection_callback
+                ))
             if favorite_buttons:
                 rows.append(favorite_buttons)
         if getattr(config, 'FEATURE_RECOMMENDATION_FEEDBACK', False):
             feedback_buttons = []
             more_callback = callback('more')
             less_callback = callback('less')
+            reset_callback = callback('rec_reset')
             if more_callback:
                 feedback_buttons.append(ButtonBuilder.action_button(
                     "👍 More like this", callback_data=more_callback
@@ -73,6 +79,10 @@ class FileCallbackHandler(BaseCommandHandler):
             if less_callback:
                 feedback_buttons.append(ButtonBuilder.action_button(
                     "👎 Not interested", callback_data=less_callback
+                ))
+            if reset_callback:
+                feedback_buttons.append(ButtonBuilder.action_button(
+                    "↩ Reset", callback_data=reset_callback
                 ))
             if feedback_buttons:
                 rows.append(feedback_buttons)

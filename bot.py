@@ -525,6 +525,9 @@ class MediaSearchBot(Client):
                     BotCommand("favorites", "⭐ View favorite files"),
                     BotCommand("collections", "📚 View file collections"),
                     BotCommand("collection_create", "➕ Create a collection"),
+                    BotCommand("collection_rename", "✏️ Rename a collection"),
+                    BotCommand("collection_clear", "🧹 Clear a collection"),
+                    BotCommand("collection_delete", "🗑 Delete a collection"),
                 ])
             if self.config.FEATURE_RECENT_FILES:
                 feature_commands.extend([
@@ -533,6 +536,13 @@ class MediaSearchBot(Client):
                 ])
             if self.config.FEATURE_SEARCH_AUTOCOMPLETE:
                 feature_commands.append(BotCommand("suggest", "💡 Suggest valid searches"))
+            if self.config.FEATURE_RECOMMENDATION_FEEDBACK:
+                feature_commands.append(
+                    BotCommand(
+                        "recommendation_preferences",
+                        "🎯 Manage recommendation preferences"
+                    )
+                )
             if self.config.FEATURE_ADVANCED_SEARCH:
                 feature_commands.append(BotCommand("search_help", "🔎 Advanced search syntax"))
             if self.config.FEATURE_REQUEST_TRACKING:
