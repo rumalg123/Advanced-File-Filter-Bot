@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -177,10 +177,12 @@ async def test_file_only_post_search_recommendations_are_rendered():
     media_repo = SimpleNamespace(
         find_files_batch=AsyncMock(return_value={"recommended": file})
     )
-    message = SimpleNamespace(reply_text=AsyncMock())
+    sent_message = SimpleNamespace()
+    message = SimpleNamespace(reply_text=AsyncMock(return_value=sent_message))
+    cleanup = Mock()
     service = SearchResultsService(
         cache,
-        SimpleNamespace(),
+        SimpleNamespace(MESSAGE_DELETE_SECONDS=25),
         media_repo=media_repo
     )
 
@@ -191,12 +193,14 @@ async def test_file_only_post_search_recommendations_are_rendered():
         ["recommended"],
         [],
         5,
-        "@deadbeef"
+        "@deadbeef",
+        cleanup
     )
 
     message.reply_text.assert_awaited_once()
     markup = message.reply_text.await_args.kwargs["reply_markup"]
     assert markup.inline_keyboard[0][0].callback_data.endswith("#@deadbeef")
+    cleanup.assert_called_once_with(sent_message, 25)
 
 
 @pytest.mark.asyncio

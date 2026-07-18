@@ -196,7 +196,7 @@ class SearchResultsService:
                         asyncio.create_task(
                             self._send_recommendations(
                                 client, message, query, recommended_file_ids, similar_queries,
-                                user_id, query_reference
+                                user_id, query_reference, auto_delete_callback
                             )
                         )
                 except Exception as e:
@@ -261,7 +261,8 @@ class SearchResultsService:
         recommended_file_ids: List[str],
         similar_queries: List[str],
         user_id: int,
-        query_reference: str
+        query_reference: str,
+        auto_delete_callback: Optional[Callable[[Message, int], Any]] = None
     ):
         """Send recommendations as a separate message (non-blocking)"""
         try:
@@ -310,10 +311,15 @@ class SearchResultsService:
             
             if buttons:
                 text = "\n".join(text_parts) if text_parts else "💡 <b>Recommendations</b>"
-                await message.reply_text(
+                sent_message = await message.reply_text(
                     text,
                     reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
                 )
+                delete_time = int(
+                    getattr(self.config, 'MESSAGE_DELETE_SECONDS', 0) or 0
+                )
+                if delete_time > 0 and auto_delete_callback:
+                    auto_delete_callback(sent_message, delete_time)
         except Exception as e:
             logger.debug(f"Error sending recommendations: {e}")
 

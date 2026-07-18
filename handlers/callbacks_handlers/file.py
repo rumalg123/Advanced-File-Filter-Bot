@@ -49,12 +49,19 @@ class FileCallbackHandler(BaseCommandHandler):
             return value if len(value.encode('utf-8')) <= 64 else None
 
         favorite_callback = callback('fav')
-        if getattr(config, 'FEATURE_FAVORITES', False) and favorite_callback:
-            rows.append([
-                ButtonBuilder.action_button(
+        unfavorite_callback = callback('unfav')
+        if getattr(config, 'FEATURE_FAVORITES', False):
+            favorite_buttons = []
+            if favorite_callback:
+                favorite_buttons.append(ButtonBuilder.action_button(
                     "⭐ Favorite", callback_data=favorite_callback
-                )
-            ])
+                ))
+            if unfavorite_callback:
+                favorite_buttons.append(ButtonBuilder.action_button(
+                    "💔 Remove", callback_data=unfavorite_callback
+                ))
+            if favorite_buttons:
+                rows.append(favorite_buttons)
         if getattr(config, 'FEATURE_RECOMMENDATION_FEEDBACK', False):
             feedback_buttons = []
             more_callback = callback('more')

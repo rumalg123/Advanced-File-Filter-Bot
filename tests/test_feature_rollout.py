@@ -1,7 +1,9 @@
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from pyrogram.errors import UserIsBlocked
 
 from config.settings import FeatureConfig
 from core.cache.config import CacheKeyGenerator
@@ -401,7 +403,7 @@ def test_delivery_action_buttons_are_off_by_default_and_callback_safe_when_enabl
         for button in row
     ]
     assert {callback.split('#')[1] for callback in callbacks} == {
-        'fav', 'more', 'less', 'report'
+        'fav', 'unfav', 'more', 'less', 'report'
     }
     assert all(len(callback.encode()) <= 64 for callback in callbacks)
 
@@ -416,8 +418,15 @@ async def test_feature_callbacks_mutate_only_the_clicking_users_data():
     file = make_file()
     repository = SimpleNamespace(
         add_to_collection=AsyncMock(return_value=True),
+        remove_from_collection=AsyncMock(return_value=True),
         set_recommendation_feedback=AsyncMock(return_value=True),
-        create_file_report=AsyncMock(return_value=({'_id': 'report'}, True))
+        create_file_report=AsyncMock(return_value=({
+            '_id': 'report',
+            'file_unique_id': file.file_unique_id,
+            'file_name': file.file_name,
+            'reason': 'broken',
+            'reporter_ids': [77],
+        }, 'created'))
     )
     service = SimpleNamespace(
         enabled=lambda flag: flag in {
@@ -429,7 +438,7 @@ async def test_feature_callbacks_mutate_only_the_clicking_users_data():
     recommendation_service = SimpleNamespace(
         invalidate_user_recommendations=AsyncMock()
     )
-    message = SimpleNamespace(reply_text=AsyncMock())
+    message = SimpleNamespace(reply_text=AsyncMock(), delete=AsyncMock())
     query = SimpleNamespace(
         data=f"feature#fav#{file.file_unique_id}",
         from_user=SimpleNamespace(id=77),
@@ -440,6 +449,7 @@ async def test_feature_callbacks_mutate_only_the_clicking_users_data():
     handler.service = service
     handler.repository = repository
     handler.bot = SimpleNamespace(
+        config=SimpleNamespace(MESSAGE_DELETE_SECONDS=0, LOG_CHANNEL=0),
         media_repo=SimpleNamespace(find_file=AsyncMock(return_value=file)),
         recommendation_service=recommendation_service
     )
@@ -448,6 +458,12 @@ async def test_feature_callbacks_mutate_only_the_clicking_users_data():
     await callback(handler, None, query)
     repository.add_to_collection.assert_awaited_once_with(
         77, file.file_unique_id
+    )
+
+    query.data = f"feature#unfav#{file.file_unique_id}"
+    await callback(handler, None, query)
+    repository.remove_from_collection.assert_awaited_once_with(
+        77, file.file_unique_id, 'Favorites'
     )
 
     query.data = f"feature#less#{file.file_unique_id}"
@@ -464,8 +480,396 @@ async def test_feature_callbacks_mutate_only_the_clicking_users_data():
     query.data = f"feature#reason_broken#{file.file_unique_id}"
     await callback(handler, None, query)
     repository.create_file_report.assert_awaited_once_with(
-        77, file.file_unique_id, 'broken'
+        77, file.file_unique_id, 'broken', file.file_name
     )
+
+
+@pytest.mark.asyncio
+async def test_report_menu_cleanup_and_log_channel_include_file_details():
+    file = make_file('reported', 'Glory.E24.AMZN.1080p.mkv')
+    report = {
+        '_id': 'report-1',
+        'file_unique_id': file.file_unique_id,
+        'file_name': file.file_name,
+        'reason': 'quality',
+        'reporter_ids': [77],
+    }
+    repository = SimpleNamespace(
+        create_file_report=AsyncMock(return_value=(report, 'created'))
+    )
+    service = SimpleNamespace(
+        enabled=lambda flag: flag == 'FEATURE_FILE_REPORTS'
+    )
+    report_menu = SimpleNamespace(delete=AsyncMock())
+    source_message = SimpleNamespace(
+        reply_text=AsyncMock(return_value=report_menu),
+        delete=AsyncMock()
+    )
+    query = SimpleNamespace(
+        data=f"feature#report#{file.file_unique_id}",
+        from_user=SimpleNamespace(
+            id=77, first_name='Test', last_name='Reporter', username='tester'
+        ),
+        message=source_message,
+        answer=AsyncMock()
+    )
+    client = SimpleNamespace(send_message=AsyncMock())
+    handler = object.__new__(FeatureHandler)
+    handler.service = service
+    handler.repository = repository
+    handler.bot = SimpleNamespace(
+        config=SimpleNamespace(MESSAGE_DELETE_SECONDS=45, LOG_CHANNEL=-100123),
+        media_repo=SimpleNamespace(find_file=AsyncMock(return_value=file))
+    )
+    handler._schedule_auto_delete = Mock()
+    callback = FeatureHandler.feature_callback.__wrapped__.__wrapped__
+
+    await callback(handler, client, query)
+    handler._schedule_auto_delete.assert_called_once_with(report_menu, 45)
+
+    query.data = f"feature#reason_quality#{file.file_unique_id}"
+    query.message = report_menu
+    await callback(handler, client, query)
+
+    report_menu.delete.assert_awaited_once()
+    log_text = client.send_message.await_args.args[1]
+    assert file.file_name in log_text
+    assert file.file_unique_id in log_text
+    assert 'Poor quality' in log_text
+    assert 'Test Reporter' in log_text
+
+
+@pytest.mark.asyncio
+async def test_favorites_menu_has_remove_action_and_uses_cleanup_timer():
+    file = make_file('favorite-file')
+    sent_menu = SimpleNamespace(
+        reply_markup=None,
+        edit_reply_markup=AsyncMock(),
+        delete=AsyncMock()
+    )
+    command_message = SimpleNamespace(
+        reply_text=AsyncMock(return_value=sent_menu)
+    )
+    repository = SimpleNamespace(
+        remove_from_collection=AsyncMock(return_value=True)
+    )
+    handler = object.__new__(FeatureHandler)
+    handler.service = SimpleNamespace(
+        enabled=lambda flag: flag == 'FEATURE_FAVORITES'
+    )
+    handler.repository = repository
+    handler.bot = SimpleNamespace(
+        config=SimpleNamespace(MESSAGE_DELETE_SECONDS=30),
+        media_repo=SimpleNamespace(
+            find_files_batch=AsyncMock(return_value={file.file_unique_id: file})
+        )
+    )
+    handler._schedule_auto_delete = Mock()
+
+    await handler._send_file_list(
+        command_message,
+        '⭐ <b>Favorites</b>',
+        [file.file_unique_id],
+        collection_name='Favorites'
+    )
+
+    markup = command_message.reply_text.await_args.kwargs['reply_markup']
+    sent_menu.reply_markup = markup
+    remove_button = next(
+        button
+        for button in markup.inline_keyboard[0]
+        if button.callback_data.startswith('feature#unfavlist#')
+    )
+    handler._schedule_auto_delete.assert_called_once_with(sent_menu, 30)
+
+    query = SimpleNamespace(
+        data=remove_button.callback_data,
+        from_user=SimpleNamespace(id=77),
+        message=sent_menu,
+        answer=AsyncMock()
+    )
+    callback = FeatureHandler.feature_callback.__wrapped__.__wrapped__
+    await callback(handler, None, query)
+
+    repository.remove_from_collection.assert_awaited_once_with(
+        77, file.file_unique_id, 'Favorites'
+    )
+    sent_menu.delete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_favorite_removal_requires_the_file_to_be_in_the_collection():
+    collection = SimpleNamespace(
+        update_one=AsyncMock(return_value=SimpleNamespace(modified_count=0))
+    )
+
+    class Pool:
+        async def get_collection(self, name):
+            assert name == 'user_collections'
+            return collection
+
+        async def execute_with_retry(self, function, *args, **kwargs):
+            return await function(*args, **kwargs)
+
+    repository = FeatureRepository(Pool())
+    removed = await repository.remove_from_collection(
+        77, 'file-1', 'Favorites'
+    )
+
+    assert removed is False
+    remove_filter = collection.update_one.await_args.args[0]
+    assert remove_filter == {
+        'user_id': 77,
+        'normalized_name': 'favorites',
+        'file_ids': 'file-1',
+    }
+
+
+@pytest.mark.asyncio
+async def test_file_reports_deduplicate_reporters_and_can_reopen_after_resolution():
+    class ReportCollection:
+        class Cursor:
+            def __init__(self, collection, query):
+                self.collection = collection
+                self.query = query
+
+            def sort(self, *args, **kwargs):
+                return self
+
+            def limit(self, *args, **kwargs):
+                return self
+
+            async def to_list(self, length):
+                return [
+                    deepcopy(document)
+                    for document in self.collection.documents.values()
+                    if self.collection._matches(document, self.query)
+                ][:length]
+
+        def __init__(self):
+            self.documents = {}
+
+        @staticmethod
+        def _matches(document, query):
+            for key, expected in query.items():
+                actual = document.get(key)
+                if isinstance(expected, dict) and '$ne' in expected:
+                    if actual == expected['$ne']:
+                        return False
+                elif actual != expected:
+                    return False
+            return True
+
+        async def find_one(self, query):
+            for document in self.documents.values():
+                if self._matches(document, query):
+                    return deepcopy(document)
+            return None
+
+        def find(self, query):
+            return self.Cursor(self, query)
+
+        async def insert_one(self, document):
+            self.documents[document['_id']] = deepcopy(document)
+            return SimpleNamespace(inserted_id=document['_id'])
+
+        async def update_one(self, query, update):
+            for report_id, document in self.documents.items():
+                if not self._matches(document, query):
+                    continue
+                before = deepcopy(document)
+                for key, value in update.get('$set', {}).items():
+                    document[key] = deepcopy(value)
+                for key in update.get('$unset', {}):
+                    document.pop(key, None)
+                for key, value in update.get('$addToSet', {}).items():
+                    additions = value.get('$each', []) if isinstance(value, dict) else [value]
+                    target = document.setdefault(key, [])
+                    for addition in additions:
+                        if addition not in target:
+                            target.append(addition)
+                for key, value in update.get('$push', {}).items():
+                    document.setdefault(key, []).append(deepcopy(value))
+                self.documents[report_id] = document
+                return SimpleNamespace(
+                    matched_count=1,
+                    modified_count=int(document != before)
+                )
+            return SimpleNamespace(matched_count=0, modified_count=0)
+
+        async def find_one_and_update(self, query, update, **kwargs):
+            result = await self.update_one(query, update)
+            if not result.matched_count:
+                return None
+            return await self.find_one({'_id': query['_id']})
+
+    collection = ReportCollection()
+
+    class Pool:
+        async def get_collection(self, name):
+            assert name == 'file_reports'
+            return collection
+
+        async def execute_with_retry(self, function, *args, **kwargs):
+            return await function(*args, **kwargs)
+
+    repository = FeatureRepository(Pool())
+    first, first_state = await repository.create_file_report(
+        1, 'file-1', 'broken', 'Movie.mkv'
+    )
+    second, second_state = await repository.create_file_report(
+        2, 'file-1', 'broken', 'Movie.mkv'
+    )
+    duplicate, duplicate_state = await repository.create_file_report(
+        2, 'file-1', 'broken', 'Movie.mkv'
+    )
+
+    assert first_state == 'created'
+    assert second_state == 'subscribed'
+    assert duplicate_state == 'duplicate'
+    assert first['_id'] == second['_id'] == duplicate['_id']
+    assert len(collection.documents) == 1
+    assert second['reporter_ids'] == [1, 2]
+
+    collection.documents['legacy-duplicate'] = {
+        '_id': 'legacy-duplicate',
+        'user_id': 4,
+        'file_unique_id': 'file-1',
+        'file_name': 'Movie.mkv',
+        'reason': 'broken',
+        'status': 'open',
+        'created_at': first['created_at'],
+        'updated_at': first['updated_at'],
+    }
+    listed = await repository.list_file_reports('open')
+    assert len(listed) == 1
+    assert listed[0]['reporter_ids'] == [1, 2, 4]
+    assert listed[0]['duplicate_report_ids'] == ['legacy-duplicate']
+
+    resolved = await repository.resolve_file_report(first['_id'], admin_id=99)
+    assert resolved['status'] == 'resolved'
+    assert resolved['reporter_ids'] == [1, 2, 4]
+    assert resolved['resolution_history'][0]['resolved_by'] == 99
+    assert collection.documents['legacy-duplicate']['status'] == 'merged'
+
+    reopened, reopened_state = await repository.create_file_report(
+        3, 'file-1', 'broken', 'Movie.mkv'
+    )
+    assert reopened_state == 'created'
+    assert reopened['reporter_ids'] == [3]
+    assert len(collection.documents) == 2
+
+
+@pytest.mark.asyncio
+async def test_report_resolution_notifies_subscribers_and_skips_blocked_users():
+    file = make_file('reported-file', 'Reported.Movie.2026.1080p.mkv')
+    report = {
+        '_id': 'report-1',
+        'file_unique_id': file.file_unique_id,
+        'file_name': file.file_name,
+        'reason': 'broken',
+        'reporter_ids': [10, 20],
+        'status': 'resolved',
+    }
+    repository = SimpleNamespace(
+        resolve_file_report=AsyncMock(return_value=report),
+        record_report_notification_results=AsyncMock()
+    )
+    client = SimpleNamespace(
+        get_chat=AsyncMock(side_effect=[SimpleNamespace(id=10), UserIsBlocked()]),
+        send_message=AsyncMock()
+    )
+    message = SimpleNamespace(
+        text='/resolve_report report-1',
+        from_user=SimpleNamespace(id=99),
+        reply_text=AsyncMock()
+    )
+    handler = object.__new__(FeatureHandler)
+    handler.repository = repository
+    handler.bot = SimpleNamespace(
+        config=SimpleNamespace(LOG_CHANNEL=0),
+        media_repo=SimpleNamespace(find_file=AsyncMock(return_value=file))
+    )
+
+    await handler.resolve_report_command(client, message)
+
+    client.send_message.assert_awaited_once()
+    assert client.send_message.await_args.args[0] == 10
+    repository.record_report_notification_results.assert_awaited_once_with(
+        'report-1', [10], [20], []
+    )
+    result_text = message.reply_text.await_args.args[0]
+    assert 'Notified 1' in result_text
+    assert 'unreachable 1' in result_text
+
+
+@pytest.mark.asyncio
+async def test_admin_report_list_resolves_and_displays_legacy_file_names():
+    file = make_file('legacy-report-file', 'Legacy.Reported.Movie.mkv')
+    report = {
+        '_id': 'legacy-report',
+        'user_id': 10,
+        'file_unique_id': file.file_unique_id,
+        'reason': 'incorrect',
+        'status': 'open',
+    }
+    message = SimpleNamespace(
+        text='/file_reports open',
+        reply_text=AsyncMock()
+    )
+    handler = object.__new__(FeatureHandler)
+    handler.repository = SimpleNamespace(
+        list_file_reports=AsyncMock(return_value=[report])
+    )
+    handler.bot = SimpleNamespace(
+        media_repo=SimpleNamespace(find_files_batch=AsyncMock(return_value={
+            file.file_unique_id: file
+        }))
+    )
+
+    await handler.file_reports_command(None, message)
+
+    report_text = message.reply_text.await_args.args[0]
+    assert file.file_name in report_text
+    assert file.file_unique_id in report_text
+    assert 'Incorrect title or metadata' in report_text
+    assert 'Reporters: <b>1</b>' in report_text
+
+
+@pytest.mark.asyncio
+async def test_saved_search_and_suggestion_menus_use_cleanup_timer():
+    saved_menu = SimpleNamespace()
+    suggestion_menu = SimpleNamespace()
+    message = SimpleNamespace(
+        text='/saved_searches',
+        from_user=SimpleNamespace(id=77),
+        reply_text=AsyncMock(side_effect=[saved_menu, suggestion_menu])
+    )
+    handler = object.__new__(FeatureHandler)
+    handler.repository = SimpleNamespace(
+        list_saved_searches=AsyncMock(return_value=[{
+            '_id': 'saved-1', 'query': 'glory', 'active': True
+        }])
+    )
+    handler.service = SimpleNamespace(
+        autocomplete=AsyncMock(return_value=['glory 2026'])
+    )
+    handler.bot = SimpleNamespace(
+        config=SimpleNamespace(MESSAGE_DELETE_SECONDS=35),
+        cache=SortedCache()
+    )
+    handler._schedule_auto_delete = Mock()
+
+    saved_callback = FeatureHandler.saved_searches_command.__wrapped__.__wrapped__
+    suggest_callback = FeatureHandler.suggest_command.__wrapped__.__wrapped__
+    await saved_callback(handler, None, message)
+    message.text = '/suggest glory'
+    await suggest_callback(handler, None, message)
+
+    assert handler._schedule_auto_delete.call_args_list == [
+        ((saved_menu, 35), {}),
+        ((suggestion_menu, 35), {}),
+    ]
 
 
 @pytest.mark.asyncio

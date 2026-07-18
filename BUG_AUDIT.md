@@ -34,6 +34,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-024 | Medium | Fixed | Telegram formatting | HTML-producing `ErrorMessageFormatter` output is passed to callback alerts and inline switch text, but Telegram never parses markup in those plain-text-only fields, so users see literal tags such as `<b>Success:</b>`. | Every callback/inline answer requests `plain_text=True`, literal HTML is absent from those surfaces, and a repository-wide AST regression test enforces both rules. |
 | BUG-025 | Medium | Fixed | Callback handling | Variant headings and pagination indicators are registered with a synchronous lambda that returns `CallbackQuery.answer()` without awaiting it, producing runtime warnings under Wzgram/Pyrogram compatibility dispatch. | Every callback-answer coroutine is awaited, inert callbacks use an async handler, and a repository-wide AST regression test guards the rule. |
 | BUG-026 | Medium | Fixed | Search pagination | Variant grouping is applied only by the initial search-result renderer; pagination rebuilds plain file rows, so grouping disappears after moving forward or back. | Initial results and every pagination direction use one shared variant-aware row builder, preserving every file and group heading. |
+| BUG-027 | High | Fixed | File reports | Reports are keyed by reporter, contain only a file ID, are not sent to `LOG_CHANNEL`, and resolution neither knows nor notifies all affected users. | One open file/reason issue subscribes every distinct reporter, stores/displays filenames, logs detailed events, safely notifies reachable reporters on resolution, and records notification outcomes. |
+| BUG-028 | Medium | Fixed | Transient feature messages | Report reason, favorites, saved-search, autocomplete, and post-search recommendation menus bypass `MESSAGE_DELETE_SECONDS` and remain after their parent results/files disappear. | Every transient feature menu uses the tracked cleanup scheduler when the configured interval is positive; selected report menus are removed immediately. |
 
 ## Verification log
 
@@ -80,3 +82,9 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   construction so initial, forward, and backward pages render identically.
   Added callback-await and forward/back pagination regressions; all 72 tests,
   `compileall`, Ruff undefined-name checks, and `pip check` passed.
+- 2026-07-18: Fixed BUG-027 and BUG-028. File/reason reports now deduplicate
+  atomically, subscribe all reporters, coalesce legacy duplicates, retain file
+  names, log detailed events, and notify reachable users when resolved. Added
+  favorites removal controls and tracked cleanup for report, favorites, recent,
+  saved-search, suggestion, and recommendation menus. All 79 tests, `compileall`,
+  Ruff undefined-name checks, `pip check`, and `git diff --check` passed.

@@ -399,7 +399,7 @@ The bot must be a member and usually an administrator in each configured channel
 | `PREMIUM_DURATION_DAYS` | `30` | Number of days granted by `/addpremium`. |
 | `NON_PREMIUM_DAILY_LIMIT` | `10` | Daily successful-file quota for free users. |
 | `PREMIUM_PRICE` | `$1` | Display value used by `/plans`. |
-| `MESSAGE_DELETE_SECONDS` | `300` | Delay before temporary result/file messages are auto-deleted. |
+| `MESSAGE_DELETE_SECONDS` | `300` | Delay before temporary result/file, report, favorites, saved-search, suggestion, and recommendation messages are auto-deleted. `0` disables cleanup. |
 | `MAX_BTN_SIZE` | `12` | Maximum search-result buttons per page. |
 | `REQUEST_PER_DAY` | `3` | Daily `#request` allowance before warnings. |
 | `REQUEST_WARNING_LIMIT` | `5` | Request-abuse warnings before automatic ban. |
@@ -414,7 +414,7 @@ Every value below defaults to `false`:
 | `FEATURE_FAVORITES` | Favorites, named collections, commands, and result-button actions. |
 | `FEATURE_ADVANCED_SEARCH` | Structured `key:value` search filters and `/search_help`. |
 | `FEATURE_RECOMMENDATION_FEEDBACK` | More/less recommendation buttons and persisted feedback. |
-| `FEATURE_FILE_REPORTS` | User report buttons plus `/file_reports` and `/resolve_report` for admins. |
+| `FEATURE_FILE_REPORTS` | Deduplicated user report buttons, detailed `LOG_CHANNEL` events, `/file_reports`, resolution notifications, and `/resolve_report` for admins. |
 | `FEATURE_SEARCH_AUTOCOMPLETE` | `/suggest` using user and global search history. |
 | `FEATURE_DUPLICATE_GROUPING` | Group likely encode/quality variants without discarding files. |
 | `FEATURE_REQUEST_TRACKING` | Deduplicate/persist unresolved `#request` items and expose `/myrequests`. |
@@ -544,6 +544,10 @@ Send ordinary text with at least two characters to search. In inline mode, type 
 | Request tracking | `/myrequests` |
 
 For `/favorite`, reply to a delivered file, or use `/favorite file_unique_id [collection name]`.
+Delivered files expose Favorite and Remove buttons. `/favorites` also provides a
+Remove action for each file when its callback fits Telegram's 64-byte limit;
+`/unfavorite file_unique_id [collection name]` remains available for every
+collection name.
 
 ### Group filters and connections
 
@@ -596,6 +600,14 @@ Primary-admin-only commands:
 - `/verify` runs file-access verification.
 - `/cancel` cancels an active settings operation.
 - `/shell command` executes a server shell command. Treat the primary admin account as infrastructure-level access.
+
+File reports are deduplicated by file and reason. If another user reports an
+already-open issue, they are subscribed to the existing report and are notified
+when an administrator resolves it. `/file_reports` displays the filename, file
+ID, reason, and reporter count. New reports, additional reporters, and resolution
+outcomes are sent to `LOG_CHANNEL` when it is configured. Resolution performs a
+Telegram access check before messaging each reporter and safely records blocked,
+deleted, or otherwise unreachable users.
 
 ### Request workflow
 

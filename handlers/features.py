@@ -4,6 +4,7 @@ import html
 import shlex
 
 from pyrogram import Client, filters
+from pyrogram.errors import InputUserDeactivated, PeerIdInvalid, UserIsBlocked
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from core.utils.button_builder import ButtonBuilder
@@ -11,6 +12,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
 from core.utils.pagination import create_search_query_reference
+from core.utils.telegram_api import telegram_api
 from handlers.base import BaseHandler
 from handlers.decorators import check_ban, require_subscription
 
@@ -136,8 +138,36 @@ class FeatureHandler(BaseHandler):
                 return media.file_unique_id
         return None
 
+    def _schedule_feature_cleanup(self, sent_message: Message | None) -> None:
+        """Apply the configured cleanup timer to transient feature messages."""
+        delete_time = int(
+            getattr(getattr(self.bot, 'config', None), 'MESSAGE_DELETE_SECONDS', 0)
+            or 0
+        )
+        if sent_message and delete_time > 0:
+            self._schedule_auto_delete(sent_message, delete_time)
+
+    @staticmethod
+    def _reporter_ids(report: dict) -> list[int]:
+        values = list(report.get('reporter_ids') or [])
+        if report.get('user_id') is not None:
+            values.append(report['user_id'])
+        reporter_ids = []
+        for value in values:
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                continue
+            if value not in reporter_ids:
+                reporter_ids.append(value)
+        return reporter_ids
+
     async def _send_file_list(
-        self, message: Message, title: str, file_ids: list[str]
+        self,
+        message: Message,
+        title: str,
+        file_ids: list[str],
+        collection_name: str | None = None
     ) -> None:
         files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
         files = [
@@ -146,14 +176,161 @@ class FeatureHandler(BaseHandler):
             if files_by_id.get(file_id) is not None
         ]
         if not files:
-            await message.reply_text(f"{title}\n\nNo available files were found.")
+            sent_message = await message.reply_text(
+                f"{title}\n\nNo available files were found."
+            )
+            self._schedule_feature_cleanup(sent_message)
             return
-        buttons = ButtonBuilder.file_buttons_row(files, is_private=True)
-        await message.reply_text(
+        buttons = []
+        for file in files:
+            row = [ButtonBuilder.file_button(file, is_private=True)]
+            if collection_name:
+                remove_callback = (
+                    f"feature#unfavlist#{file.file_unique_id}#{collection_name}"
+                )
+                if len(remove_callback.encode('utf-8')) <= 64:
+                    row.append(ButtonBuilder.action_button(
+                        "🗑 Remove", callback_data=remove_callback
+                    ))
+            buttons.append(row)
+        sent_message = await message.reply_text(
             f"{title}\n\n{len(files)} file(s)",
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=CaptionFormatter.get_parse_mode()
         )
+        self._schedule_feature_cleanup(sent_message)
+
+    async def _send_report_log(self, client: Client, text: str) -> bool:
+        log_channel = getattr(
+            getattr(self.bot, 'config', None), 'LOG_CHANNEL', None
+        )
+        if not log_channel:
+            return False
+        try:
+            await telegram_api.call_api(
+                client.send_message,
+                log_channel,
+                text,
+                parse_mode=CaptionFormatter.get_parse_mode(),
+                chat_id=log_channel
+            )
+            return True
+        except Exception as error:
+            logger.warning(f"Could not send file-report event to LOG_CHANNEL: {error}")
+            return False
+
+    async def _log_report_submission(
+        self,
+        client: Client,
+        report: dict,
+        file,
+        reporter,
+        state: str
+    ) -> None:
+        event = (
+            "New file report" if state == 'created'
+            else "Additional reporter subscribed"
+        )
+        file_name = (
+            getattr(file, 'file_name', None)
+            or report.get('file_name')
+            or "Unavailable file"
+        )
+        first_name = getattr(reporter, 'first_name', None) or "User"
+        last_name = getattr(reporter, 'last_name', None) or ""
+        display_name = " ".join(part for part in (first_name, last_name) if part)
+        username = getattr(reporter, 'username', None)
+        username_text = f"@{username}" if username else "Not set"
+        reason = self.REPORT_REASONS.get(
+            report.get('reason'), report.get('reason', 'Unknown')
+        )
+        reporter_count = len(self._reporter_ids(report))
+        await self._send_report_log(
+            client,
+            "🚩 <b>File report</b>\n"
+            f"Event: <b>{html.escape(event)}</b>\n"
+            f"Report ID: <code>{html.escape(str(report.get('_id', 'unknown')))}</code>\n"
+            f"File: <code>{html.escape(str(file_name))}</code>\n"
+            f"File ID: <code>{html.escape(str(report.get('file_unique_id', 'unknown')))}</code>\n"
+            f"Reason: <b>{html.escape(str(reason))}</b>\n"
+            f"Reporter: <b>{html.escape(display_name)}</b> "
+            f"(<code>{getattr(reporter, 'id', 'unknown')}</code>)\n"
+            f"Username: <code>{html.escape(username_text)}</code>\n"
+            f"Subscribed reporters: <b>{reporter_count}</b>"
+        )
+
+    async def _notify_reporters(
+        self, client: Client, report: dict, file_name: str
+    ) -> dict[str, list[int]]:
+        results = {'notified': [], 'unreachable': [], 'failed': []}
+        reason = self.REPORT_REASONS.get(
+            report.get('reason'), report.get('reason', 'Unknown')
+        )
+        notification = (
+            "✅ <b>Your file report was resolved</b>\n\n"
+            f"File: <code>{html.escape(file_name)}</code>\n"
+            f"Reason: <b>{html.escape(str(reason))}</b>\n"
+            f"Report ID: <code>{html.escape(str(report.get('_id', 'unknown')))}</code>\n\n"
+            "Thank you for helping us keep the file library accurate."
+        )
+        blocked_errors = (UserIsBlocked, InputUserDeactivated, PeerIdInvalid)
+
+        for reporter_id in self._reporter_ids(report):
+            try:
+                await telegram_api.call_api(
+                    client.get_chat, reporter_id, chat_id=reporter_id
+                )
+            except blocked_errors:
+                results['unreachable'].append(reporter_id)
+                continue
+            except Exception as error:
+                logger.warning(
+                    f"Could not verify report notification recipient {reporter_id}: {error}"
+                )
+                results['failed'].append(reporter_id)
+                continue
+
+            try:
+                await telegram_api.call_api(
+                    client.send_message,
+                    reporter_id,
+                    notification,
+                    parse_mode=CaptionFormatter.get_parse_mode(),
+                    chat_id=reporter_id
+                )
+                results['notified'].append(reporter_id)
+            except blocked_errors:
+                results['unreachable'].append(reporter_id)
+            except Exception as error:
+                logger.error(
+                    f"Failed to notify reporter {reporter_id} for "
+                    f"{report.get('_id')}: {error}"
+                )
+                results['failed'].append(reporter_id)
+
+        return results
+
+    @staticmethod
+    async def _remove_collection_menu_row(message: Message, callback_data: str) -> None:
+        """Remove a deleted favorite from an already rendered collection menu."""
+        markup = getattr(message, 'reply_markup', None)
+        rows = list(getattr(markup, 'inline_keyboard', None) or [])
+        if not rows:
+            return
+        remaining = [
+            row for row in rows
+            if not any(
+                getattr(button, 'callback_data', None) == callback_data
+                for button in row
+            )
+        ]
+        try:
+            if remaining:
+                await message.edit_reply_markup(InlineKeyboardMarkup(remaining))
+            else:
+                await message.delete()
+        except Exception as error:
+            logger.debug(f"Could not refresh favorites menu after removal: {error}")
 
     @check_ban()
     @require_subscription()
@@ -196,9 +373,10 @@ class FeatureHandler(BaseHandler):
                     "🗑 Delete", callback_data=f"feature#saved_delete#{saved['_id']}"
                 ),
             ])
-        await message.reply_text(
+        sent_message = await message.reply_text(
             "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons)
         )
+        self._schedule_feature_cleanup(sent_message)
 
     async def _favorite_mutation(self, message: Message, remove: bool = False):
         arguments = self._arguments(message)
@@ -257,7 +435,8 @@ class FeatureHandler(BaseHandler):
         await self._send_file_list(
             message,
             f"⭐ <b>{html.escape(collection['name'])}</b>",
-            collection.get('file_ids', [])
+            collection.get('file_ids', []),
+            collection_name=collection['name']
         )
 
     @check_ban()
@@ -331,10 +510,11 @@ class FeatureHandler(BaseHandler):
                     )
                 )
             ])
-        await message.reply_text(
+        sent_message = await message.reply_text(
             "💡 <b>Search suggestions</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+        self._schedule_feature_cleanup(sent_message)
 
     @check_ban()
     @require_subscription()
@@ -382,6 +562,25 @@ class FeatureHandler(BaseHandler):
             await self.repository.add_to_collection(user_id, file.file_unique_id)
             return await query.answer("⭐ Added to Favorites", show_alert=True)
 
+        if (
+            action in {'unfav', 'unfavlist'}
+            and self.service.enabled('FEATURE_FAVORITES')
+        ):
+            collection_name = parts[3] if len(parts) == 4 else "Favorites"
+            removed = await self.repository.remove_from_collection(
+                user_id, value, collection_name
+            )
+            if removed:
+                await query.answer(
+                    f"Removed from {collection_name}.", show_alert=True
+                )
+                if action == 'unfavlist' and query.message:
+                    await self._remove_collection_menu_row(query.message, query.data)
+                return
+            return await query.answer(
+                f"File is not in {collection_name}.", show_alert=True
+            )
+
         if action in {'more', 'less'} and self.service.enabled('FEATURE_RECOMMENDATION_FEEDBACK'):
             file = await self.bot.media_repo.find_file(value)
             if not file:
@@ -401,19 +600,48 @@ class FeatureHandler(BaseHandler):
                 )]
                 for reason, label in self.REPORT_REASONS.items()
             ]
-            await query.message.reply_text(
+            await query.answer()
+            menu = await query.message.reply_text(
                 f"Report <code>{html.escape(display_name)}</code> as:",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
-            return await query.answer()
+            self._schedule_feature_cleanup(menu)
+            return
 
         if action.startswith('reason_') and self.service.enabled('FEATURE_FILE_REPORTS'):
             reason = action.removeprefix('reason_')
             if reason not in self.REPORT_REASONS:
                 return await query.answer("Invalid report reason.", show_alert=True)
-            _report, created = await self.repository.create_file_report(user_id, value, reason)
-            text = "Report submitted." if created else "You already submitted this report."
-            return await query.answer(text, show_alert=True)
+            file = await self.bot.media_repo.find_file(value)
+            report, state = await self.repository.create_file_report(
+                user_id,
+                value,
+                reason,
+                file.file_name if file else None
+            )
+            if state == 'created':
+                text = "Report submitted."
+            elif state == 'subscribed':
+                text = (
+                    "This issue is already reported. You will be notified when "
+                    "it is resolved."
+                )
+            else:
+                text = (
+                    "You already reported this issue. You will be notified when "
+                    "it is resolved."
+                )
+            await query.answer(text, show_alert=True)
+            if query.message:
+                try:
+                    await query.message.delete()
+                except Exception as error:
+                    logger.debug(f"Could not remove selected report menu: {error}")
+            if state != 'duplicate':
+                await self._log_report_submission(
+                    client, report, file, query.from_user, state
+                )
+            return
 
         if action.startswith('saved_') and self.service.enabled('FEATURE_SAVED_SEARCH_ALERTS'):
             operation = action.removeprefix('saved_')
@@ -442,12 +670,38 @@ class FeatureHandler(BaseHandler):
         reports = await self.repository.list_file_reports(status=status)
         if not reports:
             return await message.reply_text("No matching file reports.")
+        file_ids = list({
+            report.get('file_unique_id') for report in reports
+            if report.get('file_unique_id')
+        })
+        try:
+            files_by_id = await self.bot.media_repo.find_files_batch(file_ids)
+        except Exception as error:
+            logger.warning(f"Could not resolve report filenames in batch: {error}")
+            files_by_id = {}
         lines = [f"🚩 <b>{status.title()} file reports</b>"]
         for report in reports:
-            lines.append(
-                f"• <code>{report['_id']}</code> — {html.escape(report['reason'])} — "
-                f"<code>{html.escape(report['file_unique_id'])}</code>"
+            file = files_by_id.get(report.get('file_unique_id'))
+            file_name = (
+                report.get('file_name')
+                or getattr(file, 'file_name', None)
+                or "Unavailable file"
             )
+            reason = self.REPORT_REASONS.get(
+                report.get('reason'), report.get('reason', 'Unknown')
+            )
+            entry = (
+                f"\n• <code>{html.escape(str(report['_id']))}</code>\n"
+                f"  File: <code>{html.escape(str(file_name)[:100])}</code>\n"
+                f"  File ID: <code>{html.escape(str(report.get('file_unique_id', 'unknown')))}</code>\n"
+                f"  Reason: <b>{html.escape(str(reason))}</b>\n"
+                f"  Status: <b>{html.escape(str(report.get('status', 'unknown')).title())}</b>\n"
+                f"  Reporters: <b>{len(self._reporter_ids(report))}</b>"
+            )
+            if len("\n".join(lines)) + len(entry) > 3800:
+                lines.append("\n… More reports are available; narrow the status filter.")
+                break
+            lines.append(entry)
         lines.append("\nResolve with <code>/resolve_report report_id</code>.")
         await message.reply_text("\n".join(lines))
 
@@ -455,10 +709,58 @@ class FeatureHandler(BaseHandler):
         arguments = self._arguments(message)
         if not arguments:
             return await message.reply_text("Usage: <code>/resolve_report report_id</code>")
-        resolved = await self.repository.resolve_file_report(
+        report = await self.repository.resolve_file_report(
             arguments[0], message.from_user.id
         )
-        await message.reply_text("Report resolved." if resolved else "Open report not found.")
+        if not report:
+            return await message.reply_text("Open report not found.")
+
+        file = await self.bot.media_repo.find_file(report['file_unique_id'])
+        file_name = (
+            report.get('file_name')
+            or getattr(file, 'file_name', None)
+            or "Unavailable file"
+        )
+        notification_results = await self._notify_reporters(
+            client, report, file_name
+        )
+        record_results = getattr(
+            self.repository, 'record_report_notification_results', None
+        )
+        if record_results:
+            try:
+                await record_results(
+                    report['_id'],
+                    notification_results['notified'],
+                    notification_results['unreachable'],
+                    notification_results['failed']
+                )
+            except Exception as error:
+                logger.error(
+                    f"Could not persist notification results for {report['_id']}: {error}"
+                )
+
+        reason = self.REPORT_REASONS.get(
+            report.get('reason'), report.get('reason', 'Unknown')
+        )
+        await self._send_report_log(
+            client,
+            "✅ <b>File report resolved</b>\n"
+            f"Report ID: <code>{html.escape(str(report['_id']))}</code>\n"
+            f"File: <code>{html.escape(str(file_name))}</code>\n"
+            f"File ID: <code>{html.escape(str(report['file_unique_id']))}</code>\n"
+            f"Reason: <b>{html.escape(str(reason))}</b>\n"
+            f"Resolved by: <code>{message.from_user.id}</code>\n"
+            f"Notified: <b>{len(notification_results['notified'])}</b>\n"
+            f"Unreachable: <b>{len(notification_results['unreachable'])}</b>\n"
+            f"Failed: <b>{len(notification_results['failed'])}</b>"
+        )
+        await message.reply_text(
+            "Report resolved. "
+            f"Notified {len(notification_results['notified'])}; "
+            f"unreachable {len(notification_results['unreachable'])}; "
+            f"failed {len(notification_results['failed'])}."
+        )
 
     async def content_dashboard_command(self, client: Client, message: Message):
         dashboard = await self.service.dashboard()
