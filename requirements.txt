@@ -1,5 +1,5 @@
 # Core dependencies
-pyrofork
+git+https://github.com/rjriajul/wzgram.git
 tgcrypto; platform_system == "Linux"
 sqlalchemy
 
