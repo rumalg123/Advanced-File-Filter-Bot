@@ -74,7 +74,10 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
         # Check if current user matches original user
         if current_user_id != original_user_id:
             await query.answer(
-                ErrorMessageFormatter.format_error("This subscription check is for another user. Please use your own command."),
+                ErrorMessageFormatter.format_error(
+                    "This subscription check is for another user. Please use your own command.",
+                    plain_text=True
+                ),
                 show_alert=True
             )
             return

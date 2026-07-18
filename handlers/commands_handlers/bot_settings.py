@@ -613,7 +613,10 @@ class BotSettingsHandler(BaseHandler):
                         logger.info("Enabling filter handlers")
                 await self.show_setting_details(query.message, key)
                 await query.answer(
-                    ErrorMessageFormatter.format_success("Setting updated! Restart bot for changes to take effect."),
+                    ErrorMessageFormatter.format_success(
+                        "Setting updated! Restart bot for changes to take effect.",
+                        plain_text=True
+                    ),
                     show_alert=True
                 )
             else:

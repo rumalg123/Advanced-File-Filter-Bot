@@ -460,6 +460,11 @@ class RequestHandler(BaseHandler):
             query.message.text + "\n" + ErrorMessageFormatter.format_success(f"Action Taken: {action.title()}", include_prefix=False)
         )
 
-        await query.answer(ErrorMessageFormatter.format_success(f"User notified: {action.title()}"))
+        await query.answer(
+            ErrorMessageFormatter.format_success(
+                f"User notified: {action.title()}",
+                plain_text=True
+            )
+        )
 
 

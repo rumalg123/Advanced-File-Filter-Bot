@@ -31,6 +31,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-021 | Medium | Fixed | Similar filters | Adding a near-duplicate filter builds `warning_msg` but immediately discards it with `pass`, so the administrator sees no warning. | Similar-filter warnings are shown and require an explicit confirmation or documented automatic policy. |
 | BUG-022 | Medium | Fixed | Personalization | File clicks increment `rec:user_interactions:{user_id}`, but no recommendation read path consumes that sorted set. | Personalized ranking uses the recorded user interaction profile or stops writing unused interaction data. |
 | BUG-023 | Critical | Fixed | Wzgram migration | `MediaSearchBot` assigns the application limiter to `Client.rate_limiter` before the wzgram constructor runs; wzgram replaces it with its transport limiter, which has no `check_rate_limit`, breaking every search and file-access request. | Wzgram retains ownership of `Client.rate_limiter`; all application search, file, inline, and broadcast limits use a separately named Redis-backed limiter, with a constructor regression test. |
+| BUG-024 | Medium | Fixed | Telegram formatting | HTML-producing `ErrorMessageFormatter` output is passed to callback alerts and inline switch text, but Telegram never parses markup in those plain-text-only fields, so users see literal tags such as `<b>Success:</b>`. | Every callback/inline answer requests `plain_text=True`, literal HTML is absent from those surfaces, and a repository-wide AST regression test enforces both rules. |
 
 ## Verification log
 
@@ -69,3 +70,6 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   `Client.rate_limiter` while the application limiter exposes
   `check_rate_limit` at `app_rate_limiter`. All 67 tests, `compileall`, Ruff
   undefined-name checks, `pip check`, and `git diff --check` passed.
+- 2026-07-18: Fixed BUG-024 in `/bsetting` and fourteen other callback/inline
+  responses. Added formatter, behavioral settings-alert, and repository-wide
+  plain-text-surface tests; all 70 tests passed.

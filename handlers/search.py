@@ -282,7 +282,9 @@ class SearchHandler:
                 await query.answer(
                     results=[],
                     cache_time=0,
-                    switch_pm_text=ErrorMessageFormatter.format_error("Authentication Error", include_prefix=False),
+                    switch_pm_text=ErrorMessageFormatter.format_error(
+                        "Authentication Error", include_prefix=False, plain_text=True
+                    ),
                     switch_pm_parameter="start"
                 )
             except QueryIdInvalid:
@@ -302,7 +304,8 @@ class SearchHandler:
                     cache_time=0,
                     switch_pm_text=ErrorMessageFormatter.format_warning(
                         f"Rate limit exceeded. Try again in {cooldown} seconds.",
-                        include_prefix=False
+                        include_prefix=False,
+                        plain_text=True
                     ),
                     switch_pm_parameter="start"
                 )
@@ -346,7 +349,11 @@ class SearchHandler:
                     await query.answer(
                         results=[],
                         cache_time=0,
-                        switch_pm_text=ErrorMessageFormatter.format_warning("Inline mode disabled (Premium mode active)", include_prefix=False),
+                        switch_pm_text=ErrorMessageFormatter.format_warning(
+                            "Inline mode disabled (Premium mode active)",
+                            include_prefix=False,
+                            plain_text=True
+                        ),
                         switch_pm_parameter="inline_disabled"
                     )
                 except QueryIdInvalid:
@@ -441,7 +448,9 @@ class SearchHandler:
                     await query.answer(
                         results=[],
                         cache_time=10,
-                        switch_pm_text=ErrorMessageFormatter.format_not_found("Results", include_prefix=False),
+                        switch_pm_text=ErrorMessageFormatter.format_not_found(
+                            "Results", include_prefix=False, plain_text=True
+                        ),
                         switch_pm_parameter="start"
                     )
                 except QueryIdInvalid:
@@ -498,7 +507,9 @@ class SearchHandler:
             await query.answer(
                 results=[],
                 cache_time=0,
-                switch_pm_text=ErrorMessageFormatter.format_error("Search Error", include_prefix=False),
+                switch_pm_text=ErrorMessageFormatter.format_error(
+                    "Search Error", include_prefix=False, plain_text=True
+                ),
                 switch_pm_parameter="start"
             )
 

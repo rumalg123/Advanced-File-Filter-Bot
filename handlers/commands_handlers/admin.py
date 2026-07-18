@@ -238,7 +238,12 @@ class AdminCommandHandler(BaseCommandHandler):
             # Check persistent broadcast state
             is_broadcasting = await self._get_broadcast_state()
             if is_broadcasting:
-                await callback_query.answer(ErrorMessageFormatter.format_warning("A broadcast is already in progress."))
+                await callback_query.answer(
+                    ErrorMessageFormatter.format_warning(
+                        "A broadcast is already in progress.",
+                        plain_text=True
+                    )
+                )
                 return
 
             # Set broadcast state as active

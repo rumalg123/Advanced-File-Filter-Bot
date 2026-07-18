@@ -198,7 +198,10 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
+                ErrorMessageFormatter.format_error(
+                    "Please start the bot first!",
+                    plain_text=True
+                ) + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )
@@ -432,7 +435,10 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             await query.answer(
-                ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
+                ErrorMessageFormatter.format_error(
+                    "Please start the bot first!",
+                    plain_text=True
+                ) + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )
@@ -486,7 +492,10 @@ class FileCallbackHandler(BaseCommandHandler):
             )
             if not success:
                 await query.answer(
-                    ErrorMessageFormatter.format_error(f"{message}. Upgrade to premium for unlimited access!"),
+                    ErrorMessageFormatter.format_error(
+                        f"{message}. Upgrade to premium for unlimited access!",
+                        plain_text=True
+                    ),
                     show_alert=True
                 )
                 return
@@ -515,7 +524,10 @@ class FileCallbackHandler(BaseCommandHandler):
             if needs_quota and reserved_count:
                 await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
             await query.answer(
-                ErrorMessageFormatter.format_error("Please start the bot first!") + "\n"
+                ErrorMessageFormatter.format_error(
+                    "Please start the bot first!",
+                    plain_text=True
+                ) + "\n"
                 f"Click here: @{self.bot.bot_username}",
                 show_alert=True
             )

@@ -455,7 +455,10 @@ class ConnectionHandler(BaseHandler):
 
         if removed > 0:
             await query.answer(
-                ErrorMessageFormatter.format_success(f"Removed {removed} invalid connection(s)!"),
+                ErrorMessageFormatter.format_success(
+                    f"Removed {removed} invalid connection(s)!",
+                    plain_text=True
+                ),
                 show_alert=True
             )
         else:

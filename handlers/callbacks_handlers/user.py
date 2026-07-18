@@ -101,7 +101,12 @@ class UserCallbackHandler(BaseCommandHandler):
     async def handle_plans_callback(self, client: Client, query: CallbackQuery):
         """Handle plans button callback"""
         if self.bot.config.DISABLE_PREMIUM:
-            await query.answer(ErrorMessageFormatter.format_success("Premium features are disabled. Enjoy unlimited access!"))
+            await query.answer(
+                ErrorMessageFormatter.format_success(
+                    "Premium features are disabled. Enjoy unlimited access!",
+                    plain_text=True
+                )
+            )
             return
 
         user_id = query.from_user.id

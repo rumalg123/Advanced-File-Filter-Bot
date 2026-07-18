@@ -772,7 +772,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The repository currently contains 67 focused tests covering access/quota behavior, batch links, cache correctness, configuration/packaging, feature rollout, channel indexing, recommendations/similarity, sessions, and wzgram integration boundaries.
+The repository currently contains 70 focused tests covering access/quota behavior, batch links, cache correctness, configuration/packaging, feature rollout, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
 
 Useful additional checks:
 
