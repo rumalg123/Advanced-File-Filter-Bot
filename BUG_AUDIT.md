@@ -46,6 +46,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-036 | Low | Fixed | Recommendation formatting | The recommended-files heading contains a double-decoded UTF-8 book emoji and displays `ðŸ“š` to Telegram users. | The source contains the intended `📚` character and a rendered-message regression rejects the mojibake sequence. |
 | BUG-037 | High | Fixed | Content dashboard | Zero-result demand is incremented when result delivery fails rather than when MongoDB has no matches, and is never resolved after a successful search or later indexing, so valid titles remain indefinitely in the dashboard. | Analytics use authoritative access/search totals, successful matches remove stale demand, and the bounded dashboard pass revalidates and cleans existing rows against current MongoDB search behavior. |
 | BUG-038 | High | Fixed | Handler lifecycle | Command and database handlers bypass `HandlerManager`, dispatcher groups are discarded, managed cleanup marks handlers removed without removing them, and `/verify` can still report 100/100 while listing issues. | Every top-level handler has managed cleanup and shutdown signaling; registration/removal preserves dispatcher groups; shutdown removes tracked handlers; the verifier recognizes the complete configured handler set and any warning or issue lowers its score. |
+| BUG-039 | Medium | Fixed | Command routing | Search excludes a hard-coded command list, so newer commands such as `/verify` also run as file searches and send a false no-results response. | Text beginning with `/` never reaches file search, including bot-qualified and future command names; ordinary text search remains unchanged. |
 
 ## Verification log
 
@@ -122,3 +123,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   `/verify` now knows the complete handler set and uses non-saturating scoring.
   All 123 tests, `compileall`, Ruff fatal/undefined-name checks, Markdown fence
   validation, and `git diff --check` passed.
+- 2026-07-19: Fixed BUG-039. Replaced the manually synchronized search command
+  list with a general command-prefix filter plus an in-handler safety guard, so
+  current and future slash commands cannot fall through to file search. All 130
+  tests passed.

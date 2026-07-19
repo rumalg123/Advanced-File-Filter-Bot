@@ -32,6 +32,12 @@ from core.utils.pagination import create_search_query_reference
 
 logger = get_logger(__name__)
 
+SEARCH_TEXT_FILTER = (
+    filters.text
+    & filters.incoming
+    & ~filters.regex(r"^\s*/")
+)
+
 
 class SearchHandler:
     """Handler for search functionality with subscription checks"""
@@ -64,27 +70,10 @@ class SearchHandler:
 
     def register_handlers(self):
         """Register search handlers"""
-        # Text message search in groups and private chats
-        excluded_commands = [
-            'start', 'help', 'about', 'stats', 'plans', 'my_keywords', 'popular_keywords', 'recommendations',
-            'broadcast', 'users', 'ban', 'unban', 'addpremium', 'removepremium',
-            'add_channel', 'remove_channel', 'list_channels', 'toggle_channel',
-            'connect', 'disconnect', 'connections', 'setskip',
-            'delete', 'deleteall', 'link', 'plink', 'batch', 'pbatch',
-            'viewfilters', 'filters', 'del', 'delall', 'delallf', 'deleteallf',
-            'delf', 'deletef', 'add', 'filter', 'bsetting', 'restart', 'shell',
-            'cache_stats', 'cache_analyze', 'cache_cleanup', 'log', 'performance', 'cancel', 'dbstats',
-            'dbinfo', 'dbswitch', 'save_search', 'saved_searches', 'favorite', 'unfavorite',
-            'favorites', 'collections', 'collection_create', 'collection_rename',
-            'collection_clear', 'collection_delete', 'recent', 'clear_recent',
-            'recommendation_preferences', 'suggest', 'search_help', 'myrequests',
-            'file_reports', 'resolve_report', 'content_dashboard'
-        ]
-
         # Register text search handler
         text_handler = MessageHandler(
             self.handle_text_search,
-            filters.text & filters.incoming & ~filters.command(excluded_commands)
+            SEARCH_TEXT_FILTER
         )
 
         # Use handler_manager if available - register with lower priority (higher group number)
@@ -203,6 +192,10 @@ class SearchHandler:
     @check_ban()
     async def handle_text_search(self, client: Client, message: Message):
         """Handle text search in groups and private chats"""
+        query = (getattr(message, 'text', None) or '').strip()
+        if not query or query.startswith('/'):
+            return
+
         # Skip special channels using validators
         special_channels = get_special_channels(self.bot.config)
         if is_special_channel(message.chat.id, special_channels):
@@ -229,9 +222,6 @@ class SearchHandler:
             logger.info(f"[SEARCH_BLOCKED] User {user_id} has recent edit activity - blocking search")
             return
 
-        # Get search query
-        query = message.text.strip()
-        
         # Handle "Close" button click (replaces "Remove Keyboard")
         if query == "❌ Close":
             await message.reply_text(
