@@ -1,12 +1,16 @@
-import asyncio
 import html
 import random
 import uuid
 
 from pyrogram import Client
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+)
 
-import core.utils.messages as config_messages
 from core.utils.messages import MessageHelper
 from core.utils.helpers import format_file_size
 from core.utils.file_emoji import get_file_type_display_name
@@ -16,7 +20,6 @@ from core.utils.caption import CaptionFormatter
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.utils.pagination import create_search_query_reference
 from core.utils.premium import format_user_plan_status
-from repositories.media import FileType
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import private_only, extract_user_id, skip_subscription_check
@@ -131,13 +134,15 @@ class UserCommandHandler(BaseCommandHandler):
         )
 
         if self.bot.config.PICS:
-            await message.reply_photo(
+            await self._reply_photo_with_auto_delete(
+                message,
                 photo=random.choice(self.bot.config.PICS),
                 caption=welcome_text,
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
         else:
-            await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 welcome_text,
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
@@ -200,14 +205,14 @@ class UserCommandHandler(BaseCommandHandler):
                 "• /toggle_channel <id> - Enable/disable channel\n"
             )
 
-        await message.reply_text(help_text)
+        await self._reply_text_with_auto_delete(message, help_text)
 
     @check_ban()
     @require_subscription()
     async def about_command(self, client: Client, message: Message):
         """Handle /about command"""
         about_text = MessageHelper.get_about_message(self.bot.config).format(bot_username=self.bot.bot_username, bot_name=self.bot.bot_name)
-        await message.reply_text(about_text)
+        await self._reply_text_with_auto_delete(message, about_text)
 
     @check_ban()
     @require_subscription()
@@ -218,7 +223,12 @@ class UserCommandHandler(BaseCommandHandler):
             stats = await self.bot.maintenance_service.get_system_stats()
         except Exception as e:
             logger.error(f"Error getting system stats: {e}")
-            await message.reply_text(ErrorMessageFormatter.format_error("Error retrieving statistics. Please try again later."))
+            await self._reply_text_with_auto_delete(
+                message,
+                ErrorMessageFormatter.format_error(
+                    "Error retrieving statistics. Please try again later."
+                )
+            )
             return
 
         # Format stats message
@@ -268,7 +278,7 @@ class UserCommandHandler(BaseCommandHandler):
                     symbol = "└" if i == len(sorted_collections) - 1 else "├"
                     text += f"{symbol} {display_name}: {format_file_size(coll_data['storage_size'])}\n"
 
-        await message.reply_text(text)
+        await self._reply_text_with_auto_delete(message, text)
 
     @check_ban()
     @private_only
@@ -276,7 +286,12 @@ class UserCommandHandler(BaseCommandHandler):
     async def plans_command(self, client: Client, message: Message):
         """Handle plans command"""
         if self.bot.config.DISABLE_PREMIUM:
-            await message.reply_text(ErrorMessageFormatter.format_success("Premium features are disabled. Enjoy unlimited access!"))
+            await self._reply_text_with_auto_delete(
+                message,
+                ErrorMessageFormatter.format_success(
+                    "Premium features are disabled. Enjoy unlimited access!"
+                )
+            )
             return
 
         user_id = message.from_user.id
@@ -313,7 +328,11 @@ class UserCommandHandler(BaseCommandHandler):
             ButtonBuilder.action_button("💳 Get Premium", url=self.bot.config.PAYMENT_LINK)
         ]]
 
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        await self._reply_text_with_auto_delete(
+            message,
+            text,
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     @check_ban()
     @require_subscription()
@@ -323,8 +342,11 @@ class UserCommandHandler(BaseCommandHandler):
         stats = await self.bot.user_repo.get_request_stats(user_id)
 
         if not stats['exists']:
-            await message.reply_text(
-                ErrorMessageFormatter.format_not_found("Request data") + ". Make your first request using #request in the support group!")
+            await self._reply_text_with_auto_delete(
+                message,
+                ErrorMessageFormatter.format_not_found("Request data")
+                + ". Make your first request using #request in the support group!"
+            )
             return
 
         # Build stats message
@@ -349,7 +371,7 @@ class UserCommandHandler(BaseCommandHandler):
         if stats['last_request_date']:
             text += f"\n📅 <b>Last Request:</b> {stats['last_request_date']}"
 
-        await message.reply_text(text)
+        await self._reply_text_with_auto_delete(message, text)
 
     @check_ban()
     @require_subscription()
@@ -359,7 +381,8 @@ class UserCommandHandler(BaseCommandHandler):
         
         # Get search history service
         if not hasattr(self.bot, 'search_history_service') or not self.bot.search_history_service:
-            await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 ErrorMessageFormatter.format_error("Search history feature is not available.")
             )
             return
@@ -368,7 +391,8 @@ class UserCommandHandler(BaseCommandHandler):
         keywords = await self.bot.search_history_service.get_most_searched_keywords(user_id, limit=8)
         
         if not keywords:
-            await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 ErrorMessageFormatter.format_info(
                     "You haven't searched for anything yet. Start searching and your most used keywords will appear here!",
                     title="No Search History"
@@ -402,7 +426,11 @@ class UserCommandHandler(BaseCommandHandler):
             "Use /my_keywords to refresh the list."
         )
         
-        await message.reply_text(text, reply_markup=keyboard)
+        await self._reply_text_with_auto_delete(
+            message,
+            text,
+            reply_markup=keyboard
+        )
 
     @check_ban()
     @require_subscription()
@@ -410,7 +438,8 @@ class UserCommandHandler(BaseCommandHandler):
         """Show top 10 global searches as keyboard buttons"""
         # Get search history service
         if not hasattr(self.bot, 'search_history_service') or not self.bot.search_history_service:
-            await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 ErrorMessageFormatter.format_error("Search history feature is not available.")
             )
             return
@@ -419,7 +448,8 @@ class UserCommandHandler(BaseCommandHandler):
         keywords = await self.bot.search_history_service.get_global_top_searches(limit=10)
         
         if not keywords:
-            await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 ErrorMessageFormatter.format_info(
                     "No global search data available yet. Start searching and popular keywords will appear here!",
                     title="No Popular Searches"
@@ -453,7 +483,11 @@ class UserCommandHandler(BaseCommandHandler):
             "Use /popular_keywords to refresh the list."
         )
         
-        await message.reply_text(text, reply_markup=keyboard)
+        await self._reply_text_with_auto_delete(
+            message,
+            text,
+            reply_markup=keyboard
+        )
 
     @check_ban()
     @require_subscription()
@@ -463,7 +497,8 @@ class UserCommandHandler(BaseCommandHandler):
         
         # Get recommendation service
         if not hasattr(self.bot, 'recommendation_service') or not self.bot.recommendation_service:
-            await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 ErrorMessageFormatter.format_error("Recommendations feature is not available.")
             )
             return
@@ -597,25 +632,16 @@ class UserCommandHandler(BaseCommandHandler):
             if action_buttons:
                 buttons.append(action_buttons)
             
-            sent_message = await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 text,
                 reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
             
-            # Schedule auto-delete for recommendations message
-            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_message:
-                asyncio.create_task(
-                    self._auto_delete_message(sent_message, self.bot.config.MESSAGE_DELETE_SECONDS)
-                )
-            
         except Exception as e:
             logger.error(f"Error getting recommendations: {e}", exc_info=True)
-            error_msg = await message.reply_text(
+            await self._reply_text_with_auto_delete(
+                message,
                 ErrorMessageFormatter.format_error("Error getting recommendations. Please try again later.")
             )
-            # Schedule auto-delete for error message too
-            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and error_msg:
-                asyncio.create_task(
-                    self._auto_delete_message(error_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-                )

@@ -1,6 +1,6 @@
 # handlers/commands_handlers/base.py
 import asyncio
-from typing import Tuple
+from typing import Any, Tuple
 
 from core.utils.logger import get_logger
 
@@ -22,6 +22,51 @@ class BaseCommandHandler:
             await message.delete()
         except Exception as e:
             logger.debug(f"Failed to delete message: {e}")
+
+    def _schedule_auto_delete(self, message, delay: int | None = None):
+        """Schedule a transient command response through the shared task manager."""
+        if message is None:
+            return None
+
+        if delay is None:
+            delay = getattr(
+                getattr(self.bot, 'config', None),
+                'MESSAGE_DELETE_SECONDS',
+                0,
+            )
+        try:
+            delay = int(delay or 0)
+        except (TypeError, ValueError):
+            delay = 0
+        if delay <= 0:
+            return None
+
+        coroutine = self._auto_delete_message(message, delay)
+        manager = getattr(self.bot, 'handler_manager', None)
+        if manager:
+            return manager.create_auto_delete_task(coroutine)
+        return asyncio.create_task(coroutine)
+
+    async def _reply_text_with_auto_delete(
+        self,
+        message,
+        text: str,
+        **kwargs: Any,
+    ):
+        """Reply with text and apply the configured transient-message timer."""
+        sent_message = await message.reply_text(text, **kwargs)
+        self._schedule_auto_delete(sent_message)
+        return sent_message
+
+    async def _reply_photo_with_auto_delete(
+        self,
+        message,
+        **kwargs: Any,
+    ):
+        """Reply with a photo and apply the configured transient-message timer."""
+        sent_message = await message.reply_photo(**kwargs)
+        self._schedule_auto_delete(sent_message)
+        return sent_message
 
     async def check_file_access(self, user_id: int) -> Tuple[bool, str]:
         """

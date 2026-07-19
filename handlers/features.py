@@ -154,6 +154,17 @@ class FeatureHandler(BaseHandler):
         if sent_message and delete_time > 0:
             self._schedule_auto_delete(sent_message, delete_time)
 
+    async def _reply_with_cleanup(
+        self,
+        message: Message,
+        text: str,
+        **kwargs,
+    ) -> Message:
+        """Reply to a user feature command and schedule transient cleanup."""
+        sent_message = await message.reply_text(text, **kwargs)
+        self._schedule_feature_cleanup(sent_message)
+        return sent_message
+
     @staticmethod
     def _reporter_ids(report: dict) -> list[int]:
         values = list(report.get('reporter_ids') or [])
@@ -184,10 +195,10 @@ class FeatureHandler(BaseHandler):
             if files_by_id.get(file_id) is not None
         ]
         if not files:
-            sent_message = await message.reply_text(
+            await self._reply_with_cleanup(
+                message,
                 f"{title}\n\nNo available files were found."
             )
-            self._schedule_feature_cleanup(sent_message)
             return
         buttons = []
         for file in files:
@@ -209,12 +220,12 @@ class FeatureHandler(BaseHandler):
                         "🗑 Remove", callback_data=remove_callback
                     ))
             buttons.append(row)
-        sent_message = await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             f"{title}\n\n{len(files)} file(s)",
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=CaptionFormatter.get_parse_mode()
         )
-        self._schedule_feature_cleanup(sent_message)
 
     async def _send_report_log(self, client: Client, text: str) -> bool:
         log_channel = getattr(
@@ -633,17 +644,22 @@ class FeatureHandler(BaseHandler):
         arguments = self._arguments(message)
         query = " ".join(arguments).strip()
         if len(query) < 2:
-            return await message.reply_text("Usage: <code>/save_search movie title</code>")
+            return await self._reply_with_cleanup(
+                message, "Usage: <code>/save_search movie title</code>"
+            )
         if len(query) > 100:
-            return await message.reply_text("Saved searches are limited to 100 characters.")
+            return await self._reply_with_cleanup(
+                message, "Saved searches are limited to 100 characters."
+            )
         try:
             document, created = await self.repository.create_saved_search(
                 message.from_user.id, query
             )
         except ValueError as e:
-            return await message.reply_text(html.escape(str(e)))
+            return await self._reply_with_cleanup(message, html.escape(str(e)))
         state = "saved" if created else "already exists"
-        await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             f"🔔 Search <code>{html.escape(document['query'])}</code> {state}."
         )
 
@@ -651,10 +667,10 @@ class FeatureHandler(BaseHandler):
     @require_subscription()
     async def saved_searches_command(self, client: Client, message: Message):
         text, markup = await self._saved_searches_view(message.from_user.id)
-        sent_message = await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             text, reply_markup=markup
         )
-        self._schedule_feature_cleanup(sent_message)
 
     async def _favorite_mutation(self, message: Message, remove: bool = False):
         arguments = self._arguments(message)
@@ -666,14 +682,17 @@ class FeatureHandler(BaseHandler):
             file_id = arguments[0]
             collection_name = " ".join(arguments[1:]) or "Favorites"
         else:
-            return await message.reply_text(
+            return await self._reply_with_cleanup(
+                message,
                 "Reply to a delivered file or use "
                 "<code>/favorite file_unique_id [collection]</code>."
             )
 
         file = await self.bot.media_repo.find_file(file_id)
         if not file:
-            return await message.reply_text("That file is no longer available.")
+            return await self._reply_with_cleanup(
+                message, "That file is no longer available."
+            )
         if remove:
             success = await self.repository.remove_from_collection(
                 message.from_user.id, file.file_unique_id, collection_name
@@ -685,12 +704,15 @@ class FeatureHandler(BaseHandler):
             )
             action = "added to"
         if success:
-            await message.reply_text(
+            await self._reply_with_cleanup(
+                message,
                 f"⭐ <code>{html.escape(file.file_name)}</code> {action} "
                 f"<b>{html.escape(collection_name)}</b>."
             )
         else:
-            await message.reply_text("The collection could not be updated.")
+            await self._reply_with_cleanup(
+                message, "The collection could not be updated."
+            )
 
     @check_ban()
     @require_subscription()
@@ -709,7 +731,10 @@ class FeatureHandler(BaseHandler):
         name = " ".join(arguments) or "Favorites"
         collection = await self.repository.get_collection(message.from_user.id, name)
         if not collection:
-            return await message.reply_text(f"Collection <b>{html.escape(name)}</b> was not found.")
+            return await self._reply_with_cleanup(
+                message,
+                f"Collection <b>{html.escape(name)}</b> was not found."
+            )
         await self._send_file_list(
             message,
             f"⭐ <b>{html.escape(collection['name'])}</b>",
@@ -722,19 +747,22 @@ class FeatureHandler(BaseHandler):
     async def collections_command(self, client: Client, message: Message):
         collections = await self.repository.list_collections(message.from_user.id)
         text, markup = self._collections_view(collections)
-        sent_message = await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             text, reply_markup=markup
         )
-        self._schedule_feature_cleanup(sent_message)
 
     @check_ban()
     @require_subscription()
     async def collection_create_command(self, client: Client, message: Message):
         name = " ".join(self._arguments(message)).strip()
         if not name:
-            return await message.reply_text("Usage: <code>/collection_create name</code>")
+            return await self._reply_with_cleanup(
+                message, "Usage: <code>/collection_create name</code>"
+            )
         document = await self.repository.ensure_collection(message.from_user.id, name)
-        await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             f"Collection <b>{html.escape(document['name'])}</b> is ready."
         )
 
@@ -743,7 +771,8 @@ class FeatureHandler(BaseHandler):
     async def collection_rename_command(self, client: Client, message: Message):
         arguments = self._arguments(message)
         if len(arguments) != 2:
-            return await message.reply_text(
+            return await self._reply_with_cleanup(
+                message,
                 "Usage: <code>/collection_rename \"Old name\" \"New name\"</code>"
             )
         document, state = await self.repository.rename_collection(
@@ -759,20 +788,28 @@ class FeatureHandler(BaseHandler):
             'not_found': "Collection not found.",
             'invalid': "The new collection name is invalid.",
         }
-        await message.reply_text(responses.get(state, "Collection could not be renamed."))
+        await self._reply_with_cleanup(
+            message,
+            responses.get(state, "Collection could not be renamed.")
+        )
 
     @check_ban()
     @require_subscription()
     async def collection_clear_command(self, client: Client, message: Message):
         name = " ".join(self._arguments(message)).strip()
         if not name:
-            return await message.reply_text("Usage: <code>/collection_clear name</code>")
+            return await self._reply_with_cleanup(
+                message, "Usage: <code>/collection_clear name</code>"
+            )
         removed_count = await self.repository.clear_collection(
             message.from_user.id, name
         )
         if removed_count is None:
-            return await message.reply_text("Collection not found.")
-        await message.reply_text(
+            return await self._reply_with_cleanup(
+                message, "Collection not found."
+            )
+        await self._reply_with_cleanup(
+            message,
             f"Collection cleared. Removed {removed_count} file(s)."
         )
 
@@ -781,9 +818,12 @@ class FeatureHandler(BaseHandler):
     async def collection_delete_command(self, client: Client, message: Message):
         name = " ".join(self._arguments(message)).strip()
         if not name:
-            return await message.reply_text("Usage: <code>/collection_delete name</code>")
+            return await self._reply_with_cleanup(
+                message, "Usage: <code>/collection_delete name</code>"
+            )
         deleted = await self.repository.delete_collection(message.from_user.id, name)
-        await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             "Collection deleted." if deleted else "Collection not found."
         )
 
@@ -802,7 +842,10 @@ class FeatureHandler(BaseHandler):
     @require_subscription()
     async def clear_recent_command(self, client: Client, message: Message):
         count = await self.repository.clear_recent_files(message.from_user.id)
-        await message.reply_text(f"Cleared {count} recent file entr{'y' if count == 1 else 'ies'}.")
+        await self._reply_with_cleanup(
+            message,
+            f"Cleared {count} recent file entr{'y' if count == 1 else 'ies'}."
+        )
 
     @check_ban()
     @require_subscription()
@@ -813,7 +856,9 @@ class FeatureHandler(BaseHandler):
             message.from_user.id
         )
         if not feedback:
-            return await message.reply_text("You have no recommendation preferences.")
+            return await self._reply_with_cleanup(
+                message, "You have no recommendation preferences."
+            )
         file_ids = [item['file_unique_id'] for item in feedback]
         files_by_id = await self.bot.media_repo.find_files_batch(file_ids)
         lines = ["🎯 <b>Recommendation preferences</b>"]
@@ -838,21 +883,25 @@ class FeatureHandler(BaseHandler):
                 ))
             if row:
                 buttons.append(row)
-        sent_message = await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             "\n".join(lines),
             reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
         )
-        self._schedule_feature_cleanup(sent_message)
 
     @check_ban()
     @require_subscription()
     async def suggest_command(self, client: Client, message: Message):
         query = " ".join(self._arguments(message)).strip()
         if not query:
-            return await message.reply_text("Usage: <code>/suggest partial title</code>")
+            return await self._reply_with_cleanup(
+                message, "Usage: <code>/suggest partial title</code>"
+            )
         suggestions = await self.service.autocomplete(message.from_user.id, query)
         if not suggestions:
-            return await message.reply_text("No valid suggestions were found.")
+            return await self._reply_with_cleanup(
+                message, "No valid suggestions were found."
+            )
         buttons = []
         for suggestion in suggestions:
             reference = await create_search_query_reference(
@@ -866,16 +915,17 @@ class FeatureHandler(BaseHandler):
                     )
                 )
             ])
-        sent_message = await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             "💡 <b>Search suggestions</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-        self._schedule_feature_cleanup(sent_message)
 
     @check_ban()
     @require_subscription()
     async def search_help_command(self, client: Client, message: Message):
-        await message.reply_text(
+        await self._reply_with_cleanup(
+            message,
             "🔎 <b>Advanced search</b>\n\n"
             "Add filters after a title:\n"
             "<code>matrix type:video year:1999 quality:1080p</code>\n"
@@ -889,7 +939,9 @@ class FeatureHandler(BaseHandler):
     async def my_requests_command(self, client: Client, message: Message):
         requests = await self.repository.list_content_requests(message.from_user.id)
         if not requests:
-            return await message.reply_text("You have no tracked requests.")
+            return await self._reply_with_cleanup(
+                message, "You have no tracked requests."
+            )
         lines = ["📮 <b>Your requests</b>"]
         for request in requests:
             status = request['status']
@@ -899,7 +951,7 @@ class FeatureHandler(BaseHandler):
                 f"• <code>{html.escape(request['query'])}</code> — "
                 f"<b>{html.escape(status.title())}</b>"
             )
-        await message.reply_text("\n".join(lines))
+        await self._reply_with_cleanup(message, "\n".join(lines))
 
     @check_ban()
     @require_subscription()

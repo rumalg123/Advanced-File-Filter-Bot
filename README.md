@@ -400,7 +400,7 @@ The bot must be a member and usually an administrator in each configured channel
 | `PREMIUM_DURATION_DAYS` | `30` | Default days granted by `/addpremium`; `/addpremium user_id Nd` overrides it for one grant. |
 | `NON_PREMIUM_DAILY_LIMIT` | `10` | Daily successful-file quota for free users. |
 | `PREMIUM_PRICE` | `$1` | Display value used by `/plans`. |
-| `MESSAGE_DELETE_SECONDS` | `300` | Delay before temporary result/file, report, favorites, saved-search, suggestion, and recommendation messages are auto-deleted. `0` disables cleanup. |
+| `MESSAGE_DELETE_SECONDS` | `300` | Delay before temporary result/file messages, core user command responses (`/start`, `/help`, `/about`, `/stats`, `/plans`, and related user menus), reports, favorites, saved-search, suggestion, and recommendation messages are auto-deleted. Incoming user commands, admin diagnostics, and deep-link subscription gates are not deleted. `0` disables cleanup. |
 | `MAX_BTN_SIZE` | `12` | Maximum search-result buttons per page. |
 | `REQUEST_PER_DAY` | `3` | Daily `#request` allowance before warnings. |
 | `REQUEST_WARNING_LIMIT` | `5` | Request-abuse warnings before automatic ban. |

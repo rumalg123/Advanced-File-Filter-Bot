@@ -47,6 +47,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-037 | High | Fixed | Content dashboard | Zero-result demand is incremented when result delivery fails rather than when MongoDB has no matches, and is never resolved after a successful search or later indexing, so valid titles remain indefinitely in the dashboard. | Analytics use authoritative access/search totals, successful matches remove stale demand, and the bounded dashboard pass revalidates and cleans existing rows against current MongoDB search behavior. |
 | BUG-038 | High | Fixed | Handler lifecycle | Command and database handlers bypass `HandlerManager`, dispatcher groups are discarded, managed cleanup marks handlers removed without removing them, and `/verify` can still report 100/100 while listing issues. | Every top-level handler has managed cleanup and shutdown signaling; registration/removal preserves dispatcher groups; shutdown removes tracked handlers; the verifier recognizes the complete configured handler set and any warning or issue lowers its score. |
 | BUG-039 | Medium | Fixed | Command routing | Search excludes a hard-coded command list, so newer commands such as `/verify` also run as file searches and send a false no-results response. | Text beginning with `/` never reaches file search, including bot-qualified and future command names; ordinary text search remains unchanged. |
+| BUG-040 | Medium | Fixed | Transient command messages | Core user responses such as `/start`, `/help`, and `/stats`, plus several user feature-command confirmations, bypass `MESSAGE_DELETE_SECONDS` and leave stale menus in private chats. | User-facing informational responses and feature confirmations use one task-managed cleanup path, respect the current configured delay, and remain persistent when the delay is `0`; admin diagnostics and deep-link subscription gates are not shortened. |
 
 ## Verification log
 
@@ -127,3 +128,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   list with a general command-prefix filter plus an in-handler safety guard, so
   current and future slash commands cannot fall through to file search. All 130
   tests passed.
+- 2026-07-19: Fixed BUG-040. Core informational commands and user feature
+  confirmations now use shared, manager-tracked auto-deletion based on the live
+  `MESSAGE_DELETE_SECONDS` value. Incoming user commands, admin diagnostics, and
+  deep-link subscription gates remain untouched. All 136 tests passed.
