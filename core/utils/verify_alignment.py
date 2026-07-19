@@ -19,6 +19,10 @@ class AlignmentVerifier:
 
     async def verify_all(self) -> Dict:
         """Run all verification checks"""
+        self.issues.clear()
+        self.warnings.clear()
+        self.successes.clear()
+
         checks = [
             self.check_handler_manager_exists,
             self.check_handler_instances,
@@ -62,10 +66,11 @@ class AlignmentVerifier:
 
         expected_handlers = [
             'command', 'search', 'delete', 'channel',
-            'indexing', 'filestore', 'request'
+            'indexing', 'filestore', 'request', 'features',
+            'database'
         ]
 
-        if not self.bot.config.DISABLE_FILTER:
+        if not getattr(self.bot.config, 'DISABLE_FILTER', False):
             expected_handlers.extend(['filter', 'connection'])
 
         registered = list(self.bot.handler_manager.handler_instances.keys())
@@ -126,7 +131,7 @@ class AlignmentVerifier:
             return
 
         for name, handler in self.bot.handler_manager.handler_instances.items():
-            if hasattr(handler, 'cleanup'):
+            if callable(getattr(handler, 'cleanup', None)):
                 self.successes.append(f"✓ {name} has cleanup method")
             else:
                 self.issues.append(f"{name} missing cleanup method")
@@ -165,7 +170,10 @@ class AlignmentVerifier:
             return
 
         for name, handler in self.bot.handler_manager.handler_instances.items():
-            if hasattr(handler, '_shutdown'):
+            shutdown_signal = getattr(handler, '_shutdown', None)
+            if shutdown_signal is not None and callable(
+                getattr(shutdown_signal, 'is_set', None)
+            ):
                 self.successes.append(f"✓ {name} has shutdown signal")
             else:
                 self.warnings.append(f"{name} missing shutdown signal")
@@ -176,16 +184,11 @@ class AlignmentVerifier:
         if total_checks == 0:
             return 0
 
-        # Issues are critical (-10 points each)
-        # Warnings are minor (-3 points each)
-        # Successes are +5 points each
-        score = 50  # Base score
-        score -= len(self.issues) * 10
-        score -= len(self.warnings) * 3
-        score += len(self.successes) * 5
-
-        # Normalize to 0-100
-        return max(0, min(100, score))
+        # A success earns full credit, a warning earns half credit, and an
+        # issue earns none. Unlike the old additive formula, this cannot hide
+        # failures by saturating at 100 after enough successful checks.
+        earned_checks = len(self.successes) + (len(self.warnings) * 0.5)
+        return round((earned_checks / total_checks) * 100)
 
 
 # Fixed command to properly handle stats

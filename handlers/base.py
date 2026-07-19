@@ -33,12 +33,15 @@ class BaseHandler(ABC):
         self._background_tasks: List[asyncio.Task] = []
         self._queues: List[asyncio.Queue] = []
 
-    def _register_handler(self, handler) -> None:
+    def _register_handler(self, handler, group: int = 0) -> None:
         """Register a single handler with handler_manager support"""
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            self.bot.handler_manager.add_handler(handler)
+            self.bot.handler_manager.add_handler(handler, group=group)
         else:
-            self.bot.add_handler(handler)
+            if group:
+                self.bot.add_handler(handler, group=group)
+            else:
+                self.bot.add_handler(handler)
         self._handlers.append(handler)
 
     def _register_message_handlers(
@@ -157,9 +160,6 @@ class BaseHandler(ABC):
         # If handler_manager is available, let it handle handler removal
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             logger.info(f"{self._handler_name}: HandlerManager will handle handler removal")
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
             self._handlers.clear()
             self.auto_delete_tasks.clear()
             logger.info(f"{self._handler_name} cleanup complete")

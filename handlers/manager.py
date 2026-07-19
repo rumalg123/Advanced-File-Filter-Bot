@@ -19,6 +19,7 @@ class HandlerManager:
 
         # Handler tracking
         self.handlers: List = []  # All registered handlers
+        self.handler_groups: Dict[int, int] = {}  # Dispatcher group by handler identity
         self.handler_instances: Dict[str, Any] = {}  # Named handler instances
         self.removed_handlers: Set = set()  # Track already removed handlers
 
@@ -42,13 +43,19 @@ class HandlerManager:
             'handlers_removal_failed': 0
         }
 
-    def add_handler(self, handler):
+    def add_handler(self, handler, group: int = 0):
         """Register a handler with the bot"""
         try:
-            self.bot.add_handler(handler)
+            if group:
+                self.bot.add_handler(handler, group=group)
+            else:
+                self.bot.add_handler(handler)
             self.handlers.append(handler)
+            self.handler_groups[id(handler)] = group
             self.stats['handlers_registered'] += 1
-            logger.debug(f"Registered handler: {type(handler).__name__}")
+            logger.debug(
+                f"Registered handler: {type(handler).__name__} (group={group})"
+            )
         except Exception as e:
             logger.error(f"Error adding handler: {e}")
             raise
@@ -63,7 +70,11 @@ class HandlerManager:
 
         try:
             # Try to remove from bot
-            self.bot.remove_handler(handler)
+            group = self.handler_groups.get(handler_id, 0)
+            if group:
+                self.bot.remove_handler(handler, group=group)
+            else:
+                self.bot.remove_handler(handler)
 
             # Mark as removed
             self.removed_handlers.add(handler_id)
@@ -71,6 +82,7 @@ class HandlerManager:
             # Remove from our tracking list
             if handler in self.handlers:
                 self.handlers.remove(handler)
+            self.handler_groups.pop(handler_id, None)
 
             self.stats['handlers_removed'] += 1
             logger.debug(f"Successfully removed handler: {type(handler).__name__}")
@@ -85,6 +97,7 @@ class HandlerManager:
                 # Remove from our tracking list if present
                 if handler in self.handlers:
                     self.handlers.remove(handler)
+                self.handler_groups.pop(handler_id, None)
 
                 # Don't count this as a failure - it's expected during cleanup
                 # self.stats['handlers_removal_failed'] += 1
@@ -233,6 +246,7 @@ class HandlerManager:
 
             # Clear all tracking structures
             self.handlers.clear()
+            self.handler_groups.clear()
             self.handler_instances.clear()
             self.background_tasks.clear()
             self.named_tasks.clear()

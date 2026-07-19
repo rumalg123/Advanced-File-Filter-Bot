@@ -632,7 +632,9 @@ and rounded-up remaining days. See the
 Primary-admin-only commands:
 
 - `/bsetting` opens the Mongo-backed settings editor.
-- `/verify` runs file-access verification.
+- `/verify` audits handler registration, lifecycle hooks, managed tasks, and
+  shutdown alignment. Warnings receive partial credit and issues receive none,
+  so a report containing either cannot incorrectly remain at 100/100.
 - `/cancel` cancels an active settings operation.
 - `/shell command` executes a server shell command. Treat the primary admin account as infrastructure-level access.
 

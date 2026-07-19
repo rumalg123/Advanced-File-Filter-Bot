@@ -11,12 +11,12 @@ from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import admin_only
-from handlers.commands_handlers.base import BaseCommandHandler
+from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
 
 
-class DatabaseCommandHandler(BaseCommandHandler):
+class DatabaseCommandHandler(BaseHandler):
     """Handler for database management commands"""
 
     def __init__(self, bot):
@@ -25,28 +25,28 @@ class DatabaseCommandHandler(BaseCommandHandler):
 
     def register_handlers(self):
         """Register database management command handlers"""
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.handle_database_stats,
                 filters.command("dbstats") & filters.private & filters.incoming
             )
         )
 
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.handle_database_switch,
                 filters.command("dbswitch") & filters.private & filters.incoming
             )
         )
 
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.handle_database_info,
                 filters.command("dbinfo") & filters.private & filters.incoming
             )
         )
 
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.handle_database_callback,
                 filters.regex(r"^db_(refresh_stats|detailed_info|stats|refresh_info)$")

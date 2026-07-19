@@ -89,7 +89,7 @@ class SearchHandler:
 
         # Use handler_manager if available - register with lower priority (higher group number)
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
-            self.bot.handler_manager.add_handler(text_handler)  # Handler manager doesn't support group parameter
+            self.bot.handler_manager.add_handler(text_handler, group=10)
         else:
             self.bot.add_handler(text_handler, group=10)  # Lower priority than command handlers
         self._handlers.append(text_handler)
@@ -150,10 +150,6 @@ class SearchHandler:
         # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
             logger.info("HandlerManager will handle cleanup")
-            # Mark our handlers as removed in the manager
-            for handler in self._handlers:
-                handler_id = id(handler)
-                self.bot.handler_manager.removed_handlers.add(handler_id)
             self._handlers.clear()
             logger.info("SearchHandler cleanup complete")
             return

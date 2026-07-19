@@ -130,7 +130,11 @@ flowchart LR
     Ops --> HTTP
 ```
 
-`HandlerManager` tracks handler instances and background tasks so shutdown can cancel work before closing the client, MongoDB pools, and Redis.
+`HandlerManager` tracks every top-level handler registration, its Wzgram
+dispatcher group, handler instances, and background tasks. Shutdown signals and
+cleans each instance, removes registrations from their original groups, and only
+then closes the client, MongoDB pools, and Redis. `/verify` audits this contract
+against the configured handler set.
 
 ## 4. Search, filters, and result pagination
 

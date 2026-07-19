@@ -3,6 +3,7 @@ from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 
 from core.utils.logger import get_logger
 from core.utils.verify_alignment import verify_alignment_command
+from handlers.base import BaseHandler
 from handlers.callbacks_handlers import UserCallbackHandler
 from handlers.callbacks_handlers.file import FileCallbackHandler
 from handlers.callbacks_handlers.filter import FilterCallBackHandler
@@ -20,11 +21,11 @@ logger = get_logger(__name__)
 
 
 
-class CommandHandler:
+class CommandHandler(BaseHandler):
     """Centralized command handler that coordinates all sub-handlers"""
 
     def __init__(self, bot):
-        self.bot = bot
+        super().__init__(bot)
 
         # Initialize sub-handlers
         self.user_handler = UserCommandHandler(bot)
@@ -45,41 +46,41 @@ class CommandHandler:
         """Register all command and callback handlers"""
 
         # User commands
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(self.user_handler.start_command, filters.command("start") & filters.incoming)
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(self.user_handler.help_command, filters.command("help") & filters.incoming)
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(self.user_handler.about_command, filters.command("about") & filters.incoming)
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(self.user_handler.stats_command, filters.command("stats") & filters.incoming)
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(self.user_handler.plans_command, filters.command("plans") & filters.private)
         )
         # Add this command registration in the user commands section:
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.user_handler.request_stats_command,
                 filters.command("request_stats") & filters.private
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.user_handler.my_keywords_command,
                 filters.command("my_keywords") & filters.private
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.user_handler.popular_keywords_command,
                 filters.command("popular_keywords") & filters.private
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.user_handler.recommendations_command,
                 filters.command("recommendations") & filters.private
@@ -89,20 +90,20 @@ class CommandHandler:
         # In the register_handlers method, add this BEFORE registering search handlers (around line 42):
 
         # Bot settings management
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.bot_settings_handler.bsetting_command,
                 filters.command("bsetting") & filters.user(self.bot.config.ADMINS[0:1])
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             MessageHandler(
                 self.bot_settings_handler.restart_command,
                 filters.command("restart") & filters.user(self.bot.config.ADMINS)
             )
         )
         # Usage: Add to your admin commands
-        self.bot.add_handler(
+        self._register_handler(
              MessageHandler(
                  verify_alignment_command,
                  filters.command("verify") & filters.user(self.bot.config.ADMINS)
@@ -110,7 +111,7 @@ class CommandHandler:
          )
 
         # Bot settings callbacks - single handler for all bset_ callbacks
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.bot_settings_handler.settings_callback,
                 filters.regex(r"^bset_")
@@ -120,7 +121,7 @@ class CommandHandler:
 
         # IMPORTANT: Add this handler for bot settings input BEFORE search handlers
         if self.bot.config.ADMINS:
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.bot_settings_handler.handle_edit_input,
                     filters.text & filters.private & filters.user(self.bot.config.ADMINS[0]) & 
@@ -131,7 +132,7 @@ class CommandHandler:
 
         # Add standalone cancel handler for better reliability 
         if self.bot.config.ADMINS:
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.bot_settings_handler.handle_cancel,
                     filters.command("cancel") & filters.private & filters.user(self.bot.config.ADMINS[0])
@@ -140,39 +141,39 @@ class CommandHandler:
             )
 
         # Callback handlers
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.subscription_callback_handler.handle_checksub_callback,
                 filters.regex(r"^checksub")
             )
         )
         logger.info("Registering file callback handler with pattern: ^file#")
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.file_callback_handler.handle_file_callback,
                 filters.regex(r"^file#")
             )
         )
         logger.info("File callback handler registered successfully")
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.file_callback_handler.handle_sendall_callback,
                 filters.regex(r"^sendall#")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.pagination_callback_handler.handle_search_pagination,
                 filters.regex(r"^search#")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.handle_noop_callback,
                 filters.regex(r"^noop(?:#\d+)?$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.handle_close_data_callback,
                 filters.regex(r"^close_data$")
@@ -182,7 +183,7 @@ class CommandHandler:
         # In the register_handlers method, add these callback handlers:
 
         # Filter alert callback
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.filter_callback_handler.handle_filter_alert_callback,
                 filters.regex(r"^alertmessage:")
@@ -190,7 +191,7 @@ class CommandHandler:
         )
 
         # Delete all filters confirmation
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.filter_callback_handler.handle_delall_confirm_callback,
                 filters.regex(r"^delallconfirm#")
@@ -198,50 +199,50 @@ class CommandHandler:
         )
 
         # Delete all filters cancel
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.filter_callback_handler.handle_delall_cancel_callback,
                 filters.regex(r"^delallcancel$")
             )
         )
 
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_help_callback,
                 filters.regex(r"^help$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_about_callback,
                 filters.regex(r"^about$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_stats_callback,
                 filters.regex(r"^stats$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_plans_callback,
                 filters.regex(r"^plans$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_start_menu_callback,
                 filters.regex(r"^start_menu$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_refresh_recommendations_callback,
                 filters.regex(r"^refresh_recommendations$")
             )
         )
-        self.bot.add_handler(
+        self._register_handler(
             CallbackQueryHandler(
                 self.user_callback_handler.handle_close_recommendations_callback,
                 filters.regex(r"^close_recommendations$")
@@ -250,7 +251,7 @@ class CommandHandler:
         
         # Broadcast confirmation callbacks
         if self.bot.config.ADMINS:
-            self.bot.add_handler(
+            self._register_handler(
                 CallbackQueryHandler(
                     self.admin_handler.handle_broadcast_confirmation,
                     filters.regex(r"^(confirm_broadcast|cancel_broadcast)$") & filters.user(self.bot.config.ADMINS)
@@ -259,49 +260,49 @@ class CommandHandler:
         # Admin commands - check if ADMINS is configured
         if self.bot.config.ADMINS:
             # User management
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.add_premium_command,
                     filters.command("addpremium") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.remove_premium_command,
                     filters.command("removepremium") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.broadcast_command,
                     filters.command("broadcast") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.stop_broadcast_command,
                     filters.command("stop_broadcast") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.reset_broadcast_limit_command,
                     filters.command("reset_broadcast_limit") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.users_command,
                     filters.command("users") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.ban_command,
                     filters.command("ban") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.unban_command,
                     filters.command("unban") & filters.user(self.bot.config.ADMINS)
@@ -309,38 +310,38 @@ class CommandHandler:
             )
 
             # Channel management
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.channel_handler.add_channel_command,
                     filters.command("add_channel") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.channel_handler.remove_channel_command,
                     filters.command("remove_channel") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.channel_handler.list_channels_command,
                     filters.command("list_channels") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.channel_handler.toggle_channel_command,
                     filters.command("toggle_channel") & filters.user(self.bot.config.ADMINS)
                 )
             )
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.log_command,
                     filters.command("log") & filters.user(self.bot.config.ADMINS)
                 )
             )
 
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.performance_command,
                     filters.command("performance") & filters.user(self.bot.config.ADMINS)
@@ -348,21 +349,21 @@ class CommandHandler:
             )
 
             # Cache monitoring commands
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.cache_stats_command,
                     filters.command("cache_stats") & filters.user(self.bot.config.ADMINS)
                 )
             )
 
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.cache_analyze_command,
                     filters.command("cache_analyze") & filters.user(self.bot.config.ADMINS)
                 )
             )
 
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.cache_cleanup_command,
                     filters.command("cache_cleanup") & filters.user(self.bot.config.ADMINS)
@@ -370,7 +371,7 @@ class CommandHandler:
             )
 
             # Shell command - only for primary admin
-            self.bot.add_handler(
+            self._register_handler(
                 MessageHandler(
                     self.admin_handler.shell_command,
                     filters.command("shell") & filters.user(self.bot.config.ADMINS[0:1])

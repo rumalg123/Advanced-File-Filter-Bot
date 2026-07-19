@@ -45,6 +45,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-035 | Medium | Fixed | Performance command | `PerformanceMonitor` returns canonical `process_memory_rss_mb` and `process_cpu_percent` fields, but `/performance` still indexes removed `memory_mb` and `cpu_percent` aliases and fails with `KeyError`. | The command consumes canonical process metrics with backward-compatible fallback values and renders successfully when aliases are absent. |
 | BUG-036 | Low | Fixed | Recommendation formatting | The recommended-files heading contains a double-decoded UTF-8 book emoji and displays `ðŸ“š` to Telegram users. | The source contains the intended `📚` character and a rendered-message regression rejects the mojibake sequence. |
 | BUG-037 | High | Fixed | Content dashboard | Zero-result demand is incremented when result delivery fails rather than when MongoDB has no matches, and is never resolved after a successful search or later indexing, so valid titles remain indefinitely in the dashboard. | Analytics use authoritative access/search totals, successful matches remove stale demand, and the bounded dashboard pass revalidates and cleans existing rows against current MongoDB search behavior. |
+| BUG-038 | High | Fixed | Handler lifecycle | Command and database handlers bypass `HandlerManager`, dispatcher groups are discarded, managed cleanup marks handlers removed without removing them, and `/verify` can still report 100/100 while listing issues. | Every top-level handler has managed cleanup and shutdown signaling; registration/removal preserves dispatcher groups; shutdown removes tracked handlers; the verifier recognizes the complete configured handler set and any warning or issue lowers its score. |
 
 ## Verification log
 
@@ -115,3 +116,9 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   emoji, made zero-result writes depend on authoritative search totals, and added
   a concurrency-bounded dashboard reconciliation that removes historical rows
   once their query matches an indexed file.
+- 2026-07-19: Fixed BUG-038. Command and database registrations now participate
+  in the shared handler lifecycle, dispatcher groups survive registration and
+  removal, and managed shutdown removes rather than merely forgets handlers.
+  `/verify` now knows the complete handler set and uses non-saturating scoring.
+  All 123 tests, `compileall`, Ruff fatal/undefined-name checks, Markdown fence
+  validation, and `git diff --check` passed.
