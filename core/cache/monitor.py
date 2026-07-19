@@ -2,7 +2,11 @@ from typing import Dict, List, Any
 
 from core.cache.config import CacheKeyGenerator, CachePatterns
 from core.cache.redis_cache import CacheManager
-from core.cache.serialization import get_serialization_stats, estimate_memory_usage
+from core.cache.serialization import (
+    deserialize,
+    estimate_memory_usage,
+    get_serialization_stats,
+)
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,6 +21,11 @@ class CacheMonitor:
     @staticmethod
     def _key_text(key: Any) -> str:
         return key.decode('utf-8', errors='replace') if isinstance(key, bytes) else str(key)
+
+    async def _key_type(self, key: Any) -> str:
+        """Return a normalized Redis type name for type-safe inspection."""
+        key_type = await self.cache.redis.type(key)
+        return self._key_text(key_type).lower()
 
     async def get_cache_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics"""
@@ -173,9 +182,18 @@ class CacheMonitor:
                 try:
                     value_size = await self.cache.redis.memory_usage(key)
                 except Exception:
-                    # Fallback: estimate size by getting the actual value
-                    value = await self.cache.redis.get(key)
-                    value_size = len(value) if value else 0
+                    # DUMP works for every Redis data type. GET does not, and
+                    # using it here for sorted sets/hashes produces WRONGTYPE.
+                    try:
+                        dumped_value = await self.cache.redis.dump(key)
+                        value_size = len(dumped_value) if dumped_value else 0
+                    except Exception:
+                        # Last-resort fallback is safe only for string keys.
+                        if await self._key_type(key) == 'string':
+                            value = await self.cache.redis.get(key)
+                            value_size = len(value) if value else 0
+                        else:
+                            value_size = 0
 
                 # Get TTL
                 ttl = await self.cache.redis.ttl(key)
@@ -217,6 +235,8 @@ class CacheMonitor:
 
         analysis: Dict[str, Any] = {
             "samples_analyzed": 0,
+            "keys_examined": 0,
+            "non_string_keys_skipped": 0,
             "total_current_size": 0,
             "potential_savings": {},
             "method_comparison": [],
@@ -225,20 +245,37 @@ class CacheMonitor:
 
         try:
             sampled = 0
+            keys_examined = 0
+            max_keys_examined = max(sample_size * 20, sample_size)
             async for key in self.cache.redis.scan_iter(count=sample_size * 2):
-                if sampled >= sample_size:
+                if sampled >= sample_size or keys_examined >= max_keys_examined:
                     break
 
+                keys_examined += 1
+                analysis["keys_examined"] = keys_examined
+
                 try:
-                    # Get the cached value
+                    # Only Redis strings contain CacheManager serialization.
+                    # Recommendation and history keys are sorted sets and must
+                    # be inspected with their native commands, never GET.
+                    if await self._key_type(key) != 'string':
+                        analysis["non_string_keys_skipped"] += 1
+                        continue
+
+                    # Read the confirmed string once. Going through
+                    # CacheManager.get() would issue another GET and log a
+                    # misleading cache error if the key changed type between
+                    # TYPE and GET.
                     key_text = self._key_text(key)
-                    value = await self.cache.get(key_text)
+                    raw_value = await self.cache.redis.get(key)
+                    if not raw_value:
+                        continue
+
+                    value = deserialize(raw_value)
                     if value is None or not isinstance(value, (dict, list)):
                         continue
 
-                    # Get current stored size
-                    raw_value = await self.cache.redis.get(key)
-                    current_size = len(raw_value) if raw_value else 0
+                    current_size = len(raw_value)
 
                     # Estimate sizes with different methods
                     estimates = estimate_memory_usage(value)

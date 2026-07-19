@@ -49,6 +49,7 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
 | CACHE-021 | Medium | Fixed | Version recovery | A malformed search-version value can break all searches instead of being discarded. Validate and self-heal the version key. |
 | CACHE-022 | Low | Fixed | Channel projection | Indexed-count updates invalidate the entity key but not the cached active-channel projection, so callers can see old channel metadata. Invalidate the projection after a successful count update. |
 | CACHE-023 | Medium | Fixed | Session identity | Default session IDs use one-second timestamps, allowing two same-user/same-type creations in one second to reuse a cache identity. Generate collision-resistant IDs so ownership checks remain meaningful. |
+| CACHE-024 | High | Fixed | Monitoring | Serialization analysis scans mixed Redis data types through scalar `GET`; recommendation and search-history sorted sets therefore emit a `WRONGTYPE` error per key, and the scan can traverse the entire database while looking for a small number of serializable samples. Inspect `TYPE` first, read only strings, use `DUMP` for type-agnostic size fallback, and bound examined keys without deleting or rewriting live data. |
 
 ## Remediation order
 
@@ -89,3 +90,11 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
    preserves file ID, unique ID, and file-reference lookup keys.
 6. After deployment, smoke-test one search with pagination/send-all, a filter,
    a connected group, a premium check, `/cache_stats`, and `/cache_analyze`.
+7. `/cache_analyze` now skips native Redis structures such as recommendation and
+   history sorted sets during serialization sampling; no Redis flush or key
+   migration is required.
+
+## 2026-07-19 verification
+
+- Fixed CACHE-024 after production `/cache_analyze` logs exposed type-unsafe
+  monitoring reads. Added mixed string/sorted-set and `DUMP` fallback tests.

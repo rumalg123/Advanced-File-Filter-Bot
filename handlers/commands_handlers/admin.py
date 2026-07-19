@@ -846,10 +846,17 @@ class AdminCommandHandler(BaseCommandHandler):
             else:
                 text += f"<b>Note:</b> {metrics.get('recommendation', '')}\n"
 
+            memory_mb = metrics.get(
+                'process_memory_rss_mb', metrics.get('memory_mb', 0.0)
+            )
+            cpu_percent = metrics.get(
+                'process_cpu_percent', metrics.get('cpu_percent', 0.0)
+            )
+
             text += (
                 f"\n📊 <b>System Resources:</b>\n"
-                f"├ Memory: {metrics['memory_mb']:.2f} MB\n"
-                f"├ CPU: {metrics['cpu_percent']:.1f}%\n"
+                f"├ Memory: {memory_mb:.2f} MB\n"
+                f"├ CPU: {cpu_percent:.1f}%\n"
                 f"├ Threads: {metrics['num_threads']}\n"
                 f"├ File Descriptors: {metrics['num_fds']}\n"
                 f"└ Pending Tasks: {metrics['pending_tasks']}\n\n"

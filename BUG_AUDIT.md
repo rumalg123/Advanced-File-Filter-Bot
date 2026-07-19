@@ -41,6 +41,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-031 | High | Fixed | Broadcast recovery | Broadcast pending state is stored before the confirmation preview is accepted; a preview failure consumes the rate limit and leaves every later `/broadcast` stuck, while stop/reset cannot clear the phantom confirmation. | Pending state is published only after a successful preview, preview failure releases the limiter, and both broadcast recovery commands clear pending state safely. |
 | BUG-032 | High | Fixed | Broadcast callbacks | The confirmation callback is acknowledged only after delivery to every user, so Telegram can expire the query and make Confirm appear unresponsive during a large broadcast. | Confirm and Cancel are acknowledged before slow work, each callback is answered exactly once, and delivery/status failures still clear active and pending state. |
 | BUG-033 | Medium | Fixed | Broadcast formatting | `/broadcast` advertises HTML support but always calls `Message.copy()`, so HTML tags typed into otherwise plain text or media captions are delivered literally. | Existing Telegram entities continue through `Message.copy()`; supported raw HTML text and captions are explicitly parsed during delivery; preview content is safely escaped. |
+| BUG-034 | High | Fixed | Cache observability | `/cache_analyze` calls scalar `GET` on sorted-set recommendation and history keys, flooding logs with `WRONGTYPE` errors and potentially scanning the entire Redis database for a small serialization sample. | Monitoring checks Redis types, reads only serialized strings, uses a type-safe size fallback, and enforces a bounded examination limit without mutating live keys. |
+| BUG-035 | Medium | Fixed | Performance command | `PerformanceMonitor` returns canonical `process_memory_rss_mb` and `process_cpu_percent` fields, but `/performance` still indexes removed `memory_mb` and `cpu_percent` aliases and fails with `KeyError`. | The command consumes canonical process metrics with backward-compatible fallback values and renders successfully when aliases are absent. |
 
 ## Verification log
 
@@ -104,3 +106,6 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
   stop/reset recover pending confirmations, and delivery supports raw HTML while
   preserving existing Telegram formatting. Added 8 focused regressions; all 112
   tests and Ruff fatal-error checks passed.
+- 2026-07-19: Fixed BUG-034 and BUG-035 from production observability logs.
+  Cache analysis is Redis-type-aware and bounded, while `/performance` consumes
+  the current process metric schema. No Redis keys are deleted or migrated.

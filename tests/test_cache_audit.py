@@ -394,6 +394,92 @@ async def test_monitor_awaits_memory_reports_selected_db_and_classifies_aliases(
 
 
 @pytest.mark.asyncio
+async def test_serialization_analysis_skips_non_string_redis_keys():
+    class MixedRedis:
+        def __init__(self):
+            self.keys = [
+                b"rec:file_cooccur:file-1",
+                b"search_history:42",
+                b"serialized:document",
+            ]
+            self.get_calls = []
+
+        async def scan_iter(self, match=None, count=None):
+            del match, count
+            for key in self.keys:
+                yield key
+
+        async def type(self, key):
+            return b"string" if key == b"serialized:document" else b"zset"
+
+        async def get(self, key):
+            self.get_calls.append(key)
+            assert key == b"serialized:document"
+            return serialize({"name": "value"})
+
+    redis = MixedRedis()
+
+    cache = SimpleNamespace(redis=redis)
+    analysis = await CacheMonitor(cache).analyze_serialization_efficiency(
+        sample_size=1
+    )
+
+    assert analysis["samples_analyzed"] == 1
+    assert analysis["keys_examined"] == 3
+    assert analysis["non_string_keys_skipped"] == 2
+    assert redis.get_calls == [b"serialized:document"]
+
+
+@pytest.mark.asyncio
+async def test_serialization_analysis_bounds_mixed_type_scan():
+    class SortedSetOnlyRedis:
+        async def scan_iter(self, match=None, count=None):
+            del match, count
+            for index in range(100):
+                yield f"rec:file_cooccur:{index}".encode()
+
+        async def type(self, _key):
+            return b"zset"
+
+        async def get(self, _key):
+            raise AssertionError("GET must not be used for sorted sets")
+
+    analysis = await CacheMonitor(
+        SimpleNamespace(redis=SortedSetOnlyRedis())
+    ).analyze_serialization_efficiency(sample_size=1)
+
+    assert analysis["samples_analyzed"] == 0
+    assert analysis["keys_examined"] == 20
+    assert analysis["non_string_keys_skipped"] == 20
+
+
+@pytest.mark.asyncio
+async def test_cache_size_fallback_uses_dump_for_sorted_sets():
+    class SortedSetRedis:
+        async def scan_iter(self, count=None):
+            del count
+            yield b"search_history:42"
+
+        async def memory_usage(self, _key):
+            raise RuntimeError("MEMORY USAGE unavailable")
+
+        async def dump(self, key):
+            assert key == b"search_history:42"
+            return b"redis-dump"
+
+        async def get(self, _key):
+            raise AssertionError("GET must not be used for a sorted set")
+
+        async def ttl(self, _key):
+            return 300
+
+    cache = SimpleNamespace(redis=SortedSetRedis())
+    analysis = await CacheMonitor(cache).analyze_cache_usage(sample_size=1)
+
+    assert analysis["key_size_distribution"] == {"< 1KB": 1}
+
+
+@pytest.mark.asyncio
 async def test_delete_pattern_streams_bounded_batches():
     class PatternRedis:
         def __init__(self):
