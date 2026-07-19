@@ -43,6 +43,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-033 | Medium | Fixed | Broadcast formatting | `/broadcast` advertises HTML support but always calls `Message.copy()`, so HTML tags typed into otherwise plain text or media captions are delivered literally. | Existing Telegram entities continue through `Message.copy()`; supported raw HTML text and captions are explicitly parsed during delivery; preview content is safely escaped. |
 | BUG-034 | High | Fixed | Cache observability | `/cache_analyze` calls scalar `GET` on sorted-set recommendation and history keys, flooding logs with `WRONGTYPE` errors and potentially scanning the entire Redis database for a small serialization sample. | Monitoring checks Redis types, reads only serialized strings, uses a type-safe size fallback, and enforces a bounded examination limit without mutating live keys. |
 | BUG-035 | Medium | Fixed | Performance command | `PerformanceMonitor` returns canonical `process_memory_rss_mb` and `process_cpu_percent` fields, but `/performance` still indexes removed `memory_mb` and `cpu_percent` aliases and fails with `KeyError`. | The command consumes canonical process metrics with backward-compatible fallback values and renders successfully when aliases are absent. |
+| BUG-036 | Low | Fixed | Recommendation formatting | The recommended-files heading contains a double-decoded UTF-8 book emoji and displays `ðŸ“š` to Telegram users. | The source contains the intended `📚` character and a rendered-message regression rejects the mojibake sequence. |
+| BUG-037 | High | Fixed | Content dashboard | Zero-result demand is incremented when result delivery fails rather than when MongoDB has no matches, and is never resolved after a successful search or later indexing, so valid titles remain indefinitely in the dashboard. | Analytics use authoritative access/search totals, successful matches remove stale demand, and the bounded dashboard pass revalidates and cleans existing rows against current MongoDB search behavior. |
 
 ## Verification log
 
@@ -109,3 +111,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 - 2026-07-19: Fixed BUG-034 and BUG-035 from production observability logs.
   Cache analysis is Redis-type-aware and bounded, while `/performance` consumes
   the current process metric schema. No Redis keys are deleted or migrated.
+- 2026-07-19: Fixed BUG-036 and BUG-037. Restored the recommendation heading
+  emoji, made zero-result writes depend on authoritative search totals, and added
+  a concurrency-bounded dashboard reconciliation that removes historical rows
+  once their query matches an indexed file.

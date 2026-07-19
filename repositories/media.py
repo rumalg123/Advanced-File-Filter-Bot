@@ -554,6 +554,34 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         await self.cache.set(cache_key, cache_data, expire=self.ttl.SEARCH_RESULTS)
         return files, next_offset, total
 
+    async def has_matching_file(
+            self,
+            query: str,
+            file_type: Optional[FileType] = None,
+            use_caption: bool = True,
+            advanced_filters: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Check current MongoDB search truth without counting every match."""
+        search_filter = self._build_search_filter(
+            normalize_query(query), file_type, use_caption, advanced_filters
+        )
+
+        if self.is_multi_db:
+            matches = await self.multi_db_manager.search_across_all_databases(
+                self.collection_name,
+                search_filter,
+                limit=1,
+                skip=0,
+                sort=[('_id', 1)]
+            )
+            return bool(matches)
+
+        collection = await self.collection()
+        match = await self.db_pool.execute_with_retry(
+            collection.find_one, search_filter, {'_id': 1}
+        )
+        return match is not None
+
     def _build_search_filter(
             self,
             query: str,

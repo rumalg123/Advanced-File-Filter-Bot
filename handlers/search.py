@@ -589,17 +589,16 @@ class SearchHandler:
             if search_sent or filter_sent:
                 await self._track_successful_query(user_id, query)
 
+            await self._sync_zero_result_analytics(
+                user_id=user_id,
+                query=query,
+                has_access=has_access,
+                total=total,
+                filter_sent=filter_sent
+            )
+
             # Send "not found" message only if nothing was sent
             if not search_sent and not filter_sent:
-                feature_service = getattr(self.bot, 'feature_service', None)
-                if (
-                    feature_service
-                    and feature_service.enabled('FEATURE_CONTENT_DASHBOARD')
-                ):
-                    try:
-                        await self.bot.feature_repo.track_zero_result(user_id, query)
-                    except Exception as e:
-                        logger.debug(f"Could not track zero-result search: {e}")
                 no_results_buttons = []
                 
                 # Try to find similar queries using fuzzy matching
@@ -730,16 +729,14 @@ class SearchHandler:
 
             if search_sent or filter_sent:
                 await self._track_successful_query(user_id, query)
-            else:
-                feature_service = getattr(self.bot, 'feature_service', None)
-                if (
-                    feature_service
-                    and feature_service.enabled('FEATURE_CONTENT_DASHBOARD')
-                ):
-                    try:
-                        await self.bot.feature_repo.track_zero_result(user_id, query)
-                    except Exception as e:
-                        logger.debug(f"Could not track group zero-result search: {e}")
+
+            await self._sync_zero_result_analytics(
+                user_id=user_id,
+                query=query,
+                has_access=has_access,
+                total=total,
+                filter_sent=filter_sent
+            )
 
         except Exception as e:
             logger.error(f"Error in group search: {e}")
@@ -751,6 +748,31 @@ class SearchHandler:
             await self.search_history_service.track_search(user_id, query, track_global=True)
         if self.recommendation_service:
             await self.recommendation_service.track_successful_search(user_id, query)
+
+    async def _sync_zero_result_analytics(
+            self,
+            user_id: int,
+            query: str,
+            has_access: bool,
+            total: int,
+            filter_sent: bool
+    ) -> None:
+        """Persist only authoritative, currently unresolved search demand."""
+        feature_service = getattr(self.bot, 'feature_service', None)
+        if not (
+            has_access
+            and feature_service
+            and feature_service.enabled('FEATURE_CONTENT_DASHBOARD')
+        ):
+            return
+
+        try:
+            if total > 0 or filter_sent:
+                await self.bot.feature_repo.resolve_zero_result(query)
+            else:
+                await self.bot.feature_repo.track_zero_result(user_id, query)
+        except Exception as e:
+            logger.debug(f"Could not synchronize zero-result analytics: {e}")
 
 
     async def _check_and_send_filter(

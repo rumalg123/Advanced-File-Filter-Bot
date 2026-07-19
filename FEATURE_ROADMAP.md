@@ -39,7 +39,7 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
 | FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users can view their requests and statuses, duplicate requests are detected, and completion/rejection transitions are persisted and notified idempotently. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
 | FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. |
-| FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view zero-result searches, popular searches, report counts, request demand, and index/file-health summaries with bounded queries. |
+| FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view currently unresolved zero-result searches, popular searches, report counts, request demand, and index/file-health summaries; successful/later-indexed matches self-heal through bounded current-search validation. |
 
 ## Delivery order
 

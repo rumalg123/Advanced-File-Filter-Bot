@@ -169,12 +169,15 @@ class FeatureService:
             return {}
 
         zero_results, popular, media_stats, report_count, pending_requests = await asyncio.gather(
-            self.repository.top_zero_results(limit=10),
+            # Fetch a bounded surplus so stale resolved rows can be removed
+            # while still returning up to ten real unmet searches.
+            self.repository.top_zero_results(limit=30),
             self.search_history_service.get_global_top_searches(limit=10),
             self.media_repo.get_file_stats(),
             self.repository.count_documents('file_reports', {'status': 'open'}),
             self.repository.count_documents('content_requests', {'status': 'pending'}),
         )
+        zero_results = await self._reconcile_zero_results(zero_results, limit=10)
         return {
             'zero_results': zero_results,
             'popular_searches': popular,
@@ -184,3 +187,77 @@ class FeatureService:
             'saved_searches': await self.repository.count_documents('saved_searches'),
             'collections': await self.repository.count_documents('user_collections'),
         }
+
+    async def _reconcile_zero_results(
+            self, rows: list[dict[str, Any]], limit: int
+    ) -> list[dict[str, Any]]:
+        """Drop analytics rows whose query now matches an indexed file."""
+        checker = getattr(self.media_repo, 'has_matching_file', None)
+        resolver = getattr(self.repository, 'resolve_zero_result', None)
+        if not checker:
+            return rows[:limit]
+
+        validation_limit = asyncio.Semaphore(5)
+
+        async def query_has_match(row: dict[str, Any]) -> bool:
+            query = str(row.get('query') or row.get('_id') or '').strip()
+            if not query:
+                return False
+
+            search_query = query
+            advanced_filters = None
+            file_type = None
+            if self.enabled('FEATURE_ADVANCED_SEARCH'):
+                from core.utils.feature_search import parse_advanced_search_query
+                from core.utils.file_type import get_file_type_from_string
+
+                search_query, advanced_filters = parse_advanced_search_query(query)
+                if advanced_filters and advanced_filters.get('file_type'):
+                    file_type = get_file_type_from_string(
+                        str(advanced_filters['file_type'])
+                    )
+
+            async with validation_limit:
+                return await checker(
+                    search_query,
+                    file_type=file_type,
+                    use_caption=getattr(self.config, 'USE_CAPTION_FILTER', True),
+                    advanced_filters=advanced_filters
+                )
+
+        match_results = await asyncio.gather(
+            *(query_has_match(row) for row in rows),
+            return_exceptions=True
+        )
+
+        unresolved = []
+        resolved_queries = []
+        for row, match_result in zip(rows, match_results):
+            if isinstance(match_result, Exception):
+                logger.debug(
+                    "Could not validate zero-result query %s: %s",
+                    row.get('query', row.get('_id')),
+                    match_result
+                )
+                unresolved.append(row)
+            elif match_result:
+                resolved_queries.append(
+                    str(row.get('query') or row.get('_id') or '')
+                )
+            else:
+                unresolved.append(row)
+
+        if resolver and resolved_queries:
+            cleanup_results = await asyncio.gather(
+                *(resolver(query) for query in resolved_queries),
+                return_exceptions=True
+            )
+            for query, cleanup_result in zip(resolved_queries, cleanup_results):
+                if isinstance(cleanup_result, Exception):
+                    logger.debug(
+                        "Could not resolve stale zero-result query %s: %s",
+                        query,
+                        cleanup_result
+                    )
+
+        return unresolved[:limit]

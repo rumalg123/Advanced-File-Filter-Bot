@@ -198,6 +198,9 @@ async def test_file_only_post_search_recommendations_are_rendered():
     )
 
     message.reply_text.assert_awaited_once()
+    recommendation_text = message.reply_text.await_args.args[0]
+    assert "📚 <b>Recommended Files:</b>" in recommendation_text
+    assert "ðŸ" not in recommendation_text
     markup = message.reply_text.await_args.kwargs["reply_markup"]
     assert markup.inline_keyboard[0][0].callback_data.endswith("#@deadbeef")
     cleanup.assert_called_once_with(sent_message, 25)
@@ -265,6 +268,35 @@ async def test_failed_private_search_is_not_added_to_keyword_history():
 
     search_history.track_search.assert_not_awaited()
     recommendation_service.track_successful_search.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_zero_result_analytics_follow_database_results_not_delivery_state():
+    feature_repo = SimpleNamespace(
+        resolve_zero_result=AsyncMock(),
+        track_zero_result=AsyncMock()
+    )
+    handler = object.__new__(SearchHandler)
+    handler.bot = SimpleNamespace(
+        feature_service=SimpleNamespace(enabled=lambda _flag: True),
+        feature_repo=feature_repo
+    )
+
+    # A matching file resolves old zero-result demand even if presentation or
+    # Telegram delivery later fails.
+    await handler._sync_zero_result_analytics(7, "Agent Kim Reactivated", True, 6, False)
+    feature_repo.resolve_zero_result.assert_awaited_once_with(
+        "Agent Kim Reactivated"
+    )
+    feature_repo.track_zero_result.assert_not_awaited()
+
+    feature_repo.resolve_zero_result.reset_mock()
+    await handler._sync_zero_result_analytics(7, "Missing title", True, 0, False)
+    feature_repo.track_zero_result.assert_awaited_once_with(7, "Missing title")
+
+    feature_repo.track_zero_result.reset_mock()
+    await handler._sync_zero_result_analytics(7, "Access denied", False, 0, False)
+    feature_repo.track_zero_result.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -280,7 +280,7 @@ class SearchResultsService:
                     if files_by_id.get(file_id) is not None
                 ]
                 if recommended_files:
-                    text_parts.append("ðŸ“š <b>Recommended Files:</b>")
+                    text_parts.append("📚 <b>Recommended Files:</b>")
                     buttons.extend(
                         ButtonBuilder.file_buttons_row(
                             files=recommended_files,

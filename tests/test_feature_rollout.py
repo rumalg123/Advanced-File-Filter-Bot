@@ -1,4 +1,5 @@
 from copy import deepcopy
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -203,6 +204,16 @@ def test_advanced_mongo_filter_and_variant_grouping_keep_every_file():
         "720", "1080", "other"
     ]
     assert len(groups[0][1]) == 2
+
+    title_filter = repository._build_search_filter(
+        "Agent Kim Reactivated", None, True
+    )
+    title_pattern = title_filter['$or'][0]['file_name']['$regex']
+    assert re.search(
+        title_pattern,
+        "Agent Kim Reactivated S01E06 NF x264 540p mkv",
+        re.IGNORECASE
+    )
 
     service = SearchResultsService(
         SimpleNamespace(),
@@ -978,3 +989,58 @@ async def test_content_dashboard_uses_bounded_aggregate_sources():
     assert dashboard['pending_requests'] == 4
     assert dashboard['saved_searches'] == 5
     assert dashboard['collections'] == 6
+
+
+@pytest.mark.asyncio
+async def test_content_dashboard_removes_queries_that_now_have_files():
+    repository = SimpleNamespace(
+        top_zero_results=AsyncMock(return_value=[
+            {'_id': 'agent kim reactivated', 'query': 'Agent Kim reactivated', 'count': 4},
+            {'_id': 'missing title', 'query': 'Missing title', 'count': 3},
+        ]),
+        resolve_zero_result=AsyncMock(return_value=True),
+        count_documents=AsyncMock(side_effect=[0, 0, 0, 0])
+    )
+
+    async def has_matching_file(query, **_kwargs):
+        return query.lower() == 'agent kim reactivated'
+
+    media_repo = SimpleNamespace(
+        get_file_stats=AsyncMock(return_value={'total_files': 1, 'total_size': 1}),
+        has_matching_file=has_matching_file
+    )
+    service = FeatureService(
+        repository,
+        media_repo,
+        SimpleNamespace(get_global_top_searches=AsyncMock(return_value=[])),
+        feature_config('FEATURE_CONTENT_DASHBOARD')
+    )
+
+    dashboard = await service.dashboard()
+
+    assert [item['query'] for item in dashboard['zero_results']] == ['Missing title']
+    repository.resolve_zero_result.assert_awaited_once_with(
+        'Agent Kim reactivated'
+    )
+    repository.top_zero_results.assert_awaited_once_with(limit=30)
+
+
+@pytest.mark.asyncio
+async def test_successful_search_resolves_normalized_zero_result_record():
+    result = SimpleNamespace(deleted_count=1)
+    collection = SimpleNamespace(delete_one=AsyncMock(return_value=result))
+
+    class Pool:
+        async def get_collection(self, name):
+            assert name == 'search_analytics'
+            return collection
+
+        async def execute_with_retry(self, function, *args, **kwargs):
+            return await function(*args, **kwargs)
+
+    repository = FeatureRepository(Pool())
+
+    assert await repository.resolve_zero_result("  Agent Kim Reactivated  ")
+    collection.delete_one.assert_awaited_once_with({
+        '_id': 'agent kim reactivated'
+    })

@@ -421,7 +421,7 @@ Every value below defaults to `false`:
 | `FEATURE_REQUEST_TRACKING` | Deduplicate/persist unresolved `#request` items and expose `/myrequests`. |
 | `FEATURE_RECENT_FILES` | Store successful deliveries and expose `/recent`, per-file removal, and `/clear_recent`. |
 | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Show a reason beside recommended files. |
-| `FEATURE_CONTENT_DASHBOARD` | Persist zero-result analytics and expose `/content_dashboard` to admins. |
+| `FEATURE_CONTENT_DASHBOARD` | Persist currently unresolved zero-result analytics, reconcile newly matching titles, and expose `/content_dashboard` to admins. |
 
 ### Messages and presentation
 
