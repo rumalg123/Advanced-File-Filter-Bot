@@ -27,7 +27,7 @@ def test_histograms_keep_bounded_memory_and_calculate_bucket_percentiles():
     assert snapshot["cache_hit_ratio"] == round(2 / 3, 4)
     assert snapshot["events"]["search"]["count"] == 11
     assert snapshot["events"]["search"]["p50_bucket_ms"] == 200
-    assert snapshot["events"]["search"]["p95_bucket_ms"] == 10001
+    assert snapshot["events"]["search"]["p95_bucket_ms"] == ">10000"
     assert len(telemetry._histograms["search"]) == len(BUCKETS_MS) + 1
 
     # Durations and queries are never retained as an unbounded list.
