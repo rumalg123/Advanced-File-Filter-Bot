@@ -230,3 +230,29 @@ async def test_preview_rejects_more_than_1000_without_storing_a_token():
     await handler.handle_deleteall_command(None, msg)
     cache.set.assert_not_awaited()
     assert "1001" in msg.reply_text.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_delete_channel_queue_applies_backpressure_without_drops(monkeypatch):
+    import handlers.delete as module
+
+    handler = object.__new__(DeleteHandler)
+    handler.delete_queue = asyncio.Queue(maxsize=1)
+    existing = {"file_unique_id": "old-file", "file_name": "Old file"}
+    handler.delete_queue.put_nowait(existing)
+    incoming = {"file_unique_id": "new-file", "file_name": "New file"}
+    monkeypatch.setattr(module, "extract_file_info", lambda _: incoming)
+
+    message = SimpleNamespace(
+        media=True,
+        id=7,
+    )
+    producer = asyncio.create_task(
+        handler.handle_delete_channel_message(None, message)
+    )
+    await asyncio.sleep(0)
+    assert not producer.done()
+    assert handler.delete_queue.qsize() == 1
+    assert handler.delete_queue.get_nowait() is existing
+    await asyncio.wait_for(producer, timeout=1)
+    assert handler.delete_queue.get_nowait() is incoming
