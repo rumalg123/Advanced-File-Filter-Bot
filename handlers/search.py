@@ -12,6 +12,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
     InlineKeyboardMarkup, ReplyKeyboardRemove
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.session.manager import SessionType
 from core.services.search_results import SearchResultsService
 from core.utils.button_builder import ButtonBuilder
@@ -415,6 +416,8 @@ class SearchHandler:
                 # Check if it's daily limit
                 if access_reason and "Daily limit reached" in access_reason:
                     switch_text = "⚠️ Daily limit reached. Upgrade to premium for unlimited access!"
+                elif access_reason == SEARCH_RETRY_MESSAGE:
+                    switch_text = SEARCH_RETRY_MESSAGE
                 else:
                     switch_text = ErrorMessageFormatter.format_access_denied(access_reason, include_prefix=False, plain_text=True)
                 try:
@@ -422,7 +425,7 @@ class SearchHandler:
                         results=[],
                         cache_time=0,
                         switch_pm_text=switch_text,
-                        switch_pm_parameter="premium"
+                        switch_pm_parameter="start" if access_reason == SEARCH_RETRY_MESSAGE else "premium"
                     )
                 except QueryIdInvalid:
                     logger.warning(f"Inline query expired for user {user_id} (access denied)")
@@ -699,6 +702,16 @@ class SearchHandler:
                         title="Daily Limit Reached"
                     )
                 await message.reply_text(limit_msg)
+                return
+
+            # Search is temporarily down. Do not proceed to filter results,
+            # success tracking or zero-result analytics for a failed search.
+            if not has_access and access_reason == SEARCH_RETRY_MESSAGE:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_warning(
+                        SEARCH_RETRY_MESSAGE, title="Search Unavailable"
+                    )
+                )
                 return
 
             search_sent = False
