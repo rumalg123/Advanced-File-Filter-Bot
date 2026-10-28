@@ -119,6 +119,9 @@ class RoutedCacheManager:
                     output[index] = value
         return output
 
+    async def ensure_counter_initialized(self, key: str, initial: int):
+        return await self.backend_for_key(key).ensure_counter_initialized(key, initial)
+
     async def increment(self, key: str, amount: int = 1) -> Optional[int]:
         return await self.backend_for_key(key).increment(key, amount)
 
