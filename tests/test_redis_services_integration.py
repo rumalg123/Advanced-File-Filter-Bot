@@ -44,8 +44,14 @@ async def test_isolated_redis_cache_and_protected_state_real_roundtrip():
     session_key = f"session:ci:{suffix}"
     limiter_key = f"rate_limit:ci:{suffix}"
     try:
-        assert (await cache.redis.config_get("maxmemory-policy"))["maxmemory-policy"] == "allkeys-lru"
-        assert (await state.redis.config_get("maxmemory-policy"))["maxmemory-policy"] == "noeviction"
+        cache_config = await cache.redis.config_get("maxmemory-policy")
+        state_config = await state.redis.config_get("maxmemory-policy")
+        def policy(config):
+            value = next(iter(config.values()))
+            return value.decode() if isinstance(value, bytes) else value
+
+        assert policy(cache_config) == "allkeys-lru"
+        assert policy(state_config) == "noeviction"
 
         assert await routed.set(cache_key, {"source": "disposable"}, expire=30)
         assert await routed.set(session_key, {"source": "protected"}, expire=30)
