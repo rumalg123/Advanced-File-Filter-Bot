@@ -104,7 +104,7 @@ All items are initially **Open** unless marked Deferred. "Evidence" is a source 
 - Added `tests/test_production_authorization.py` covering denial/allowed behavior, callback and service entry points, absent users and premium batches.
 - Added a basic compile/pytest GitHub Actions workflow as initial work towards PH-008. Branch protection, MongoDB/Redis integration tests, and staging rollout are not complete.
 - **Compatibility:** no MongoDB fields, indexes, document values, Redis keys, cache TTLs or collection names changed.
-- **Verification:** full CI suite, production-smoke tests and authorization integration checks are pending. Keep PH-001 In review and PH-008 In progress until acceptance criteria are verified. No production deployment occurred.
+- **Verification:** full project pytest and Python compilation passed on [GitHub Actions run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842). Production/staging Telegram integration smoke tests and required-check branch protection are still pending. The CI workflow was subsequently upgraded to current Node24-compatible GitHub Actions and retriggered. Keep PH-001 In review and PH-008 In progress until acceptance criteria are verified. No production deployment occurred.
 
 ## 4. Architecture drift register
 
@@ -134,7 +134,7 @@ These are design divergences, **not** independent production incidents. Any reme
 
 ### Phase 1: correctness/security before scaling
 
-- [x] PH-001: central banned/unknown-user gate added and unit regression tests committed on this branch. **Verification pending**: CI, staging, real Telegram workflows, and runtime configuration combinations; status remains In review.
+- [x] PH-001: central banned/unknown-user gate added and unit regression tests committed on this branch. **Verification:** full pytest and compilation passed in [GitHub Actions run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842); staging, real Telegram workflows, and runtime configuration combinations remain pending; status remains In review.
 - [ ] PH-002: no failure-as-empty results, no false negative-result caching.
 - [ ] PH-004, PH-010: restrict monitoring and Redis access after reachability assessment.
 - [ ] PH-003, PH-011: protect Redis correctness-critical state from eviction/version reset.
@@ -229,3 +229,4 @@ These are **merged**, not proof that full project tests, load tests or a product
 |---|---|---|
 | 2026-10-28 | Initialized production-specific source-of-truth tracker for one MongoDB database (~97K media records). Prioritized active security/reliability issues, preserved older registers, and deferred multi-DB risks. | Documentation PR |
 | 2026-10-28 | Began PH-001: centralized ban checks and fail-closed unknown users, tests and PH-008 initial GitHub Actions CI. Corrected previous assumption about send-all decorator. No DB/Redis changes. | [PR #4](https://github.com/rumalg123/Advanced-File-Filter-Bot/pull/4) |
+| 2026-10-28 | Full pytest suite and compileall passed on first completed GitHub Actions run. Updated Actions runtime to Node24-compatible current versions; staging smoke checks remain pending. | [CI run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842) |
