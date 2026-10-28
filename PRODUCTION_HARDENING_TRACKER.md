@@ -65,7 +65,7 @@ All items are initially **Open** unless marked Deferred. "Evidence" is a source 
 | ID | Priority | Status | Evidence | Finding and impact | Definition of done |
 |---|---|---|---|---|---|
 | PH-001 | **P0** | In review | Code-confirmed, conditional: [`repositories/user.py`](repositories/user.py) `can_retrieve_file`, [`handlers/callbacks_handlers/file.py`](handlers/callbacks_handlers/file.py) `handle_sendall_callback` | With `DISABLE_PREMIUM` enabled, the authorization helper returns before the banned-user check; the lower-level helper can permit banned users if their handler is not consistently protected. Note: `handle_sendall_callback` **does** already have a `@check_ban()` decorator; the prior missing-decorator allegation was incorrect. | Ban check precedes every premium/admin/quota bypass; direct link, single file, send-all and batch paths have negative tests. |
-| PH-002 | **P1** | Open | Code-confirmed: [`core/database/base.py`](core/database/base.py) `find_many`/`count`; [`repositories/media.py`](repositories/media.py) `search_files` | Database failures become empty lists or zero counts and may be cached as legitimate "no results." | DB timeout/error is distinguishable from zero matches, not cached, and user sees a retryable error; verify with forced failures. |
+| PH-002 | **P1** | In review | Code-confirmed: [`core/database/base.py`](core/database/base.py) `find_many`/`count`; [`repositories/media.py`](repositories/media.py) `search_files` | When MongoDB fails, legacy repository methods can return empty lists/zero counts that search previously cached as valid. Strict single-DB media search now distinguishes failures; multi-DB failure handling remains PH-027. | DB timeout/error is distinguishable from zero matches, not cached, and user sees a retryable error; verify with forced failures. |
 | PH-003 | **P1** | Open | Conditional: [`redis.conf`](redis.conf), [`core/cache/invalidation.py`](core/cache/invalidation.py) | `allkeys-lru` plus a 256 MB cap can evict search version counters, sessions, and rate-limit state, not only disposable cache entries. | Inventory keys by durability; separate disposable vs operational state or implement equivalent protection; test memory-pressure behavior and failure handling. |
 | PH-004 | **P1** | Open | Code-confirmed exposure surface: [`bot.py`](bot.py) `_start_web_server`, [`docker-compose.yml`](docker-compose.yml) | Health/metrics/performance endpoints have no app authorization; bot binds all interfaces and Compose publishes port 8000. Actual Internet reachability is **unverified**. | Restrict detailed metrics to private/authenticated access; keep liveness minimal; verify firewall/port exposure from outside. |
 | PH-005 | **P1** | Open | Code-confirmed: [`handlers/channel.py`](handlers/channel.py) `handle_channel_media` | Full in-memory primary and overflow queues discard the oldest item; crash can lose unprocessed indexing events. | Durable recovery/checkpoints, idempotent replay, alerts on loss, and test for overload/restart recovery; no silent loss. |
@@ -106,6 +106,20 @@ All items are initially **Open** unless marked Deferred. "Evidence" is a source 
 - **Compatibility:** no MongoDB fields, indexes, document values, Redis keys, cache TTLs or collection names changed.
 - **Verification:** full project pytest and Python compilation passed on [GitHub Actions run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842). Production/staging Telegram integration smoke tests and required-check branch protection are still pending. The CI workflow was subsequently upgraded to current Node24-compatible GitHub Actions and retriggered. Keep PH-001 In review and PH-008 In progress until acceptance criteria are verified. No production deployment occurred.
 
+### PH-002 implementation record (2026-10-28)
+
+**Branch:** `docs/production-hardening-source-of-truth-20261028`; **PR:** [#4](https://github.com/rumalg123/Advanced-File-Filter-Bot/pull/4).
+
+- Added an opt-in `raise_on_error` argument to `BaseRepository.count()` and `BaseRepository.find_many()`. **All other callers retain previous default behavior**; only single-database media search uses strict reads.
+- `MediaRepository.search_files()` now converts failed MongoDB count/page retrieval to `SearchBackendUnavailableError` **before caching**, so Redis will not store a false zero-result or partial page after a single-DB query fails.
+- `FileAccessService.search_files_with_access_check()` handles the typed exception and returns its existing five-element result structure with `has_access=False` and a generic retry message, without exposing MongoDB connection information. A **genuine** zero-result query remains `has_access=True, total=0` and retains its 45-second negative-cache behavior.
+- Group search, inline search and pagination now show a retryable temporary-outage message instead of incorrectly telling the user that files are absent or access is forbidden. Group search exits before filter/zero-result analytics when media search itself failed.
+- Added `tests/test_search_backend_failure.py` covering forced count and page-read errors, Redis pollution, unchanged legacy-method defaults, successful empty searches and Telegram error paths.
+- **Not changed:** the optional multi-database manager may still suppress per-database failures. This is explicitly deferred under **PH-027**, since production has one connected database. Do not claim multi-DB failure handling is fixed.
+- **Compatibility:** no collections, MongoDB documents, indexes, migrations, Redis key schemas, TTLs or Telegram callback formats changed. Only the search failure semantics change.
+- **Rollback:** revert code commit(s) and redeploy the previous image; no database rollback is required. Previously cached search entries are not flushed.
+- **Verification:** CI compilation/pytest and a simulated database outage against staging are required before marking PH-002 Verified. Keep PR #4 in Draft and PH-002 In review until that evidence exists.
+
 ## 4. Architecture drift register
 
 These are design divergences, **not** independent production incidents. Any remediation should reference its linked PH items.
@@ -135,7 +149,7 @@ These are design divergences, **not** independent production incidents. Any reme
 ### Phase 1: correctness/security before scaling
 
 - [x] PH-001: central banned/unknown-user gate added and unit regression tests committed on this branch. **Verification:** full pytest and compilation passed in [GitHub Actions run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842); staging, real Telegram workflows, and runtime configuration combinations remain pending; status remains In review.
-- [ ] PH-002: no failure-as-empty results, no false negative-result caching.
+- [x] PH-002 code and error-injection regression tests committed for **single-database media search**. **Verification pending**: CI result, staging MongoDB failure/recovery drill and real Telegram callbacks. Multi-DB mode remains deferred as PH-027.
 - [ ] PH-004, PH-010: restrict monitoring and Redis access after reachability assessment.
 - [ ] PH-003, PH-011: protect Redis correctness-critical state from eviction/version reset.
 - [ ] PH-009: remove unsafe deserialization after compatibility assessment.
@@ -230,3 +244,4 @@ These are **merged**, not proof that full project tests, load tests or a product
 | 2026-10-28 | Initialized production-specific source-of-truth tracker for one MongoDB database (~97K media records). Prioritized active security/reliability issues, preserved older registers, and deferred multi-DB risks. | Documentation PR |
 | 2026-10-28 | Began PH-001: centralized ban checks and fail-closed unknown users, tests and PH-008 initial GitHub Actions CI. Corrected previous assumption about send-all decorator. No DB/Redis changes. | [PR #4](https://github.com/rumalg123/Advanced-File-Filter-Bot/pull/4) |
 | 2026-10-28 | Full pytest suite and compileall passed on first completed GitHub Actions run. Updated Actions runtime to Node24-compatible current versions; staging smoke checks remain pending. | [CI run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842) |
+| 2026-10-28 | Implemented PH-002 typed single-DB media search failure handling, protected Redis from false zero-result cache entries, added retry messaging and outage regression tests. Multi-DB partial-failure handling remains PH-027. | [PR #4](https://github.com/rumalg123/Advanced-File-Filter-Bot/pull/4) |
