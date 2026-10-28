@@ -179,6 +179,34 @@ async def test_full_in_memory_buffers_backpressure_without_dropping(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_small_queue_overflow_drains_when_main_has_capacity(monkeypatch):
+    import handlers.channel as channel
+
+    handler = object.__new__(ChannelHandler)
+    handler._shutdown = asyncio.Event()
+    handler.message_queue = asyncio.Queue(maxsize=2)
+    item = {"message": "old overflow"}
+    handler.overflow_queue = [item]
+
+    calls = 0
+
+    async def fast_wait(awaitable, timeout):
+        nonlocal calls
+        # Cancel the Event.wait coroutine consumed by this test stub.
+        awaitable.close()
+        calls += 1
+        if calls == 1:
+            raise asyncio.TimeoutError()
+        handler._shutdown.set()
+        return True
+
+    monkeypatch.setattr(channel.asyncio, "wait_for", fast_wait)
+    await handler._process_overflow_queue()
+    assert handler.overflow_queue == []
+    assert handler.message_queue.get_nowait() is item
+
+
+@pytest.mark.asyncio
 async def test_durable_handler_snapshots_media_before_returning(monkeypatch):
     import handlers.channel as channel
 
