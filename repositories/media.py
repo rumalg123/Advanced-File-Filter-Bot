@@ -11,6 +11,7 @@ from pymongo.errors import DuplicateKeyError
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
+from core.database.errors import SearchBackendUnavailableError
 from core.utils.validators import normalize_query
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.logger import get_logger
@@ -518,30 +519,37 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             normalized_query, file_type, use_caption, advanced_filters
         )
 
-        if self.is_multi_db:
-            # Multi-database search
-            total = await self.multi_db_manager.count_across_all_databases(
-                self.collection_name, search_filter
-            )
-            
-            # Get files from all databases
-            files_data = await self.multi_db_manager.search_across_all_databases(
-                self.collection_name,
-                search_filter,
-                limit=limit,
-                skip=offset,
-                sort=[('indexed_at', -1)]
-            )
-            files = [self._dict_to_entity(f) for f in files_data]
-        else:
-            # Single database search
-            total = await self.count(search_filter)
-            files = await self.find_many(
-                search_filter,
-                limit=limit,
-                skip=offset,
-                sort=[('indexed_at', -1)]
-            )
+        # PH-002: a MongoDB failure is NOT a successful zero-result search.
+        # Only completed queries can populate Redis or drive zero-result
+        # analytics. Existing optional multi-DB partial-result semantics are
+        # separately tracked as PH-027 and must be fixed before enabling it.
+        try:
+            if self.is_multi_db:
+                total = await self.multi_db_manager.count_across_all_databases(
+                    self.collection_name, search_filter
+                )
+                files_data = await self.multi_db_manager.search_across_all_databases(
+                    self.collection_name,
+                    search_filter,
+                    limit=limit,
+                    skip=offset,
+                    sort=[('indexed_at', -1)]
+                )
+                files = [self._dict_to_entity(f) for f in files_data]
+            else:
+                total = await self.count(search_filter, raise_on_error=True)
+                files = await self.find_many(
+                    search_filter,
+                    limit=limit,
+                    skip=offset,
+                    sort=[('indexed_at', -1)],
+                    raise_on_error=True
+                )
+        except Exception as exc:
+            logger.error("Media search failed before cache storage: %s", exc, exc_info=True)
+            raise SearchBackendUnavailableError(
+                "Unable to complete the MongoDB media search"
+            ) from exc
 
         # Calculate next offset
         next_offset = offset + limit if offset + limit < total else 0
