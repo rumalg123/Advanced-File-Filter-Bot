@@ -191,10 +191,32 @@ class OptimizedSerializer:
             logger.warning("Ignored malformed Redis cache entry")
             return None
 
+    @staticmethod
+    def _looks_like_ascii_pickle(data: bytes) -> bool:
+        """Identify complete *text-protocol* pickle safely, without loading.
+
+        pickletools disassembles opcodes but never invokes their referenced
+        functions. Only suspicious short legacy values are examined.
+        """
+        if (len(data) > 65536 or len(data) < 2
+                or data[:1] not in (b"(", b"c", b"d", b"l", b"I", b"N", b"V", b"S")
+                or not data.endswith(b".")):
+            return False
+        try:
+            from pickletools import genops
+            for opcode, _argument, position in genops(data):
+                if opcode.name == "STOP":
+                    return position == len(data) - 1
+        except (ValueError, UnicodeError, IndexError, EOFError):
+            return False
+        return False
+
     def _deserialize_legacy_data(self, data: bytes) -> Any:
         """Safely decode unprefixed JSON/MessagePack/UTF-8, not pickle."""
         if len(data) > self.MAX_ENCODED_BYTES:
             return None
+        if self._looks_like_ascii_pickle(data):
+            return self._deserialize_pickle(data)
         try:
             return self._deserialize_json(data)
         except (ValueError, UnicodeError, TypeError):
