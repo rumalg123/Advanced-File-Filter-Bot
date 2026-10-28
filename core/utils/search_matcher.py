@@ -87,6 +87,39 @@ def _number_metadata_match(
     )
 
 
+def _season_episode_match(
+    season: str, episode: str, use_caption: bool
+) -> Dict[str, Any]:
+    """Keep S01E03 together, avoiding matches from unrelated episode tags."""
+    season_number = int(season)
+    episode_number = int(episode)
+    stored = {
+        "$and": [
+            {
+                "season": {
+                    "$in": [str(season_number), str(season_number).zfill(2), season_number]
+                }
+            },
+            {
+                "episode": {
+                    "$in": [str(episode_number), str(episode_number).zfill(2), episode_number]
+                }
+            },
+        ]
+    }
+    pattern = (
+        rf"(?<![^\W_])(?:season[\W_]*|s)0*{season_number}"
+        rf"[\W_]*(?:episode[\W_]*|ep[\W_]*|e)0*{episode_number}(?!\d)"
+    )
+    return {
+        "$or": [
+            stored,
+            {"file_name": {"$regex": pattern, "$options": "i"}},
+            *([{"caption": {"$regex": pattern, "$options": "i"}}] if use_caption else []),
+        ]
+    }
+
+
 def _resolution_match(resolution: str, use_caption: bool) -> Dict[str, Any]:
     value = str(resolution).lower()
     return _sources_match(
@@ -121,10 +154,13 @@ def build_media_search_filter(
             alternatives.append({"caption": regex})
         clauses.append({"$or": alternatives})
 
-    if season is not None:
-        clauses.append(_number_metadata_match("season", season, use_caption))
-    if episode is not None:
-        clauses.append(_number_metadata_match("episode", episode, use_caption))
+    if season is not None and episode is not None:
+        clauses.append(_season_episode_match(season, episode, use_caption))
+    else:
+        if season is not None:
+            clauses.append(_number_metadata_match("season", season, use_caption))
+        if episode is not None:
+            clauses.append(_number_metadata_match("episode", episode, use_caption))
     if resolution is not None:
         clauses.append(_resolution_match(resolution, use_caption))
 
