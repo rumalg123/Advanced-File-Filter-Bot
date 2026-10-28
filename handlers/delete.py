@@ -1,4 +1,7 @@
 import asyncio
+import hashlib
+import html
+import secrets
 from typing import List, Dict, Any, Optional
 
 from pyrogram import Client, filters
@@ -6,6 +9,9 @@ from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from core.cache.config import CacheKeyGenerator
+from core.services.bulk_delete_policy import (
+    MAX_BULK_DELETE_FILES, BulkDeleteInterrupted, BulkDeleteRejected,
+)
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.constants import ProcessingConstants
 from core.utils.button_builder import ButtonBuilder
@@ -191,96 +197,184 @@ class DeleteHandler(BaseHandler):
             await message.reply_text(ErrorMessageFormatter.format_not_found("File") + " in database")
 
     async def handle_deleteall_command(self, client: Client, message: Message):
-        """Handle delete all files by keyword"""
+        """Create a safe, short-lived preview before deleting any media."""
+        if not message.from_user or message.from_user.id not in self.bot.config.ADMINS:
+            await message.reply_text("Only bot administrators can delete indexed files.")
+            return
         if len(message.command) < 2:
             await message.reply_text(
-                "<b>Usage:</b> <code>/deleteall &lt;keyword&gt;</code>\n\n"
-                "This will delete all files matching the keyword.\n"
-                "Example: <code>/deleteall movie</code>"
+                "<b>Usage:</b> <code>/deleteall &lt;keyword&gt;</code>\n"
+                f"Preview and confirm at most {MAX_BULK_DELETE_FILES} matches."
             )
             return
 
-        keyword = " ".join(message.command[1:])
+        keyword = " ".join(message.command[1:]).strip()
+        try:
+            preview = await self.bot.media_repo.preview_delete_files_by_keyword(keyword)
+        except BulkDeleteRejected as error:
+            await message.reply_text(
+                ErrorMessageFormatter.format_warning(html.escape(str(error)))
+            )
+            return
+        except Exception:
+            logger.exception("PH-007 deletion preview failed")
+            await message.reply_text("Deletion preview temporarily unavailable. Try again.")
+            return
+
+        if preview.count == 0:
+            await message.reply_text("No indexed files match that keyword.")
+            return
+        if preview.count > MAX_BULK_DELETE_FILES:
+            await message.reply_text(
+                f"Deletion refused: {preview.count} matches exceeds the "
+                f"{MAX_BULK_DELETE_FILES}-file per-request safety limit. "
+                "Use a narrower keyword."
+            )
+            return
+
         user_id = message.from_user.id
+        token = secrets.token_hex(6)
+        pending = {"keyword": preview.keyword, "count": preview.count, "token": token}
+        stored = await self.bot.cache.set(
+            CacheKeyGenerator.deleteall_pending(user_id), pending, expire=90
+        )
+        if not stored:
+            await message.reply_text(
+                "Could not save confirmation securely. Nothing was deleted."
+            )
+            return
 
-        # Store pending deletion in cache for callback handler
-        cache_key = CacheKeyGenerator.deleteall_pending(user_id)
-        await self.bot.cache.set(cache_key, keyword, expire=60)  # 60 second TTL
-
-        # Confirmation message with buttons
+        sample = "\n".join(
+            f"• {html.escape(name[:100])}" for name in preview.sample
+        )
         await message.reply_text(
-            ErrorMessageFormatter.format_warning("Warning!", title="Warning") + "\n\n"
-            f"This will delete all files matching: <b>{keyword}</b>\n\n"
-            f"Click 'Confirm' to proceed or 'Cancel' to abort.",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    ButtonBuilder.action_button("✅ Confirm", callback_data=f"deleteall_confirm#{user_id}"),
-                    ButtonBuilder.action_button("❌ Cancel", callback_data=f"deleteall_cancel#{user_id}")
-                ]
-            ])
+            "⚠️ <b>Bulk deletion preview</b>\n\n"
+            f"Keyword: <code>{html.escape(preview.keyword)}</code>\n"
+            f"Matching files: <b>{preview.count}</b>\n"
+            f"Maximum allowed: {MAX_BULK_DELETE_FILES}\n\n"
+            f"Sample:\n{sample}\n\n"
+            "This removes matching records from the bot index, not Telegram. "
+            "Confirm within 90 seconds.",
+            reply_markup=InlineKeyboardMarkup([[
+                ButtonBuilder.action_button(
+                    "✅ Confirm", callback_data=f"deleteall_confirm#{user_id}#{token}"
+                ),
+                ButtonBuilder.action_button(
+                    "❌ Cancel", callback_data=f"deleteall_cancel#{user_id}#{token}"
+                ),
+            ]]),
         )
 
     async def handle_deleteall_callback(self, client: Client, callback_query):
-        """Handle deleteall confirmation callback"""
-        # Validate callback data using validator
-        is_valid, parts = validate_callback_data(callback_query, expected_parts=2)
-        if not is_valid:
-            await callback_query.answer("Invalid callback data", show_alert=True)
+        """Consume one exact confirmation; report real partial results."""
+        valid, parts = validate_callback_data(callback_query, expected_parts=3)
+        if not valid or len(parts) != 3 or parts[0] not in (
+            "deleteall_confirm", "deleteall_cancel"
+        ):
+            await callback_query.answer("Invalid deletion request", show_alert=True)
+            return
+        action, original, token = parts
+        try:
+            owner_id = int(original)
+        except (TypeError, ValueError):
+            await callback_query.answer("Invalid requester", show_alert=True)
+            return
+        requester = getattr(callback_query.from_user, "id", None)
+        if (not is_original_requester(requester, owner_id)
+                or requester not in self.bot.config.ADMINS):
+            await callback_query.answer(
+                "Only the original bot administrator can confirm.",
+                show_alert=True,
+            )
             return
 
-        action = parts[0]
-        original_user_id = int(parts[1])
-        callback_user_id = callback_query.from_user.id
-
-        # Only the original requester can confirm/cancel using validator
-        if not is_original_requester(callback_user_id, original_user_id):
-            await callback_query.answer(ErrorMessageFormatter.format_access_denied("You cannot interact with this", plain_text=True), show_alert=True)
+        cache_key = CacheKeyGenerator.deleteall_pending(owner_id)
+        pending = await self.bot.cache.get(cache_key)
+        if (not isinstance(pending, dict)
+                or pending.get("token") != token
+                or not isinstance(pending.get("keyword"), str)
+                or not isinstance(pending.get("count"), int)):
+            await callback_query.answer(
+                "Confirmation expired or replaced. Preview again.", show_alert=True
+            )
             return
 
-        cache_key = CacheKeyGenerator.deleteall_pending(original_user_id)
-        keyword = await self.bot.cache.get(cache_key)
-
+        # Atomic compare-and-delete makes concurrent/replayed callbacks harmless.
+        consumed = await self.bot.cache.delete_if_value(cache_key, pending)
+        if not consumed:
+            await callback_query.answer(
+                "Confirmation already used or unavailable.", show_alert=True
+            )
+            return
         if action == "deleteall_cancel":
-            await self.bot.cache_invalidator.invalidate_deleteall_pending(original_user_id)
-            await callback_query.message.edit_text(ErrorMessageFormatter.format_info("Deletion cancelled", title="Cancelled"))
+            await callback_query.message.edit_text("Deletion cancelled. No files deleted.")
             await callback_query.answer()
             return
 
-        if action == "deleteall_confirm":
-            if not keyword:
-                await callback_query.message.edit_text(ErrorMessageFormatter.format_error("Deletion request expired. Please try again."))
-                await callback_query.answer()
-                return
-
-            # Delete from cache
-            await self.bot.cache_invalidator.invalidate_deleteall_pending(original_user_id)
-
-            # Update message to show progress
-            await callback_query.message.edit_text("🗑 Deleting files...")
-
-            # Delete files
-            deleted_count = await self.bot.media_repo.delete_files_by_keyword(keyword)
-
-            await callback_query.message.edit_text(
-                ErrorMessageFormatter.format_success(f"Deleted {deleted_count} files matching: <b>{keyword}</b>")
+        fingerprint = hashlib.sha256(
+            pending["keyword"].encode("utf-8")
+        ).hexdigest()[:12]
+        logger.warning(
+            "PH-007 admin=%s began confirmed deletion keyword_hash=%s count=%d",
+            owner_id, fingerprint, pending["count"],
+        )
+        await callback_query.message.edit_text("🗑 Deleting in bounded batches...")
+        deleted = 0
+        completed = False
+        try:
+            deleted = await self.bot.media_repo.delete_files_by_keyword(
+                pending["keyword"],
+                expected_count=pending["count"],
+                stop_requested=self._shutdown.is_set,
             )
-
-            # Log the bulk deletion
-            if self.bot.config.LOG_CHANNEL:
-                try:
-                    await telegram_api.call_api(
-                        self.bot.send_message,
-                        self.bot.config.LOG_CHANNEL,
-                        f"#BulkDelete\n"
-                        f"Admin: {callback_query.from_user.mention}\n"
-                        f"Keyword: {keyword}\n"
-                        f"Files deleted: {deleted_count}",
-                        chat_id=self.bot.config.LOG_CHANNEL
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to log bulk deletion: {e}")
-
-            await callback_query.answer("Deletion complete!")
+            completed = True
+            response = (
+                f"✅ Deleted <b>{deleted}</b> indexed files. "
+                "No Telegram source files were removed."
+            )
+        except BulkDeleteRejected as error:
+            response = (
+                "⚠️ Nothing deleted. "
+                f"{html.escape(str(error))} Run /deleteall again to preview."
+            )
+        except BulkDeleteInterrupted as error:
+            deleted = error.deleted_count
+            response = (
+                f"⚠️ Deletion stopped after <b>{deleted}</b> acknowledged files. "
+                "Review logs and preview remaining matches before retrying."
+            )
+            logger.error(
+                "PH-007 admin=%s interrupted keyword_hash=%s acknowledged=%d: %s",
+                owner_id, fingerprint, deleted, error,
+            )
+        except Exception:
+            logger.exception(
+                "PH-007 admin=%s failed keyword_hash=%s acknowledged=%d",
+                owner_id, fingerprint, deleted,
+            )
+            response = "⚠️ Deletion failed. Review logs before retrying."
+        logger.warning(
+            "PH-007 audit admin=%s keyword_hash=%s completed=%s deleted=%d expected=%d",
+            owner_id, fingerprint, completed, deleted, pending["count"],
+        )
+        await callback_query.message.edit_text(response)
+        if self.bot.config.LOG_CHANNEL:
+            try:
+                await telegram_api.call_api(
+                    self.bot.send_message, self.bot.config.LOG_CHANNEL,
+                    "#BulkDelete\n"
+                    f"Admin ID: {owner_id}\n"
+                    f"Keyword hash: {fingerprint}\n"
+                    f"Expected: {pending['count']}\n"
+                    f"Acknowledged deleted: {deleted}\n"
+                    f"Completed: {completed}",
+                    chat_id=self.bot.config.LOG_CHANNEL,
+                )
+            except Exception:
+                logger.exception("PH-007 deletion audit Telegram delivery failed")
+        await callback_query.answer(
+            "Deletion completed" if completed else "Deletion stopped; review details"
+        )
 
     async def _process_delete_batch(self, batch: List[Dict[str, Any]]):
         """Process a batch of delete requests"""
