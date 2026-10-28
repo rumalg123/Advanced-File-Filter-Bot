@@ -243,25 +243,28 @@ def parse_media_metadata(
     return season, episode, resolution
 
 
-# Patterns for parsing user search queries (natural language)
+# Search-query metadata parsing. Keep filename/title terms untouched: words
+# like "movie", "show" and "series" can also be part of a real media title.
 _QUERY_SEASON_EPISODE_PATTERN = re.compile(
-    r"(?:season\s*)?[Ss](?P<season>\d{1,2})(?:\s*episode\s*)?[Ee](?P<episode>\d{1,3})",
-    re.IGNORECASE
+    r"(?<!\w)(?:season[\s._-]*)?s(?P<season>\d{1,2})"
+    r"[\s._-]*(?:episode[\s._-]*)?e(?P<episode>\d{1,3})(?!\w)",
+    re.IGNORECASE,
 )
 
 _QUERY_EPISODE_PATTERN = re.compile(
-    r"(?:episode\s*|ep\s*)[Ee]?(?P<episode>\d{1,3})\b",
-    re.IGNORECASE
+    r"(?<!\w)(?:episode[\s._-]*|ep[\s._-]*|e)"
+    r"e?(?P<episode>\d{1,3})(?!\w)",
+    re.IGNORECASE,
 )
 
 _QUERY_SEASON_PATTERN = re.compile(
-    r"(?:season\s*)[Ss]?(?P<season>\d{1,2})\b",
-    re.IGNORECASE
+    r"(?<!\w)(?:season[\s._-]*s?|s)(?P<season>\d{1,2})(?!\w)",
+    re.IGNORECASE,
 )
 
 _QUERY_RESOLUTION_PATTERN = re.compile(
     r"\b(?P<resolution>\d{3,4}p)\b",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 
@@ -269,59 +272,40 @@ def parse_search_query(
     query: str
 ) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
     """
-    Parse user search query to extract season, episode, resolution and return cleaned query.
-    
-    Handles natural language queries like:
-    - "our golden days episode 45" → cleaned="our golden days", episode="45", season=None, resolution=None
-    - "our golden days 540p episode 45" → cleaned="our golden days", episode="45", resolution="540p", season=None
-    - "ep45 s01" → cleaned="", episode="45", season="01", resolution=None
-    - "our golden days season 1 episode 45" → cleaned="our golden days", season="01", episode="45", resolution=None
-    - "our golden days s01e45 1080p" → cleaned="our golden days", season="01", episode="45", resolution="1080p"
-    - "our golden days ep 45 tv show" → cleaned="our golden days", episode="45", season=None, resolution=None
-    
-    Returns:
-        (cleaned_query, season, episode, resolution)
+    Extract query metadata without silently dropping real title words.
+
+    Supports S01E03, S1 E3, s01, e03, ep 3, episode 3,
+    season 1 episode 3, 540p, and normalized dotted filenames.
+
+    Returns: (title_query, season, episode, resolution).
     """
-    original_query = query
+    query = re.sub(r"[_\-.+]", " ", query or "")
     season: Optional[str] = None
     episode: Optional[str] = None
     resolution: Optional[str] = None
-    
-    # Extract season + episode together first (S01E45, season 1 episode 45)
+
     match = _QUERY_SEASON_EPISODE_PATTERN.search(query)
     if match:
         season = match.group("season").zfill(2)
         episode = match.group("episode").zfill(2)
-        # Remove the matched pattern from query
-        query = _QUERY_SEASON_EPISODE_PATTERN.sub("", query)
+        query = _QUERY_SEASON_EPISODE_PATTERN.sub(" ", query)
     else:
-        # Try episode-only patterns (episode 45, ep45, e45, ep 45)
         match = _QUERY_EPISODE_PATTERN.search(query)
         if match:
             episode = match.group("episode").zfill(2)
-            query = _QUERY_EPISODE_PATTERN.sub("", query)
-        
-        # Try season-only patterns (season 1, s01)
+            query = _QUERY_EPISODE_PATTERN.sub(" ", query)
+
         match = _QUERY_SEASON_PATTERN.search(query)
         if match:
             season = match.group("season").zfill(2)
-            query = _QUERY_SEASON_PATTERN.sub("", query)
-    
-    # Extract resolution (540p, 1080p, etc.)
+            query = _QUERY_SEASON_PATTERN.sub(" ", query)
+
     match = _QUERY_RESOLUTION_PATTERN.search(query)
     if match:
         resolution = match.group("resolution").lower()
-        query = _QUERY_RESOLUTION_PATTERN.sub("", query)
-    
-    # Remove common noise words that don't help with search
-    noise_words = ['tv', 'show', 'series', 'drama', 'movie', 'film', 'video', 'file']
-    words = query.split()
-    cleaned_words = [w for w in words if w.lower() not in noise_words]
-    query = ' '.join(cleaned_words)
-    
-    # Clean up the query: remove extra spaces, trim
-    cleaned = re.sub(r'\s+', ' ', query).strip()
-    
+        query = _QUERY_RESOLUTION_PATTERN.sub(" ", query)
+
+    cleaned = re.sub(r"\s+", " ", query).strip()
     return cleaned, season, episode, resolution
 
 
