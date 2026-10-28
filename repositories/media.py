@@ -484,11 +484,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
         # Generate versioned cache key
         normalized_query = normalize_query(query)
-        # Include version in cache key - when version changes, old keys become stale
-        cache_query = query
+        # Cache the same normalized text that reaches the MongoDB matcher.
+        # Explicit filters remain part of the key to prevent cross-filter hits.
+        cache_query = normalized_query
         if advanced_filters:
             cache_query = (
-                f"{query}|advanced:"
+                f"{normalized_query}|advanced:"
                 f"{json.dumps(advanced_filters, sort_keys=True, separators=(',', ':'))}"
             )
         cache_key = CacheKeyGenerator.search_results_versioned(
@@ -551,7 +552,14 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             'next_offset': next_offset,
             'total': total
         }
-        await self.cache.set(cache_key, cache_data, expire=self.ttl.SEARCH_RESULTS)
+        # Negative cache entries are more sensitive to out-of-band MongoDB
+        # imports, so give genuine zero-match queries a shorter expiration.
+        # Repository writes still invalidate all versions immediately.
+        ttl = (
+            min(self.ttl.SEARCH_RESULTS, self.ttl.SEARCH_EMPTY_RESULTS)
+            if total == 0 else self.ttl.SEARCH_RESULTS
+        )
+        await self.cache.set(cache_key, cache_data, expire=ttl)
         return files, next_offset, total
 
     async def has_matching_file(
