@@ -183,14 +183,18 @@ class UnifiedSessionManager:
             data=data
         )
         
-        # Cache the session
+        # PH-003: do not report a usable session when its state was rejected
+        # due to Redis OOM/unavailability. Remove a partially written session
+        # if its user pointer cannot be saved.
         cache_key = self._generate_cache_key(session_type, user_id, session_id)
-        await self.cache.set(cache_key, session.to_dict(), expire=ttl)
-        
-        # Also cache with just user_id for quick lookups
+        if not await self.cache.set(cache_key, session.to_dict(), expire=ttl):
+            raise RuntimeError("Operational session storage unavailable")
+
         user_cache_key = self._generate_cache_key(session_type, user_id)
-        await self.cache.set(user_cache_key, session_id, expire=ttl)
-        
+        if not await self.cache.set(user_cache_key, session_id, expire=ttl):
+            await self.cache.delete(cache_key)
+            raise RuntimeError("Operational session pointer storage unavailable")
+
         logger.debug(f"Created {session_type.value} session {session_id} for user {user_id}")
         return session_id
     
