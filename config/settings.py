@@ -96,7 +96,10 @@ class RedisConfig(BaseSettings):
     )
     
     uri: str = Field(default='', description="Redis connection URI")
-    
+    # Empty by default: existing single-Redis deployments are unchanged.
+    # Must target a separate Redis server, not merely another database number.
+    state_uri: str = Field(default='', description="Optional protected Redis state URI")
+
     @field_validator('uri')
     def validate_uri(cls, v):
         if not v:
