@@ -3,6 +3,7 @@ from datetime import datetime, UTC
 from enum import Enum
 import json
 import re
+import time
 from typing import Dict, Any, Optional, List, Tuple
 
 from pymongo import DeleteOne
@@ -14,6 +15,7 @@ from core.database.base import BaseRepository, AggregationMixin
 from core.database.errors import SearchBackendUnavailableError
 from core.utils.validators import normalize_query
 from core.utils.search_matcher import build_media_search_filter
+from core.utils.search_observability import search_telemetry
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -480,11 +482,16 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         Search for files across all databases
         Returns: (files, next_offset, total_count)
         """
+        # PH-006: instrument stage latency, never raw user queries.
+        search_started = time.perf_counter()
         # PH-003: if protected Redis state is unavailable we cannot trust
         # cached pages, because the generation may have been reset.
         try:
             cache_version = await self.cache_invalidator.get_search_cache_version()
         except RuntimeError as exc:
+            search_telemetry.observe(
+                "generation_error", (time.perf_counter() - search_started) * 1000
+            )
             raise SearchBackendUnavailableError(
                 "Protected search cache generation unavailable"
             ) from exc
@@ -515,14 +522,21 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         cached = await self.cache.get(cache_key)
         if cached is not None:
             try:
-                return (
+                result = (
                     [self._dict_to_entity(f) for f in cached['files']],
                     cached['next_offset'],
                     cached['total']
                 )
+                elapsed_ms = (time.perf_counter() - search_started) * 1000
+                search_telemetry.observe("cache_hit", elapsed_ms)
+                search_telemetry.observe("search", elapsed_ms)
+                return result
             except (KeyError, TypeError, ValueError) as e:
                 logger.warning(f"Invalid search cache entry {cache_key}: {e}")
                 await self.cache.delete(cache_key)
+
+        # Cache misses are counted separately from completed MongoDB reads.
+        search_telemetry.observe("cache_miss", (time.perf_counter() - search_started) * 1000)
 
         # Build search filter
         search_filter = self._build_search_filter(
@@ -535,9 +549,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         # separately tracked as PH-027 and must be fixed before enabling it.
         try:
             if self.is_multi_db:
+                count_started = time.perf_counter()
                 total = await self.multi_db_manager.count_across_all_databases(
                     self.collection_name, search_filter
                 )
+                search_telemetry.observe("count", (time.perf_counter() - count_started) * 1000)
+                page_started = time.perf_counter()
                 files_data = await self.multi_db_manager.search_across_all_databases(
                     self.collection_name,
                     search_filter,
@@ -546,8 +563,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     sort=[('indexed_at', -1)]
                 )
                 files = [self._dict_to_entity(f) for f in files_data]
+                search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
             else:
+                count_started = time.perf_counter()
                 total = await self.count(search_filter, raise_on_error=True)
+                search_telemetry.observe("count", (time.perf_counter() - count_started) * 1000)
+                page_started = time.perf_counter()
                 files = await self.find_many(
                     search_filter,
                     limit=limit,
@@ -555,7 +576,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     sort=[('indexed_at', -1)],
                     raise_on_error=True
                 )
+                search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
         except Exception as exc:
+            search_telemetry.observe(
+                "backend_error", (time.perf_counter() - search_started) * 1000
+            )
             logger.error("Media search failed before cache storage: %s", exc, exc_info=True)
             raise SearchBackendUnavailableError(
                 "Unable to complete the MongoDB media search"
@@ -578,6 +603,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             if total == 0 else self.ttl.SEARCH_RESULTS
         )
         await self.cache.set(cache_key, cache_data, expire=ttl)
+        search_telemetry.observe("search", (time.perf_counter() - search_started) * 1000)
         return files, next_offset, total
 
     async def has_matching_file(
