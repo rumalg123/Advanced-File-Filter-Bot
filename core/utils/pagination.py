@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple
 from pyrogram.types import InlineKeyboardButton
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.cache.errors import OperationalStateUnavailableError
 from core.utils.button_builder import ButtonBuilder
 
 QUERY_REFERENCE_PREFIX = "@"
@@ -28,11 +29,15 @@ async def create_search_query_reference(cache, query: str, user_id: int) -> str:
     """Cache a query and return a compact reference for Telegram callback_data."""
     session_id = uuid.uuid4().hex[:8]
     search_key = CacheKeyGenerator.search_session(user_id, session_id)
-    await cache.set(
+    stored = await cache.set(
         search_key,
         {'files': [], 'query': query, 'user_id': user_id},
         expire=CacheTTLConfig.SEARCH_SESSION
     )
+    if not stored:
+        raise OperationalStateUnavailableError(
+            "Unable to store Telegram callback query reference"
+        )
     return make_search_query_reference(session_id)
 
 
