@@ -323,6 +323,81 @@ async def test_cached_empty_channel_and_filter_lists_are_hits_not_database_reads
     assert await filters.get_filters("-100") == []
 
 
+def test_search_cache_keys_are_isolated_by_matching_algorithm():
+    key = CacheKeyGenerator.search_results_versioned(
+        "doctor x mafia", None, 0, 10, True, 1
+    )
+    legacy_key = CacheKeyGenerator.search_results(
+        "doctor x mafia", None, 0, 10, True
+    ) + ":v1"
+
+    assert key != legacy_key
+    assert f"algo{CacheKeyGenerator.SEARCH_ALGORITHM_REVISION}" in key
+    assert key != CacheKeyGenerator.search_results_versioned(
+        "doctor x mafia", None, 0, 10, True, 2
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_cache_reuses_normalized_queries_and_invalidation_refreshes():
+    cache = MemoryCache()
+    repository = MediaRepository(None, cache)
+    repository.count = AsyncMock(return_value=1)
+    repository.find_many = AsyncMock(return_value=[make_media()])
+
+    first, _, first_total = await repository.search_files("Doctor.X")
+    second, _, second_total = await repository.search_files("doctor x")
+
+    assert first_total == second_total == 1
+    assert first[0].file_unique_id == second[0].file_unique_id
+    assert repository.count.await_count == 1
+    assert repository.find_many.await_count == 1
+
+    # A successful indexing/update/delete should invalidate the generation.
+    await repository.cache_invalidator.invalidate_all_search_results()
+    await repository.search_files("doctor x")
+    assert repository.count.await_count == 2
+    assert repository.find_many.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_empty_search_cache_is_short_lived_and_new_media_can_invalidate_it():
+    cache = MemoryCache()
+    repository = MediaRepository(None, cache)
+    repository.count = AsyncMock(return_value=0)
+    repository.find_many = AsyncMock(return_value=[])
+
+    files, _, total = await repository.search_files("new episode")
+    assert files == [] and total == 0
+    assert cache.set_calls[-1][2] == 45
+
+    await repository.search_files("new episode")
+    assert repository.count.await_count == 1
+
+    # Indexing a new file advances the version, not a global Redis FLUSH.
+    await repository.cache_invalidator.invalidate_all_search_results()
+    repository.count.return_value = 1
+    repository.find_many.return_value = [make_media()]
+    files, _, total = await repository.search_files("new episode")
+    assert total == 1 and len(files) == 1
+    assert repository.count.await_count == 2
+    assert cache.set_calls[-1][2] == repository.ttl.SEARCH_RESULTS
+
+
+@pytest.mark.asyncio
+async def test_different_advanced_filters_have_distinct_search_cache_entries():
+    cache = MemoryCache()
+    repository = MediaRepository(None, cache)
+    repository.count = AsyncMock(return_value=0)
+    repository.find_many = AsyncMock(return_value=[])
+
+    await repository.search_files("doctor x", advanced_filters={"season": "01"})
+    await repository.search_files("doctor x", advanced_filters={"season": "02"})
+    await repository.search_files("doctor x", advanced_filters={"season": "01"})
+
+    assert repository.count.await_count == 2
+
+
 class MonitorRedis:
     def __init__(self, documents):
         self.documents = documents
