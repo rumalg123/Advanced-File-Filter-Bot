@@ -14,6 +14,7 @@ class CacheTTLConfig:
     # Media related
     MEDIA_FILE: int = 300  # 5 minutes
     SEARCH_RESULTS: int = 300  # 5 minutes
+    SEARCH_EMPTY_RESULTS: int = 45  # Short-lived negative search results
     FILE_STATS: int = 1800  # 30 minutes
 
     # Connection related
@@ -128,12 +129,19 @@ class CacheKeyGenerator:
         normalized_query = query.lower().strip()
         return CacheKeyGenerator._get_cached_key('search', normalized_query, file_type, offset, limit, use_caption)
 
+    # Bump whenever the Mongo query matching semantics change. Redis data
+    # from earlier releases then expires naturally instead of being re-used.
+    SEARCH_ALGORITHM_REVISION = 2
+
     @staticmethod
     def search_results_versioned(query: str, file_type: Optional[str], offset: int,
                                   limit: int, use_caption: bool, cache_version: int) -> str:
-        """Generate versioned search results cache key"""
+        """Key includes both search semantics and the mutable data generation."""
         base_key = CacheKeyGenerator.search_results(query, file_type, offset, limit, use_caption)
-        return f"{base_key}:v{cache_version}"
+        return (
+            f"{base_key}:algo{CacheKeyGenerator.SEARCH_ALGORITHM_REVISION}"
+            f":v{cache_version}"
+        )
 
     @staticmethod
     def file_stats() -> str:
