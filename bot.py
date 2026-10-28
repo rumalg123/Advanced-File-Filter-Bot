@@ -6,6 +6,7 @@ import aiohttp_cors
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.performance import performance_monitor
+from core.utils.search_observability import search_telemetry
 from handlers.manager import HandlerManager
 
 UVLOOP_AVAILABLE = False
@@ -1203,6 +1204,9 @@ class MediaSearchBot(Client):
         async def performance_metrics(request):
             try:
                 metrics = await performance_monitor.get_metrics()
+                # PH-006: additive, bounded, in-process search telemetry.
+                # Does not change HTTP exposure or existing monitoring routes.
+                metrics["media_search"] = search_telemetry.snapshot()
                 # Backward-compatible aliases for existing consumers.
                 if 'cpu_percent' not in metrics:
                     metrics['cpu_percent'] = metrics.get('process_cpu_percent', 0.0)
