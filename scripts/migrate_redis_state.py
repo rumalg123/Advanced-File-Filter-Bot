@@ -31,6 +31,10 @@ def transfer_state(source, destination, apply: bool = False) -> dict:
         if ttl == -2:  # Key expired while inspecting it.
             counts["expired"] += 1
             continue
+        if ttl == 0:
+            # Never turn an almost-expired key into a persistent state key.
+            counts["almost_expired"] += 1
+            continue
 
         if ttl == -1 and key.startswith((
             b"rate_limit:", b"session:", b"search_results_",
