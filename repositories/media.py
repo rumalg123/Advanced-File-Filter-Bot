@@ -6,13 +6,13 @@ import re
 import time
 from typing import Dict, Any, Optional, List, Tuple
 
-from pymongo import DeleteOne
 from pymongo.errors import DuplicateKeyError
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
 from core.database.errors import SearchBackendUnavailableError
+from core.services.bulk_media_deletion import MediaBulkDeletion
 from core.utils.validators import normalize_query
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.search_observability import search_telemetry
@@ -676,44 +676,17 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
         return success
 
-    async def delete_files_by_keyword(self, keyword: str) -> int:
-        """Delete all files matching keyword"""
-        search_filter = self._build_search_filter(keyword, None, True)
+    async def preview_delete_files_by_keyword(self, keyword: str):
+        """Strict read-only preview for an administrator-confirmed deletion."""
+        return await MediaBulkDeletion(self).preview(keyword)
 
-        # Get files to delete
-        if self.is_multi_db:
-            files_data = await self.multi_db_manager.find_many_in_all_databases(
-                self.collection_name,
-                search_filter
-            )
-            files = [self._dict_to_entity(data) for data in files_data]
-        else:
-            files = await self.find_many(search_filter)
-
-        if not files:
-            return 0
-
-        if self.is_multi_db:
-            deleted_count = await self.multi_db_manager.delete_many_across_databases(
-                self.collection_name,
-                search_filter
-            )
-            success = deleted_count > 0
-        else:
-            # Build bulk delete operations
-            operations = [DeleteOne({'file_unique_id': f.file_unique_id}) for f in files]
-
-            # Execute bulk delete
-            success = await self.bulk_write(operations)
-            deleted_count = len(files) if success else 0
-
-        # Clear cache for deleted files
-        for file in files:
-            await self.cache_invalidator.invalidate_file_cache(file)
-        if success:
-            await self.cache_invalidator.invalidate_all_search_results()
-
-        return deleted_count if success else 0
+    async def delete_files_by_keyword(
+        self, keyword: str, *, expected_count=None, stop_requested=None
+    ) -> int:
+        """Delete in bounded batches only after the preview is confirmed."""
+        return await MediaBulkDeletion(self).execute(
+            keyword, expected_count=expected_count, stop_requested=stop_requested
+        )
 
     async def get_file_stats(self) -> Dict[str, Any]:
         """Get file statistics"""
