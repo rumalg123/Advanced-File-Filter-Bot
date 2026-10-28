@@ -165,14 +165,23 @@ def build_media_search_filter(
         clauses.append(_resolution_match(resolution, use_caption))
 
     advanced = advanced_filters or {}
-    if advanced.get("season") is not None and advanced["season"] != season:
-        clauses.append(
-            _number_metadata_match("season", str(advanced["season"]), use_caption)
-        )
-    if advanced.get("episode") is not None and advanced["episode"] != episode:
-        clauses.append(
-            _number_metadata_match("episode", str(advanced["episode"]), use_caption)
-        )
+    if advanced.get("season") is not None and advanced.get("episode") is not None:
+        # Both explicit filters must refer to the same season/episode pair.
+        if str(advanced["season"]) != season or str(advanced["episode"]) != episode:
+            clauses.append(
+                _season_episode_match(
+                    str(advanced["season"]), str(advanced["episode"]), use_caption
+                )
+            )
+    else:
+        if advanced.get("season") is not None and advanced["season"] != season:
+            clauses.append(
+                _number_metadata_match("season", str(advanced["season"]), use_caption)
+            )
+        if advanced.get("episode") is not None and advanced["episode"] != episode:
+            clauses.append(
+                _number_metadata_match("episode", str(advanced["episode"]), use_caption)
+            )
     if advanced.get("resolution") and advanced["resolution"] != resolution:
         clauses.append(_resolution_match(str(advanced["resolution"]), use_caption))
 
