@@ -122,6 +122,8 @@ Telegram update
 
 See the code-derived [architecture diagrams](docs/architecture/diagrams.md) for system context, startup, search, delivery, indexing, recommendations, cache, settings, multi-database, data-model, and deployment views.
 
+PH-006 search diagnostics: [read-only MongoDB EXPLAIN profiler and latency baseline guide](docs/SEARCH_PERFORMANCE_BASELINE.md). The existing `/metrics` response adds `metrics.media_search` with per-process cache hit/miss counts and approximate p50/p95/p99 latency buckets. This does not change search semantics or create new production indexes.
+
 ### Wzgram compatibility note
 
 The project dependency is pinned to a specific `wzgram` Git commit in `pyproject.toml` and `requirements.txt`. Wzgram exposes a Pyrogram-compatible import namespace, so source imports such as `from pyrogram import Client` are expected; they do not mean the project still installs the unmaintained upstream Pyrogram distribution.
