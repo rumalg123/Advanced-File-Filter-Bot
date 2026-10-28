@@ -604,6 +604,14 @@ class DeepLinkHandler(BaseCommandHandler):
             await message.reply_text(ErrorMessageFormatter.format_not_found("User") + ". Please start the bot again.")
             return
 
+        # PH-001: Premium batch links use a dedicated premium policy, but an
+        # account ban must still be enforced before any premium/link exemptions.
+        if user.status == UserStatus.BANNED:
+            await message.reply_text(
+                ErrorMessageFormatter.format_access_denied(user.ban_reason or "User banned")
+            )
+            return
+
         # Check premium access with precedence rules
         global_premium_enabled = not self.bot.config.DISABLE_PREMIUM
         user_is_premium, _ = await self.bot.user_repo.check_and_update_premium_status(user)
@@ -616,12 +624,6 @@ class DeepLinkHandler(BaseCommandHandler):
 
         if not can_access:
             await message.reply_text(reason)
-            return
-
-        # Check general user status (banned, etc.) but bypass premium checks for premium batch links
-        # Premium batch links have their own access control logic above
-        if user.status == UserStatus.BANNED:
-            await message.reply_text(ErrorMessageFormatter.format_access_denied(user.ban_reason or 'User banned'))
             return
 
         sts = await message.reply("📦 <b>Processing premium batch files...</b>")
