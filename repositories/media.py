@@ -493,6 +493,10 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 f"{normalized_query}|advanced:"
                 f"{json.dumps(advanced_filters, sort_keys=True, separators=(',', ':'))}"
             )
+        # PH-003: a split-state cutover must not accidentally reuse an older
+        # ":v1" search page produced with the legacy counter on cache Redis.
+        if getattr(self.cache, "protected_state_enabled", False):
+            cache_query += "|state:split-v1"
         cache_key = CacheKeyGenerator.search_results_versioned(
             cache_query,
             file_type.value if file_type else None,
