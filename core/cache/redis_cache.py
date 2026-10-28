@@ -188,6 +188,22 @@ class CacheManager:
             logger.error(f"Cache increment error for key {key}: {e}")
             return None
 
+    async def ensure_counter_initialized(self, key: str, initial: int) -> Optional[int]:
+        """Atomically initialize a raw Redis integer counter, preserving old values.
+
+        Used for a unique search-cache generation on the dedicated state
+        instance. SET NX and GET are distinct commands, but simultaneous
+        initializers cannot overwrite the winner's value.
+        """
+        if not self.redis or initial < 1:
+            return None
+        try:
+            await self.redis.set(key, int(initial), nx=True)
+            return int(await self.redis.get(key))
+        except Exception as e:
+            logger.error("Unable to initialize protected counter %s: %s", key, e)
+            return None
+
     async def increment_with_expiry(
             self,
             key: str,
