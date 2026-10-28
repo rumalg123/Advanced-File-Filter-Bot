@@ -233,9 +233,8 @@ async def test_private_failure_does_not_emit_no_results_or_analytics():
 
 
 @pytest.mark.asyncio
-async def test_pagination_backend_failure_shows_retry_alert():
+async def test_pagination_backend_failure_shows_retry_alert(monkeypatch):
     from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
-    from core.utils import pagination as pagination_utils
 
     handler = PaginationCallbackHandler(SimpleNamespace(
         file_service=SimpleNamespace(search_files_with_access_check=AsyncMock(
@@ -250,15 +249,15 @@ async def test_pagination_backend_failure_shows_retry_alert():
         answer=AsyncMock(),
     )
 
-    # Explicitly replace the parser to test an otherwise valid callback.
+    # Use a valid parsed callback without depending on an actual Telegram client.
     import handlers.callbacks_handlers.pagination as pagination_handler
-    original_parser = pagination_handler.PaginationHelper.parse_callback_data
-    try:
-        pagination_handler.PaginationHelper.parse_callback_data = lambda _: {
-            "query": "doctor x", "offset": 0, "total": 10, "user_id": 42
-        }
-        await handler.handle_search_pagination(None, callback)
-    finally:
-        pagination_handler.PaginationHelper.parse_callback_data = original_parser
+    monkeypatch.setattr(
+        pagination_handler.PaginationHelper,
+        "parse_callback_data",
+        lambda _: {"query": "doctor x", "offset": 0, "total": 10, "user_id": 42},
+    )
+    monkeypatch.setattr(pagination_handler, "is_private_chat", lambda _: True)
+
+    await handler.handle_search_pagination(None, callback)
 
     callback.answer.assert_awaited_once_with(SEARCH_RETRY_MESSAGE, show_alert=True)
