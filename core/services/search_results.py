@@ -8,6 +8,7 @@ from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.cache.errors import OperationalStateUnavailableError
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
@@ -109,11 +110,17 @@ class SearchResultsService:
 
             # Store search results in cache
             search_data = {'files': files_data, 'query': query, 'user_id': user_id}
-            await self.cache.set(
+            stored = await self.cache.set(
                 search_key,
                 search_data,
                 expire=self.ttl.SEARCH_SESSION
             )
+            if not stored:
+                # Do not display unusable file/send-all buttons when the
+                # protected state store is full or offline.
+                raise OperationalStateUnavailableError(
+                    "Unable to store Telegram search button session"
+                )
             query_reference = make_search_query_reference(session_id)
             
             # Track files shown for this query (for recommendations)
@@ -204,6 +211,9 @@ class SearchResultsService:
 
             return True
 
+        except OperationalStateUnavailableError:
+            # Let handler show retryable error instead of "No Results Found".
+            raise
         except Exception as e:
             logger.error(f"Error sending search results: {e}", exc_info=True)
             return False
