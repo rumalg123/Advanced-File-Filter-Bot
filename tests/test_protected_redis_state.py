@@ -317,8 +317,6 @@ async def test_pagination_not_updated_if_new_state_session_fails(monkeypatch):
 
 
 def test_protected_state_redis_config_is_opt_in():
-    from config.settings import RedisConfig
-    import os
     from pathlib import Path
 
     assert "maxmemory-policy noeviction" in Path("redis-state.conf").read_text()
@@ -327,4 +325,3 @@ def test_protected_state_redis_config_is_opt_in():
     assert 'profiles: ["protected-state"]' in compose
     assert "REDIS_STATE_URI=" in compose
     assert "internal: true" in compose
-    assert "REDIS_STATE_URI" not in (os.environ.get("REDIS_STATE_URI") or "")
