@@ -465,6 +465,8 @@ All processing variables use the `PROCESSING_` prefix:
 | `PROCESSING_MAX_BATCH_MESSAGES` | `10000` | Maximum messages represented by one batch link. |
 | `PROCESSING_MESSAGE_QUEUE_SIZE` | `1000` | Main auto-indexing queue capacity. |
 | `PROCESSING_OVERFLOW_QUEUE_SIZE` | `500` | Overflow queue capacity. |
+| `PROCESSING_DURABLE_INDEXING` | `false` | Opt-in MongoDB-backed recoverable channel auto-index queue (new collection only). See [reliability runbook](docs/INDEXING_RELIABILITY.md). |
+| `PROCESSING_DURABLE_INDEXING_LEASE_SECONDS` | `180` | Duration after which a crashed worker's claimed job is eligible for replay. |
 | `PROCESSING_INTER_MESSAGE_DELAY` | `0.5` | Delay between processed messages in seconds. |
 | `PROCESSING_BATCH_WAIT_TIME_HIGH` | `2` | High-load batch wait in seconds. |
 | `PROCESSING_BATCH_WAIT_TIME_MEDIUM` | `3` | Medium-load batch wait in seconds. |
