@@ -7,6 +7,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# No privileged pull_request_target workflows or deployment steps here.
 permissions:
   contents: read
 
@@ -16,8 +17,9 @@ concurrency:
 
 jobs:
   pytest:
+    name: pytest
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       mongodb:
         image: mongo:7
@@ -28,18 +30,38 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      redis-cache:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+        # Ephemeral cache instance: allkeys-lru via runtime step below.
+      redis-state:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
     env:
-      # This URI is consumed only by tests with an explicit localhost check.
+      # Tests explicitly reject non-local targets and never use deployed credentials.
       TEST_MONGO_URI: mongodb://127.0.0.1:27017
+      TEST_REDIS_CACHE_URI: redis://127.0.0.1:6379/0
+      TEST_REDIS_STATE_URI: redis://127.0.0.1:6380/0
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.13"
           cache: pip
@@ -48,9 +70,66 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
+          python -m pip check
 
-      - name: Compile Python source
-        run: python -m compileall -q bot.py config core handlers repositories tests
+      - name: Configure isolated Redis eviction policies
+        # Using Docker container IDs from the job's own service containers.
+        run: |
+          docker exec "${{ job.services.redis-cache.id }}" redis-cli CONFIG SET maxmemory 67108864
+          docker exec "${{ job.services.redis-cache.id }}" redis-cli CONFIG SET maxmemory-policy allkeys-lru
+          docker exec "${{ job.services.redis-state.id }}" redis-cli CONFIG SET maxmemory 67108864
+          docker exec "${{ job.services.redis-state.id }}" redis-cli CONFIG SET maxmemory-policy noeviction
 
-      - name: Run full regression suite
-        run: python -m pytest -q
+      - name: Compile all Python source including scripts
+        run: python -m compileall -q bot.py config core handlers repositories scripts tests
+
+      - name: High-signal lint (undefined Python names)
+        run: python -m ruff check --select F821,F822,F823 .
+
+      - name: Full tests with coverage and real MongoDB and Redis
+        run: >-
+          python -m pytest -q
+          --cov=core --cov=handlers --cov=repositories
+          --cov-report=term-missing:skip-covered
+          --cov-report=xml:coverage.xml
+
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  container-preflight:
+    name: container-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose without production secrets or deployments
+        shell: bash
+        run: |
+          set -eu
+          # Compose expects .env but these are inert CI-only placeholders.
+          printf 'API_ID=1\nAPI_HASH=ci-placeholder\nBOT_TOKEN=123456:ci-placeholder\nDATABASE_URI=mongodb://127.0.0.1:27017/ci\n' > .env
+          trap 'rm -f .env' EXIT
+          docker compose --profile protected-state config --quiet
+
+      - name: Build production Dockerfile without deploying
+        run: docker build --tag file-filter-bot:ci .
+
+      - name: Assert container uses nonroot runtime and disabled updater
+        shell: bash
+        run: |
+          set -eu
+          test "$(docker image inspect --format '{{.Config.User}}' file-filter-bot:ci)" = "botuser"
+          docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' file-filter-bot:ci | grep -qx 'AUTO_UPDATE=false'
+          docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' file-filter-bot:ci | grep -qx 'UPDATE_ON_START=false'
