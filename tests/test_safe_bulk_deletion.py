@@ -70,7 +70,10 @@ class Collection:
 
 def make_deletion(count=250):
     collection = Collection(count)
-    db = SimpleNamespace(execute_with_retry=AsyncMock(side_effect=lambda op, *args, **kwargs: op(*args, **kwargs)))
+    async def execute(op, *args, **kwargs):
+        return await op(*args, **kwargs)
+
+    db = SimpleNamespace(execute_with_retry=AsyncMock(side_effect=execute))
     cache = SimpleNamespace(
         invalidate_file_cache=AsyncMock(return_value=True),
         invalidate_all_search_results=AsyncMock(return_value=True),
