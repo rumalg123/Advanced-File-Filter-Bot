@@ -549,6 +549,18 @@ class SearchHandler:
                 )
                 return
 
+            # Access and rate-limit failures are not empty search results.
+            # Previously "Rate limit exceeded" could incorrectly display
+            # "No Results Found" even when files existed.
+            if not has_access:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_warning(
+                        html.escape(access_reason or "Search is temporarily unavailable."),
+                        title="Search Unavailable",
+                    )
+                )
+                return
+
             if has_access and files:
                 # Send search results using centralized service
                 search_sent = await self.search_results_service.send_results(
