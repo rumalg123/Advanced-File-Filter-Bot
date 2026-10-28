@@ -35,6 +35,7 @@ from core.utils.caption import CaptionFormatter
 from pyrogram.types import Message
 
 from core.cache.redis_cache import CacheManager
+from core.cache.routed_cache import RoutedCacheManager
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.pool import DatabaseConnectionPool
 from core.database.multi_pool import MultiDatabaseManager
@@ -1377,6 +1378,12 @@ async def initialize_bot() -> MediaSearchBot:
     # Initialize components using centralized settings
     db_pool = DatabaseConnectionPool()
     cache_manager = CacheManager(settings.redis.uri)
+    if settings.redis.state_uri:
+        # Explicit opt-in only. Cache and protected state must live on
+        # separate Redis instances with independently configured eviction.
+        cache_manager = RoutedCacheManager(
+            cache_manager, CacheManager(settings.redis.state_uri)
+        )
     session_manager = UnifiedSessionManager(cache_manager)
     rate_limiter = RateLimiter(cache_manager)
 
