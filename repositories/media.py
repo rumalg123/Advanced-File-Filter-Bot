@@ -480,8 +480,14 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         Search for files across all databases
         Returns: (files, next_offset, total_count)
         """
-        # Get current cache version for versioned cache keys
-        cache_version = await self.cache_invalidator.get_search_cache_version()
+        # PH-003: if protected Redis state is unavailable we cannot trust
+        # cached pages, because the generation may have been reset.
+        try:
+            cache_version = await self.cache_invalidator.get_search_cache_version()
+        except RuntimeError as exc:
+            raise SearchBackendUnavailableError(
+                "Protected search cache generation unavailable"
+            ) from exc
 
         # Generate versioned cache key
         normalized_query = normalize_query(query)
