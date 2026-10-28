@@ -4,6 +4,7 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
@@ -68,6 +69,8 @@ class PaginationCallbackHandler(BaseCommandHandler):
         )
 
         if not has_access:
+            if access_reason == SEARCH_RETRY_MESSAGE:
+                return await query.answer(SEARCH_RETRY_MESSAGE, show_alert=True)
             # Check if it's daily limit or ban
             if access_reason and "Daily limit reached" in access_reason:
                 # Show proper daily limit message
