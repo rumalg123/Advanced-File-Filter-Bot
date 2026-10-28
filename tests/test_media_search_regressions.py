@@ -193,7 +193,7 @@ def test_type_filter_is_applied_with_parsed_metadata():
         ("E03", "", None, "03", None),
         ("ep45 s01", "", "01", "45", None),
         ("season 1 episode 3", "", "01", "03", None),
-        ("Doctor.X.S01E03.540p.mkv", "Doctor mkv", "01", "03", "540p"),
+        ("Doctor.X.S01E03.540p.mkv", "Doctor X mkv", "01", "03", "540p"),
         ("Scary Movie 2025", "Scary Movie 2025", None, None, None),
         ("My TV Show", "My TV Show", None, None, None),
         ("doctor x mafia 540p", "doctor x mafia", None, None, "540p"),
