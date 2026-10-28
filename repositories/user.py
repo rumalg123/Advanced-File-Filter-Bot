@@ -716,11 +716,14 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # quota exemptions. All search, file, batch and deep-link paths call
         # this method, so the ban check must happen before every allow shortcut.
         user = await self.get_user(user_id)
-        if user and user.status == UserStatus.BANNED:
+        if user is None:
+            # Fail closed on missing/unavailable user state, even when premium
+            # is disabled. /start creates the user before delivering links.
+            return False, "User not found or unavailable. Please start the bot again."
+        if user.status == UserStatus.BANNED:
             return False, f"User banned: {user.ban_reason or 'No reason provided'}"
 
-        # Preserve pre-existing access for users who are not banned:
-        # disabling premium removes the quota gate, not the ban gate.
+        # Disabling premium removes quota enforcement, never status checks.
         if _feature_config.disable_premium:
             return True, "Unlimited access (Premium disabled)"
 
@@ -731,9 +734,6 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if owner_id is not None and user_id == owner_id:
             return True, "Owner access"
-
-        if not user:
-            return False, "User not found"
 
         # Check premium status
         is_premium, premium_msg = await self.check_and_update_premium_status(user)
