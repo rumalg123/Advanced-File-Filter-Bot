@@ -32,7 +32,7 @@ class FakeDestination:
         return key in self.records
 
     def restore(self, key, ttl, payload, replace=False):
-        assert replace is False
+        assert replace is False or key in self.records
         self.records[key] = (ttl, payload)
         self.restores.append((key, ttl, payload))
 
@@ -91,3 +91,17 @@ def test_expiring_state_without_ttl_requires_manual_review():
     source = FakeSource({b"rate_limit:42:search": (-1, b"persistent")})
     with pytest.raises(RuntimeError, match="without a TTL"):
         transfer_state(source, FakeDestination(), apply=True)
+
+def test_explicit_rollback_can_replace_older_destination_state():
+    key = b"session:search:42"
+    source = FakeSource({key: (60000, b"current")})
+    destination = FakeDestination()
+    destination.records[key] = (40000, b"old")
+
+    counts = transfer_state(
+        source, destination, apply=True, replace_existing=True
+    )
+
+    assert counts["copied"] == 1
+    assert destination.records[key] == (60000, b"current")
+    assert not source.deleted
