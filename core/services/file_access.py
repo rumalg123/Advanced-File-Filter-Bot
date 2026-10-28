@@ -6,6 +6,7 @@ from core.utils.rate_limiter import RateLimiter
 from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.user import UserRepository
 from core.cache.config import CacheTTLConfig
+from core.database.errors import SearchBackendUnavailableError, SEARCH_RETRY_MESSAGE
 from core.utils.validators import is_premium_valid
 
 logger = get_logger(__name__)
@@ -138,14 +139,20 @@ class FileAccessService:
 
             if advanced_filters and not file_type_enum and advanced_filters.get('file_type'):
                 file_type_enum = get_file_type_from_string(str(advanced_filters['file_type']))
-        # Search files
-        files, next_offset, total = await self.media_repo.search_files(
-            search_query,
-            file_type_enum,
-            offset,
-            limit,
-            use_caption_filter,
-            advanced_filters=advanced_filters
-        )
+        # PH-002: keep the existing 5-tuple API for callers, but distinguish
+        # a retryable backend failure from a successful empty result. Do not
+        # leak connection URIs or internal errors into Telegram messages.
+        try:
+            files, next_offset, total = await self.media_repo.search_files(
+                search_query,
+                file_type_enum,
+                offset,
+                limit,
+                use_caption_filter,
+                advanced_filters=advanced_filters
+            )
+        except SearchBackendUnavailableError:
+            logger.warning("File search unavailable for user_id=%s", user_id)
+            return [], 0, 0, False, SEARCH_RETRY_MESSAGE
 
         return files, next_offset, total, True, None
