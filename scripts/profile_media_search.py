@@ -31,15 +31,19 @@ DEFAULT_QUERIES = (
 
 def is_local(uri: str) -> bool:
     """Avoid accidental remote probing without an explicit operator flag."""
+    # SRV parsing may trigger DNS requests even before a database query.
+    if uri.startswith("mongodb+srv://"):
+        return False
     from pymongo.uri_parser import parse_uri
 
     try:
         parsed = parse_uri(uri)
     except (ValueError, TypeError) as exc:
         raise ValueError("Invalid DATABASE_URI") from exc
-    return all(host.split(":")[0].strip("[]") in (
-        "127.0.0.1", "localhost", "::1",
-    ) for host, _ in parsed["nodelist"])
+    return bool(parsed["nodelist"]) and all(
+        host.strip("[]").lower() in ("127.0.0.1", "localhost", "::1")
+        for host, _ in parsed["nodelist"]
+    )
 
 
 def concise_plan(explanation: dict) -> dict:
