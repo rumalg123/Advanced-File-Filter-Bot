@@ -154,6 +154,14 @@ class ProcessingLimitsConfig(BaseSettings):
     # Queue sizes
     message_queue_size: int = Field(default=1000, description="Maximum message queue size")
     overflow_queue_size: int = Field(default=500, description="Maximum overflow queue size")
+    # PH-005: opt-in durable MongoDB channel indexing. Creates only a NEW
+    # channel_index_jobs collection; existing media_files documents unchanged.
+    durable_indexing: bool = Field(
+        default=False, description="Enable recoverable automatic channel indexing"
+    )
+    durable_indexing_lease_seconds: int = Field(
+        default=180, ge=30, description="Recovery lease on channel indexing jobs"
+    )
 
     # Processing delays
     inter_message_delay: float = Field(default=0.5, description="Delay between processing messages in seconds")
