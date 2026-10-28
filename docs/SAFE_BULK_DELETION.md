@@ -10,7 +10,7 @@ errors and it reported the number of files *found* rather than the number
 actually deleted. A 60-second confirmation held only a keyword and was not
 bound to a specific count or single-use token.
 
-The new /deleteall flow is deliberately stricter:
+The delete-channel automatic queue also no longer drops requests when full; it waits for a free slot. This protects in-process delivery only; a process crash can still lose pending in-memory delete requests.\n\nThe new /deleteall flow is deliberately stricter:
 
 1. An authorized admin enters /deleteall followed by at least three keyword
    characters.
