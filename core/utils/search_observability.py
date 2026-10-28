@@ -59,7 +59,7 @@ class SearchTelemetry:
             )
 
     @staticmethod
-    def _percentile(histogram: list[int], count: int, percentile: float) -> int | None:
+    def _percentile(histogram: list[int], count: int, percentile: float) -> int | str | None:
         if count == 0:
             return None
         rank = max(1, int((percentile * count) + 0.999999))
@@ -67,8 +67,8 @@ class SearchTelemetry:
         for i, bucket_count in enumerate(histogram):
             seen += bucket_count
             if seen >= rank:
-                return BUCKETS_MS[i] if i < len(BUCKETS_MS) else BUCKETS_MS[-1] + 1
-        return BUCKETS_MS[-1] + 1
+                return BUCKETS_MS[i] if i < len(BUCKETS_MS) else f">{BUCKETS_MS[-1]}"
+        return f">{BUCKETS_MS[-1]}"
 
     def snapshot(self) -> dict[str, Any]:
         """Create a stable copy with no raw user/search material."""
