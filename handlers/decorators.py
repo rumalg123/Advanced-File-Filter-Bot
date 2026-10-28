@@ -167,10 +167,8 @@ class BanCheck:
                 if not user_id:
                     return
 
-                # Skip ban check for admins
-                if is_admin(user_id, self.bot.config.ADMINS):
-                    return await func(self, client, message, *args, **kwargs)
-
+                # PH-001: Never bypass a ban based on admin/owner status.
+                # Privileged users may bypass quotas, but not account bans.
                 # Check if user is banned
                 user = await self.bot.user_repo.get_user(user_id)
                 if user and user.status == UserStatus.BANNED:
