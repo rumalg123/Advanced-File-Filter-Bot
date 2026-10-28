@@ -712,26 +712,28 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""
-        # Check if premium is disabled - use settings to avoid circular import
+        # PH-001: A ban overrides premium-disabled mode and administrator/owner
+        # quota exemptions. All search, file, batch and deep-link paths call
+        # this method, so the ban check must happen before every allow shortcut.
+        user = await self.get_user(user_id)
+        if user and user.status == UserStatus.BANNED:
+            return False, f"User banned: {user.ban_reason or 'No reason provided'}"
+
+        # Preserve pre-existing access for users who are not banned:
+        # disabling premium removes the quota gate, not the ban gate.
         if _feature_config.disable_premium:
             return True, "Unlimited access (Premium disabled)"
 
-        # Check if user is admin
+        # Admin/owner status bypasses quotas, but never a ban.
         admin_list = _channel_config.get_admin_list()
         if is_admin(user_id, admin_list or []):
             return True, "Admin access"
 
-        # Check if user is owner
-        if owner_id and user_id == owner_id:
+        if owner_id is not None and user_id == owner_id:
             return True, "Owner access"
 
-        user = await self.get_user(user_id)
         if not user:
             return False, "User not found"
-
-        # Check ban status
-        if user.status == UserStatus.BANNED:
-            return False, f"User banned: {user.ban_reason}"
 
         # Check premium status
         is_premium, premium_msg = await self.check_and_update_premium_status(user)
