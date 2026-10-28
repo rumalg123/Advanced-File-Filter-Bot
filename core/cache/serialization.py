@@ -130,9 +130,15 @@ class OptimizedSerializer:
             if isinstance(obj, dict) and "__datetime__" in obj:
                 return datetime.fromisoformat(obj["__datetime__"])
             return obj
+        # unpackb does not accept Unpacker(max_buffer_size=...). Limit
+        # individual values/collections using its supported max_* options.
         return msgpack.unpackb(
             data, object_hook=hook, raw=False,
-            max_buffer_size=self.MAX_DECODED_BYTES,
+            max_str_len=self.MAX_DECODED_BYTES,
+            max_bin_len=self.MAX_DECODED_BYTES,
+            max_array_len=1_000_000,
+            max_map_len=1_000_000,
+            max_ext_len=self.MAX_DECODED_BYTES,
         )
 
     def _deserialize_pickle(self, data: bytes) -> Any:
