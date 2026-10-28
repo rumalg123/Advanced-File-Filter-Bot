@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from typing import TYPE_CHECKING, Optional
 
 from core.cache.config import CachePatterns, CacheKeyGenerator
@@ -33,8 +34,31 @@ class CacheInvalidator:
         return succeeded
 
     async def get_search_cache_version(self) -> int:
-        """Get current search cache version"""
+        """Return a valid cache generation or refuse unsafe split-state reads."""
         version = await self.cache.get(self.SEARCH_CACHE_VERSION_KEY)
+
+        # A separate protected state instance can lose all state after a disk
+        # restore/reset. Initializing with a random positive counter ensures
+        # old search pages on the disposable cache cannot collide with v1.
+        if getattr(self.cache, "protected_state_enabled", False):
+            try:
+                parsed = int(version) if version is not None else None
+                if parsed is not None and parsed >= 1:
+                    return parsed
+                if version is not None:
+                    logger.warning("Invalid protected search cache counter; reinitializing")
+                    await self.cache.delete(self.SEARCH_CACHE_VERSION_KEY)
+
+                new_version = await self.cache.ensure_counter_initialized(
+                    self.SEARCH_CACHE_VERSION_KEY, secrets.randbits(60) + 1
+                )
+                if new_version is None or int(new_version) < 1:
+                    raise RuntimeError("Protected search cache generation unavailable")
+                return int(new_version)
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("Protected search cache generation invalid") from exc
+
+        # Legacy single-Redis behavior is unchanged.
         if version is None:
             return 1
         try:
@@ -49,6 +73,10 @@ class CacheInvalidator:
 
     async def increment_search_cache_version(self) -> Optional[int]:
         """Increment search cache version to invalidate all search caches lazily"""
+        if getattr(self.cache, "protected_state_enabled", False):
+            # Create an unpredictable base before the first mutation as well
+            # as before the first query, never plain v1 after state loss.
+            await self.get_search_cache_version()
         new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
         if new_version is None:
             return None
