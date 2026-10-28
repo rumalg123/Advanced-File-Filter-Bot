@@ -4,6 +4,7 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.cache.errors import STATE_RETRY_MESSAGE
 from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
@@ -116,11 +117,13 @@ class PaginationCallbackHandler(BaseCommandHandler):
             for f in files
         ]
 
-        await self.bot.cache.set(
+        stored = await self.bot.cache.set(
             search_key,
             {'files': files_data, 'query': search_query, 'user_id': result_owner_id},
             expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
         )
+        if not stored:
+            return await query.answer(STATE_RETRY_MESSAGE, show_alert=True)
         query_reference = make_search_query_reference(session_id)
 
         # Build response with new pagination builder
