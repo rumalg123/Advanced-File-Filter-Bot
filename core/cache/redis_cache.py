@@ -336,6 +336,9 @@ class CacheManager:
                 stats['redis_info'] = {
                     'used_memory': redis_info.get('used_memory', 0),
                     'used_memory_human': redis_info.get('used_memory_human', '0B'),
+                    'maxmemory': redis_info.get('maxmemory', 0),
+                    'maxmemory_policy': redis_info.get('maxmemory_policy', 'unknown'),
+                    'evicted_keys': redis_info.get('evicted_keys', 0),
                     'keyspace_hits': redis_info.get('keyspace_hits', 0),
                     'keyspace_misses': redis_info.get('keyspace_misses', 0),
                     'connected_clients': redis_info.get('connected_clients', 0),
