@@ -75,10 +75,10 @@ jobs:
       - name: Configure isolated Redis eviction policies
         # Using Docker container IDs from the job's own service containers.
         run: |
-          docker exec "${{ job.services.redis-cache.id }}" redis-cli CONFIG SET maxmemory 67108864
-          docker exec "${{ job.services.redis-cache.id }}" redis-cli CONFIG SET maxmemory-policy allkeys-lru
-          docker exec "${{ job.services.redis-state.id }}" redis-cli CONFIG SET maxmemory 67108864
-          docker exec "${{ job.services.redis-state.id }}" redis-cli CONFIG SET maxmemory-policy noeviction
+          docker exec "${{ job.services['redis-cache'].id }}" redis-cli CONFIG SET maxmemory 67108864
+          docker exec "${{ job.services['redis-cache'].id }}" redis-cli CONFIG SET maxmemory-policy allkeys-lru
+          docker exec "${{ job.services['redis-state'].id }}" redis-cli CONFIG SET maxmemory 67108864
+          docker exec "${{ job.services['redis-state'].id }}" redis-cli CONFIG SET maxmemory-policy noeviction
 
       - name: Compile all Python source including scripts
         run: python -m compileall -q bot.py config core handlers repositories scripts tests
