@@ -46,9 +46,9 @@ def test_default_deployment_flags_are_opt_in_and_runtime_is_nonroot():
     compose = (ROOT / "docker-compose.yml").read_text()
     dockerfile = (ROOT / "Dockerfile").read_text()
     settings = (ROOT / "config/settings.py").read_text()
-    assert "AUTO_UPDATE=\${AUTO_UPDATE:-false}" in compose
-    assert "UPDATE_ON_START=\${UPDATE_ON_START:-false}" in compose
-    assert "REDIS_STATE_URI=\${REDIS_STATE_URI:-}" in compose
+    assert "AUTO_UPDATE=${AUTO_UPDATE:-false}" in compose
+    assert "UPDATE_ON_START=${UPDATE_ON_START:-false}" in compose
+    assert "REDIS_STATE_URI=${REDIS_STATE_URI:-}" in compose
     assert 'durable_indexing: bool = Field(' in settings
     assert "default=False" in settings
     assert "USER botuser" in dockerfile
