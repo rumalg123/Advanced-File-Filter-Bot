@@ -12,7 +12,7 @@ from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
 from core.utils.validators import normalize_query
-from core.utils.helpers import parse_search_query, build_fuzzy_regex_pattern, build_typo_tolerant_pattern
+from core.utils.search_matcher import build_media_search_filter
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -589,147 +589,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             use_caption: bool,
             advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Build MongoDB search filter with support for season/episode/resolution parsing"""
-        # Parse query to extract season, episode, resolution
-        cleaned_query, season, episode, resolution = parse_search_query(query)
-        
-        # Use cleaned query for text search (without season/episode/resolution keywords)
-        text_query = cleaned_query if cleaned_query else query
-        
-        # Build fuzzy regex pattern for flexible matching
-        # This handles variations, typos, and word order flexibility
-        # Use typo-tolerant pattern to handle common typos like "thus" vs "this"
-        pattern = build_typo_tolerant_pattern(text_query)
-        regex = {'$regex': pattern, '$options': 'i'}
-
-        # Build filter
-        search_filter = {}
-
-        # Text search on file_name/caption (only if we have text to search)
-        if text_query:
-            if use_caption:
-                search_filter['$or'] = [
-                    {'file_name': regex},
-                    {'caption': regex}
-                ]
-            else:
-                search_filter['file_name'] = regex
-        else:
-            # If no text query, we still need a base filter - match all
-            search_filter = {}
-
-        # Add metadata filters (season, episode, resolution)
-        metadata_filters = {}
-        if season:
-            metadata_filters['season'] = season
-        if episode:
-            metadata_filters['episode'] = episode
-        if resolution:
-            metadata_filters['resolution'] = resolution
-        
-        # Combine text search with metadata filters
-        if metadata_filters:
-            if search_filter:
-                # Both text and metadata filters - use $and
-                search_filter = {
-                    '$and': [
-                        search_filter,
-                        metadata_filters
-                    ]
-                }
-            else:
-                # Only metadata filters
-                search_filter = metadata_filters
-
-        if file_type:
-            if '$and' in search_filter:
-                search_filter['$and'].append({'file_type': file_type.value})
-            else:
-                search_filter['file_type'] = file_type.value
-
-        if advanced_filters:
-            clauses = [search_filter] if search_filter else []
-
-            if advanced_filters.get('season'):
-                season_number = int(advanced_filters['season'])
-                season_regex = {
-                    '$regex': rf"\bs0?{season_number}\b",
-                    '$options': 'i'
-                }
-                clauses.append({
-                    '$or': [
-                        {'season': advanced_filters['season']},
-                        {'file_name': season_regex},
-                        {'caption': season_regex},
-                    ]
-                })
-            if advanced_filters.get('episode'):
-                episode_number = int(advanced_filters['episode'])
-                episode_regex = {
-                    '$regex': rf"\be0?{episode_number}\b",
-                    '$options': 'i'
-                }
-                clauses.append({
-                    '$or': [
-                        {'episode': advanced_filters['episode']},
-                        {'file_name': episode_regex},
-                        {'caption': episode_regex},
-                    ]
-                })
-
-            if advanced_filters.get('year'):
-                year_regex = {
-                    '$regex': rf"\b{int(advanced_filters['year'])}\b",
-                    '$options': 'i'
-                }
-                clauses.append({
-                    '$or': [
-                        {'file_name': year_regex},
-                        {'caption': year_regex},
-                    ]
-                })
-
-            if advanced_filters.get('language'):
-                language = re.escape(str(advanced_filters['language']))
-                language_regex = {
-                    '$regex': rf"\b{language}\b",
-                    '$options': 'i'
-                }
-                clauses.append({
-                    '$or': [
-                        {'file_name': language_regex},
-                        {'caption': language_regex},
-                    ]
-                })
-
-            if advanced_filters.get('resolution'):
-                resolution = re.escape(str(advanced_filters['resolution']))
-                resolution_regex = {'$regex': resolution, '$options': 'i'}
-                clauses.append({
-                    '$or': [
-                        {'resolution': resolution_regex},
-                        {'file_name': resolution_regex},
-                        {'caption': resolution_regex},
-                    ]
-                })
-
-            size_filter = {}
-            if advanced_filters.get('min_size') is not None:
-                size_filter['$gte'] = int(advanced_filters['min_size'])
-            if advanced_filters.get('max_size') is not None:
-                size_filter['$lte'] = int(advanced_filters['max_size'])
-            if size_filter:
-                clauses.append({'file_size': size_filter})
-
-            if not file_type and advanced_filters.get('file_type'):
-                clauses.append({'file_type': advanced_filters['file_type']})
-
-            if len(clauses) == 1:
-                search_filter = clauses[0]
-            elif clauses:
-                search_filter = {'$and': clauses}
-
-        return search_filter
+        """Build a backward-compatible MongoDB search predicate."""
+        return build_media_search_filter(query, file_type, use_caption, advanced_filters)
 
     async def update(self, id: Any, update_data: Dict[str, Any], upsert: bool = False) -> bool:
         """Update entity and invalidate cache properly"""
