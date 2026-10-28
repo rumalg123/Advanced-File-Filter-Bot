@@ -145,18 +145,11 @@ class DeleteHandler(BaseHandler):
             self.delete_queue.put_nowait(file_info)
             logger.info(f"File added to delete queue successfully: {file_info['file_name']}")
         except asyncio.QueueFull:
-            logger.warning(f"Delete queue is full, dropping file: {file_info['file_name']}")
-            # Optionally, send alert to log channel
-            if self.bot.config.LOG_CHANNEL:
-                try:
-                    await telegram_api.call_api(
-                        self.bot.send_message,
-                        self.bot.config.LOG_CHANNEL,
-                        ErrorMessageFormatter.format_warning("Delete queue is full! Consider increasing queue size or processing rate."),
-                        chat_id=self.bot.config.LOG_CHANNEL
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to send queue full alert: {e}")
+            # PH-007: never silently discard accepted delete-channel messages.
+            # Apply backpressure until the worker has capacity. This remains
+            # in-memory and cannot guarantee crash recovery.
+            logger.warning("Delete queue at capacity; applying backpressure")
+            await self.delete_queue.put(file_info)
 
     async def handle_delete_command(self, client: Client, message: Message):
         """Handle manual delete command"""
