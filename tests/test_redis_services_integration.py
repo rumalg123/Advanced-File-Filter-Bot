@@ -103,3 +103,39 @@ async def test_real_protected_search_cache_generation_is_not_reused_after_reset(
     finally:
         await routed.delete(key)
         await routed.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_real_redis_safe_serialization_and_legacy_pickle_miss():
+    """Prove the live Redis API reads safe values but never unpickles legacy ones."""
+    import json
+    import pickle
+
+    uri = _localhost_test_uri("TEST_REDIS_CACHE_URI", expected_port=6379)
+    manager = CacheManager(uri)
+    await manager.initialize()
+    suffix = uuid4().hex
+    keys = (
+        f"media:ph009:safe:{suffix}",
+        f"session:ph009:pickle:{suffix}",
+        f"media:ph009:legacy-json:{suffix}",
+    )
+    try:
+        assert await manager.set(keys[0], {"name": "Doctor X"}, expire=30)
+        await manager.redis.setex(keys[1], 30, b"p" + pickle.dumps(
+            {"should_be_ignored": True}, protocol=4
+        ))
+        await manager.redis.setex(keys[2], 30, json.dumps(
+            {"raw_json": True}
+        ).encode("utf-8"))
+
+        assert await manager.mget(list(keys)) == [
+            {"name": "Doctor X"}, None, {"raw_json": True}
+        ]
+        assert await manager.redis.exists(keys[1]) == 1
+        assert await manager.redis.ttl(keys[1]) > 0
+    finally:
+        for key in keys:
+            await manager.redis.delete(key)
+        await manager.close()
