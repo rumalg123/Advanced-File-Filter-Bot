@@ -36,7 +36,12 @@ def test_malicious_pickle_never_executes_for_any_legacy_prefix(monkeypatch):
     ):
         assert serializer.deserialize(raw) is None
         assert not hasattr(builtins, "PH009_EXECUTED")
-    assert serializer.get_stats()["rejected_unsafe"] >= 3
+    # The original ASCII pickle protocol is also rejected, without
+    # converting its opcodes to inert-but-confusing session text.
+    protocol_zero = pickle.dumps(DangerousObject(), protocol=0)
+    assert serializer.deserialize(protocol_zero) is None
+    assert not hasattr(builtins, "PH009_EXECUTED")
+    assert serializer.get_stats()["rejected_unsafe"] >= 4
 
 
 def test_no_runtime_pickle_load_path_or_pickle_import():
@@ -70,6 +75,7 @@ def test_all_legacy_safe_wire_formats_remain_readable():
     assert serializer.deserialize(json.dumps(raw).encode()) == raw
     assert serializer.deserialize(msgpack.packb(raw, use_bin_type=True)) == raw
     assert serializer.deserialize(b"hello from legacy cache") == "hello from legacy cache"
+    assert serializer.deserialize(b"caption.") == "caption."
 
 
 def test_existing_prefix_and_compression_contract_unchanged():
