@@ -65,9 +65,12 @@ class RateLimiter:
             # Backward-compatible fallback for alternate cache implementations.
             new_count = await self.cache.increment(key)
 
-        # Handle Redis unavailability - allow request but log warning
+        # PH-003: protected operational Redis cannot fail open. Preserve the
+        # historical fallback for unsplit deployments, tracked under PH-023.
         if new_count is None:
-            logger.warning(f"Rate limit check failed for user {user_id}, action {action} - Redis unavailable")
+            logger.warning("Rate limit backend unavailable for action %s", action)
+            if getattr(self.cache, "protected_state_enabled", False):
+                return False, config.cooldown_time
             return True, None
 
         # Alternate cache implementations may still use separate commands;
