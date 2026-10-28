@@ -115,9 +115,10 @@ class BaseRepository(ABC, Generic[T]):
             filter: Dict[str, Any],
             limit: Optional[int] = None,
             skip: int = 0,
-            sort: Optional[List[tuple]] = None
+            sort: Optional[List[tuple]] = None,
+            raise_on_error: bool = False
     ) -> List[T]:
-        """Find multiple entities"""
+        """Find multiple entities; strict search callers may propagate read failures."""
         try:
             collection = await self.collection()
             cursor = collection.find(filter)
@@ -135,6 +136,8 @@ class BaseRepository(ABC, Generic[T]):
             return [self._dict_to_entity(data) for data in results]
         except Exception as e:
             logger.error(f"Error finding entities: {e}")
+            if raise_on_error:
+                raise
             return []
 
     async def create(self, entity: T) -> bool:
@@ -215,8 +218,10 @@ class BaseRepository(ABC, Generic[T]):
             logger.error(f"Error deleting entity {id}: {e}")
             return False
 
-    async def count(self, filter: Dict[str, Any] = None) -> int:
-        """Count entities"""
+    async def count(
+            self, filter: Dict[str, Any] = None, raise_on_error: bool = False
+    ) -> int:
+        """Count entities; strict search callers may propagate count failures."""
         try:
             collection = await self.collection()
             filter = filter or {}
@@ -226,6 +231,8 @@ class BaseRepository(ABC, Generic[T]):
             )
         except Exception as e:
             logger.error(f"Error counting entities: {e}")
+            if raise_on_error:
+                raise
             return 0
 
     async def bulk_write(self, operations: List[Any]) -> bool:
