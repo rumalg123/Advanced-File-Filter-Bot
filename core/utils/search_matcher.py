@@ -23,7 +23,10 @@ def _text_pattern(text: str) -> str:
     variants with different word order. It also preserves existing common typo
     aliases (e.g. this/thus).
     """
-    tokens = text.split()
+    # Duplicate lookaheads do not enforce token multiplicity; the old
+    # matcher only required existence. Removing duplicates preserves those
+    # semantics while reducing worst-case regex evaluation work.
+    tokens = list(dict.fromkeys(text.split()))
     if len(tokens) == 1:
         return build_typo_tolerant_pattern(tokens[0])
     return (
