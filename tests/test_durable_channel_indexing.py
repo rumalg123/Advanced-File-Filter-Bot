@@ -5,7 +5,7 @@ Uses self-contained collection doubles; never touches production MongoDB.
 import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -226,7 +226,7 @@ async def test_worker_acknowledges_before_scheduling_side_effects():
         fail=AsyncMock(),
     )
     handler.durable_jobs = jobs
-    notifications = SimpleNamespace(schedule_new_media=AsyncMock())
+    notifications = SimpleNamespace(schedule_new_media=Mock())
     handler.bot = SimpleNamespace(
         media_repo=SimpleNamespace(
             _dict_to_entity=lambda data: media,
