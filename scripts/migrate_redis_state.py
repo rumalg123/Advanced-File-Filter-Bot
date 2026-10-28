@@ -21,7 +21,9 @@ def is_state_key(key: bytes) -> bool:
     return key.decode("utf-8", "replace").startswith(STATE_PREFIXES)
 
 
-def transfer_state(source, destination, apply: bool = False) -> dict:
+def transfer_state(
+    source, destination, apply: bool = False, replace_existing: bool = False
+) -> dict:
     counts = Counter()
     for key in source.scan_iter(count=200):
         if not is_state_key(key):
@@ -43,7 +45,7 @@ def transfer_state(source, destination, apply: bool = False) -> dict:
             # Session/rate-limit state must never become persistent by mistake.
             raise RuntimeError("Found an expiring state key without a TTL. Investigate before migration.")
 
-        if destination.exists(key):
+        if destination.exists(key) and not replace_existing:
             counts["already_exists"] += 1
             continue
 
@@ -59,7 +61,7 @@ def transfer_state(source, destination, apply: bool = False) -> dict:
         # RESTORE ttl=0 preserves a genuinely persistent key; positive PTTL
         # preserves the existing expiry with millisecond precision.
         try:
-            destination.restore(key, max(0, ttl), serialized, replace=False)
+            destination.restore(key, max(0, ttl), serialized, replace=replace_existing)
             counts["copied"] += 1
         except ResponseError as error:
             if "BUSYKEY" in str(error).upper():
@@ -80,7 +82,13 @@ def main() -> None:
         "--bot-stopped", action="store_true",
         help="Required acknowledgement that all bot writers are stopped."
     )
+    parser.add_argument(
+        "--replace-existing", action="store_true",
+        help="Advanced rollback only: overwrite destination state with latest source state."
+    )
     args = parser.parse_args()
+    if args.replace_existing and not args.apply:
+        parser.error("--replace-existing requires --apply and --bot-stopped")
     if args.apply and not args.bot_stopped:
         parser.error("--apply requires --bot-stopped after stopping all bot replicas")
 
@@ -98,7 +106,11 @@ def main() -> None:
     try:
         source.ping()
         destination.ping()
-        counts = transfer_state(source, destination, apply=args.apply)
+        counts = transfer_state(
+            source, destination,
+            apply=args.apply,
+            replace_existing=args.replace_existing,
+        )
         print("State copy summary:", counts)
         print("Source keys were not deleted or modified.")
     finally:
