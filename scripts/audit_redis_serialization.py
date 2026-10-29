@@ -12,6 +12,7 @@ from collections import Counter
 from urllib.parse import urlsplit
 
 import redis
+from core.cache.auth import redis_auth_kwargs
 
 
 def classify(prefix: bytes) -> str:
@@ -87,7 +88,14 @@ def main():
             parsed.hostname.lower() not in ("127.0.0.1", "localhost", "::1")):
         parser.error("Remote Redis requires explicit --allow-remote")
 
-    client = redis.Redis.from_url(uri, socket_connect_timeout=3, socket_timeout=5)
+    prefix = "REDIS_STATE_" if args.state else "REDIS_"
+    client = redis.Redis.from_url(
+        uri, socket_connect_timeout=3, socket_timeout=5,
+        **redis_auth_kwargs(
+            uri, username=os.environ.get(prefix + "USERNAME", ""),
+            password_file=os.environ.get(prefix + "PASSWORD_FILE", ""),
+        )
+    )
     try:
         client.ping()
         print(json.dumps(inventory(client, max_keys=args.max_keys),
