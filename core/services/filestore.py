@@ -180,7 +180,10 @@ class FileStoreService:
                 logger.info(f"Successfully saved new file to database with ref: {identifier}")
                 feature_service = getattr(self, 'feature_service', None)
                 if feature_service:
-                    feature_service.schedule_new_media(media_file)
+                    if hasattr(feature_service, "persist_new_media"):
+                        await feature_service.persist_new_media(media_file)
+                    else:
+                        feature_service.schedule_new_media(media_file)
             else:
                 # Error saving file and no duplicate found
                 logger.error(f"Failed to save file to database: {media_file_unique_id}")
