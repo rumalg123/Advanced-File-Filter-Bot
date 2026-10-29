@@ -119,6 +119,16 @@ class RoutedCacheManager:
                     output[index] = value
         return output
 
+    async def ensure_search_generation(self, key: str, random_initial: int):
+        return await self.backend_for_key(key).ensure_search_generation(
+            key, random_initial
+        )
+
+    async def advance_search_generation(self, key: str, random_initial: int):
+        return await self.backend_for_key(key).advance_search_generation(
+            key, random_initial
+        )
+
     async def ensure_counter_initialized(self, key: str, initial: int):
         return await self.backend_for_key(key).ensure_counter_initialized(key, initial)
 
