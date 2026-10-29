@@ -46,7 +46,7 @@ class SessionData:
     
     def is_expired(self) -> bool:
         """Check if session is expired"""
-        return datetime.now(UTC) > self.expires_at
+        return datetime.now(UTC) >= self.expires_at
     
     def is_active(self) -> bool:
         """Check if session is active and not expired"""
@@ -82,7 +82,7 @@ class UnifiedSessionManager:
     
     # Default TTL values for different session types
     DEFAULT_TTL = {
-        SessionType.EDIT: 300,      # 5 minutes
+        SessionType.EDIT: CacheTTLConfig.EDIT_SESSION,
         SessionType.SEARCH: 3600,   # 1 hour
         SessionType.INDEX: 1800,    # 30 minutes
         SessionType.BATCH: 7200,    # 2 hours
