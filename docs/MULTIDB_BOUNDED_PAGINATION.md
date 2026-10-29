@@ -49,3 +49,20 @@ adjacent-page disjointness, bounded fetch and cursor-close/failure suites pass
 (51 focused cases). Very deep offsets can still exceed server memory or latency
 budgets and need representative measurement/keyset continuation; the fix does
 not claim constant server memory independent of offset.
+
+## Guaranteed source-prefix skips
+
+For an indexed deep page, the merge now also obtains complete per-source counts.
+Source i can safely skip `max(0, offset - sum(other_source_counts))` rows (capped
+at its own count): those rows must be among the first global `offset` results,
+regardless of interleaving. The residual global offset is reduced by the sum of
+these disjoint skipped prefixes. The merge still uses exact stable ordering and
+64-row buffers; counts or cursors failing on any source remain hard errors.
+
+This avoids transferring nearly an entire dominant shard to reach its last page.
+Deterministic reference tests cover balanced/skewed/empty sources, exhausted pages
+and exact source-prefix membership. A real three-source 2000/3/2-record fixture
+matches the reference page while skipping 1,985 guaranteed earlier owner rows.
+Fifty-seven focused multi-source cases pass. Balanced middle pages may still
+require substantial merging, and count/page reads are not a distributed snapshot;
+repository generation checks continue rejecting concurrent known mutations.

@@ -200,8 +200,10 @@ async def test_shallow_merge_fits_small_server_sort_budget_without_disk_spill(lo
             internalQueryMaxBlockingSortMemoryUsageBytes=65536)
         class Collection:
             def find(self, query): return database.FILES.find(query).allow_disk_use(False)
+            async def count_documents(self, query): return await database.FILES.count_documents(query)
         class BoundedPool:
             async def get_collection(self, collection): return Collection()
+            async def execute_with_retry(self, fn, *args, **kwargs): return await fn(*args, **kwargs)
         manager = multi_manager(database)
         manager.databases[0].pool = BoundedPool()
         # A query-wide sort is too large even though its first page is tiny.
@@ -218,6 +220,46 @@ async def test_shallow_merge_fits_small_server_sort_budget_without_disk_spill(lo
         await client.admin.command('setParameter', 1,
             internalQueryMaxBlockingSortMemoryUsageBytes=original['internalQueryMaxBlockingSortMemoryUsageBytes'])
         await client.drop_database(name)
+        client.close()
+
+
+@pytest.mark.parametrize('counts',[(2000,3,2),(1250,1250,1250),(0,200,0),(7,4),(0,0,0)])
+def test_guaranteed_prefixes_only_remove_rows_before_the_reference_page(counts):
+    import random
+    rng=random.Random(20261029)
+    records=[(rng.random(), source, index) for source,count in enumerate(counts) for index in range(count)]
+    ordered=sorted(records)
+    per_source=[sorted([row for row in records if row[1]==source]) for source in range(len(counts))]
+    total=sum(counts)
+    for skip in [0,1,total//2,max(0,total-10),total,total+10]:
+        prefixes,remaining=MultiDatabaseManager._guaranteed_prefix_skips(counts,skip)
+        retained=sorted([row for source,rows in enumerate(per_source) for row in rows[prefixes[source]:]])
+        assert retained[remaining:remaining+10]==ordered[skip:skip+10]
+        if skip<=total:
+            dropped={row for source,rows in enumerate(per_source) for row in rows[:prefixes[source]]}
+            assert dropped<=set(ordered[:skip])
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_skewed_deep_indexed_page_matches_reference_and_skips_large_owner_prefix(local_mongo_uri):
+    client=AsyncIOMotorClient(local_mongo_uri,serverSelectionTimeoutMS=5000)
+    name='ph026_skew_'+uuid4().hex
+    dbs=[client[name+str(i)] for i in range(3)]
+    manager=multi_manager(*dbs);records=[]
+    try:
+        for source,(db,count) in enumerate(zip(dbs,[2000,3,2])):
+            docs=[{'_id':f'{source}-{i:05}','indexed_at':f'{i:05}'} for i in range(count)]
+            await db.FILES.insert_many(docs);records.extend(docs)
+            await db.FILES.create_index([('indexed_at',-1),('_id',-1)],name='qa_deep_sort')
+        expected=sorted(records,key=lambda row:(row['indexed_at'],row['_id']),reverse=True)
+        rows=await manager.search_across_all_databases('FILES',{},limit=10,skip=1990,
+            sort=[('indexed_at',-1)],sort_index_hint='qa_deep_sort')
+        assert rows==expected[1990:2000]
+        prefixes,remaining=manager._guaranteed_prefix_skips([2000,3,2],1990)
+        assert prefixes[0]==1985 and remaining==5
+    finally:
+        for db in dbs:await client.drop_database(db.name)
         client.close()
 
 

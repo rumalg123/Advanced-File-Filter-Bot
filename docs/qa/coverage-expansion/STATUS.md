@@ -159,3 +159,11 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   source. It now pings all configured media pools concurrently under the existing
   timeout, including inactive/missing/empty-topology checks. Liveness remains
   independent. Five pre-fix failures and 22 passing focused cases are recorded.
+
+- **Deep-page network work correction passed locally:** the index eliminated
+  sort-memory failure but live last-page callbacks could still expire while
+  fetching earlier 64-row buffers. Complete per-source counts now identify only
+  prefixes mathematically guaranteed to lie before the global page, skip them
+  on MongoDB, and reduce the residual merge offset. Reference ordering is
+  unchanged across skewed/balanced/empty/exhausted distributions. Fifty-seven
+  focused cases pass; uncached live timing is being replayed.

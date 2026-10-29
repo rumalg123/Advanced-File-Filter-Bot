@@ -770,6 +770,9 @@ class MultiDatabaseManager:
         self, collection_name: str, query: Dict[str, Any]
     ) -> int:
         """PH-027: counts are complete or explicitly unavailable, never zero."""
+        return sum(await self._counts_by_source(collection_name, query))
+
+    async def _counts_by_source(self, collection_name, query) -> List[int]:
         self._require_all_databases("count")
         results = await asyncio.gather(*[
             self._count_in_database(info, collection_name, query)
@@ -780,7 +783,7 @@ class MultiDatabaseManager:
                 raise MultiDatabaseReadError("count", info.name, result) from result
             if type(result) is not int or result < 0:
                 raise MultiDatabaseReadError("count", info.name, "invalid count")
-        return sum(results)
+        return results
 
     async def _count_in_database(
         self, db_info: DatabaseInfo, collection_name: str, query: Dict[str, Any]
@@ -824,6 +827,18 @@ class MultiDatabaseManager:
         key.append(database_index)
         return tuple(key)
 
+    @staticmethod
+    def _guaranteed_prefix_skips(counts, skip):
+        """Discard only rows guaranteed to precede this global offset.
+
+        Other sources can contribute at most total-count[i] rows to the first
+        skip results. Thus at least skip-(total-count[i]) rows from source i
+        precede the page, regardless of sort values or interleaving.
+        """
+        total = sum(counts)
+        skips = [min(count, max(0, skip - (total - count))) for count in counts]
+        return skips, max(0, skip - sum(skips))
+
     async def search_across_all_databases(
         self,
         collection_name: str,
@@ -851,6 +866,11 @@ class MultiDatabaseManager:
         self._require_all_databases("search")
 
         merge_sort = self._bounded_merge_sort(sort)
+        source_skips = [0] * len(self.databases)
+        remaining_skip = skip
+        if sort_index_hint is not None and skip:
+            counts = await self._counts_by_source(collection_name, query)
+            source_skips, remaining_skip = self._guaranteed_prefix_skips(counts, skip)
         batch_size = 64
         # A Motor cursor is a stream; do NOT call to_list(length=None).
         cursors = []
@@ -865,9 +885,11 @@ class MultiDatabaseManager:
                 # to this global page. Push that bound to MongoDB too: batch
                 # size alone limits client reads, not server-side sort memory.
                 cursor = (collection.find(query).sort(merge_sort)
-                          .limit(skip + limit).batch_size(batch_size))
+                          .limit(remaining_skip + limit).batch_size(batch_size))
                 if sort_index_hint is not None:
                     cursor = cursor.hint(sort_index_hint)
+                if source_skips[db_index]:
+                    cursor = cursor.skip(source_skips[db_index])
                 cursors.append(cursor)
                 buffers.append([])
                 indices.append(0)
@@ -891,10 +913,10 @@ class MultiDatabaseManager:
             seen = 0
             while heap and len(result) < limit:
                 _, db_index, item = heapq.heappop(heap)
-                if seen >= skip:
+                if seen >= remaining_skip:
                     result.append(item)
                 seen += 1
-                if seen < skip + limit:
+                if seen < remaining_skip + limit:
                     await load_next(db_index)
             return result
         finally:
