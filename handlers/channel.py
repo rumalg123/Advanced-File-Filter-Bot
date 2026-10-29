@@ -391,12 +391,11 @@ class ChannelHandler:
                                 if hasattr(feature_service, "persist_new_media"):
                                     await feature_service.persist_new_media(media_file)
                                 else:
-                                    if hasattr(feature_service, "persist_new_media"):
-                        await feature_service.persist_new_media(media_file)
-                    else:
-                        feature_service.schedule_new_media(media_file)
+                                    feature_service.schedule_new_media(media_file)
                             except Exception:
-                                logger.exception("Indexed file but notification scheduling failed")
+                                # Media has already been saved and indexing job
+                                # acknowledged; surface the cross-write gap.
+                                logger.exception("Indexed file but durable alert enqueue failed")
                     await asyncio.sleep(self.processing_config.inter_message_delay)
 
                 except asyncio.CancelledError:
@@ -496,7 +495,10 @@ class ChannelHandler:
                 await self.channel_repo.update_indexed_count(message.chat.id)
                 feature_service = getattr(self.bot, 'feature_service', None)
                 if feature_service:
-                    feature_service.schedule_new_media(media_file)
+                    if hasattr(feature_service, "persist_new_media"):
+                        await feature_service.persist_new_media(media_file)
+                    else:
+                        feature_service.schedule_new_media(media_file)
                 return "indexed"
             elif status_code == 0:
                 logger.debug(f"Duplicate file: {media_file.file_name}")
