@@ -7,6 +7,7 @@ from typing import List, Optional, Callable, Any
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
+from core.utils.service_tasks import ServiceTasks
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.cache.errors import OperationalStateUnavailableError
 from core.utils.button_builder import ButtonBuilder
@@ -25,7 +26,7 @@ logger = get_logger(__name__)
 class SearchResultsService:
     """Service for sending search results with unified formatting and pagination"""
 
-    def __init__(self, cache_manager, config, recommendation_service=None, media_repo=None):
+    def __init__(self, cache_manager, config, recommendation_service=None, media_repo=None, task_manager=None):
         """
         Initialize SearchResultsService
         
@@ -35,6 +36,7 @@ class SearchResultsService:
             recommendation_service: Optional recommendation service for tracking
             media_repo: Optional media repository used to resolve recommended files
         """
+        self.tasks = ServiceTasks(task_manager)
         self.cache = cache_manager
         self.config = config
         self.ttl = CacheTTLConfig()
@@ -199,8 +201,7 @@ class SearchResultsService:
                     if recommended_file_ids or similar_queries:
                         # This will be sent as a separate message (non-blocking)
                         # We'll create a background task for this
-                        import asyncio
-                        asyncio.create_task(
+                        self.tasks.create(
                             self._send_recommendations(
                                 client, message, query, recommended_file_ids, similar_queries,
                                 user_id, query_reference, auto_delete_callback

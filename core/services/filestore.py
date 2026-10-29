@@ -11,6 +11,7 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
+from core.utils.service_tasks import ServiceTasks
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
@@ -36,9 +37,11 @@ class FileStoreService:
             media_repo: MediaRepository,
             cache_manager: CacheManager,
             config: Any,
-            batch_link_repo: Optional[BatchLinkRepository] = None
+            batch_link_repo: Optional[BatchLinkRepository] = None,
+            task_manager=None
 
     ):
+        self.tasks = ServiceTasks(task_manager)
         self.media_repo = media_repo
         self.cache = cache_manager
         self.config = config
@@ -596,7 +599,7 @@ class FileStoreService:
 
             # Schedule auto-deletion if enabled
             if self.config.MESSAGE_DELETE_SECONDS > 0:
-                asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+                self.tasks.create(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS), auto_delete=True)
 
             return True
         except Exception as e:
@@ -661,7 +664,7 @@ class FileStoreService:
 
                 # Schedule auto-deletion if enabled
                 if self.config.MESSAGE_DELETE_SECONDS > 0:
-                    asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+                    self.tasks.create(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS), auto_delete=True)
 
                 success_count += 1
                 await asyncio.sleep(1)  # Avoid flooding
@@ -769,7 +772,7 @@ class FileStoreService:
 
                         # Schedule auto-deletion if enabled
                         if self.config.MESSAGE_DELETE_SECONDS > 0:
-                            asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+                            self.tasks.create(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS), auto_delete=True)
 
                         sent_messages.append(sent_msg)
                         success_count += 1

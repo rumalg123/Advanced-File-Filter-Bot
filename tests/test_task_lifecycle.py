@@ -55,7 +55,8 @@ async def test_cleanup_cancels_scheduled_deletions_and_rejects_new_work():
 def test_delivery_paths_do_not_spawn_unmanaged_deletion_tasks():
     root = Path(__file__).resolve().parents[1]
     offenders = []
-    for name in ["handlers/deeplink.py", "handlers/commands_handlers/bot_settings.py"]:
+    for name in ["handlers/deeplink.py", "handlers/commands_handlers/bot_settings.py",
+                 "core/services/filestore.py", "core/services/search_results.py"]:
         for node in ast.walk(ast.parse((root / name).read_text())):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                     and isinstance(node.func.value, ast.Name)
@@ -63,3 +64,28 @@ def test_delivery_paths_do_not_spawn_unmanaged_deletion_tasks():
                     and node.func.attr == "create_task"):
                 offenders.append(f"{name}:{node.lineno}")
     assert offenders == []
+
+
+@pytest.mark.asyncio
+async def test_service_tasks_use_shared_shutdown_manager():
+    from core.utils.service_tasks import ServiceTasks
+    manager=HandlerManager(SimpleNamespace())
+    service=ServiceTasks(manager)
+    tasks=[service.create(asyncio.sleep(3600), auto_delete=auto) for auto in [False,True]]
+    await asyncio.sleep(0)
+    await manager.cleanup()
+    assert all(t.cancelled() for t in tasks)
+    coroutine=asyncio.sleep(3600)
+    assert service.create(coroutine) is None
+    assert coroutine.cr_frame is None
+
+
+@pytest.mark.asyncio
+async def test_standalone_service_owns_and_closes_tasks():
+    from core.utils.service_tasks import ServiceTasks
+    service=ServiceTasks()
+    task=service.create(asyncio.sleep(3600))
+    await asyncio.sleep(0)
+    assert task in service.pending
+    await service.close()
+    assert task.cancelled() and not service.pending

@@ -36,7 +36,8 @@ class RequestHandler(BaseHandler):
             cache_manager=bot.cache,
             config=bot.config,
             recommendation_service=getattr(bot, 'recommendation_service', None),
-            media_repo=bot.media_repo
+            media_repo=bot.media_repo,
+            task_manager=getattr(bot, 'handler_manager', None),
         )
         
         self.register_handlers()
@@ -63,6 +64,7 @@ class RequestHandler(BaseHandler):
     # cleanup() method is inherited from BaseHandler, with background_tasks cleanup added
     async def cleanup(self) -> None:
         """Clean up handler resources including background tasks"""
+        await self.search_results_service.tasks.close()
         # Cancel any background tasks specific to this handler
         for task in self.background_tasks:
             if not task.done():

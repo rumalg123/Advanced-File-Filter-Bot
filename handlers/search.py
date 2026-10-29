@@ -58,7 +58,8 @@ class SearchHandler:
             cache_manager=bot.cache,
             config=bot.config,
             recommendation_service=getattr(bot, 'recommendation_service', None),
-            media_repo=bot.media_repo
+            media_repo=bot.media_repo,
+            task_manager=getattr(bot, 'handler_manager', None),
         )
         
         # Get search history service from bot
@@ -136,6 +137,8 @@ class SearchHandler:
 
         # Signal shutdown
         self._shutdown.set()
+
+        await self.search_results_service.tasks.close()
 
         # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:

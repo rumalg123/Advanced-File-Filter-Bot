@@ -7,8 +7,12 @@
 - Deep-link and settings timers now use the shared shutdown-aware scheduler.
   The manager retains timers until completion and retrieves/logs failures for
   both background and deletion tasks. Cancellation remains a normal outcome.
-- Filestore and post-search recommendation service tasks still require review;
-  this entry does not close the entire historical report.
+- Filestore and post-search recommendation services now receive the shared
+  task manager. Standalone service instances retain tasks and expose explicit
+  cleanup; handler shutdown closes that fallback. Completion errors are observed.
+- Broadcast owns its task explicitly; session maintenance owns and cancels its
+  cleanup task; alert lease heartbeats are cancelled/awaited by their workers.
+- Full isolated MongoDB/dual-Redis suite after these fixes: 453 passed.
 - Rollback: revert the lifecycle-fix commit; no data/schema changes are involved.
 
 ## 1. Missing `# noqa` comments for `create_background_task`

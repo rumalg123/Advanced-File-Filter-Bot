@@ -882,7 +882,8 @@ class MediaSearchBot(Client):
                 self.user_repo,
                 self.media_repo,
                 self.cache,
-                self.batch_link_repo
+                self.batch_link_repo,
+                task_manager=self.handler_manager,
             )
 
             self.indexing_service = IndexingService(
@@ -918,7 +919,8 @@ class MediaSearchBot(Client):
                 self.media_repo,
                 self.cache,
                 self.config,
-                self.batch_link_repo
+                self.batch_link_repo,
+                task_manager=self.handler_manager,
             )
 
             # Initialize search history service
@@ -1028,6 +1030,9 @@ class MediaSearchBot(Client):
             logger.info("Session manager stopped")
 
         # Get handler manager stats before cleanup
+        if self.filestore_service:
+            await self.filestore_service.tasks.close()
+
         if self.handler_manager:
             stats = self.handler_manager.get_stats()
             logger.info(f"Handler Manager Stats: {stats}")
