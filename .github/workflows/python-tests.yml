@@ -199,6 +199,9 @@ jobs:
       - name: Build production Dockerfile without deploying
         run: docker build --tag file-filter-bot:ci .
 
+      - name: Verify Redis connectivity from separate containers
+        run: bash scripts/test_redis_compose_network.sh
+
       - name: Assert container uses nonroot runtime and disabled updater
         shell: bash
         run: |

@@ -68,6 +68,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-056 | High | Fixed | Media aliases | A colliding alias can be reported as a harmless duplicate or return another canonical identity. | Different canonical identities return an explicit conflict; real-Mongo sparse-index/cross-namespace regressions passed. |
 | BUG-057 | High | Fixed | Ownership activation | A one-source activation writes permanent bindings although the bot cannot start that configuration. | Reject before binding/index writes; read-only one-source inventory remains allowed. Library and CLI regressions passed. |
 | BUG-058 | Medium | Fixed | Settings retries | Selecting the already-saved boolean or reset value reports MESSAGE_NOT_MODIFIED as failure. | Treat unchanged detail rendering as successful; both callback regressions and real repeated-boolean edits passed. |
+| BUG-059 | High | Fixed | Redis deployment | Default protected-state Redis answers local health probes but denies the bot's separate container, preventing split-mode startup. | Permit connections on the private, unpublished Compose state network; retain optional ACL authentication. A real separate-container regression fails before the fix and passes afterward; CI runs it. |
 
 ## Current QA, 2026-10-29
 
