@@ -1,6 +1,6 @@
 # PH-020: Live semaphore resize without over-admission
 
-**State:** In review, Draft PR #4. No production deployment or database changes.
+**State:** Code CI passed ([run 40816879931](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40816879931)), staging pending; Draft PR #4. No production deployment or database changes.
 
 ## Root cause and change
 
@@ -22,7 +22,7 @@ tests/test_semaphore_resize.py verifies shrinking 3 to 1 with holders and queued
 
 ## Acceptance gates
 
-- [ ] Full Python suite, ephemeral MongoDB/dual Redis, compile/lint and Docker preflight passed for PH-020 code SHA.
+- [x] Full Python suite, ephemeral MongoDB/dual Redis, compile/lint and Docker preflight passed at code SHA `ba5acbfd` ([run 40816879931](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40816879931)). The first run found that lazy-created domains still used the old semaphore class; corrected before the green run.
 - [ ] Isolated staging exercise while holders are active: both growing and shrinking, queued work, cancellations and failure paths.
 - [ ] Verify no new admission during debt, no leaked permits, and accurate active/queue metrics. Active work admitted under an earlier higher limit can temporarily exceed the newly lowered limit; it must not be cancelled or supplemented by new work.
 - [ ] Review all Python runtime upgrades against the internal semaphore hook. Multiple processes have independent limits.
