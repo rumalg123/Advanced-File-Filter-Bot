@@ -39,3 +39,12 @@ PH-027 must still handle comprehensive multi-DB read/count failures and caching.
 - [ ] Review any legitimate callers relying on scatter-update behavior before rollout.
 
 **Rollback:** revert approved image without DB migration. This reinstates unsafe scatter updates if multi-DB is enabled, so keep multi-DB disabled. No production deployment, no PR merge, no DB/index changes.
+
+## 2026-10-29 registry integration
+
+The optional [PH-028 registry](MULTIDB_GLOBAL_IDENTITY.md) now routes media
+lookups, saves, updates and deletes to its immutable owner. The older generic
+four-argument API retains its defensive owner-probe behavior for compatibility.
+An activated topology cannot fall back to uncoordinated media writes merely by
+disabling the flag. See the current PH-028 runbook for activation/recovery and
+its limits; historical production topology statements above are not a rollout.

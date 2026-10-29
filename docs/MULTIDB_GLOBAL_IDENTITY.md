@@ -1,39 +1,104 @@
-# PH-028: Global media identity and ownership, pre-enable gate
+# PH-028: Global media identity and ownership
 
-**Status:** Defensive write-block and read-only collision audit implemented; **global uniqueness is NOT yet implemented**. The phase stays In review until an authoritative ownership protocol and staging failover tests exist. Production uses one MongoDB database. Existing Draft PR #4 and branch remain unchanged.
+**Implementation complete; local acceptance passed. Remote QA is in progress.**
+`DATABASE_GLOBAL_OWNER_REGISTRY=false` is the default. Without activation and
+this flag, creation across independent databases remains blocked. Production
+rollout and merging remain separate operator decisions.
 
-## Why existing unique indexes are insufficient
+## Guarantees and limits
 
-Individual independent MongoDB databases enforce their own unique `_id` and `file_unique_id` indexes, but cannot atomically prevent the same identity from being inserted into two different databases. A read-before-insert duplicate check races when two workers select different write pools. PH-025's sequential owner lookup prevents existing scatter writes but is not a globally transactional reservation mechanism.
+`GlobalMediaOwners` uses the first configured MongoDB as coordinator. A unique
+multikey index on one `identifiers` array enforces collisions across canonical
+`file_unique_id`, Telegram `_id` and `file_ref` namespaces. Majority-acknowledged
+atomic reservation happens before any media insertion. The winning owner is
+immutable; concurrent creators, retries and pending reservations use that owner.
+Each source also requires a full unique canonical index. New inserts use an
+idempotent canonical upsert on exactly one owner.
 
-MongoDB explicitly documents unique index constraints in native sharding, including the shard-key prefix requirement: https://www.mongodb.com/docs/manual/core/sharding-shard-key-indexes/. A manual fan-out of independent database connections does **not** inherit native `mongos` routing, global key ownership or transactions.
+Claims never expire, move or get stolen. A failed coordinator or owner causes an
+error rather than a fallback write elsewhere. After a crash before insertion,
+retry writes to the reserved owner. After insertion but before commit, a read or
+retry verifies the owner document and repairs the committed marker. A lost
+acknowledgment therefore cannot create another shard copy.
 
-## Defense now implemented
+This is not an atomic transaction across MongoDB clusters. During an uncertain
+write the caller may receive an error even though the owner accepted it; retry
+resolves that uncertainty. Concurrent deletion and insertion have normal
+last-operation behavior on that owner. Deletion retains all identity reservations;
+explicit reingestion recreates on the same owner. Deletion is not a permanent
+ban. Owner transfer, source removal and coordinator migration require a separate
+offline migration; this implementation deliberately provides no automatic move.
+All writers must use this protocol. An external client or old image with direct
+MongoDB write privileges can bypass application invariants.
 
-1. **Fail-closed media creation:** `MediaRepository.save_media` refuses new insertions if the manager reports two or more configured DBs. This is a temporary safety interlock to ensure adding a second MongoDB cannot silently allow duplicate ingestion. The original one-database path is unchanged, and already-existing updates use PH-025's unique-owner update.
-2. **Read-only, bounded collision audit:** `MultiDatabaseManager.audit_media_identity_uniqueness(collection, max_docs_per_db=50000)` scans projected `_id`, `file_unique_id`, `file_ref` fields in 200-document chunks and counts cross-database duplicate identities. It never copies full media documents, returns raw identifiers, writes records or creates indexes.
-3. **Bounded evidence:** A configured source failure or more documents than the explicit per-DB scan cap produces a hard error, never a misleading “0 duplicates”. Caps may be explicitly raised up to 100,000 per database; large production-scale audits may require a different offline streamed merge/partitioned inspection design.
-4. **Honest result:** Even when audit output shows zero duplicates, `global_uniqueness_proven=False`. The scan is not transactional with concurrent writers. There is no claim that duplicate-free history guarantees future uniqueness. The duplicate lookup path from PH-027 also fails when multiple owners already exist.
+## Activation
 
-**Note:** audit uses hashed in-memory keys but stores them only inside the Python process for the duration of a capped read. Its report contains aggregate counts, not original media IDs. It should not be used on a live production cluster without explicit operator approval. No migration, new collection or index DDL has been run.
+1. Back up the selected sources. Stop **every** writer, including index workers,
+   old bot processes and maintenance jobs. Inventory is not a cross-cluster
+   snapshot while external writers continue.
+2. Privately export `DATABASE_URI`, `DATABASE_NAME`, `DATABASE_URIS` and
+   `DATABASE_NAMES`, as for the bot. For seed-list URIs containing commas, instead
+   export `MEDIA_OWNER_SOURCES_JSON` as an array of `{uri, name}` objects. The
+   first source is the coordinator; never reorder it.
+3. Run the default read-only cross-namespace inventory:
 
-## Authoritative design required before enabling second DB
+   ```sh
+   python -m scripts.activate_media_owners --allow-remote
+   ```
 
-The following options remain subject to a separate approved architecture design, schema migration/rollback and concurrency tests:
+   Require `complete=true`, `eligible=true` and zero identity conflicts. Missing
+   canonical IDs, invalid aliases, unavailable sources and scan overflow are
+   hard errors. Resolve legacy conflicts explicitly; no automatic deletion or
+   deduplication occurs.
+4. Choose and retain an activation token, then apply while writers remain stopped:
 
-- **Prefer native MongoDB sharding via `mongos`:** choose a shard key and validate global uniqueness/unique-index constraints and existing media identity indexes before migrating. A single database/cluster model has a coordinated router and defined consistency behavior.
-- **If independent deployments must remain:** create an authoritative **global identity and owner registry** on an always-available consistent store, with a unique key for `file_unique_id` and every other promised globally unique identifier. Every writer must atomically claim the identity **before** a media insertion, then commit its stable owner. Stale pending claims, crashes between registry claim and media write, conflict repair, fencing/lease expiry, and removal/transfer must have explicit recovery rules. Do not infer ownership from a best-effort cached lookup.
-- During a registry outage the **new write must fail closed**; no fallback insertion to whichever database is reachable. For existing IDs, routing and failed owner reads must be authoritative, not first-match.
-- Migration needs read-only inventory of all configured sources, duplicate resolution approval, an offline cutover or dual-write-free rollback, monitoring and fault injection of concurrent creators, mid-flight crashes and inter-DB network partitions.
+   ```sh
+   python -m scripts.activate_media_owners --allow-remote --apply --activation-token QA-CUTOVER-1
+   python -m scripts.activate_media_owners --allow-remote --status
+   ```
 
-## Verification gates
+   Inventory is capped at 1,000,000 records per source (`--limit` can reduce it),
+   with bounded batches. Activation binds every source to its coordinator,
+   creates the registry and required uniqueness indexes, and adopts existing
+   records. Existing compatible unique indexes are reused. Incompatible indexes
+   block activation; nothing is dropped, renamed or made less restrictive.
+5. Set `DATABASE_GLOBAL_OWNER_REGISTRY=true`, keep the entire original topology,
+   and restart the new bot. Startup only attaches to an already-ready registry;
+   it never activates implicitly. Existing binding markers prevent silently
+   disabling ownership or restarting as a single-source bot. Secondary ordering
+   may change; coordinator/source membership may not.
+6. Test indexing, duplicate indexing, delivery via all aliases, owner updates,
+   deletion, pagination, restart and outage behavior before admitting writers.
+   Multi-database keyword bulk deletion remains explicitly unsupported.
 
-- [x] Full Python regression, disposable MongoDB/dual Redis and Docker/Compose preflight **passed** on code SHA `01be21f3` ([CI run 40823704857](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40823704857)). Global ownership design remains incomplete despite passing tests.
-- [ ] Two local-only MongoDB databases with identical `_id`, `file_unique_id` and `file_ref` values produce collision counts, with no index/document changes; no raw identifiers appear in report.
-- [ ] Cap exceeded, unavailable DB, and duplicate owner always fail visibly. No misleading clean scan or default-off production changes.
-- [ ] Two-DB `save_media` path refuses creation **before selecting a write pool or inserting**; one-DB path continues to create media normally.
-- [ ] Define and implement a **real** atomic ownership reservation protocol or native sharding migration, including claims/commit/reconcile/fencing, and test at least 100 simultaneous same-ID writers.
-- [ ] Pass staging restart and failover tests, index/identity audit, owner recovery, duplicate reconciliation, and operator rollback approval.
-- [ ] Integrate PH-027 read-failure handling, PH-025 owner updates and PH-026 pagination performance before enabling more than one DB.
+## Interrupted activation, recovery and rollback
 
-**Release decision:** PH-028's defense-in-depth components can be code-reviewed, but **the phase cannot be considered Verified or permission to enable a second database**. The missing global-ownership mechanism is a known explicit blocker, not silently marked solved.
+An interrupted activation leaves `initializing`, partial adoption and permanent
+source bindings. No new media writes are admitted. Stop the interrupted process,
+verify writers remain stopped, fix the cause and resume with the **same** token.
+The scan restarts idempotently and publishes `ready` only after every source
+completes. A different token cannot steal the lock. Do not run two operators with
+the same token or mutate control documents manually.
+
+A binding disagreement, changed coordinator/topology or missing uniqueness index
+fails startup. Restore the intended topology/index definition and revalidate;
+never point a fresh coordinator at the same sources to bypass recovery.
+
+Once activated, toggling the flag off is **not** a safe rollback. Roll back to a
+previous build that implements this protocol, with identical configuration, or
+keep writers stopped. An older image requires an offline export/consolidation,
+complete identity audit and explicit retirement of source bindings before writes
+resume. This runbook does not offer an automatic destructive retirement command.
+Search-token rollback is independent; see [its runbook](INDEXED_MEDIA_SEARCH.md).
+
+## Local acceptance evidence, 2026-10-29
+
+Real disposable MongoDB tests cover 100 simultaneous creators choosing different
+owners; cross-namespace alias races; legacy duplicates; conflicting canonical
+indexes; competing coordinators; interrupted bounded inventory and token resume;
+crashes before write and after owner acknowledgment; coordinator/owner outages;
+restart; immutable identity; alias update; owner-only deletion and reingestion;
+and real operator inventory/apply/status commands. No raw URI or media identity
+appears in operator reports. The earlier defensive audit and flag-off interlock
+remain regression-tested. Current remote results are recorded in
+[the active QA log](qa/coverage-expansion/STATUS.md).

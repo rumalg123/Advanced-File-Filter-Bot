@@ -176,6 +176,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
     async def find_file(self, identifier: str) -> Optional[MediaFile]:
         """Find file by identifier, supporting multi-database mode"""
+        if self.is_multi_db and getattr(self.multi_db_manager, 'media_owners', None) is not None:
+            data = await self.multi_db_manager.media_owners.find(identifier)
+            return self._dict_to_entity(data) if data is not None else None
         # Try cache first
         cache_key = CacheKeyGenerator.media(identifier)
         cached = await self.cache.get(cache_key)
@@ -332,10 +335,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 return False
 
             if self.is_multi_db:
-                deleted_count = await self.multi_db_manager.delete_one_across_databases(
-                    self.collection_name,
-                    {"file_unique_id": file.file_unique_id}
-                )
+                if getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                    deleted_count = await self.multi_db_manager.media_owners.delete(file.file_unique_id)
+                else:
+                    deleted_count = await self.multi_db_manager.delete_one_across_databases(
+                        self.collection_name,
+                        {"file_unique_id": file.file_unique_id}
+                    )
             else:
                 collection = await self.collection()
 
@@ -362,6 +368,23 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         existing_file: The existing file if it's a duplicate
         """
         try:
+            if self.is_multi_db and getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                pool = await self.multi_db_manager.get_optimal_write_database()
+                from core.database.media_owners import source_key
+                proposed = next(source_key(db.uri, db.name)
+                                for db in self.multi_db_manager.databases if db.pool is pool)
+                try:
+                    inserted, stored = await self.multi_db_manager.media_owners.create(
+                        self._entity_to_dict(media), proposed)
+                finally:
+                    # A write acknowledgment may be lost after the owner
+                    # accepted the insert. Invalidate even on uncertain writes
+                    # and duplicate retries so search caches cannot hide it.
+                    await self.cache_invalidator.invalidate_all_search_results()
+                    await self.cache_invalidator.invalidate_file_stats()
+                if inserted:
+                    return True, 1, None
+                return False, 0, self._dict_to_entity(stored)
             # Check for duplicate by file_unique_id across all databases
             existing = await self.find_file(media.file_unique_id)
             if existing:
@@ -762,17 +785,22 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             operation["$unset"] = {key: "" for key in unset_fields}
         old_file = await self.find_file(id)
         if self.is_multi_db:
-            success = await self.multi_db_manager.update_one_across_databases(
-                self.collection_name,
-                {"_id": id},
-                operation,
-                upsert=upsert
-            )
+            if getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                success = await self.multi_db_manager.media_owners.update(id, update_data)
+            else:
+                success = await self.multi_db_manager.update_one_across_databases(
+                    self.collection_name,
+                    {"_id": id},
+                    operation,
+                    upsert=upsert
+                )
             if success:
                 if old_file:
                     await self.cache_invalidator.invalidate_file_cache(old_file)
                 else:
                     await self.cache_invalidator.invalidate_media_entry(id)
+                if update_data.get('file_ref'):
+                    await self.cache_invalidator.invalidate_media_entry(update_data['file_ref'])
                 await self.cache_invalidator.invalidate_file_stats()
                 await self.cache_invalidator.invalidate_all_search_results()
             return success

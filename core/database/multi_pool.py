@@ -94,6 +94,7 @@ class MultiDatabaseManager:
         if not hasattr(self, '_initialized'):
             self._initialized = True
             self.databases: List[DatabaseInfo] = []
+            self.media_owners = None
             self.current_write_db_index: int = 0
             self.size_limit_gb: float = 0.5
             self.auto_switch: bool = True
@@ -115,7 +116,8 @@ class MultiDatabaseManager:
         uris: List[str],
         names: List[str],
         size_limit_gb: float = 0.5,
-        auto_switch: bool = True
+        auto_switch: bool = True,
+        global_owner_registry: bool = False,
     ) -> None:
         """Initialize multiple database connections"""
         async with self._init_lock:
@@ -145,9 +147,14 @@ class MultiDatabaseManager:
                         f"({'Primary' if i == 0 else 'Secondary'})"
                     )
                 self.databases = topology
+                if global_owner_registry:
+                    from core.database.media_owners import GlobalMediaOwners
+                    self.media_owners = GlobalMediaOwners(topology)
+                    await self.media_owners.attach()
                 await self._update_database_stats_with_circuit_breaker()
             except BaseException:
                 self.databases = []
+                self.media_owners = None
                 self.current_write_db_index = 0
                 await asyncio.gather(
                     *(pool.close() for pool in opened_pools),
@@ -1141,6 +1148,7 @@ class MultiDatabaseManager:
                     logger.error(f"Error closing database {db_info.name}: {e}")
         
         self.databases.clear()
+        self.media_owners = None
         logger.info("Multi-database manager closed")
 
     @property

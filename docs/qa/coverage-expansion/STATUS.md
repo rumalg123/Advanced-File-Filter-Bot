@@ -71,3 +71,18 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
 - **Live settings edit passed:** invalid integer rejected without persistence,
   valid edit saved, cancel cleared the pending edit; all eleven pre-existing
   optional feature flags were enabled through real current keyboard buttons.
+
+- **PH-028 implementation complete; local acceptance passed:** immutable
+  majority-acknowledged coordinator reservations enforce cross-namespace alias
+  uniqueness and owner-only CRUD, with stopped-writer activation, source bindings
+  and explicit crash recovery. The 37 registry/operator cases achieve **100%
+  line and branch coverage for those two modules**; 49 focused multi-DB/recovery
+  cases pass. This does not imply whole-bot 100% coverage or a production rollout.
+- **Remote activation passed:** all 96,908 records across the three authorized
+  disposable MongoDB sources were inventoried without conflicts and adopted.
+  Full remote race/restart/update/delete checks are being replayed after fixing
+  a private harness-only async count error. Test bot writers remain stopped.
+- **Current expanded automated baseline:** 16,829 statements, 52.03% line
+  coverage and 48.47% combined statement/branch coverage before the final added
+  ownership failure-path tests. Root operator modules were requested but not
+  imported, so the next whole-tree measurement must include them explicitly.

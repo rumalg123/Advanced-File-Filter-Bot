@@ -158,6 +158,7 @@ class BotConfig:
         self.DATABASE_NAMES = self._parse_database_names()
         self.DATABASE_SIZE_LIMIT_GB = self._settings.database.size_limit_gb
         self.DATABASE_AUTO_SWITCH = self._settings.database.auto_switch
+        self.DATABASE_GLOBAL_OWNER_REGISTRY = self._settings.database.global_owner_registry
 
         # Circuit breaker settings
         self.DATABASE_MAX_FAILURES = self._settings.database.max_failures
@@ -775,7 +776,8 @@ class MediaSearchBot(Client):
                     self.config.DATABASE_URIS,
                     self.config.DATABASE_NAMES,
                     size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
-                    auto_switch=self.config.DATABASE_AUTO_SWITCH
+                    auto_switch=self.config.DATABASE_AUTO_SWITCH,
+                    global_owner_registry=self.config.DATABASE_GLOBAL_OWNER_REGISTRY,
                 )
                 logger.info("Multi-database manager initialized")
                 
@@ -791,6 +793,15 @@ class MediaSearchBot(Client):
                     self.config.DATABASE_NAME
                 )
                 logger.info("Single database connection pool initialized")
+
+            # Ownership cannot be bypassed by disabling its environment flag or
+            # removing secondary sources. Registry retirement needs migration.
+            owner_control = await self.db_pool.get_collection('media_owner_control')
+            owner_binding = await owner_control.find_one({'_id': 'binding-v1'})
+            if owner_binding and (not self.multi_db_manager or not self.config.DATABASE_GLOBAL_OWNER_REGISTRY):
+                raise RuntimeError('This database requires its activated media ownership configuration')
+            if self.config.DATABASE_GLOBAL_OWNER_REGISTRY and not self.multi_db_manager:
+                raise RuntimeError('Media ownership requires the complete multi-database topology')
 
             # Initialize Redis cache
             await self.cache.initialize()

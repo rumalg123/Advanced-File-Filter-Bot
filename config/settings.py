@@ -61,6 +61,7 @@ class DatabaseConfig(BaseSettings):
     # Multi-database support
     size_limit_gb: float = Field(default=0.5, description="Database size limit in GB")
     auto_switch: bool = Field(default=True, description="Enable automatic database switching")
+    global_owner_registry: bool = Field(default=False, description="Require activated immutable media ownership")
     uris: str = Field(default='', description="Additional database URIs (comma-separated)")
     names: str = Field(default='', description="Additional database names (comma-separated)")
     
