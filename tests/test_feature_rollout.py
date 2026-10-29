@@ -311,6 +311,13 @@ async def test_autocomplete_uses_only_non_exact_successful_candidates():
 async def test_saved_search_alerts_are_flagged_matched_and_deduplicated():
     media = make_file(name="The.Matrix.1999.1080p.mkv")
     repository = SimpleNamespace(
+        get_active_saved_search_page=AsyncMock(side_effect=lambda **kwargs: [{
+            '_id': 'search1',
+            'user_id': 7,
+            'query': 'The Matrix',
+            'normalized_query': 'the matrix'
+        }] if kwargs['after_id'] is None else []),
+        # previous get_active_saved_searches fixture is retained below
         get_active_saved_searches=AsyncMock(return_value=[{
             '_id': 'search1',
             'user_id': 7,
