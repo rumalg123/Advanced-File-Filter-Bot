@@ -88,7 +88,7 @@ async def test_disposable_redis_raw_dump_restore_preserves_session_and_ttl():
     old = f"session:ph012-ci-original:{nonce}"
     new = f"session:ph012-ci-recovered:{nonce}"
     try:
-        payload = b'm{¤role¤test¤step'
+        payload = b"PH012-inert-session-fixture-no-secret"
         assert await client.set(old, payload, px=120_000)
         prior_ttl = await client.pttl(old)
         assert 0 < prior_ttl <= 120_000
