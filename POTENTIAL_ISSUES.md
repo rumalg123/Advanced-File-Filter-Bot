@@ -1,5 +1,16 @@
 # Potential Issues Found
 
+## QA verification (2026-10-29)
+
+- Reproduced unmanaged deep-link/settings deletion timers and unobserved task
+  failures with `tests/test_task_lifecycle.py` (three failures before the fix).
+- Deep-link and settings timers now use the shared shutdown-aware scheduler.
+  The manager retains timers until completion and retrieves/logs failures for
+  both background and deletion tasks. Cancellation remains a normal outcome.
+- Filestore and post-search recommendation service tasks still require review;
+  this entry does not close the entire historical report.
+- Rollback: revert the lifecycle-fix commit; no data/schema changes are involved.
+
 ## 1. Missing `# noqa` comments for `create_background_task`
 
 **Location:** `handlers/channel.py:58`

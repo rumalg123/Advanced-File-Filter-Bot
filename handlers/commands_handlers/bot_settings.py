@@ -572,7 +572,7 @@ class BotSettingsHandler(BaseHandler):
                 await self.session_manager.cancel_edit_session(user_id)
                 
                 # Schedule auto-delete of success message
-                asyncio.create_task(self._auto_delete_message(success_msg, 10))
+                self._schedule_auto_delete(success_msg, 10)
                 
                 # Prevent any other handlers from processing this message
                 raise StopPropagation
