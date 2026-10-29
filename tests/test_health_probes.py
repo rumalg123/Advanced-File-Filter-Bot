@@ -172,3 +172,24 @@ def test_docker_liveness_does_not_use_dependency_readiness():
     assert "register_probe_routes(app, self)" in bot
     assert "app.router.add_get('/metrics', performance_metrics)" in bot
     assert "app.router.add_get('/performance', performance_metrics)" in bot
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('condition',['healthy','ping_failure','inactive','missing_pool','empty_topology'])
+async def test_readiness_requires_every_configured_media_source(condition):
+    bot, *_ = fake_bot()
+    secondary_ping=AsyncMock(return_value={'ok':1})
+    pool=SimpleNamespace(client=SimpleNamespace(admin=SimpleNamespace(command=secondary_ping)))
+    source=SimpleNamespace(pool=pool,is_active=True)
+    if condition=='ping_failure':secondary_ping.side_effect=ConnectionError('private Mongo URI')
+    if condition=='inactive':source.is_active=False
+    if condition=='missing_pool':source.pool=None
+    bot.multi_db_manager=SimpleNamespace(databases=[] if condition=='empty_topology' else [source])
+    app=web.Application();register_probe_routes(app,bot)
+    async with TestClient(TestServer(app)) as client:
+        response=await client.get('/ready');body=await response.json()
+        assert response.status==(200 if condition=='healthy' else 503)
+        assert (await client.get('/health')).status==200
+        assert 'private' not in str(body)
+    if condition in ('inactive','missing_pool','empty_topology'):secondary_ping.assert_not_awaited()
+    else:secondary_ping.assert_awaited_once()

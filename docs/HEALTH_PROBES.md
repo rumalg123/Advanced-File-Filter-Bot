@@ -103,3 +103,13 @@ for that distinction.
 **No MongoDB collection/index/document changes, Redis key migrations,
 Redis flush, Telegram button format changes, port/bind changes, automatic
 deployment or GitHub merge occur in this phase.**
+
+## Multi-source readiness continuation, 2026-10-29
+
+Readiness now includes every configured media source as `mongodb_media_N`, in
+addition to the primary application database and Redis dependencies. Pings run
+concurrently with the existing per-probe deadline, single-flight/cache behavior
+and no database statistics. Inactive circuits, absent pools and an empty
+configured topology report unavailable; responses expose no source addresses.
+Liveness is unchanged. Five new cases reproduced the previous missing checks;
+22 focused health/multi-source cases pass.

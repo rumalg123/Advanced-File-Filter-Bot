@@ -153,3 +153,9 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   Remote EXPLAIN at offsets 0/10/1,000/36,550 used no blocking SORT; the deepest
   measured source read took 0.500s. Both single/distributed paths and small-memory
   deep-page equivalence are regression-tested. Live last-page replay is pending.
+
+- **Multi-source readiness passed:** `/ready` previously checked only the
+  primary application pool and could report healthy with an unavailable media
+  source. It now pings all configured media pools concurrently under the existing
+  timeout, including inactive/missing/empty-topology checks. Liveness remains
+  independent. Five pre-fix failures and 22 passing focused cases are recorded.

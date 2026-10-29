@@ -15,9 +15,11 @@ class ReadinessProbe:
     """Single-flight bounded MongoDB/Redis pings, including optional state Redis."""
 
     def __init__(self, db_pool: Any, cache: Any, *, timeout: float = 0.75,
-                 healthy_ttl: float = 5.0, failed_ttl: float = 2.0):
+                 healthy_ttl: float = 5.0, failed_ttl: float = 2.0,
+                 multi_db_manager: Any = None):
         self.db_pool = db_pool
         self.cache = cache
+        self.multi_db_manager = multi_db_manager
         self.timeout = timeout
         self.healthy_ttl = healthy_ttl
         self.failed_ttl = failed_ttl
@@ -25,10 +27,10 @@ class ReadinessProbe:
         self._cached = None
         self._expires_at = 0.0
 
-    async def _ping_mongodb(self) -> bool:
+    async def _ping_mongodb(self, pool) -> bool:
         # Avoid execute_with_retry and dbStats. This is one bounded ping.
         try:
-            client = self.db_pool.client
+            client = pool.client
             await asyncio.wait_for(client.admin.command("ping"), self.timeout)
             return True
         except Exception:
@@ -44,9 +46,16 @@ class ReadinessProbe:
 
     async def _measure(self) -> dict:
         dependencies = {
-            "mongodb": self._ping_mongodb(),
+            "mongodb": self._ping_mongodb(self.db_pool),
             "redis": self._ping_redis(self.cache.redis),
         }
+        if self.multi_db_manager is not None:
+            sources = self.multi_db_manager.databases
+            if not sources:
+                dependencies['mongodb_media'] = self._ping_mongodb(None)
+            for index, source in enumerate(sources, 1):
+                pool = source.pool if source.is_active else None
+                dependencies[f'mongodb_media_{index}'] = self._ping_mongodb(pool)
         if getattr(self.cache, "protected_state_enabled", False):
             dependencies["redis_state"] = self._ping_redis(
                 getattr(self.cache, "state_redis", None)
@@ -84,7 +93,8 @@ def register_probe_routes(app: web.Application, bot: Any) -> None:
     bind/CORS changes. ?details=1 gives old /health response on demand.
     """
 
-    probe = ReadinessProbe(bot.db_pool, bot.cache)
+    probe = ReadinessProbe(bot.db_pool, bot.cache,
+                           multi_db_manager=getattr(bot, 'multi_db_manager', None))
     app["readiness_probe"] = probe
 
     async def detailed_health() -> web.Response:
