@@ -70,7 +70,7 @@ async def test_every_active_subscriber_matched_after_500_with_bounded_pages():
     assert len(deliveries) == len(set(deliveries)) == 5
     assert len(requested) == 26  # 13 bounded pages per invocation
     assert all(limit == 100 for _after, limit in requested)
-    assert "s001200" in {after for after, _limit in requested}
+    assert "s001199" in {after for after, _limit in requested}
     repo.release_saved_search_notification.assert_not_awaited()
 
 
