@@ -49,7 +49,10 @@ class CacheManager:
         return redis.error_reply('Invalid search generation')
     end
     redis.call('PERSIST', KEYS[1])
-    return redis.call('INCR', KEYS[1])
+    redis.call('INCR', KEYS[1])
+    -- Redis Lua numbers use floating point. Reading the raw string avoids
+    -- losing precision for 60-bit search generations.
+    return redis.call('GET', KEYS[1])
     """
 
     _DELETE_IF_VALUE_SCRIPT = """
