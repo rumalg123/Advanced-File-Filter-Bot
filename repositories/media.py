@@ -16,6 +16,7 @@ from core.services.bulk_media_deletion import MediaBulkDeletion
 from core.utils.validators import normalize_query
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.search_observability import search_telemetry
+from core.utils.media_metadata import effective_quality
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -63,7 +64,15 @@ class MediaFile:
     resolution: Optional[str] = None
     episode: Optional[str] = None
     season: Optional[str] = None
+    # PH-015 additive fields. Legacy media_files documents need not have them.
+    width: Optional[int] = None
+    height: Optional[int] = None
+    quality: Optional[str] = None
 
+    @property
+    def display_quality(self) -> Optional[str]:
+        """Read old and new quality labels without writing inferred values."""
+        return effective_quality(self.quality, self.resolution, self.file_name, self.caption)
 
     def __post_init__(self):
         if self.indexed_at is None:
@@ -110,6 +119,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         data = asdict(media)
         data['_id'] = data.pop('file_id')
         data['file_type'] = media.file_type.value
+        # Optional canonical fields are absent, not null, on media without
+        # authoritative metadata. Avoid inflating existing document formats.
+        for field in ('width', 'height', 'quality'):
+            if data[field] is None:
+                del data[field]
         data['indexed_at'] = data['indexed_at'].isoformat()
         if data.get('updated_at'):
             data['updated_at'] = data['updated_at'].isoformat()
