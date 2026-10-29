@@ -77,3 +77,14 @@ The workflow **does not deploy** and does not automatically push to Docker regis
 - Optionally tighten full-codebase lint, dependency pinning, SBOM/image vulnerability scans and trusted artifact provenance after documenting the current baseline.
 
 **Release status is deliberately not "Verified" until required checks are enforced on `main` and staging validation is supplied.**
+
+## Coverage scope, 2026-10-29
+
+CI now measures `--cov=. --cov-branch`, including bot startup, configuration and
+operator scripts, and uploads both XML and JSON. Namespace packages are included
+when finding unexecuted files: the denominator no longer depends on whether a
+live test happened to import `core.services.search_history`. The local QA audit
+checks the reported file list against every tracked non-test Python file.
+Coverage is reported honestly; no passing 100% threshold is claimed. Live shards
+are combined only when each file's start/end/current SHA256 matches, so source
+changes during a run cannot inflate current coverage.

@@ -142,6 +142,7 @@ omit = [
 ]
 
 [tool.coverage.report]
+include_namespace_packages = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

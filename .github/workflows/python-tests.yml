@@ -81,7 +81,7 @@ jobs:
           docker exec "${{ job.services['redis-state'].id }}" redis-cli CONFIG SET maxmemory-policy noeviction
 
       - name: Compile all Python source including scripts
-        run: python -m compileall -q bot.py config core handlers repositories scripts tests
+        run: python -m compileall -q bot.py update.py migrate_media_metadata.py config core handlers repositories scripts tests
 
       - name: High-signal lint (undefined Python names)
         run: python -m ruff check --select F821,F822,F823 .
@@ -89,16 +89,19 @@ jobs:
       - name: Full tests with coverage and real MongoDB and Redis
         run: >-
           python -m pytest -q
-          --cov=core --cov=handlers --cov=repositories
+          --cov=. --cov-branch
           --cov-report=term-missing:skip-covered
           --cov-report=xml:coverage.xml
+          --cov-report=json:coverage.json
 
       - name: Upload coverage baseline
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: python-coverage
-          path: coverage.xml
+          path: |
+            coverage.xml
+            coverage.json
           if-no-files-found: ignore
           retention-days: 14
 

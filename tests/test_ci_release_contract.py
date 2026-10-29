@@ -21,6 +21,8 @@ def test_actions_are_sha_pinned_and_not_privileged_on_pull_request():
     assert "name: container-preflight" in workflow
     assert "branches: [main]" in workflow
     assert "--cov-report=xml:coverage.xml" in workflow
+    assert "--cov=. --cov-branch" in workflow
+    assert "--cov-report=json:coverage.json" in workflow
     assert "TEST_MONGO_URI: mongodb://127.0.0.1:27017" in workflow
     assert "TEST_REDIS_STATE_URI: redis://127.0.0.1:6380/0" in workflow
 
