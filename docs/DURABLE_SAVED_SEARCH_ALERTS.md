@@ -1,6 +1,6 @@
 # PH-018: Saved-search alert queue, leases, recovery and rollout
 
-**Status:** Code implementation in Draft PR #4; do not enable in production.
+**Status:** Code and CI passed ([run 40814929762](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40814929762)); staging and reconciliation acceptance pending. Draft PR #4; do not enable in production.
 This phase is opt-in and must satisfy CI plus isolated staging review.
 
 ## Original failure
@@ -123,8 +123,9 @@ throughput. No separate broker or hidden Redis key migration.
 
 ## Tests and approval checklist
 
-- [ ] Code SHA passes full CI including Python, ephemeral MongoDB/dual
-      Redis, compile/lint and production Docker/Compose preflight.
+- [x] Full CI passed at SHA `e092b9af`: Python, disposable MongoDB/dual
+      Redis, compile/lint and Docker/Compose preflight.
+      [Run 40814929762](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40814929762).
 - [ ] Verify both flags default off and **no new collection or index**
       is created in the default deployment.
 - [ ] Verify queue duplicate submission, claim/reclaim, lease fencing,
