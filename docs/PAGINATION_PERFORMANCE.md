@@ -1,7 +1,8 @@
 # PH-014: Deterministic offset paging and deep-page profiling
 
 **Status:** implementation and tests committed to the existing hardening branch
-and Draft PR #4. **No production measurements or deployment have occurred.**
+and Draft PR #4. Both CI jobs passed on [run 40809408684](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40809408684).
+**No production measurements or deployment have occurred.**
 
 ## Finding and scope
 
@@ -124,8 +125,9 @@ can preserve old callback semantics and full result equivalence.
 
 ## Verification and rollback gates
 
-- [ ] Python compileall, full pytest, real ephemeral MongoDB/Redis CI and
-      Docker/Compose preflight pass at the exact PH-014 branch commit.
+- [x] Python compileall, full pytest, real ephemeral MongoDB/Redis CI and
+      Docker/Compose preflight passed at PH-014 code SHA `f838be99`
+      ([run 40809408684](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40809408684)).
 - [ ] Isolated staging bot shows correct first, next, previous, last and
       repeated pages, including equal timestamps, no-results and expired
       callbacks, without leaking data between users.
