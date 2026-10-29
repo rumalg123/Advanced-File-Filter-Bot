@@ -17,6 +17,7 @@ from core.utils.validators import normalize_query
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.search_observability import search_telemetry
 from core.utils.media_metadata import effective_quality
+from config.settings import settings
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -122,7 +123,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         # Optional canonical fields are absent, not null, on media without
         # authoritative metadata. Avoid inflating existing document formats.
         for field in ('width', 'height', 'quality'):
-            if data[field] is None:
+            if (not settings.features.feature_canonical_media_metadata
+                    or data[field] is None):
                 del data[field]
         data['indexed_at'] = data['indexed_at'].isoformat()
         if data.get('updated_at'):
