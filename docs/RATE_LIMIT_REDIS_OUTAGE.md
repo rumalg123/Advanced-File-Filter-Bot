@@ -1,6 +1,6 @@
 # PH-023: Bounded rate limiting when Redis is unavailable
 
-**Status:** Implementation and regression tests on existing Draft PR #4. CI and operator staging pending. No production deployment, database, Redis schema or index changes.
+**Status:** Full code CI passed at SHA `89fadb57` ([run 40820968179](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820968179)); operator staging pending. Existing Draft PR #4. No production deployment, database, Redis schema or index changes.
 
 ## Root cause
 
@@ -26,7 +26,7 @@ The max-entries guard is deliberately fail-closed rather than allocating unbound
 
 ## Verification
 
-- [ ] CI: full Python tests, local disposable MongoDB and dual Redis, compile/lint and production Docker/Compose preflight.
+- [x] Full Python tests, local disposable MongoDB/dual Redis, compile/lint and production Docker/Compose preflight passed at code SHA `89fadb57` ([CI run 40820968179](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820968179)). The first run exposed a test's fractional FloodWait fixture; fixed in PH-024 without changing production logic.
 - [ ] Simulate both Redis exceptions and missing incremental results; verify normal per-action limits/cooldowns and 50-way concurrent requests for one identity.
 - [ ] Check independent users/actions, protected state still fails closed, healthy Redis unchanged, and reset/health recovery.
 - [ ] Fill local capacity, verify new identities denied, active counters not evicted and expired windows reclaimed; verify memory.
