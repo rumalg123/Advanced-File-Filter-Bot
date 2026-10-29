@@ -1,8 +1,8 @@
 {
   "date": "2026-10-29",
-  "application_commit": "c83344e9647e233e99f0fbcc0d10277a9c0890cb",
+  "application_commit": "325e458f3c000c94d71d7b5d5a6f8a51e3f8a3be",
   "tests": {
-    "passed": 769,
+    "passed": 774,
     "failed": 0,
     "skipped": 0,
     "warnings": 22
@@ -10,35 +10,35 @@
   "application_files": 118,
   "denominator_matches_all_tracked_non_test_python": true,
   "automated": {
-    "covered_lines": 9529,
+    "covered_lines": 9563,
     "num_statements": 17440,
-    "percent_covered": 51.14967275232518,
+    "percent_covered": 51.34343782294179,
     "percent_covered_display": "51",
-    "missing_lines": 7911,
+    "missing_lines": 7877,
     "excluded_lines": 41,
-    "percent_statements_covered": 54.63876146788991,
+    "percent_statements_covered": 54.83371559633027,
     "percent_statements_covered_display": "55",
     "num_branches": 5784,
-    "num_partial_branches": 820,
-    "covered_branches": 2350,
-    "missing_branches": 3434,
-    "percent_branches_covered": 40.62932226832642,
+    "num_partial_branches": 827,
+    "covered_branches": 2361,
+    "missing_branches": 3423,
+    "percent_branches_covered": 40.8195020746888,
     "percent_branches_covered_display": "41"
   },
   "automated_plus_source_matched_live": {
-    "covered_lines": 11796,
+    "covered_lines": 11737,
     "num_statements": 17440,
-    "percent_covered": 64.08026179813986,
+    "percent_covered": 63.71856699965553,
     "percent_covered_display": "64",
-    "missing_lines": 5644,
+    "missing_lines": 5703,
     "excluded_lines": 41,
-    "percent_statements_covered": 67.63761467889908,
-    "percent_statements_covered_display": "68",
+    "percent_statements_covered": 67.2993119266055,
+    "percent_statements_covered_display": "67",
     "num_branches": 5784,
-    "num_partial_branches": 1094,
-    "covered_branches": 3086,
-    "missing_branches": 2698,
-    "percent_branches_covered": 53.35408022130014,
+    "num_partial_branches": 1089,
+    "covered_branches": 3061,
+    "missing_branches": 2723,
+    "percent_branches_covered": 52.92185338865837,
     "percent_branches_covered_display": "53"
   },
   "target_100_percent_reached": false,
@@ -48,6 +48,12 @@
       "missing_lines": 237,
       "missing_branches": 111,
       "line_percent": 39.23
+    },
+    {
+      "file": "core/database/multi_pool.py",
+      "missing_lines": 225,
+      "missing_branches": 126,
+      "line_percent": 64.29
     },
     {
       "file": "handlers/commands_handlers/admin.py",
@@ -72,12 +78,6 @@
       "missing_lines": 179,
       "missing_branches": 111,
       "line_percent": 69.19
-    },
-    {
-      "file": "core/database/multi_pool.py",
-      "missing_lines": 166,
-      "missing_branches": 101,
-      "line_percent": 73.65
     },
     {
       "file": "core/services/indexing.py",

@@ -1,13 +1,13 @@
 # Final-source QA and remaining coverage
 
-QA date: 2026-10-29. Application source: `c83344e` (documentation follows).
+QA date: 2026-10-29. Application source: `325e458` (documentation follows).
 The operator authorized all supplied MongoDB copies, extra commented sources,
 two user sessions and declared QA chats. Original server containers were left
 running. No push, merge or production deployment was performed.
 
 ## Result
 
-**769 tests passed, zero failed/skipped**, using disposable MongoDB and two
+**774 tests passed, zero failed/skipped**, using disposable MongoDB and two
 separate Redis instances on the rebuilt wzgram 3.1.5 runtime. The warning audit
 identified 22 Redis `setex` deprecation/aiohttp app-key notices; no resource-leak
 warning was observed. Compile, undefined-name Ruff, dependency consistency,
@@ -16,8 +16,8 @@ hash verification passed. The image runs as a nonroot user.
 
 | Coverage | Lines | Branches | Combined |
 |---|---:|---:|---:|
-| Automated suite | 54.64% | 40.63% | 51.15% |
-| Source-matched automated + live | 67.64% | 53.35% | 64.08% |
+| Automated suite | 54.83% | 40.82% | 51.34% |
+| Source-matched automated + live | 67.30% | 52.92% | 63.72% |
 
 The denominator is **17,440 executable statements, 5,784 branches and all 118
 tracked application/operator Python files**. Namespace discovery now includes
@@ -164,4 +164,29 @@ independent namespace check found no remaining network-fault rules, and no
 shell-output temporary files remained. Isolated QA containers were stopped and
 removed after saving coverage; the two original server containers kept running.
 Raw logs, sessions, credentials and database dumps stay outside Git in the
-private QA directories. The final QA image is retained locally.
+private QA directories. The rebuilt cutover candidate is retained with an archive outside Docker.
+
+## Production-cutover follow-up
+
+This is the QA server; production is elsewhere and currently has one MongoDB.
+The operator accepts a fresh Redis reset and plans a second MongoDB later.
+The [production runbook](../../PRODUCTION_CUTOVER.md) records targeted reset,
+backup requirements, storage headroom and initial two-source activation.
+
+BUG-059 fixed the default state Redis rejecting a separate container despite
+passing loopback health probes. The before/after network regression is now in
+CI; actual runtime split-cache routing and ACL enforcement passed on separate
+containers. BUG-060 fixed write-source statistics ignoring index storage; four
+pre-fix failures and five post-fix capacity cases include real MongoDB. Both
+fixes are separate commits.
+
+The new image's Python and deployment files match the tested source; all runtime
+dependencies match the 774-test runner. Its identity, checks and archive checksum
+are in [candidate evidence](cutover-candidate-checks.json). Earlier QA image
+availability statements describe their original checkpoint; that image was no
+longer available when this follow-up started. The new candidate was rebuilt and
+archived independently of Docker. No image was pushed or production deployed.
+
+Current coverage is conservatively source-matched: older live execution of the
+changed multi-database module is discarded. Its percentage can therefore decrease
+after a fix despite more passing tests. No uncovered file was excluded.

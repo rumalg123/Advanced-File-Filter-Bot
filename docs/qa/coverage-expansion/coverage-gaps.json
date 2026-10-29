@@ -6,6 +6,12 @@
     "line_percent": 39.23
   },
   {
+    "file": "core/database/multi_pool.py",
+    "missing_lines": 225,
+    "missing_branches": 126,
+    "line_percent": 64.29
+  },
+  {
     "file": "handlers/commands_handlers/admin.py",
     "missing_lines": 218,
     "missing_branches": 88,
@@ -28,12 +34,6 @@
     "missing_lines": 179,
     "missing_branches": 111,
     "line_percent": 69.19
-  },
-  {
-    "file": "core/database/multi_pool.py",
-    "missing_lines": 166,
-    "missing_branches": 101,
-    "line_percent": 73.65
   },
   {
     "file": "core/services/indexing.py",

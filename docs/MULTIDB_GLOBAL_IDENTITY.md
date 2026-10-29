@@ -36,6 +36,20 @@ deleted files and media owned by other sources. Size it for that permanent
 metadata in addition to its own media; switching the media write source does
 not transfer or shrink the registry.
 
+For a single-source production deployment with no bindings, adding the first
+secondary later uses the initial two-source activation procedure below. Do it
+before the coordinator is full: the registry and its indexes require additional
+space on the original primary. That primary also contains users/settings and
+other application state, so replacing it with an empty new primary is not a
+media-only configuration change. Adding a third source after two-source
+activation requires a separate membership migration. See the
+[capacity and cutover plan](PRODUCTION_CUTOVER.md).
+
+Write-source statistics include `dataSize + indexSize` after BUG-060. The
+configured soft limit is evaluated per database and is not a guarantee of free
+space across other databases on the same deployment. Leave provider headroom;
+an additional database name in a capped cluster does not expand its capacity.
+
 ## Activation
 
 1. Back up the selected sources. Stop **every** writer, including index workers,

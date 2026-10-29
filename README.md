@@ -269,6 +269,11 @@ Do not run `docker compose down -v` during a normal update; `-v` removes named R
 
 ## Production deployment
 
+For an existing MongoDB deployment, planned Redis reset, or adding a second
+database later, follow the [production cutover runbook](docs/PRODUCTION_CUTOVER.md).
+It distinguishes disposable Redis volumes from application backups/data and
+documents capacity headroom, ownership activation and rollback.
+
 The `Dockerfile` can be used on a VPS or a container PaaS.
 
 ### Required services

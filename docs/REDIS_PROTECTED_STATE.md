@@ -1,5 +1,12 @@
 # Protected Redis state: design, safe cutover and rollback (PH-003)
 
+**Operator-authorized cold restart (2026-10-29):** up to 24 hours of downtime and
+full Redis state loss are accepted for the production cutover. That path can
+start both instances empty and skip the state-copy migration below. It still
+requires production backup/configuration checks, sizing and startup verification.
+See the [production cutover runbook](PRODUCTION_CUTOVER.md). The preservation
+workflow below remains applicable when operational Redis state must survive.
+
 > **Status: staged only. Not deployed. Do not enable in production until CI, staging migration, memory measurements and rollback drills are complete.**
 
 ## Why this exists
@@ -25,6 +32,26 @@ A separate Redis database **number** on the same Redis server is **not** an inde
 - Redis failures cannot create "successful" sessions or fake working file/pagination buttons. Failed search generation returns the existing temporary-search-unavailable response.
 - Memory, policy and eviction metrics are separated by Redis instance.
 - The optional `redis-state` service is on an internal-only Docker network, without published host ports.
+
+### Separate-container startup verification
+
+BUG-059 reproduced a loopback-only `DENIED` response with the original
+`protected-mode yes` setting and no credentials. A local Redis health probe
+could pass while the bot's container could not connect. The default state
+config now permits connections on the private internal Compose network; it
+must never be published or reused on a public network. The optional ACL overlay
+continues to require authentication when enabled.
+
+Run `bash scripts/test_redis_compose_network.sh` on a Docker-capable QA host.
+It tests the committed cache/state configs from distinct containers, requires
+an actual `PONG` (Redis CLI can exit zero for a denial), publishes no ports and
+cleans its temporary containers/network/volumes. It failed before the fix and
+passed afterward. CI container preflight now includes this check.
+
+The Redis service user must be able to read its mounted configuration. On the
+deployment host, make the two non-secret config files readable with
+`chmod 0644 redis.conf redis-state.conf`. Keep `.env` and credential directories
+private; do not apply that command indiscriminately to secret files.
 
 ## Release prerequisites (do not skip)
 

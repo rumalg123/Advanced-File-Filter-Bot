@@ -12,28 +12,28 @@
     },
     {
       "shard": "live-02",
-      "matching_files": 110,
-      "changed_files_discarded": 8
+      "matching_files": 109,
+      "changed_files_discarded": 9
     },
     {
       "shard": "live-03",
-      "matching_files": 117,
-      "changed_files_discarded": 1
+      "matching_files": 116,
+      "changed_files_discarded": 2
     },
     {
       "shard": "live-04",
-      "matching_files": 112,
-      "changed_files_discarded": 6
-    },
-    {
-      "shard": "live-05",
-      "matching_files": 102,
+      "matching_files": 111,
       "changed_files_discarded": 7
     },
     {
+      "shard": "live-05",
+      "matching_files": 101,
+      "changed_files_discarded": 8
+    },
+    {
       "shard": "live-06",
-      "matching_files": 118,
-      "changed_files_discarded": 0
+      "matching_files": 117,
+      "changed_files_discarded": 1
     },
     {
       "shard": "live-07",
@@ -41,9 +41,9 @@
       "changed_files_discarded": 12
     }
   ],
-  "combined_percent": 64.08026179813986,
+  "combined_percent": 63.71856699965553,
   "policy": "Only files with identical start/end/current SHA256 are accepted.",
-  "application_commit": "c83344e9647e233e99f0fbcc0d10277a9c0890cb",
+  "application_commit": "325e458f3c000c94d71d7b5d5a6f8a51e3f8a3be",
   "all_tracked_application_files_retained": true,
   "empty_execution_files_retained": true,
   "source_sha256": {
@@ -66,7 +66,7 @@
     "core/database/indexes.py": "724938f372112f8aaaa63cb68e34c3b440b7633f17b713d4c85249f829e2a767",
     "core/database/media_indexes.py": "4aec11851a993d94392f1de5f006b890433e96649228ed4f9ad6ff020653ff91",
     "core/database/media_owners.py": "2215d6b68e2bc5a1010dbe8c78d8b952707be719a205e1f8843ad81a6a63171c",
-    "core/database/multi_pool.py": "5096e5c726f76f0a303dbf28b567b72d640415bf9ac15ab6756b6ef6bdab3208",
+    "core/database/multi_pool.py": "2357e1d566569e1afa9ac42005afcb9bf332985ed8e595f8a1168355aa881c3b",
     "core/database/pool.py": "35e92ebe74616398c7d8b395b5185d9a44ec9ebc20fe179d4ecdb141a2e64227",
     "core/database/topology.py": "d99a457e4c48b35f810631cbd29b623621d1a63e3f2c90662ee002a877d4db51",
     "core/services/bot_settings.py": "e3ccd86e1b3dcaad5c833f9213508882018ffaf30ea5f0cea0d7ef8e0a9c78cb",

@@ -1,13 +1,22 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-29):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **769 tests passed, zero failed/skipped** on the final source and rebuilt
+> **774 tests passed, zero failed/skipped** on the final source and rebuilt
 > wzgram 3.1.5 image. Disposable three-source ownership, real indexing/delivery,
 > deep pagination and secondary network-partition recovery passed. The earlier
 > [470-test report](docs/QA_REPORT_20261029.md) remains historical evidence.
 > Whole-bot 100% coverage remains open. `In review` remains appropriate until
 > merge and applicable production acceptance gates are complete. No merge,
 > push or production deployment was performed.
+>
+> **Cutover decision:** the operator accepts up to 24 hours of downtime and an
+> empty Redis restart while retaining production MongoDB. The
+> [production runbook](docs/PRODUCTION_CUTOVER.md) separates the recommended
+> single-source release from optional search backfill/ownership activation.
+> This host is QA; production has one MongoDB and a second is planned later.
+> BUG-059/060 fixed cross-container Redis startup and index-aware capacity
+> switching; the rebuilt candidate passed 774 tests. Production backup/restore
+> and provider headroom checks remain go-live gates.
 
 > **ACTIVE SOURCE OF TRUTH** for production reliability, correctness, security, and scaling work on Advanced-File-Filter-Bot.
 >
@@ -84,7 +93,7 @@ All items are initially **Open** unless marked Deferred. "Evidence" is a source 
 | PH-005 | **P1** | In review | Code-confirmed: [`handlers/channel.py`](handlers/channel.py) `handle_channel_media` | Queue overflow now applies backpressure and small queues can drain. An opt-in `channel_index_jobs` MongoDB queue adds crash recovery, retries and dead letters without changing existing collections; default remains disabled. | Durable recovery/checkpoints, idempotent replay, alerts on loss, and test for overload/restart recovery; no silent loss. |
 | PH-006 | **P1** | In review | Needs measurement: [`core/utils/search_matcher.py`](core/utils/search_matcher.py), [`repositories/media.py`](repositories/media.py) | Default-off indexed candidates retain the final legacy matcher, bounded backfill and edit invalidation. Complete remote result sets agree; five-query samples improved median 3.35–5.32s to 59–137ms. Sanitized EXPLAIN evidence is committed. | Review rollback and benchmark evidence. Representative production load, latency tails and an agreed SLO remain operational gates. |
 | PH-007 | **P1** | In review | Code-confirmed: [`repositories/media.py`](repositories/media.py) `delete_files_by_keyword`, [`core/database/base.py`](core/database/base.py) `find_many` | Confirmed read-only preview, single-use admin token and 1000-file cap; bounded 100-ID delete batches now replace unbounded operations. Partial failure is reported; existing MongoDB structures are unchanged. | Add bounded, resumable, preview/confirm delete workflow with permission checks, audit trail, and dry-run; test on a large fixture. |
-| PH-008 | **P1** | In review | Repo observation: no `.github/workflows` in baseline tree; `main` not protected at observation | SHA-pinned workflows cover disposable MongoDB/dual Redis, whole-tree branch coverage, compilation, lint, Compose and image builds. Local equivalents passed with 769 tests. Remote CI at the final commit and required branch protections remain unverified. | Run required CI after publication and verify repository protections; local QA does not establish merge enforcement. |
+| PH-008 | **P1** | In review | Repo observation: no `.github/workflows` in baseline tree; `main` not protected at observation | SHA-pinned workflows cover disposable MongoDB/dual Redis, whole-tree branch coverage, compilation, lint, Compose and image builds. Local equivalents passed with 774 tests. Remote CI at the final commit and required branch protections remain unverified. | Run required CI after publication and verify repository protections; local QA does not establish merge enforcement. |
 | PH-009 | **P1** | In review | Conditional: [`core/cache/serialization.py`](core/cache/serialization.py) `_deserialize_pickle`, `_deserialize_legacy_data` | PH-009 implementation removed all executable pickle codecs; legacy p/cp and complete ASCII pickle are rejected, safe JSON/MessagePack preserved, decompression bounded. Live legacy-format inventory and staging verification pending. | Inventory real legacy keys, design safe compatibility transition, remove unsafe unpickling, and regression-test malformed values. |
 | PH-010 | **P1** | In review | Conditional: [`redis.conf`](redis.conf), [`docker-compose.yml`](docker-compose.yml) | Main Redis remains unauthenticated by default but unexposed on host. Added *opt-in* ACL auth with file-mounted independent cache/state secrets, no new published Redis port, staging runbook and real ACL CI smoke. Operator must verify network and cutover. | Confirm actual network reachability/credentials, restrict clients, provide authentication and rotation plan, and avoid embedding secrets in repo. |
 | PH-011 | **P1** | In review | Conditional: [`core/cache/invalidation.py`](core/cache/invalidation.py), [`core/cache/config.py`](core/cache/config.py) | Atomic never-default-v1 generation for single and split Redis; no counter TTL; malformed counter fails closed. Bounded retries on in-flight cache hits/Mongo reads/cache writes with unit and real-Redis tests; staging still pending. | Make generation identity robust to eviction/restarts; test missing-counter and concurrent-write scenarios without global Redis flush. |
