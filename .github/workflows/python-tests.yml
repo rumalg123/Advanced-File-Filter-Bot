@@ -153,8 +153,8 @@ jobs:
           EOF
           python scripts/staging_preflight.py \
             --production-env .ph012-production.env --staging-env .env.staging
-          docker compose -f docker-compose.staging.yml config --quiet
-          docker compose -f docker-compose.staging.yml config --format json \
+          docker compose -f docker-compose.staging.yml --profile staging-bot config --quiet
+          docker compose -f docker-compose.staging.yml --profile staging-bot config --format json \
             | python scripts/validate_staging_compose.py
 
       - name: Validate opt-in Redis ACL overlay against local Redis
