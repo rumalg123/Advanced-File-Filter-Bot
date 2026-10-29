@@ -96,3 +96,48 @@ async def test_batch_service_keeps_confirmed_progress_on_cancellation(monkeypatc
         repo.release_quota.assert_awaited_once()
         refunded=repo.release_quota.await_args.args[1]
         assert refunded==1 and refunded.quota_day=='2026-10-29'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('workflow',['channel','typed_search'])
+async def test_other_bulk_workflows_refund_when_status_setup_fails(workflow):
+    import base64
+    handler,repo,reservation,message=fixture()
+    if workflow=='channel':
+        handler.bot.filestore_service.count_channel_media_items=AsyncMock(return_value=2)
+        message.reply=AsyncMock(side_effect=RuntimeError('status setup failed'))
+        encoded=base64.urlsafe_b64encode(b'1_2_-100123_batch').decode().rstrip('=')
+        invoke=handler._send_dstore_files(SimpleNamespace(),message,encoded)
+    else:
+        handler.bot.file_service=SimpleNamespace(search_files_with_access_check=AsyncMock(
+            return_value=([SimpleNamespace(),SimpleNamespace()],0,2,True,'allowed')))
+        message.reply_text.side_effect=RuntimeError('status setup failed')
+        invoke=handler._send_all_files(SimpleNamespace(),message,'qa_title','document')
+    with pytest.raises(RuntimeError,match='status setup failed'):
+        await invoke
+    repo.settle_quota_delivery.assert_awaited_once_with(42,reservation,0,uncertain=False)
+
+
+@pytest.mark.asyncio
+async def test_channel_service_preserves_confirmed_count_on_mid_send_cancellation(monkeypatch):
+    from pyrogram import enums
+    from core.services.filestore import FileStoreService
+    from core.utils.quota_delivery import bulk_delivery_quota
+    handler,repo,reservation,_=fixture()
+    config=handler.bot.config
+    config.USE_ORIGINAL_CAPTION_FOR_BATCH=False
+    service=FileStoreService(None,None,config)
+    async def messages(*args):
+        for i in range(2):
+            yield SimpleNamespace(media=enums.MessageMediaType.DOCUMENT,caption=None,
+                document=SimpleNamespace(file_unique_id=str(i),file_id='tg-'+str(i),
+                    file_name='qa.txt',file_size=10,mime_type='text/plain'),copy=AsyncMock())
+    async def no_delay(*args):pass
+    monkeypatch.setattr('core.services.filestore.asyncio.sleep',no_delay)
+    monkeypatch.setattr('core.services.filestore.telegram_api.call_api',
+        AsyncMock(side_effect=[SimpleNamespace(),asyncio.CancelledError()]))
+    with pytest.raises(asyncio.CancelledError):
+        async with bulk_delivery_quota(repo,42,reservation) as progress:
+            await service.send_channel_files(SimpleNamespace(iter_messages=messages),42,-100123,1,2,
+                delivery_progress=progress)
+    repo.settle_quota_delivery.assert_awaited_once_with(42,reservation,1,uncertain=True)
