@@ -361,6 +361,17 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 return False, 0, existing
 
             if self.is_multi_db:
+                # PH-028: independent MongoDBs have no globally unique
+                # file identity / owner registry. A pre-insert duplicate read
+                # alone can race another writer on a different DB. Do NOT
+                # create more records until a central reservation protocol
+                # with unique ownership and recovery has been deployed.
+                if self.multi_db_manager.is_multi_database:
+                    logger.error(
+                        "Multi-DB media creation disabled until global "
+                        "identity and ownership are implemented (PH-028)"
+                    )
+                    return False, 2, None
                 # Use smart database selection for optimal write performance
                 write_db_pool = await self.multi_db_manager.get_optimal_write_database()
                 collection = await write_db_pool.get_collection(self.collection_name)
