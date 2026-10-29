@@ -61,9 +61,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl --fail --silent --show-error "http://localhost:${PORT:-8000}/health" >/dev/null || exit 1
 
 # Default environment variables for auto-update
-ENV AUTO_UPDATE=${AUTO_UPDATE:-false}
-ENV UPDATE_ON_START=${UPDATE_ON_START:-false}
-ENV BACKUP_ON_UPDATE=${BACKUP_ON_UPDATE:-true}
+ENV AUTO_UPDATE=false
+ENV UPDATE_ON_START=false
+ENV BACKUP_ON_UPDATE=true
 
 # Set Python optimizations
 ENV PYTHONUNBUFFERED=1
