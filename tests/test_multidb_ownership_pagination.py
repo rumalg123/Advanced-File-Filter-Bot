@@ -9,6 +9,7 @@ from datetime import datetime
 from uuid import uuid4
 
 import pytest
+from pymongo.errors import OperationFailure
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from core.database.multi_pool import DatabaseInfo, MultiDatabaseManager
@@ -184,6 +185,38 @@ async def test_ph026_deep_pages_are_stable_bounded_and_nonoverlapping(local_mong
         client.close()
 
 
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_shallow_merge_fits_small_server_sort_budget_without_disk_spill(local_mongo_uri):
+    client = AsyncIOMotorClient(local_mongo_uri, serverSelectionTimeoutMS=5000)
+    name = 'ph026_sort_' + uuid4().hex
+    database = client[name]
+    original = await client.admin.command('getParameter', 1,
+        internalQueryMaxBlockingSortMemoryUsageBytes=1)
+    try:
+        await database.FILES.insert_many([{'_id': str(i), 'indexed_at': f'{i:04d}',
+            'payload': 'x'*4096} for i in range(250)])
+        await client.admin.command('setParameter', 1,
+            internalQueryMaxBlockingSortMemoryUsageBytes=65536)
+        class Collection:
+            def find(self, query): return database.FILES.find(query).allow_disk_use(False)
+        class BoundedPool:
+            async def get_collection(self, collection): return Collection()
+        manager = multi_manager(database)
+        manager.databases[0].pool = BoundedPool()
+        # A query-wide sort is too large even though its first page is tiny.
+        with pytest.raises(OperationFailure):
+            await database.FILES.find({}).sort([('indexed_at',-1),('_id',-1)]).allow_disk_use(False).to_list(length=5)
+        rows = await manager.search_across_all_databases('FILES', {}, limit=5,
+                                                        sort=[('indexed_at',-1)])
+        assert [row['_id'] for row in rows] == ['249','248','247','246','245']
+    finally:
+        await client.admin.command('setParameter', 1,
+            internalQueryMaxBlockingSortMemoryUsageBytes=original['internalQueryMaxBlockingSortMemoryUsageBytes'])
+        await client.drop_database(name)
+        client.close()
+
+
 @pytest.mark.asyncio
 async def test_ph026_allows_only_bounded_cursor_pages_and_closes_on_failure():
     class Cursor:
@@ -203,6 +236,11 @@ async def test_ph026_allows_only_bounded_cursor_pages_and_closes_on_failure():
 
         def batch_size(self, size):
             assert size <= 64
+            return self
+
+        def limit(self, count):
+            assert count > 0
+            self.docs = self.docs[:count]
             return self
 
         async def to_list(self, *, length):

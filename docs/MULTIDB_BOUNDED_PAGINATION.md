@@ -33,3 +33,19 @@ Unlike native MongoDB sharding with `mongos`, this application is combining inde
 - [ ] Before enabling a second database: design stable keyset continuation if deep offsets fail latency limits; integrate PH-027 partial failure handling and PH-028 global uniqueness/ownership. Decide when to migrate from manual multi-DB aggregation to native sharding.
 
 **Rollback:** revert to the prior approved image if necessary, but **do not enable multi-DB**. No media schema/backfill, index DDL, production data modification, deployment or PR merge.
+
+## Server-side sort correction, 2026-10-29
+
+A real broad `540p` query on the disposable remote topology exceeded MongoDB's
+32 MB blocking-sort limit. A client `batch_size(64)` does not limit that server
+sort. Each source cursor now also uses `limit(skip + limit)`: no row below a
+source's own top K can enter the global top K. This bounds the MongoDB top-K sort
+without materializing those K rows in Python or enabling disk spilling.
+
+The failure was reproduced with a disposable local MongoDB sort budget of 64 KB
+and spilling explicitly disabled. The corrected shallow page succeeds under the
+same budget. Existing three-source 3,750-record deep-page equivalence, stable ties,
+adjacent-page disjointness, bounded fetch and cursor-close/failure suites pass
+(51 focused cases). Very deep offsets can still exceed server memory or latency
+budgets and need representative measurement/keyset continuation; the fix does
+not claim constant server memory independent of offset.

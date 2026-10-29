@@ -860,7 +860,11 @@ class MultiDatabaseManager:
         try:
             for db_index, info in enumerate(self.databases):
                 collection = await info.pool.get_collection(collection_name)
-                cursor = collection.find(query).sort(merge_sort).batch_size(batch_size)
+                # No source can contribute a row below its own top skip+limit
+                # to this global page. Push that bound to MongoDB too: batch
+                # size alone limits client reads, not server-side sort memory.
+                cursor = (collection.find(query).sort(merge_sort)
+                          .limit(skip + limit).batch_size(batch_size))
                 cursors.append(cursor)
                 buffers.append([])
                 indices.append(0)

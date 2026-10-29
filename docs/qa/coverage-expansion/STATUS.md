@@ -139,3 +139,10 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   automatic indexing. Its distinct document was persisted, found and delivered
   to the normal account. The real Send All callback delivered all three test
   documents across the secondary sources. Temporary chat cleanup is tracked.
+
+- **Distributed sort-memory correction passed locally:** live remote `540p`
+  search failed with MongoDB code 292 (32 MB blocking-sort limit). Reproduced
+  under a restored 64 KB limit on disposable localhost MongoDB with disk spill
+  disabled. Per-source `limit(skip + limit)` now bounds server top-K sorting;
+  51 multi-source/ownership/batch cases pass, including exact deep-page results.
+  Remote first/next/previous-page replay is in progress.
