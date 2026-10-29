@@ -128,6 +128,8 @@ PH-008 release safety: the [CI/CD release gates and required branch checks guide
 
 PH-010 Redis security: [optional file-backed Redis ACL authentication and staging cutover guide](docs/REDIS_ACCESS_SECURITY.md). This uses an opt-in [Compose overlay](docker-compose.redis-auth.yml) and independent secret files for cache/state Redis; the existing unauthenticated Redis default is unchanged.
 
+PH-011 search-cache consistency: [atomic Redis generations, bounded search retry and staging verification guide](docs/SEARCH_CACHE_GENERATION.md). Missing/malformed Redis counters never default to `v1`, and concurrent invalidations trigger bounded search retries.
+
 ### Wzgram compatibility note
 
 The project dependency is pinned to a specific `wzgram` Git commit in `pyproject.toml` and `requirements.txt`. Wzgram exposes a Pyrogram-compatible import namespace, so source imports such as `from pyrogram import Client` are expected; they do not mean the project still installs the unmaintained upstream Pyrogram distribution.
