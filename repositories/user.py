@@ -752,6 +752,17 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 'active_today': facets['active_today'][0]['count'] if facets['active_today'] else 0,
             }
             cache_ttl = self.ttl.USER_STATS
+            # active_today is a UTC-day scoped facet. Do not serve it from
+            # yesterday's cache after the UTC rollover, even if the normal
+            # stats TTL has not elapsed.
+            now_utc = datetime.now(UTC)
+            next_utc_midnight = datetime.combine(
+                quota_day_utc(now_utc) + timedelta(days=1),
+                datetime.min.time(), tzinfo=UTC
+            )
+            cache_ttl = min(
+                cache_ttl, max(1, int((next_utc_midnight - now_utc).total_seconds()))
+            )
             next_expiries = facets.get('next_premium_expiry') or []
             if next_expiries:
                 next_expiry = next_expiries[0].get(
