@@ -3,6 +3,7 @@ Multi-database pool manager for handling multiple MongoDB connections
 """
 
 import asyncio
+import heapq
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Any
@@ -14,6 +15,19 @@ from core.database.pool import DatabaseConnectionPool
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class _DescendingKey:
+    """Reverse one comparable Mongo sort component for a min-heap."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def __lt__(self, other):
+        return self.value > other.value
+
+    def __eq__(self, other):
+        return isinstance(other, _DescendingKey) and self.value == other.value
 
 
 class CircuitBreakerState(Enum):
@@ -715,51 +729,110 @@ class MultiDatabaseManager:
             # Circuit breaker will handle marking database as inactive
             return 0
 
+    @staticmethod
+    def _bounded_merge_sort(
+        sort: Optional[List[Tuple[str, int]]]
+    ) -> List[Tuple[str, int]]:
+        """Ensure deterministic ties before entering the distributed merge."""
+        fields = list(sort or [("_id", 1)])
+        if any(direction not in (-1, 1) for _, direction in fields):
+            raise ValueError("Multi-DB sort directions must be ascending or descending")
+        if not any(field == "_id" for field, _ in fields):
+            fields.append(("_id", -1))
+        return fields
+
+    def _bounded_merge_key(
+        self, document: Dict[str, Any], sort: List[Tuple[str, int]],
+        database_index: int
+    ) -> tuple:
+        key = []
+        for field, direction in sort:
+            value = document.get(field)
+            if value is None:
+                key.append((1, 0))
+            else:
+                comparable = self._normalize_sort_value(value)
+                key.append((0, _DescendingKey(comparable) if direction == -1
+                            else comparable))
+        # If the same _id exists on two DBs, this still gives stable ordering
+        # but does NOT solve PH-028's global uniqueness requirement.
+        key.append(database_index)
+        return tuple(key)
+
     async def search_across_all_databases(
-        self, 
-        collection_name: str, 
-        query: Dict[str, Any], 
-        limit: int = 10, 
+        self,
+        collection_name: str,
+        query: Dict[str, Any],
+        limit: int = 10,
         skip: int = 0,
         sort: Optional[List[Tuple[str, int]]] = None
     ) -> List[Dict[str, Any]]:
+        """PH-026: k-way sorted stream, bounded app memory per database.
+
+        Retains the existing offset/limit API and Telegram button semantics.
+        Never materializes skip+limit rows from *every* database. Only the
+        documents required to reach this global page are iterated, with a
+        fixed small cursor buffer per DB. Offset scanning is still O(skip)
+        and deep-page performance requires cursor pagination before enabling
+        a second production database.
         """
-        Search across all databases and return properly paginated combined results
-        
-        FIXED: This method now correctly handles cross-database pagination by:
-        1. Getting enough sorted results from each database to satisfy the requested page
-        2. Combining and sorting those results together
-        3. THEN applying skip/limit to the final sorted list
-        """
-        all_results = []
-        query_limit = skip + limit if sort else None
-        
-        tasks = []
-        for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                task = self._get_all_matching_from_database(
-                    db_info,
-                    collection_name,
-                    query,
-                    sort,
-                    query_limit
+        if type(limit) is not int or type(skip) is not int or limit < 0 or skip < 0:
+            raise ValueError("Multi-DB pagination needs nonnegative integer skip/limit")
+        if limit == 0:
+            return []
+        if not self.databases:
+            return []
+        if any(not info.is_active or info.pool is None for info in self.databases):
+            raise RuntimeError("Cannot return complete multi-DB page: configured DB unavailable")
+
+        merge_sort = self._bounded_merge_sort(sort)
+        batch_size = 64
+        # A Motor cursor is a stream; do NOT call to_list(length=None).
+        cursors = []
+        buffers = []
+        indices = []
+        heap = []
+        result = []
+        try:
+            for db_index, info in enumerate(self.databases):
+                collection = await info.pool.get_collection(collection_name)
+                cursor = collection.find(query).sort(merge_sort).batch_size(batch_size)
+                cursors.append(cursor)
+                buffers.append([])
+                indices.append(0)
+            async def load_next(db_index):
+                if indices[db_index] >= len(buffers[db_index]):
+                    buffers[db_index] = await cursors[db_index].to_list(length=batch_size)
+                    indices[db_index] = 0
+                if indices[db_index] >= len(buffers[db_index]):
+                    return False
+                item = buffers[db_index][indices[db_index]]
+                indices[db_index] += 1
+                heapq.heappush(
+                    heap, (self._bounded_merge_key(item, merge_sort, db_index),
+                           db_index, item)
                 )
-                tasks.append(task)
-        
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, list):
-                    all_results.extend(result)
-                elif isinstance(result, Exception):
-                    logger.error(f"Error searching databases: {result}")
-        
-        # Sort the COMBINED results properly
-        if sort and all_results:
-            self._sort_documents(all_results, sort)
-        
-        # NOW apply pagination to the final sorted results  
-        return all_results[skip:skip + limit]
+                return True
+
+            await asyncio.gather(*[
+                load_next(db_index) for db_index in range(len(cursors))
+            ])
+            seen = 0
+            while heap and len(result) < limit:
+                _, db_index, item = heapq.heappop(heap)
+                if seen >= skip:
+                    result.append(item)
+                seen += 1
+                if seen < skip + limit:
+                    await load_next(db_index)
+            return result
+        finally:
+            # Close server-side cursors on errors, cancellation and early
+            # exit. This avoids leaking iterators on deep-page requests.
+            await asyncio.gather(
+                *(cursor.close() for cursor in cursors),
+                return_exceptions=True
+            )
 
     @staticmethod
     def _normalize_sort_value(value: Any) -> Tuple[int, Any]:
