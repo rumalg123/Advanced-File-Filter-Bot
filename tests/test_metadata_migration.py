@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -89,3 +90,41 @@ async def test_migration_document_and_bulk_failure_accounting(pools):
     assert migration.stats['errors']==2
     pool.execute_with_retry=AsyncMock(side_effect=ConnectionError('read outage'))
     with pytest.raises(ConnectionError):await migration.run()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', [None, 'secondary', 'cache', 'migration'])
+async def test_operator_cli_closes_initialized_resources_on_success_or_failure(monkeypatch, failure):
+    import migrate_media_metadata as module
+    from config.settings import settings
+    sources = [('mongodb://localhost', 'qa_primary'), ('mongodb://localhost', 'qa_secondary')]
+    monkeypatch.setattr(type(settings.database), 'get_sources', Mock(return_value=sources))
+    primary = SimpleNamespace(initialize=AsyncMock(), close=AsyncMock())
+    secondary = SimpleNamespace(initialize=AsyncMock(), close=AsyncMock())
+    factory = Mock(return_value=primary)
+    factory.create_isolated = Mock(return_value=secondary)
+    monkeypatch.setattr(module, 'DatabaseConnectionPool', factory)
+    cache = SimpleNamespace(initialize=AsyncMock(), close=AsyncMock())
+    monkeypatch.setattr(module, 'CacheManager', Mock(return_value=cache))
+    migration = SimpleNamespace(run=AsyncMock())
+    constructor = Mock(return_value=migration)
+    monkeypatch.setattr(module, 'MediaMetadataMigration', constructor)
+    monkeypatch.setattr('sys.argv', ['migrate_media_metadata.py', '--dry-run', '--limit', '2', '--batch-size', '1'])
+    if failure == 'secondary':
+        secondary.initialize.side_effect = ConnectionError('fixture')
+    elif failure == 'cache':
+        cache.initialize.side_effect = ConnectionError('fixture')
+    elif failure == 'migration':
+        migration.run.side_effect = RuntimeError('fixture')
+    if failure:
+        with pytest.raises(SystemExit) as exit_code:
+            await module.main()
+        assert exit_code.value.code == 1
+    else:
+        await module.main()
+        constructor.assert_called_once_with([primary, secondary], batch_size=1)
+        migration.run.assert_awaited_once_with(dry_run=True, limit=2)
+    primary.close.assert_awaited_once()
+    if failure != 'secondary':
+        secondary.close.assert_awaited_once()
+        cache.close.assert_awaited_once()

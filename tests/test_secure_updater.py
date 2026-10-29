@@ -117,3 +117,49 @@ def test_subprocess_timeout_and_error_contract(updater,monkeypatch,failure):
         with pytest.raises(type(failure)):updater._run_command(['git','status'])
     assert run.call_args.kwargs['timeout']==300 and run.call_args.kwargs['check'] is True
     assert 'shell' not in run.call_args.kwargs
+
+
+@pytest.mark.parametrize('mode', ['update', 'rollback'])
+@pytest.mark.parametrize('success', [False, True])
+def test_cli_routes_explicit_arguments_and_returns_operation_status(updater, monkeypatch, mode, success):
+    operation = Mock(return_value=success)
+    monkeypatch.setattr(SecureUpdater, mode, operation)
+    argv = ['update.py', '--repo', updater.repo_url, '--branch', 'fix/qa']
+    argv += ['--rollback', str(updater.backup_dir)] if mode == 'rollback' else ['--skip-backup']
+    monkeypatch.setattr('sys.argv', argv)
+    with pytest.raises(SystemExit) as exit_code:
+        updater_module.main()
+    assert exit_code.value.code == (0 if success else 1)
+    if mode == 'rollback':
+        operation.assert_called_once_with(str(updater.backup_dir))
+    else:
+        operation.assert_called_once_with(skip_backup=True)
+
+
+def test_cli_rejects_invalid_repository_without_starting_update(updater, monkeypatch):
+    operation = Mock()
+    monkeypatch.setattr(SecureUpdater, 'update', operation)
+    monkeypatch.setattr('sys.argv', ['update.py', '--repo', 'http://invalid.test/bot'])
+    with pytest.raises(SystemExit) as exit_code:
+        updater_module.main()
+    assert exit_code.value.code == 1
+    operation.assert_not_called()
+
+
+def test_docker_update_preserves_build_dockerfile_and_updates_application(updater, tmp_path):
+    updater.in_docker = True
+    (updater.current_dir/'Dockerfile').write_text('original build')
+    (updater.current_dir/'bot.py').write_text('old application')
+    source = tmp_path/'incoming'; source.mkdir()
+    (source/'Dockerfile').write_text('incoming build')
+    (source/'bot.py').write_text('new application')
+    updater._apply_update(source)
+    assert (updater.current_dir/'Dockerfile').read_text() == 'original build'
+    assert (updater.current_dir/'bot.py').read_text() == 'new application'
+
+
+def test_rollback_reports_copy_failure(updater, tmp_path, monkeypatch):
+    backup = tmp_path/'recovery'; backup.mkdir()
+    (backup/'bot.py').write_text('backup application')
+    monkeypatch.setattr(updater_module.shutil, 'copy2', Mock(side_effect=PermissionError('fixture')))
+    assert updater.rollback(str(backup)) is False
