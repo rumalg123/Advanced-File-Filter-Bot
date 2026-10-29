@@ -10,7 +10,15 @@ from core.cache.redis_cache import CacheManager
 from core.cache.routed_cache import RoutedCacheManager
 from core.cache.invalidation import CacheInvalidator
 from repositories.media import MediaRepository
-from scripts.profile_media_search import is_local
+from urllib.parse import urlsplit
+
+
+def is_local(uri: str, port: int) -> bool:
+    parsed = urlsplit(uri)
+    return (parsed.scheme == "redis"
+            and (parsed.hostname or "").lower() in ("127.0.0.1", "localhost")
+            and parsed.port == port
+            and parsed.username is None and parsed.password is None)
 
 
 @pytest.mark.integration
@@ -19,7 +27,7 @@ async def test_real_redis_concurrent_increment_and_nonexpiring_generation():
     uri = os.getenv("TEST_REDIS_CACHE_URI")
     if not uri:
         pytest.skip("Requires local CI Redis")
-    assert is_local(uri)
+    assert is_local(uri, 6379)
     cache = CacheManager(uri)
     await cache.initialize()
     key = f"cache:search:version:ph011:{uuid4().hex}"
@@ -63,8 +71,8 @@ async def test_real_split_redis_generation_stays_on_protected_instance_and_cache
     state_uri = os.getenv("TEST_REDIS_STATE_URI")
     if not disposable_uri or not state_uri:
         pytest.skip("Requires both local CI Redis services")
-    assert is_local(disposable_uri)
-    assert is_local(state_uri)
+    assert is_local(disposable_uri, 6379)
+    assert is_local(state_uri, 6380)
     disposable = CacheManager(disposable_uri)
     protected = CacheManager(state_uri)
     routed = RoutedCacheManager(disposable, protected)
