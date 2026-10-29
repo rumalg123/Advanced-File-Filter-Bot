@@ -25,6 +25,15 @@ from scripts.profile_media_search import is_local
 MAX_INDEXES = 200
 
 
+def public_index_definition(index):
+    """Report key/options metadata, never raw partial-filter values."""
+    view = index_definition(index)
+    for option in ("partialFilterExpression", "wildcardProjection"):
+        if option in view["options"]:
+            view["options"][option] = "<redacted>"
+    return view
+
+
 def audit_media_indexes(collection, *, include_usage=False, max_time_ms=3000):
     """Compare observed MongoDB specs with the single source-of-truth manifest.
 
@@ -61,14 +70,14 @@ def audit_media_indexes(collection, *, include_usage=False, max_time_ms=3000):
         report["indexes"].append({
             "name": name,
             "status": status,
-            "expected": index_definition(spec),
-            "observed": index_definition(actual) if actual is not None else None,
+            "expected": public_index_definition(spec),
+            "observed": public_index_definition(actual) if actual is not None else None,
         })
     for spec in observed:
-        if spec["name"] not in declared_names:
+        if spec["name"] not in declared_names and spec["name"] != "_id_":
             report["unmanaged_indexes"].append({
                 "name": spec["name"],
-                "definition": index_definition(spec),
+                "definition": public_index_definition(spec),
             })
 
     # A key-prefix relationship alone is NOT sufficient evidence of redundancy.
