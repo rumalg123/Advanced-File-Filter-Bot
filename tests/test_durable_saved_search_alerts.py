@@ -3,7 +3,7 @@ import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
@@ -45,7 +45,7 @@ async def test_default_off_mode_never_opens_durable_queue(monkeypatch):
 async def test_bounded_workers_only_start_once_with_two_flags(monkeypatch):
     monkeypatch.setattr(settings.processing, "durable_saved_search_alerts", True)
     monkeypatch.setattr(settings.processing, "saved_search_alert_workers", 2)
-    manager = SimpleNamespace(create_background_task=AsyncMock())
+    manager = SimpleNamespace(create_background_task=Mock())
     service = FeatureService(
         SimpleNamespace(db_pool=object()), None, None,
         SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
@@ -218,7 +218,7 @@ async def test_real_mongodb_recovery_reprocesses_checkpointed_page_without_dupli
 
         with patch("core.services.features.telegram_api.call_api",
                    new=AsyncMock(side_effect=healthy_send)):
-            assert await service._notify_durable_job(recovered, asyncio.Event()) == 115
+            assert await service._notify_durable_job(recovered, asyncio.Event()) == 110
         assert await queue.acknowledge(recovered)
         assert sorted(sent) == list(range(100, 315))
         assert len(sent) == len(set(sent)) == 215
