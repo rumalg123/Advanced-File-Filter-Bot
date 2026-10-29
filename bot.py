@@ -1381,12 +1381,21 @@ async def initialize_bot() -> MediaSearchBot:
 
     # Initialize components using centralized settings
     db_pool = DatabaseConnectionPool()
-    cache_manager = CacheManager(settings.redis.uri)
+    cache_manager = CacheManager(
+        settings.redis.uri,
+        username=settings.redis.username,
+        password_file=settings.redis.password_file,
+    )
     if settings.redis.state_uri:
-        # Explicit opt-in only. Cache and protected state must live on
-        # separate Redis instances with independently configured eviction.
+        # The protected instance may have its own distinct ACL credentials.
+        # Neither credential source is required unless explicitly enabled.
         cache_manager = RoutedCacheManager(
-            cache_manager, CacheManager(settings.redis.state_uri)
+            cache_manager,
+            CacheManager(
+                settings.redis.state_uri,
+                username=settings.redis.state_username,
+                password_file=settings.redis.state_password_file,
+            ),
         )
     session_manager = UnifiedSessionManager(cache_manager)
     rate_limiter = RateLimiter(cache_manager)
