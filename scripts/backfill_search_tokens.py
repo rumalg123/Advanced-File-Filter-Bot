@@ -42,7 +42,14 @@ def backfill(collection, *, apply=False, rollback=False, batch_size=200, limit=1
         stats['needs_update'] += 1
         if apply:
             # Do not tag a document with tokens computed before a concurrent edit.
-            query = {'_id': doc['_id'], 'file_name': doc.get('file_name'), 'caption': doc.get('caption')}
+            # Plain array equality also matches a nested array element in
+            # MongoDB. Compare exact source values to avoid tagging a changed
+            # legacy array with tokens from its earlier, smaller value.
+            query = {'_id': doc['_id'], '$expr': {'$and': [
+                {'$eq': [{'$ifNull': ['$' + field, None]},
+                         {'$literal': doc.get(field)}]}
+                for field in ('file_name', 'caption')
+            ]}}
             operations.append(UpdateOne(query, update))
             if len(operations) >= batch_size:
                 flush()

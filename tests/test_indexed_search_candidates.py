@@ -116,6 +116,22 @@ def test_backfill_bounds_and_concurrent_edits(mongo_collection):
     assert backfill(col,apply=True)['modified']==3
 
 
+def test_backfill_does_not_accept_nested_array_as_unchanged_source_text(mongo_collection):
+    col=mongo_collection
+    original=['doctor','spring']
+    col.insert_one({'_id':'array-edit','file_name':original})
+    class NestedArrayEdit:
+        def find(self,*args,**kwargs):return col.find(*args,**kwargs)
+        def bulk_write(self,operations,**kwargs):
+            col.update_one({}, {'$set':{'file_name':[original,'mafia']}})
+            return col.bulk_write(operations,**kwargs)
+    result=backfill(NestedArrayEdit(),apply=True)
+    assert result['matched']==0
+    legacy=build_media_search_filter('mafia')
+    indexed=build_media_search_filter('mafia',indexed_tokens=True)
+    assert col.count_documents(legacy)==col.count_documents(indexed)==1
+
+
 def test_optional_manifest_and_new_media_metadata(monkeypatch):
     from core.database.media_indexes import media_index_manifest
     legacy=media_index_manifest()

@@ -75,3 +75,10 @@ the added index produced FETCH/IXSCAN/LIMIT/SKIP plans with **no SORT**. Shallow
 pages took 59–74ms; offset 1,000 took 73ms; offset 36,550 took 500ms. These are
 single-source measured reads, not distributed or Telegram tail-latency claims.
 Rollback leaves this additive index in place; neither index is dropped or renamed.
+
+Optimistic backfill compares source values with `$expr/$eq/$literal`, treating
+missing/null text consistently. Ordinary MongoDB array equality is insufficient:
+an old array can match an element inside a newly nested array. A real-Mongo
+concurrent-edit regression reproduced stale tagging and a possible false-negative
+candidate; exact snapshot comparison now skips that edit and preserves legacy
+result equivalence.
