@@ -7,6 +7,7 @@ import redis.asyncio as aioredis
 from datetime import UTC, datetime, timedelta
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.auth import redis_auth_kwargs
 from core.cache.serialization import serialize, deserialize, get_serialization_stats
 from core.utils.logger import get_logger
 
@@ -31,8 +32,11 @@ class CacheManager:
     return 0
     """
 
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = "redis://localhost:6379", *,
+                 username: str = "", password_file: str = ""):
         self.redis_url = redis_url
+        self.username = username
+        self.password_file = password_file
         self.redis: Optional[aioredis.Redis] = None
         self._lock = asyncio.Lock()
         self._max_connections = 40 if 'uvloop' in sys.modules else 20
@@ -49,6 +53,10 @@ class CacheManager:
                     max_connections=self._max_connections,
                     socket_timeout=30.0,  # Timeout for socket operations
                     socket_connect_timeout=10.0,  # Timeout for initial connection
+                    **redis_auth_kwargs(
+                        self.redis_url, username=self.username,
+                        password_file=self.password_file,
+                    ),
                 )
 
                 try:
