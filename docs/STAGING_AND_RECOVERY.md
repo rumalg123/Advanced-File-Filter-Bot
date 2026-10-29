@@ -75,8 +75,8 @@ sources. An operator must independently verify the effective production
 settings and the Atlas cluster IDs.
 
 ```bash
-docker compose -f docker-compose.staging.yml config --quiet
-docker compose -f docker-compose.staging.yml config --format json \
+docker compose -f docker-compose.staging.yml --profile staging-bot config --quiet
+docker compose -f docker-compose.staging.yml --profile staging-bot config --format json \
   | python scripts/validate_staging_compose.py
 ```
 
