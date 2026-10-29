@@ -202,6 +202,9 @@ jobs:
       - name: Verify Redis connectivity from separate containers
         run: bash scripts/test_redis_compose_network.sh
 
+      - name: Verify Docker startup setup works without network access
+        run: sudo docker run --rm --network none file-filter-bot:ci bash start.sh --setup
+
       - name: Assert container uses nonroot runtime and disabled updater
         shell: bash
         run: |
