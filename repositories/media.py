@@ -833,31 +833,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
 
     async def create_indexes(self) -> None:
-        """Create necessary indexes for optimal performance"""
-        # Names must match indexes.py to avoid IndexOptionsConflict errors
-        indexes = [
-            ([('file_name', 'text'), ('caption', 'text')], {'name': 'text_search_idx', 'default_language': 'english'}),
-            ([('file_type', 1), ('indexed_at', -1)], {'name': 'file_type_time_idx'}),
-            ([('file_size', 1)], {'name': 'size_index'}),
-            ([('indexed_at', -1)], {'name': 'date_index'}),
-            ([('file_ref', 1)], {'name': 'file_ref_index', 'unique': True, 'sparse': True}),
-            ([('file_type', 1), ('file_name', 1)], {'name': 'type_name_index'}),
-            ([('file_unique_id', 1)], {'name': 'unique_file_id_idx', 'unique': True}),
-            # New indexes for season/episode/resolution fields
-            ([('season', 1), ('episode', 1)], {'name': 'season_episode_idx', 'sparse': True}),
-            ([('season', 1), ('episode', 1), ('resolution', 1)], {'name': 'season_episode_resolution_idx', 'sparse': True}),
-            ([('resolution', 1)], {'name': 'resolution_idx', 'sparse': True}),
-            ([('resolution', 1), ('file_type', 1)], {'name': 'resolution_type_idx', 'sparse': True}),
-            ([('episode', 1)], {'name': 'episode_idx', 'sparse': True}),
-        ]
+        """Deprecated compatibility wrapper: media DDL is owned by IndexOptimizer.
 
-        for keys, kwargs in indexes:
-            try:
-                await self.create_index(keys, **kwargs)
-            except Exception as e:
-                error_str = str(e)
-                # Index conflicts are expected if indexes.py already created them
-                if "IndexOptionsConflict" in error_str or "Index already exists" in error_str:
-                    logger.debug(f"Index {kwargs.get('name', '')} already exists")
-                else:
-                    logger.warning(f"Error creating index {kwargs.get('name', '')}: {e}")
+        Keep for callers outside bot startup, with one canonical manifest.
+        The bot invokes IndexOptimizer only once per connected database.
+        """
+        from core.database.indexes import IndexOptimizer
+
+        outcomes = await IndexOptimizer(self.db_pool).create_media_indexes()
+        if not all(outcomes.values()):
+            logger.warning("Some media indexes need operator review; no index was dropped")
