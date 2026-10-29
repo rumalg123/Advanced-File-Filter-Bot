@@ -102,6 +102,8 @@ def validate_runtime(stage: dict[str, str]) -> None:
     targets = _channel_targets(stage)
     if not stage.get("LOG_CHANNEL", "").strip() or stage["LOG_CHANNEL"] in ("0", "-0"):
         raise StagingSafetyError("Dedicated nonzero test log channel required")
+    if stage.get("CHANNELS", "").strip() in ("", "0", "-0"):
+        raise StagingSafetyError("Separate source test channels must be configured")
     if not targets:
         raise StagingSafetyError("Dedicated test channels are required")
 
