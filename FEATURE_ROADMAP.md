@@ -85,6 +85,15 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
 
 ## Verification log
 
+- 2026-10-29: [Extended QA report](docs/QA_REPORT_20261029.md) records 470
+  passing tests and private Telegram verification of saved searches/alerts,
+  favorites/collections, advanced search, feedback, file reports, autocomplete,
+  request completion, recent history, recommendations and the dashboard.
+  Grouping/pagination have automated regressions and controlled live same-title
+  variant/heading/timer checks passed. Disabling optional flags preserved file
+  search/delivery and removed feature controls. Source defaults and production
+  rollout statuses remain unchanged.
+
 - 2026-07-18: Register created. All new flags are required to default off because
   the working tree is deployed directly to a live system.
 - 2026-07-18: FEAT-001 through FEAT-011 implemented as additive, default-off

@@ -1,0 +1,648 @@
+{
+  "collection": "media_files",
+  "mode": "read_only",
+  "observed_count": 18,
+  "declared_count": 16,
+  "indexes": [
+    {
+      "name": "text_search_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "caption",
+            "text"
+          ],
+          [
+            "file_name",
+            "text"
+          ]
+        ],
+        "options": {
+          "default_language": "english"
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "caption",
+            "text"
+          ],
+          [
+            "file_name",
+            "text"
+          ]
+        ],
+        "options": {
+          "default_language": "english",
+          "language_override": "language",
+          "weights": {
+            "caption": 1,
+            "file_name": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "file_type_time_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "file_type",
+            1
+          ],
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "file_type",
+            1
+          ],
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "size_index",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "file_size",
+            1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "file_size",
+            1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "date_index",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "file_ref_index",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "file_ref",
+            1
+          ]
+        ],
+        "options": {
+          "unique": true,
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "file_ref",
+            1
+          ]
+        ],
+        "options": {
+          "unique": true,
+          "sparse": true
+        }
+      }
+    },
+    {
+      "name": "type_name_index",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "file_type",
+            1
+          ],
+          [
+            "file_name",
+            1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "file_type",
+            1
+          ],
+          [
+            "file_name",
+            1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "unique_file_id_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "file_unique_id",
+            1
+          ]
+        ],
+        "options": {
+          "unique": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "file_unique_id",
+            1
+          ]
+        ],
+        "options": {
+          "unique": true
+        }
+      }
+    },
+    {
+      "name": "season_episode_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "season",
+            1
+          ],
+          [
+            "episode",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "season",
+            1
+          ],
+          [
+            "episode",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      }
+    },
+    {
+      "name": "season_episode_resolution_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "season",
+            1
+          ],
+          [
+            "episode",
+            1
+          ],
+          [
+            "resolution",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "season",
+            1
+          ],
+          [
+            "episode",
+            1
+          ],
+          [
+            "resolution",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      }
+    },
+    {
+      "name": "resolution_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "resolution",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "resolution",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      }
+    },
+    {
+      "name": "resolution_type_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "resolution",
+            1
+          ],
+          [
+            "file_type",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "resolution",
+            1
+          ],
+          [
+            "file_type",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      }
+    },
+    {
+      "name": "episode_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "episode",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "episode",
+            1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      }
+    },
+    {
+      "name": "file_type_size_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "file_type",
+            1
+          ],
+          [
+            "file_size",
+            -1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "file_type",
+            1
+          ],
+          [
+            "file_size",
+            -1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "channel_time_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "channel_id",
+            1
+          ],
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "channel_id",
+            1
+          ],
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "cleanup_time_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "indexed_at",
+            1
+          ]
+        ],
+        "options": {}
+      },
+      "observed": {
+        "keys": [
+          [
+            "indexed_at",
+            1
+          ]
+        ],
+        "options": {}
+      }
+    },
+    {
+      "name": "resolution_date_idx",
+      "status": "matching",
+      "expected": {
+        "keys": [
+          [
+            "resolution",
+            1
+          ],
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      },
+      "observed": {
+        "keys": [
+          [
+            "resolution",
+            1
+          ],
+          [
+            "indexed_at",
+            -1
+          ]
+        ],
+        "options": {
+          "sparse": true
+        }
+      }
+    }
+  ],
+  "unmanaged_indexes": [
+    {
+      "name": "text_name_unique",
+      "definition": {
+        "keys": [
+          [
+            "file_name",
+            1
+          ],
+          [
+            "caption",
+            1
+          ]
+        ],
+        "options": {
+          "unique": true
+        }
+      }
+    }
+  ],
+  "prefix_candidates": [
+    {
+      "shorter": "resolution_idx",
+      "longer": "resolution_date_idx",
+      "status": "requires_query_plan_and_option_review"
+    },
+    {
+      "shorter": "resolution_idx",
+      "longer": "resolution_type_idx",
+      "status": "requires_query_plan_and_option_review"
+    },
+    {
+      "shorter": "season_episode_idx",
+      "longer": "season_episode_resolution_idx",
+      "status": "requires_query_plan_and_option_review"
+    }
+  ],
+  "index_usage": {
+    "file_type_time_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:54.509000"
+      ]
+    },
+    "_id_": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T01:52:56.874000"
+      ]
+    },
+    "size_index": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:43.955000"
+      ]
+    },
+    "episode_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:56.924000"
+      ]
+    },
+    "unique_file_id_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:54.910000"
+      ]
+    },
+    "resolution_date_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:57.297000"
+      ]
+    },
+    "date_index": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:44.316000"
+      ]
+    },
+    "file_type_size_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:45.473000"
+      ]
+    },
+    "type_name_index": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:45.056000"
+      ]
+    },
+    "resolution_type_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:56.451000"
+      ]
+    },
+    "channel_time_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:45.858000"
+      ]
+    },
+    "season_episode_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:55.277000"
+      ]
+    },
+    "text_name_unique": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:43.425000"
+      ]
+    },
+    "text_search_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:46.606000"
+      ]
+    },
+    "season_episode_resolution_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:55.666000"
+      ]
+    },
+    "cleanup_time_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:46.245000"
+      ]
+    },
+    "resolution_idx": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:56.091000"
+      ]
+    },
+    "file_ref_index": {
+      "sampled_nodes": 1,
+      "access_ops": 0,
+      "since": [
+        "2026-10-29T02:00:44.690000"
+      ]
+    }
+  }
+}

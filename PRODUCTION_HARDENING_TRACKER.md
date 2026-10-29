@@ -1,5 +1,15 @@
 # Production Hardening Tracker
 
+> **2026-10-29 QA evidence:** [full report](docs/QA_REPORT_20261029.md),
+> [sanitized results](docs/qa/20261029/evidence.json). Final local suite:
+> **470 passed, zero failed/skipped**, latest published Wzgram 3.1.5, real
+> disposable MongoDB/dual Redis, rebuilt Docker image, private Telegram flows,
+> dependency outages, memory pressure and actual local backup restoration.
+> New regressions exposed and fixed additional lifecycle, quota, subscription,
+> handler-reference, indexing-routing and profiler defects. **In review statuses
+> remain unchanged**: PH-028 is incomplete, search latency acceptance and the
+> report's other release gates still apply; no production rollout or merge.
+
 > **ACTIVE SOURCE OF TRUTH** for production reliability, correctness, security, and scaling work on Advanced-File-Filter-Bot.
 >
 > Established: **2026-10-28**. Baseline source commit: [`16c4bc16`](https://github.com/rumalg123/Advanced-File-Filter-Bot/commit/16c4bc16ea1ba81c9f554daeee6ecc917dadd5de).

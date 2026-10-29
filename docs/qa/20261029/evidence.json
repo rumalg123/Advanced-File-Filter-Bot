@@ -1,0 +1,156 @@
+{
+  "date": "2026-10-29",
+  "tested_head": "61aa5c8",
+  "python": "3.13.7",
+  "wzgram": "3.1.5",
+  "tests": {
+    "tests": 470,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "coverage": {
+    "covered_lines": 7146,
+    "num_statements": 14872,
+    "percent_covered": 48.05002689618074,
+    "percent_covered_display": "48",
+    "missing_lines": 7726,
+    "excluded_lines": 17,
+    "percent_statements_covered": 48.05002689618074,
+    "percent_statements_covered_display": "48"
+  },
+  "test_modules": {
+    "tests.test_access_and_quota": 24,
+    "tests.test_admin_observability": 1,
+    "tests.test_atomic_search_generation_redis": 2,
+    "tests.test_batch_links": 2,
+    "tests.test_broadcast": 8,
+    "tests.test_cache_audit": 28,
+    "tests.test_ci_release_contract": 4,
+    "tests.test_command_auto_delete": 9,
+    "tests.test_configuration_and_packaging": 9,
+    "tests.test_deeplink_bulk_quota": 11,
+    "tests.test_disposable_recovery_fixtures": 2,
+    "tests.test_durable_channel_indexing": 10,
+    "tests.test_durable_channel_indexing_mongo": 1,
+    "tests.test_durable_saved_search_alerts": 4,
+    "tests.test_feature_crud": 7,
+    "tests.test_feature_rollout": 25,
+    "tests.test_handler_alignment": 8,
+    "tests.test_health_probes": 8,
+    "tests.test_indexing_and_channel": 5,
+    "tests.test_media_index_audit": 7,
+    "tests.test_media_metadata_contract": 25,
+    "tests.test_media_search_regressions": 36,
+    "tests.test_multidb_fail_closed_identity": 4,
+    "tests.test_multidb_ownership_pagination": 4,
+    "tests.test_pagination_stability": 3,
+    "tests.test_plain_text_surfaces": 4,
+    "tests.test_production_authorization": 18,
+    "tests.test_protected_redis_state": 12,
+    "tests.test_quota_delivery_handlers": 6,
+    "tests.test_quota_delivery_ledger": 7,
+    "tests.test_quota_utc_day": 12,
+    "tests.test_rate_limiter_outage": 7,
+    "tests.test_recommendations_and_similarity": 11,
+    "tests.test_redis_acl_security": 14,
+    "tests.test_redis_serialization_audit": 2,
+    "tests.test_redis_services_integration": 3,
+    "tests.test_redis_state_migration": 5,
+    "tests.test_safe_bulk_deletion": 10,
+    "tests.test_safe_bulk_deletion_mongo": 1,
+    "tests.test_safe_redis_serialization": 10,
+    "tests.test_saved_search_pagination": 9,
+    "tests.test_search_backend_failure": 9,
+    "tests.test_search_cache_generation_races": 5,
+    "tests.test_search_command_routing": 6,
+    "tests.test_search_performance_mongo": 5,
+    "tests.test_search_performance_telemetry": 6,
+    "tests.test_semaphore_cancellation": 8,
+    "tests.test_semaphore_resize": 7,
+    "tests.test_session_and_cache": 3,
+    "tests.test_staging_isolation": 30,
+    "tests.test_task_lifecycle": 7,
+    "tests.test_telegram_flood_slots": 6
+  },
+  "remote_read_only": {
+    "media_documents": 96908,
+    "observed_indexes": 18,
+    "declared_indexes": 16,
+    "index_status_counts": {
+      "matching": 16
+    },
+    "additional_test_targets_reachable": 2,
+    "additional_media_counts": [
+      0,
+      0
+    ],
+    "writes": 0,
+    "index_ddl": 0
+  },
+  "health_outages": [
+    {
+      "paused": "affb-qa-state-20261029",
+      "ready_status": 503,
+      "liveness_status": 200,
+      "seconds": 0.82,
+      "body": {
+        "status": "not_ready",
+        "dependencies": {
+          "mongodb": "ok",
+          "redis": "ok",
+          "redis_state": "unavailable"
+        }
+      }
+    },
+    {
+      "recovered": "affb-qa-state-20261029",
+      "ready_status": 200
+    },
+    {
+      "paused": "affb-qa-mongo-20261029",
+      "ready_status": 503,
+      "liveness_status": 200,
+      "seconds": 0.82,
+      "body": {
+        "status": "not_ready",
+        "dependencies": {
+          "mongodb": "unavailable",
+          "redis": "ok",
+          "redis_state": "ok"
+        }
+      }
+    },
+    {
+      "recovered": "affb-qa-mongo-20261029",
+      "ready_status": 200
+    }
+  ],
+  "live": {
+    "alignment_score": 100,
+    "channel_index_jobs_done": 2,
+    "saved_search_alert_jobs_done": 6,
+    "broadcast_allowed_recipients": 2,
+    "broadcast_delivered": 2,
+    "broadcast_ack_seconds": 0.126,
+    "quota_limit": 2,
+    "quota_successful_deliveries": 2,
+    "quota_third_denied": true,
+    "feature_flag_rollback_passed": true,
+    "controlled_variant_grouping": true,
+    "variant_files_preserved": 4,
+    "four_second_search_and_help_deletion_tested": true
+  },
+  "recovery": {
+    "mongo_actual_dump_restore_documents": 220,
+    "mongo_counts_and_index_counts_matched": true,
+    "redis_actual_rdb_session_restored": true,
+    "redis_restored_ttl_positive": true,
+    "atlas_snapshot_restore_tested": false
+  },
+  "release_gates": {
+    "global_multidb_ownership_implemented": false,
+    "representative_search_latency_accepted": false,
+    "github_actions_on_final_head_run_here": false
+  }
+}
