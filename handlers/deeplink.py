@@ -253,10 +253,10 @@ class DeepLinkHandler(BaseCommandHandler):
             protect=protect
         )
 
-        if access_ctx.should_track_retrieval and reserved_count > media_success_count:
-            await self.bot.user_repo.release_quota(
-                user_id,
-                reserved_count - media_success_count
+        if access_ctx.should_track_retrieval and reserved_count:
+            await settle_delivery_quota(
+                self.bot.user_repo, user_id, reserved_count, media_success_count,
+                uncertain=media_success_count < int(reserved_count)
             )
 
         await sts.delete()
@@ -387,10 +387,10 @@ class DeepLinkHandler(BaseCommandHandler):
                 logger.error(f"Error sending file: {e}")
                 continue
 
-        if access_ctx.should_track_retrieval and reserved_count > success_count:
-            await self.bot.user_repo.release_quota(
-                user_id,
-                reserved_count - success_count
+        if access_ctx.should_track_retrieval and reserved_count:
+            await settle_delivery_quota(
+                self.bot.user_repo, user_id, reserved_count, success_count,
+                uncertain=success_count < int(reserved_count)
             )
 
         sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
@@ -453,10 +453,10 @@ class DeepLinkHandler(BaseCommandHandler):
             batch_data
         )
 
-        if access_ctx.should_track_retrieval and reserved_count > success_count:
-            await self.bot.user_repo.release_quota(
-                user_id,
-                reserved_count - success_count
+        if access_ctx.should_track_retrieval and reserved_count:
+            await settle_delivery_quota(
+                self.bot.user_repo, user_id, reserved_count, success_count,
+                uncertain=success_count < int(reserved_count)
             )
 
         if success_count > 0:
@@ -579,10 +579,10 @@ class DeepLinkHandler(BaseCommandHandler):
                 logger.error(f"Error sending file: {e}")
                 continue
 
-        if access_ctx.should_track_retrieval and reserved_count > success_count:
-            await self.bot.user_repo.release_quota(
-                user_id,
-                reserved_count - success_count
+        if access_ctx.should_track_retrieval and reserved_count:
+            await settle_delivery_quota(
+                self.bot.user_repo, user_id, reserved_count, success_count,
+                uncertain=success_count < int(reserved_count)
             )
 
         sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
