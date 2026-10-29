@@ -452,7 +452,7 @@ class PremiumValidation:
         # Use provided time or current UTC time
         now = current_time if current_time else datetime.now(UTC)
 
-        return expiry >= now
+        return expiry > now
 
     @staticmethod
     def check_user_premium_status(user) -> Tuple[bool, Optional[datetime]]:

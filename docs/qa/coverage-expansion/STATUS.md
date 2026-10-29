@@ -47,3 +47,8 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   successful and return an actual boolean for upserts, including an inserted
   identity of zero. Real-Mongo CRUD/cache/aggregation/connection/filter contracts
   and existing regression suites passed (76 focused cases).
+
+- **Passed QA:** premium entitlement now ends at the exact expiry instant,
+  consistent with zero remaining days and the documented future-expiry policy.
+  Validation/permissions/premium/access boundary suites pass; 49 new validation
+  cases cover public inputs and remote permission outcomes.

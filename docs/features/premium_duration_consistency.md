@@ -38,6 +38,7 @@ Implementation status: verified on 2026-07-18 with 104 passing tests.
 | PRM-007 | Premium user statistics counted the stored flag until hourly cleanup, even after expiry. | Count only future normalized expiry dates, use a versioned cache key, and expire that cache at the nearest active expiry. |
 | PRM-008 | Invalid default durations such as zero could be stored through settings or loaded from environment. | Enforce `1..36500` in Pydantic configuration and database-setting writes. |
 | PRM-009 | Some quota-reservation paths trusted the raw premium flag after access checks. | Derive quota exemption from both the flag and a future stored expiry. |
+| PRM-010 | At the exact expiry instant, entitlement returned true while remaining days returned zero. | Passed QA: entitlement now requires a strictly future expiry; exact-boundary, timezone and access regressions pass. |
 
 ## Acceptance checks
 
