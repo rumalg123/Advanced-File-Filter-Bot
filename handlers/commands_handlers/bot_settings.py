@@ -547,7 +547,10 @@ class BotSettingsHandler(BaseHandler):
                     expire=CacheTTLConfig.OPERATION_LOCK
                 )
                 # Delete the message containing the value for security
-                await message.delete()
+                try:
+                    await message.delete()
+                except Exception as error:
+                    logger.warning("Could not delete saved settings input: %s", error)
                 
                 # Also delete the editing message
                 try:
