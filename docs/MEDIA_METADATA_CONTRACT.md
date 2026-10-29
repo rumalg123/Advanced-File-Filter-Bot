@@ -3,7 +3,7 @@
 **Status:** implemented on the existing hardening branch and Draft PR #4.
 **No production deployment or migration.**
 The persisted fields are **default-off** behind `FEATURE_CANONICAL_MEDIA_METADATA=false`.
-CI and staging acceptance must be recorded separately before enabling writes.
+Both CI jobs passed at code SHA `40b4a5da` on [run 40811505457](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40811505457). Staging acceptance remains outstanding before enabling writes.
 
 ## Root cause and source-of-truth contract
 
@@ -113,7 +113,7 @@ It does not provide safe reversible updates for the new contract.
   PH-006/PH-016 require real query plans before any new index.
 - Legacy `resolution` stays mixed by design until all consumers are
   audited and a reversible migration is explicitly approved.
-- [ ] Exact code SHA passes Python, MongoDB/Redis and Docker CI.
+- [x] Exact code SHA `40b4a5da` passed Python, MongoDB/Redis and Docker CI ([run 40811505457](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40811505457)).
 - [ ] Isolated staging Telegram ingestion, old-file search/delivery
       and read-only mixed-schema search confirmed.
 - [ ] Default-off rollout and old-image rollback demonstrated.
