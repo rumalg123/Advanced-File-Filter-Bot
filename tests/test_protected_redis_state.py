@@ -72,6 +72,27 @@ class FakeBackend:
         self.data[key] = int(self.data.get(key, 0)) + amount
         return self.data[key]
 
+    async def ensure_search_generation(self, key, initial):
+        self.calls.append(("ensure_generation", key))
+        if not self.ensure_succeeds:
+            return None
+        existing = self.data.setdefault(key, int(initial))
+        try:
+            number = int(existing)
+            return number if number > 0 else None
+        except (ValueError, TypeError):
+            return None
+
+    async def advance_search_generation(self, key, initial):
+        self.calls.append(("advance_generation", key))
+        if not self.increment_succeeds:
+            return None
+        current = await self.ensure_search_generation(key, initial)
+        if current is None:
+            return None
+        self.data[key] = current + 1
+        return self.data[key]
+
     async def ensure_counter_initialized(self, key, initial):
         self.calls.append(("initialize_counter", key))
         if not self.ensure_succeeds:
@@ -208,7 +229,7 @@ async def test_state_connection_failure_never_falls_back_to_disposable_cache():
 @pytest.mark.asyncio
 async def test_protected_generation_initializes_randomly_and_never_reuses_v1(monkeypatch):
     manager, cache, state = routed()
-    values = iter((101, 202))
+    values = iter((101, 202, 303, 404, 505))
     monkeypatch.setattr("core.cache.invalidation.secrets.randbits", lambda _: next(values))
 
     invalidator = CacheInvalidator(manager)
@@ -219,9 +240,9 @@ async def test_protected_generation_initializes_randomly_and_never_reuses_v1(mon
     # A state instance restored without its counter must never resurrect v1.
     state.data.clear()
     after_reset = await invalidator.get_search_cache_version()
-    assert after_reset == 203 and after_reset != first
+    assert after_reset == 304 and after_reset != first
     assert cache.data == {}
-    assert await invalidator.increment_search_cache_version() == 204
+    assert await invalidator.increment_search_cache_version() == 305
 
 
 @pytest.mark.asyncio
