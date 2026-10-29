@@ -42,3 +42,8 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   Telegram before performing slow work. Four pre-fix failures reproduced the
   missing answers; eight focused navigation/formatting tests pass. Live sweep
   also observed the View callback timeout before this fix.
+
+- **Passed QA:** generic repository updates now treat matched no-op writes as
+  successful and return an actual boolean for upserts, including an inserted
+  identity of zero. Real-Mongo CRUD/cache/aggregation/connection/filter contracts
+  and existing regression suites passed (76 focused cases).

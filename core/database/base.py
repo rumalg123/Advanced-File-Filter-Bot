@@ -183,7 +183,9 @@ class BaseRepository(ABC, Generic[T]):
             cache_key = self._get_cache_key(id)
             await self._base_cache_invalidator.invalidate_cache_key(cache_key)
 
-            return result.modified_count > 0 or (upsert and result.upserted_id)
+            # Matching an already-current entity is an idempotent success.
+            # Inserted identities can be falsey (for example integer zero).
+            return result.matched_count > 0 or result.upserted_id is not None
         except Exception as e:
             logger.error(f"Error updating entity {id}: {e}")
             return False
