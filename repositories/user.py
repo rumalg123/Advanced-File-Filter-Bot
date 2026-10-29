@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, date, timedelta, UTC
 from dataclasses import dataclass, asdict
+from uuid import uuid4
 from enum import Enum
 
 from pymongo import UpdateOne
@@ -107,6 +108,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """Convert dictionary to User entity"""
         data['id'] = data.pop('_id')
         data['status'] = UserStatus(data.get('status', 'active'))
+        # PH-022 internal, bounded quota ledger is not part of public User DTO.
+        data.pop('quota_delivery_ledger', None)
 
         # Parse dates
         if data.get('premium_activation_date'):
@@ -555,6 +558,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, 0, f"Requested {requested_count} exceeds daily limit of {daily_limit}"
 
         today_str = quota_day_utc().isoformat()
+        ledger_enabled = settings.features.feature_quota_delivery_ledger
+        reservation_id = uuid4().hex if ledger_enabled else None
 
         # Get user to check current state
         user = await self.get_user(user_id)
@@ -570,40 +575,89 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # and same-day increments.  The conditional update is evaluated against
         # the current document, so concurrent callers cannot overwrite/reset one
         # another or reserve beyond the limit.
-        result = await self.db_pool.execute_with_retry(
-            collection.find_one_and_update,
-            {
-                '_id': user_id,
-                '$or': [
-                    {'last_retrieval_date': {'$ne': today_str}},
-                    {
-                        'last_retrieval_date': today_str,
-                        'daily_retrieval_count': {'$lte': daily_limit - requested_count}
-                    }
+        selector = {
+            '_id': user_id,
+            '$or': [
+                {'last_retrieval_date': {'$ne': today_str}},
+                {
+                    'last_retrieval_date': today_str,
+                    'daily_retrieval_count': {'$lte': daily_limit - requested_count}
+                }
+            ]
+        }
+        update_fields = {
+            'daily_retrieval_count': {
+                '$cond': [
+                    {'$eq': ['$last_retrieval_date', today_str]},
+                    {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, requested_count]},
+                    requested_count
                 ]
             },
-            [{
-                '$set': {
-                    'daily_retrieval_count': {
-                        '$cond': [
-                            {'$eq': ['$last_retrieval_date', today_str]},
-                            {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, requested_count]},
-                            requested_count
-                        ]
-                    },
-                    'last_retrieval_date': today_str,
-                    'updated_at': datetime.now(UTC)
+            'last_retrieval_date': today_str,
+            'updated_at': datetime.now(UTC)
+        }
+        if ledger_enabled:
+            # Keep unresolved entries for operator inspection, but prune old
+            # resolved entries on *new* reservations. A missing token always
+            # fails closed, so pruning cannot create a duplicate refund.
+            unresolved = {
+                '$filter': {
+                    'input': {'$ifNull': ['$quota_delivery_ledger', []]},
+                    'as': 'item',
+                    'cond': {'$in': ['$item.status', ['reserved', 'uncertain']]}
                 }
-            }],
+            }
+            selector['$expr'] = {'$lt': [{'$size': unresolved}, 256]}
+            selector['quota_delivery_ledger.id'] = {'$ne': reservation_id}
+            update_fields['quota_delivery_ledger'] = {
+                '$concatArrays': [
+                    unresolved,
+                    [{
+                        'id': reservation_id,
+                        'day': today_str,
+                        'amount': requested_count,
+                        'status': 'reserved',
+                        'created_at': datetime.now(UTC)
+                    }]
+                ]
+            }
+
+        result = await self.db_pool.execute_with_retry(
+            collection.find_one_and_update,
+            selector, [{'$set': update_fields}],
             return_document=True
         )
 
+        if not result and ledger_enabled:
+            # If a wrapper retried after an ambiguous successful write, the
+            # stable per-call token recovers the prior result without re-debit.
+            current = await collection.find_one(
+                {'_id': user_id, 'quota_delivery_ledger.id': reservation_id},
+                {'quota_delivery_ledger': 1, 'daily_retrieval_count': 1}
+            )
+            if current:
+                result = current
+
         if result:
-            new_count = result.get('daily_retrieval_count', 0)
             await self.cache_invalidator.invalidate_user_data(user_id)
             await self.cache_invalidator.invalidate_user_stats()
-            logger.info(f"Reserved {requested_count} quota for user {user_id}, new total: {new_count}")
-            return True, QuotaReservation(requested_count, today_str), f"Reserved {requested_count} quota"
+            logger.info("Reserved %s quota for user %s", requested_count, user_id)
+            return (True,
+                    QuotaReservation(requested_count, today_str, reservation_id),
+                    f"Reserved {requested_count} quota")
+
+        if ledger_enabled:
+            current = await collection.find_one(
+                {'_id': user_id},
+                {'quota_delivery_ledger': 1}
+            )
+            unresolved_count = sum(
+                item.get('status') in ('reserved', 'uncertain')
+                for item in (current or {}).get('quota_delivery_ledger', [])
+            )
+            if unresolved_count >= 256:
+                logger.error("Quota reconciliation ledger full for user %s", user_id)
+                return False, 0, "Quota delivery history needs operator review"
 
         # The guard failed because another caller consumed the remaining quota.
         fresh_user = await self.find_by_id(user_id, use_cache=False)
@@ -613,18 +667,125 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, 0, "Daily limit reached"
         return False, 0, f"Can only retrieve {remaining} more files today"
 
-    async def release_quota(self, user_id: int, count: int) -> bool:
-        """Refund only the UTC day on which quota was actually reserved.
+    async def settle_quota_delivery(
+        self, user_id: int, reservation: QuotaReservation,
+        delivered_count: int, *, uncertain: bool = False
+    ) -> bool:
+        """One-shot, atomic reservation settlement on the same user document.
 
-        QuotaReservation amounts retain their day even after subtraction in
-        bulk callback/deep-link handlers. Plain legacy ints refund only the
-        *current* UTC day. A previous-day refund never subtracts today's
-        newly reset allowance. Guard against negative counters atomically.
+        A confirmed result releases only undelivered slots. An uncertain
+        Telegram outcome stores the observed count but does not refund any
+        slot: operators must reconcile the unknown external side effect.
+        A repeated settlement/refund cannot match the 'reserved' state again.
+        """
+        token = reservation.reservation_id
+        if not token:
+            raise ValueError("Delivery settlement requires a token")
+        total = reservation.original_amount
+        if type(delivered_count) is not int or not 0 <= delivered_count <= total:
+            raise ValueError("Confirmed delivery count is out of range")
+        refunded = 0 if uncertain else total - delivered_count
+        collection = await self.get_collection()
+        selector = {
+            '_id': user_id,
+            'quota_delivery_ledger': {'$elemMatch': {
+                'id': token, 'day': reservation.quota_day,
+                'status': 'reserved', 'amount': total
+            }}
+        }
+        update = {
+            '$set': {
+                'quota_delivery_ledger.$.status': 'uncertain' if uncertain else 'settled',
+                'quota_delivery_ledger.$.confirmed_count': delivered_count,
+                'quota_delivery_ledger.$.refund_count': refunded,
+                'quota_delivery_ledger.$.settled_at': datetime.now(UTC)
+            }
+        }
+        if refunded:
+            # This day guard must remain in the *same atomic user update*.
+            selector['last_retrieval_date'] = reservation.quota_day
+            selector['daily_retrieval_count'] = {'$gte': refunded}
+            update['$inc'] = {'daily_retrieval_count': -refunded}
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one, selector, update
+        )
+        if not result.modified_count:
+            logger.warning(
+                "Quota settlement skipped (duplicate, stale day or missing token), user=%s",
+                user_id
+            )
+            return False
+        await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
+        return True
+
+    async def resolve_uncertain_quota(
+        self, user_id: int, reservation_id: str, refund_count: int
+    ) -> bool:
+        """Operator-only explicit reconciliation; no automatic Telegram guess.
+
+        A human must review delivery evidence first. This cannot refund
+        against a different UTC day and can run successfully only once.
+        """
+        if not reservation_id or type(refund_count) is not int or refund_count < 0:
+            raise ValueError("Invalid manual quota reconciliation input")
+        collection = await self.get_collection()
+        record = await collection.find_one(
+            {'_id': user_id, 'quota_delivery_ledger': {
+                '$elemMatch': {'id': reservation_id, 'status': 'uncertain'}
+            }},
+            {'quota_delivery_ledger': 1}
+        )
+        if not record:
+            return False
+        entry = next((
+            item for item in record.get('quota_delivery_ledger', [])
+            if item.get('id') == reservation_id and item.get('status') == 'uncertain'
+        ), None)
+        if not entry or refund_count > entry['amount'] - entry.get('confirmed_count', 0):
+            return False
+        selector = {
+            '_id': user_id,
+            'quota_delivery_ledger': {'$elemMatch': {
+                'id': reservation_id, 'day': entry['day'], 'status': 'uncertain'
+            }}
+        }
+        update = {'$set': {
+            'quota_delivery_ledger.$.status': 'settled',
+            'quota_delivery_ledger.$.refund_count': refund_count,
+            'quota_delivery_ledger.$.manually_resolved_at': datetime.now(UTC),
+        }}
+        if refund_count:
+            selector['last_retrieval_date'] = entry['day']
+            selector['daily_retrieval_count'] = {'$gte': refund_count}
+            update['$inc'] = {'daily_retrieval_count': -refund_count}
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one, selector, update
+        )
+        if not result.modified_count:
+            return False
+        await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
+        return True
+
+    async def release_quota(self, user_id: int, count: int) -> bool:
+        """Refund only once for ledger-enabled reservations.
+
+        Legacy plain integers and PH-021 day-tagged values without tokens
+        retain their old guarded update. New tokenized values mark a
+        reservation settled and refund in one MongoDB user-document write.
         """
         if count <= 0:
             return True
-        reserved_day = getattr(count, 'quota_day', None)
-        day_key = reserved_day or quota_day_utc().isoformat()
+        token = getattr(count, 'reservation_id', None)
+        if token:
+            original = getattr(count, 'original_amount', int(count))
+            if int(count) > original:
+                return False
+            return await self.settle_quota_delivery(
+                user_id, count, original - int(count)
+            )
+        day_key = getattr(count, 'quota_day', None) or quota_day_utc().isoformat()
         collection = await self.get_collection()
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
@@ -635,15 +796,11 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             },
             {'$inc': {'daily_retrieval_count': -int(count)}}
         )
-
         if result.modified_count > 0:
             await self.cache_invalidator.invalidate_user_data(user_id)
             await self.cache_invalidator.invalidate_user_stats()
-            logger.info("Released %s quota for user %s on day %s",
-                        count, user_id, day_key)
             return True
-
-        logger.warning("Could not refund %s quota for user %s on %s (day changed or amount unavailable)",
+        logger.warning("Could not refund %s quota for user %s on %s",
                        count, user_id, day_key)
         return False
 
