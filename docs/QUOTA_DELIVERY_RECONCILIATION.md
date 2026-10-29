@@ -1,6 +1,6 @@
 # PH-022: Durable quota reservation settlement and delivery uncertainty
 
-**Status:** opt-in implementation on the existing hardening branch / Draft PR #4. **Do not enable in production.** No production data was accessed, no live collection/index was modified, and no application was deployed.
+**Status:** code CI passed ([run 40820004258](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820004258)) at SHA `5a8c231f`; staging pending / Draft PR #4. **Do not enable in production.** No production data was accessed, no live collection/index was modified, and no application was deployed.
 
 ## Defect
 
@@ -39,7 +39,7 @@ The current implementation covers single-file callbacks, single-file deep links,
 
 ## Acceptance checklist
 
-- [ ] Full Python regression suite, compile/lint, disposable MongoDB/dual Redis, Docker/Compose preflight pass at tested code SHA.
+- [x] Full Python regression suite, compile/lint, disposable MongoDB/dual Redis and Docker/Compose preflight **passed** at code SHA `5a8c231f` ([run 40820004258](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820004258)). Initial CI identified a callback test setup issue and a real MongoDB `$filter` variable-scope bug; both were corrected, with an added assertion that unresolved entries survive midnight rollover.
 - [ ] Prove a user never receives more quota through duplicate or concurrent refund attempts, including 20 same-token settlement races, midnight rollovers, manual reconciliation and ledger overflow.
 - [ ] Test default flag off: existing user documents remain untouched, and legacy callbacks/deep links still refund known failures.
 - [ ] Fault inject a send that returns successfully but then loses its database acknowledgement, a send raising an ambiguous timeout, cancellation during a send, UserIsBlocked and error before API invocation for **single-file callbacks, send-all, deep-link and channel/batch**.
