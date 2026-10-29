@@ -51,6 +51,7 @@ from core.services.filter import FilterService
 from core.services.features import FeatureService
 from core.services.indexing import IndexingService, IndexRequestService
 from core.services.maintenance import MaintenanceService
+from core.services.health_probes import register_probe_routes
 from core.utils.rate_limiter import RateLimiter
 from core.utils.subscription import SubscriptionManager
 from core.utils.telegram_api import telegram_api
@@ -1188,17 +1189,10 @@ class MediaSearchBot(Client):
         """Start web server for health checks"""
         app = web.Application()
 
-        # Health check endpoint
-        async def health_check(request):
-            health_data = await self.maintenance_service.get_system_health_data()
-            status = health_data.get('status', 'unhealthy')
-            http_status = 200 if status in ('healthy', 'degraded') else 503
-            return web.json_response({
-                'status': status,
-                'bot_username': self.bot_username,
-                'stats': health_data.get('stats', {}),
-                'meta': health_data.get('meta', {})
-            }, status=http_status)
+        # PH-013: cheap /health and /live, bounded /ready, and opt-in
+        # /health/details legacy diagnostics. No endpoint authentication or
+        # network binding change (PH-004 remains operator-deferred).
+        register_probe_routes(app, self)
 
         # Performance metrics endpoint
         async def performance_metrics(request):
@@ -1224,8 +1218,6 @@ class MediaSearchBot(Client):
                     'error': str(e)
                 }, status=500)
 
-        app.router.add_get('/', health_check)
-        app.router.add_get('/health', health_check)
         app.router.add_get('/metrics', performance_metrics)
         app.router.add_get('/performance', performance_metrics)
 
