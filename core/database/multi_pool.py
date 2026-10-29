@@ -480,46 +480,60 @@ class MultiDatabaseManager:
         update: Dict[str, Any],
         upsert: bool = False
     ) -> bool:
-        """Update the first matching document in active databases."""
-        tasks = []
+        """PH-025: locate exactly one owner before issuing a single write.
+
+        A multi-DB setup has no global uniqueness/ownership registry yet
+        (PH-028). Fail closed when a configured DB is unavailable or if
+        multiple DBs contain a match. Multi-DB creation of a new identity
+        remains forbidden until ownership and global uniqueness exist.
+        """
+        if not self.databases:
+            return False
+        if any(not db.is_active or db.pool is None for db in self.databases):
+            raise RuntimeError("Cannot verify write owner: configured database unavailable")
+
+        owners = []
         for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                tasks.append(self._update_one_in_database(db_info, collection_name, query, update, upsert))
-
-        if not tasks:
-            return False
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if result is True:
-                return True
-            if isinstance(result, Exception):
-                logger.error(f"Error updating document across databases: {result}")
-        return False
-
-    async def _update_one_in_database(
-        self,
-        db_info: DatabaseInfo,
-        collection_name: str,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
-        upsert: bool = False
-    ) -> bool:
-        """Update one document in a specific database with circuit breaker protection."""
-        try:
-            async def update_operation():
+            async def find_owner():
                 collection = await db_info.pool.get_collection(collection_name)
-                result = await db_info.pool.execute_with_retry(
-                    collection.update_one, query, update, upsert=upsert
+                return await db_info.pool.execute_with_retry(
+                    collection.find_one, query, {"_id": 1}
                 )
-                return result.modified_count > 0 or (upsert and result.upserted_id)
 
-            return await self._execute_with_circuit_breaker(
-                db_info, "update_one", update_operation
+            # No broad exception handling: uncertain owner != no match.
+            found = await self._execute_with_circuit_breaker(
+                db_info, "locate_update_owner", find_owner
             )
-        except Exception as e:
-            logger.error(f"Error updating document in database {db_info.name}: {e}")
-            return False
+            if found is not None:
+                owners.append(db_info)
+                if len(owners) > 1:
+                    raise RuntimeError(
+                        "Ambiguous multi-database owner; no update was issued"
+                    )
+
+        if not owners:
+            if len(self.databases) > 1 and upsert:
+                raise RuntimeError(
+                    "Multi-database upsert needs a global owner/uniqueness strategy (PH-028)"
+                )
+            if not upsert:
+                return False
+            owner = self.databases[0]
+        else:
+            owner = owners[0]
+
+        async def apply_one_update():
+            collection = await owner.pool.get_collection(collection_name)
+            # Existing owner can be updated without inserting in another DB.
+            result = await owner.pool.execute_with_retry(
+                collection.update_one, query, update,
+                upsert=upsert and len(self.databases) == 1
+            )
+            return result.matched_count > 0 or result.upserted_id is not None
+
+        return bool(await self._execute_with_circuit_breaker(
+            owner, "update_single_owner", apply_one_update
+        ))
 
     async def delete_one_across_databases(
         self,
