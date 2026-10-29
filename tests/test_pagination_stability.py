@@ -69,7 +69,7 @@ def test_profiler_rejects_unbounded_or_malformed_offsets_before_database_access(
             profile(None, ("doctor x",), offsets=offsets)
 
     with pytest.raises(ValueError, match="Too many"):
-        profile(None, ("doctor x", "another"), offsets=(0, 1, 2, 3, 4, 5),
+        profile(None, ("doctor x", "another", "third"), offsets=(0, 1, 2, 3, 4, 5),
                 compare_legacy_sort=True)
 
 
