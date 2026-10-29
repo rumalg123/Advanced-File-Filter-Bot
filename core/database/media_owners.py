@@ -123,6 +123,8 @@ class GlobalMediaOwners:
             raise ValueError('Invalid media inventory bound')
         if type(batch_size) is not int or not 1 <= batch_size <= 1000:
             raise ValueError('Invalid media inventory batch size')
+        if len(self.sources) < 2:
+            raise MediaOwnershipError('Media ownership activation requires at least two sources')
         # Deterministic first binding arbitrates simultaneous competing primaries.
         for key in sorted(self.sources):
             await self._validate_binding(key, create=True)

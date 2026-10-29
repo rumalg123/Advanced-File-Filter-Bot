@@ -74,6 +74,8 @@ def main():
         parser.error('--limit must be 1..1000000')
     try:
         sources = source_configuration()
+        if args.apply and len(sources) < 2:
+            parser.error('Media ownership activation requires at least two sources')
         if not args.allow_remote and any(not is_local(s['uri']) for s in sources):
             parser.error('Remote ownership operations require --allow-remote')
         result = asyncio.run(operate(sources, args))

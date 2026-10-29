@@ -54,6 +54,34 @@ async def total(sources):
 
 
 @pytest.mark.asyncio
+async def test_single_source_activation_is_rejected_without_database_mutations(topology):
+    source = topology[0]
+    owners = GlobalMediaOwners([source])
+    assert (await owners.inventory()) == {
+        'complete': True, 'sources': 1, 'documents': 0,
+        'identity_conflicts': 0, 'eligible': True,
+    }
+    with pytest.raises(MediaOwnershipError, match='at least two'):
+        await owners.activate('unsupported-single-source')
+    assert await source.pool.db.list_collection_names() == []
+
+
+def test_cli_single_source_activation_fails_before_connecting(monkeypatch, capsys):
+    from scripts import activate_media_owners as cli
+    monkeypatch.setenv('MEDIA_OWNER_SOURCES_JSON',
+                       '[{"uri":"mongodb://localhost","name":"qa"}]')
+    monkeypatch.setattr('sys.argv', ['activate_media_owners', '--apply',
+                                   '--activation-token', 'qa'])
+    operate = AsyncMock()
+    monkeypatch.setattr(cli, 'operate', operate)
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+    assert 'at least two' in capsys.readouterr().err
+    operate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_100_concurrent_creators_choose_exactly_one_permanent_owner(topology):
     owners = GlobalMediaOwners(topology)
     assert (await owners.activate('race'))['ready']

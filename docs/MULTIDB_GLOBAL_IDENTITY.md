@@ -1,6 +1,6 @@
 # PH-028: Global media identity and ownership
 
-**Implementation complete; local acceptance passed. Remote QA is in progress.**
+**Implementation complete; local and three-source remote QA passed.**
 `DATABASE_GLOBAL_OWNER_REGISTRY=false` is the default. Without activation and
 this flag, creation across independent databases remains blocked. Production
 rollout and merging remain separate operator decisions.
@@ -31,6 +31,11 @@ offline migration; this implementation deliberately provides no automatic move.
 All writers must use this protocol. An external client or old image with direct
 MongoDB write privileges can bypass application invariants.
 
+The coordinator retains reservations for every indexed identity, including
+deleted files and media owned by other sources. Size it for that permanent
+metadata in addition to its own media; switching the media write source does
+not transfer or shrink the registry.
+
 ## Activation
 
 1. Back up the selected sources. Stop **every** writer, including index workers,
@@ -39,7 +44,10 @@ MongoDB write privileges can bypass application invariants.
 2. Privately export `DATABASE_URI`, `DATABASE_NAME`, `DATABASE_URIS` and
    `DATABASE_NAMES`, as for the bot. For seed-list URIs containing commas, instead
    export `MEDIA_OWNER_SOURCES_JSON` as an array of `{uri, name}` objects. The
-   first source is the coordinator; never reorder it.
+   first source is the coordinator; never reorder it. Activation requires at
+   least two sources, matching the bot's multi-database startup contract. Include
+   the complete intended topology before activation: adding another source later
+   requires an offline migration. A single-source read-only inventory is allowed.
 3. Run the default read-only cross-namespace inventory:
 
    ```sh
