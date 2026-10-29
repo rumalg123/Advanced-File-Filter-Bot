@@ -391,6 +391,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             # Check for duplicate by file_unique_id across all databases
             existing = await self.find_file(media.file_unique_id)
             if existing:
+                if existing.file_unique_id != media.file_unique_id:
+                    logger.error("Media canonical identity conflicts with an existing alias")
+                    return False, 2, None
                 logger.debug(f"Duplicate file found: {media.file_name}")
                 return False, 0, existing
 
@@ -447,7 +450,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         except DuplicateKeyError as e:
             logger.warning(f"Duplicate key error for file: {media.file_name}")
             existing = await self.find_file(media.file_unique_id)
-            return False, 0, existing
+            if existing and existing.file_unique_id == media.file_unique_id:
+                return False, 0, existing
+            return False, 2, None
         except Exception as e:
             logger.error(f"Error saving media: {e}")
             return False, 2, None
