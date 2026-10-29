@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, asdict
 from datetime import datetime, UTC
 from enum import Enum
@@ -240,6 +241,33 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         if not file_unique_ids:
             return {}
 
+        if self.is_multi_db:
+            try:
+                identifiers = list(dict.fromkeys(file_unique_ids))
+                owners = getattr(self.multi_db_manager, 'media_owners', None)
+                result = {uid: None for uid in identifiers}
+                if owners is not None:
+                    documents = await asyncio.gather(
+                        *(owners.find(uid) for uid in identifiers), return_exceptions=True)
+                    for uid, document in zip(identifiers, documents):
+                        if isinstance(document, BaseException):
+                            raise document
+                        if document is not None:
+                            result[uid] = self._dict_to_entity(document)
+                else:
+                    documents = await self.multi_db_manager.find_many_in_all_databases(
+                        self.collection_name, {'file_unique_id': {'$in': identifiers}})
+                    for document in documents:
+                        uid = document['file_unique_id']
+                        if result[uid] is not None:
+                            raise ValueError('Multiple canonical media owners in batch')
+                        result[uid] = self._dict_to_entity(document)
+                # Publish only a complete batch. Positive cache entries alone
+                # cannot prove owner identity or availability across sources.
+                return result
+            except Exception as exc:
+                raise SearchBackendUnavailableError('Media batch lookup is temporarily unavailable') from exc
+
         result: Dict[str, Optional[MediaFile]] = {uid: None for uid in file_unique_ids}
 
         # First, check cache for all files
@@ -266,54 +294,26 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
         # Batch fetch from database for cache misses
         try:
-            if self.is_multi_db:
-                # Search across all databases using $in
-                for db_pool in await self.multi_db_manager.get_all_databases():
-                    if not cache_misses:
-                        break
-                    collection = await db_pool.get_collection(self.collection_name)
-                    docs = await db_pool.execute_with_retry(
-                        collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
-                        length=len(cache_misses)
+            # Single database mode
+            collection = await self.collection()
+            docs = await self.db_pool.execute_with_retry(
+                collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
+                length=len(cache_misses)
+            )
+            for data in docs:
+                try:
+                    file = self._dict_to_entity(data)
+                    uid = file.file_unique_id
+                    result[uid] = file
+                    # Cache the found file
+                    cache_key = CacheKeyGenerator.media(uid)
+                    await self.cache.set(
+                        cache_key,
+                        self._entity_to_dict(file),
+                        expire=self.ttl.MEDIA_FILE
                     )
-                    for data in docs:
-                        try:
-                            file = self._dict_to_entity(data)
-                            uid = file.file_unique_id
-                            result[uid] = file
-                            # Cache the found file
-                            cache_key = CacheKeyGenerator.media(uid)
-                            await self.cache.set(
-                                cache_key,
-                                self._entity_to_dict(file),
-                                expire=self.ttl.MEDIA_FILE
-                            )
-                            # Remove from cache_misses
-                            if uid in cache_misses:
-                                cache_misses.remove(uid)
-                        except Exception as e:
-                            logger.warning(f"Error processing batch result: {e}")
-            else:
-                # Single database mode
-                collection = await self.collection()
-                docs = await self.db_pool.execute_with_retry(
-                    collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
-                    length=len(cache_misses)
-                )
-                for data in docs:
-                    try:
-                        file = self._dict_to_entity(data)
-                        uid = file.file_unique_id
-                        result[uid] = file
-                        # Cache the found file
-                        cache_key = CacheKeyGenerator.media(uid)
-                        await self.cache.set(
-                            cache_key,
-                            self._entity_to_dict(file),
-                            expire=self.ttl.MEDIA_FILE
-                        )
-                    except Exception as e:
-                        logger.warning(f"Error processing batch result: {e}")
+                except Exception as e:
+                    logger.warning(f"Error processing batch result: {e}")
 
             logger.debug(
                 f"Batch file lookup: {len(cache_hits)} cache hits, "

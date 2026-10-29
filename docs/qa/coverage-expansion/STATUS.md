@@ -86,3 +86,11 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   coverage and 48.47% combined statement/branch coverage before the final added
   ownership failure-path tests. Root operator modules were requested but not
   imported, so the next whole-tree measurement must include them explicitly.
+
+- **Passed QA:** distributed batch delivery lookups now return a complete,
+  unambiguous mapping or raise `SearchBackendUnavailableError`; they no longer
+  convert source failures into partial `None` results or cache partial rows.
+  Registry mode resolves authoritative owners even when a positive cache entry
+  exists. Three behavioral regressions reproduced before remediation; 82 focused
+  batch/ownership/search cases pass. Duplicate-input and genuine-missing-file
+  behavior remains covered.

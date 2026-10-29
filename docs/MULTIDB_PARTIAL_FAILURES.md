@@ -30,3 +30,12 @@ This gives **all-or-error responses**, not a complete distributed snapshot, cons
 - [ ] Review all multi-DB consumers and their exception handling before enabling a second DB; benchmark all-or-error availability impact.
 
 **Rollback:** previous approved image reintroduces partial failures in optional multi-DB mode. No schema/backfill, index/Redis mutation, deployment or PR merge is part of this change.
+
+## Batch delivery continuation, 2026-10-29
+
+`MediaRepository.find_files_batch` now follows the same complete-or-error rule.
+An activated registry resolves each immutable owner; the defensive legacy path
+requires every source and rejects duplicate canonical owners. Neither publishes
+partial cache entries. A real missing identity remains `None`; backend failure
+raises `SearchBackendUnavailableError` so delivery cannot label an outage as a
+missing file. Five added contracts and the ownership/search suites pass.
