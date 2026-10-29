@@ -248,3 +248,37 @@ The full 776-test/coverage snapshot above remains associated with `850bc31`;
 whole-bot coverage was not rerun or claimed as 100% for this focused correction.
 Archived candidate images predate this correction: build the current branch.
 No production server or production container was accessed from QA.
+
+## Operational flags in /bsetting — completed
+
+Commit `f7bc25e` adds all five previously environment-only rollout flags to
+primary-admin settings: canonical metadata, quota delivery ledger, durable
+channel indexing, durable saved-search alerts and global media ownership.
+Saved values are synchronized into the feature/processing/database consumers
+before routing, repositories and workers are initialized. Existing MongoDB
+choices override environment initialization; changes take effect after restart.
+
+The Media Owners control is locked unless at least two distinct valid MongoDB
+URI/database pairs are configured. URI/name validation defers connections and
+SRV DNS; credential/option variants do not count as extra sources. Its recommended
+default is false before matching activation is ready and true afterward. Owners
+can stage true before stopped-writer activation, but startup still requires all
+bindings, canonical/alias indexes and matching ready topology. Bound ownership
+cannot be disabled through updates, reset, imports or forged callbacks. Invalid
+configuration and activation-read failures lock editing without displaying URIs.
+
+**Validation passed:** full suite **831 passed, 0 failed/errors/skipped** with
+local disposable MongoDB and two Redis instances, including 34 new operational
+settings cases. A real-Mongo integration saved all five flags, stopped the
+initial manager, activated two disposable sources, and verified a new startup
+loaded the saved values before attaching owner routing. UI checks cover the
+single-source lock, forged callbacks and Telegram callback size limits. Full
+Python compilation, undefined-name lint and whitespace checks passed. The 22
+existing Redis deprecation/aiohttp warnings remain.
+
+The temporary test services shared a private network namespace with no host
+ports and were removed afterward. No production server, Telegram account or
+remote Atlas database was accessed for this change. The earlier coverage
+percentages remain the historical snapshot; this full regression run did not
+remeasure whole-bot coverage. Exposing the controls does not complete outstanding
+canonical-metadata, quota reconciliation or durable-queue production drills.
