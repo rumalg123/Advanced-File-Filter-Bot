@@ -55,7 +55,8 @@ def main() -> int:
         document = json.load(sys.stdin)
         validate_compose(document)
     except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        print("STAGING COMPOSE BLOCKED (isolated config requirements failed)")
+        # Safety checks use static messages; never print resolved env values.
+        print("STAGING COMPOSE BLOCKED: " + str(exc))
         return 2
     print("STAGING COMPOSE VERIFIED (structural checks only)")
     return 0
