@@ -1,6 +1,6 @@
 # PH-026: Bounded distributed MongoDB pagination and stable merge
 
-**Status:** Implemented on the existing hardening branch and Draft PR #4; CI and isolated staging acceptance pending. Production still uses only one MongoDB database. **This work does not authorize activating additional databases.**
+**Status:** Implemented on the existing hardening branch and Draft PR #4; Full CI passed at SHA `6b7e64bf`; isolated staging acceptance pending. Production still uses only one MongoDB database. **This work does not authorize activating additional databases.**
 
 ## Prior behavior
 
@@ -25,7 +25,7 @@ Unlike native MongoDB sharding with `mongos`, this application is combining inde
 
 ## Test and release gates
 
-- [ ] Full Python regression with disposable MongoDB/dual Redis and Docker/Compose preflight passes at tested SHA.
+- [x] Full Python regression, disposable MongoDB/dual Redis, compile/lint and Docker/Compose preflight passed at SHA `6b7e64bf` ([run 40822577874](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40822577874), attempt 2). Docker Hub returned HTTP 500 resolving the existing Python base image on attempt 1; the failed job was retried successfully without changing code or Dockerfile.
 - [ ] Two/three isolated MongoDB databases with **3,750 synthetic media documents** and repeated timestamps: verify pages 0, 50, 1050 and 3200 agree with a deterministic reference ordering. Repeat deep pages to rule out unstable ties. Check disjoint adjacent pages.
 - [ ] Instrumented cursor: every `to_list` fetch must request at most 64 records; ensure every cursor closes, and one-source errors cause a hard failure rather than incomplete results.
 - [ ] Validate malformed limits, unavailable DBs, partially failed cursor reads and exhausted results.
