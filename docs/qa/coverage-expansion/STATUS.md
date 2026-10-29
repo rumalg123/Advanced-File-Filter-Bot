@@ -146,3 +146,10 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   disabled. Per-source `limit(skip + limit)` now bounds server top-K sorting;
   51 multi-source/ownership/batch cases pass, including exact deep-page results.
   Remote first/next/previous-page replay is in progress.
+
+- **Deep-sort implementation:** last-page QA still exceeded server memory after
+  the shallow top-K fix. The optional indexed-search flag now also creates a
+  stable `indexed_at/_id` index and uses it for pages reaching offset+limit 1,000.
+  Remote EXPLAIN at offsets 0/10/1,000/36,550 used no blocking SORT; the deepest
+  measured source read took 0.500s. Both single/distributed paths and small-memory
+  deep-page equivalence are regression-tested. Live last-page replay is pending.

@@ -47,7 +47,9 @@ def media_index_manifest(*, include_search_tokens: bool = False) -> list[dict[st
         for name, keys, options in _MEDIA_INDEXES
     ]
     if include_search_tokens:
-        from core.utils.search_tokens import SEARCH_TOKEN_INDEX
+        from core.utils.search_tokens import SEARCH_TOKEN_INDEX, SEARCH_PAGE_INDEX
+        manifest.append({'name': SEARCH_PAGE_INDEX['name'],
+                         'keys': list(SEARCH_PAGE_INDEX['keys']), 'options': {}})
         manifest.append({"name": SEARCH_TOKEN_INDEX['name'],
                          "keys": list(SEARCH_TOKEN_INDEX['keys']), "options": {}})
     return manifest

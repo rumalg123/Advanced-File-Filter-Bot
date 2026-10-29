@@ -116,12 +116,16 @@ class BaseRepository(ABC, Generic[T]):
             limit: Optional[int] = None,
             skip: int = 0,
             sort: Optional[List[tuple]] = None,
-            raise_on_error: bool = False
+            raise_on_error: bool = False,
+            sort_index_hint: Optional[str] = None,
     ) -> List[T]:
         """Find multiple entities; strict search callers may propagate read failures."""
         try:
             collection = await self.collection()
             cursor = collection.find(filter)
+
+            if sort_index_hint is not None:
+                cursor = cursor.hint(sort_index_hint)
 
             if sort:
                 cursor = cursor.sort(sort)

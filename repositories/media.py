@@ -19,7 +19,8 @@ from core.utils.search_matcher import build_media_search_filter
 from core.utils.search_observability import search_telemetry
 from core.utils.media_metadata import effective_quality
 from core.utils.search_tokens import (media_search_tokens, SEARCH_TOKEN_FIELD,
-    SEARCH_TOKEN_VERSION_FIELD, SEARCH_TOKEN_VERSION)
+    SEARCH_TOKEN_VERSION_FIELD, SEARCH_TOKEN_VERSION, SEARCH_PAGE_INDEX,
+    SEARCH_DEEP_PAGE_THRESHOLD)
 from config.settings import settings
 from core.utils.logger import get_logger
 
@@ -661,6 +662,10 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         # analytics. Existing optional multi-DB partial-result semantics are
         # separately tracked as PH-027 and must be fixed before enabling it.
         try:
+            page_options = {}
+            if (settings.features.feature_indexed_media_search
+                    and offset + limit >= SEARCH_DEEP_PAGE_THRESHOLD):
+                page_options['sort_index_hint'] = SEARCH_PAGE_INDEX['name']
             if self.is_multi_db:
                 count_started = time.perf_counter()
                 total = await self.multi_db_manager.count_across_all_databases(
@@ -673,7 +678,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     search_filter,
                     limit=limit,
                     skip=offset,
-                    sort=[('indexed_at', -1)]
+                    sort=[('indexed_at', -1)],
+                    **page_options,
                 )
                 files = [self._dict_to_entity(f) for f in files_data]
                 search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
@@ -687,7 +693,8 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     limit=limit,
                     skip=offset,
                     sort=SINGLE_DB_SEARCH_SORT,
-                    raise_on_error=True
+                    raise_on_error=True,
+                    **page_options,
                 )
                 search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
         except Exception as exc:

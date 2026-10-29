@@ -20,6 +20,7 @@ from pymongo import MongoClient
 
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.validators import normalize_query
+from core.utils.search_tokens import SEARCH_DEEP_PAGE_THRESHOLD, SEARCH_PAGE_INDEX
 
 MAX_PROFILE_OFFSETS = 6
 MAX_PROFILE_OPERATIONS = 24
@@ -153,6 +154,8 @@ def profile(
                 "limit": limit,
                 "maxTimeMS": max_time_ms,
             }
+            if indexed_tokens and offset + limit >= SEARCH_DEEP_PAGE_THRESHOLD:
+                find_command['hint'] = SEARCH_PAGE_INDEX['name']
             explanation = database.command(
                 "explain", find_command, verbosity="executionStats",
                 maxTimeMS=max_time_ms,

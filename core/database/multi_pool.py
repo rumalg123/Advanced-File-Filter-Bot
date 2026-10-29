@@ -830,7 +830,8 @@ class MultiDatabaseManager:
         query: Dict[str, Any],
         limit: int = 10,
         skip: int = 0,
-        sort: Optional[List[Tuple[str, int]]] = None
+        sort: Optional[List[Tuple[str, int]]] = None,
+        sort_index_hint: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """PH-026: k-way sorted stream, bounded app memory per database.
 
@@ -865,6 +866,8 @@ class MultiDatabaseManager:
                 # size alone limits client reads, not server-side sort memory.
                 cursor = (collection.find(query).sort(merge_sort)
                           .limit(skip + limit).batch_size(batch_size))
+                if sort_index_hint is not None:
+                    cursor = cursor.hint(sort_index_hint)
                 cursors.append(cursor)
                 buffers.append([])
                 indices.append(0)

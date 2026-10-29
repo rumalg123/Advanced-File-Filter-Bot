@@ -210,6 +210,10 @@ async def test_shallow_merge_fits_small_server_sort_budget_without_disk_spill(lo
         rows = await manager.search_across_all_databases('FILES', {}, limit=5,
                                                         sort=[('indexed_at',-1)])
         assert [row['_id'] for row in rows] == ['249','248','247','246','245']
+        await database.FILES.create_index([('indexed_at',-1),('_id',-1)], name='qa_stable_sort')
+        rows = await manager.search_across_all_databases('FILES', {}, limit=5, skip=230,
+            sort=[('indexed_at',-1)], sort_index_hint='qa_stable_sort')
+        assert [row['_id'] for row in rows] == ['19','18','17','16','15']
     finally:
         await client.admin.command('setParameter', 1,
             internalQueryMaxBlockingSortMemoryUsageBytes=original['internalQueryMaxBlockingSortMemoryUsageBytes'])

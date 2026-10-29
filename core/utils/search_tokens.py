@@ -6,6 +6,12 @@ from core.utils.helpers import build_typo_tolerant_pattern
 SEARCH_TOKEN_VERSION = 1
 SEARCH_TOKEN_FIELD = '_search_terms_v1'
 SEARCH_TOKEN_VERSION_FIELD = '_search_terms_version'
+SEARCH_DEEP_PAGE_THRESHOLD = 1000
+SEARCH_PAGE_INDEX = {
+    'name': 'media_stable_page_v1',
+    'keys': [('indexed_at', -1), ('_id', -1)],
+    'options': {},
+}
 SEARCH_TOKEN_INDEX = {
     'name': 'media_search_terms_v1',
     'keys': [(SEARCH_TOKEN_VERSION_FIELD, 1), (SEARCH_TOKEN_FIELD, 1)],

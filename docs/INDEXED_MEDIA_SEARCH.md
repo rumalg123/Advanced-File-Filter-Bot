@@ -57,3 +57,21 @@ the doctor x: 4.427s → 0.039s. These are individual local full-match timings,
 not production p95 or a Telegram latency claim. Real-Mongo regression cases
 also cover typo aliases, Unicode case variants, arrays, captions, missing/future
 versions, optimistic edit conflicts, bounded backfill and metadata rollback.
+
+## Deep-page sort index
+
+The same optional flag now declares `media_stable_page_v1` on descending
+`indexed_at, _id`. For pages whose offset plus limit reaches 1,000, repository
+reads explicitly use that index rather than a blocking sort. Both single-source
+and distributed readers retain exact offset semantics. Shallow selective title
+queries continue using the candidate planner. Missing/conflicting optional
+indexes cause a visible backend error; do not enable the flag before successful
+startup index checks. The read-only profiler applies the same hint when
+`--indexed-tokens` and a deep `--offset` are selected.
+
+A live 36,563-match metadata search exposed a 32 MB sort failure at its last
+page even after bounding the per-source top K. On the disposable remote clone,
+the added index produced FETCH/IXSCAN/LIMIT/SKIP plans with **no SORT**. Shallow
+pages took 59–74ms; offset 1,000 took 73ms; offset 36,550 took 500ms. These are
+single-source measured reads, not distributed or Telegram tail-latency claims.
+Rollback leaves this additive index in place; neither index is dropped or renamed.

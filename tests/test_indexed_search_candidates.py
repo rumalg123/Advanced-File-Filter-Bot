@@ -120,13 +120,25 @@ def test_optional_manifest_and_new_media_metadata(monkeypatch):
     from core.database.media_indexes import media_index_manifest
     legacy=media_index_manifest()
     extended=media_index_manifest(include_search_tokens=True)
-    assert len(extended)==len(legacy)+1 and extended[-1]==SEARCH_TOKEN_INDEX
+    assert len(extended)==len(legacy)+2 and extended[-1]==SEARCH_TOKEN_INDEX
     extended[-1]['keys'].clear()
     assert media_index_manifest(include_search_tokens=True)[-1]['keys']
     monkeypatch.setattr(settings.features,'feature_indexed_media_search',True)
     raw=MediaRepository(None,None)._entity_to_dict(fixture_file())
     assert raw[SEARCH_TOKEN_VERSION_FIELD]==1
     assert 'spring' in raw[SEARCH_TOKEN_FIELD]
+
+
+def test_profiler_deep_page_uses_the_runtime_optional_sort_index(mongo_collection):
+    from core.utils.search_tokens import SEARCH_PAGE_INDEX
+    from scripts.profile_media_search import profile
+    for spec in (SEARCH_TOKEN_INDEX,SEARCH_PAGE_INDEX):
+        mongo_collection.create_index(spec['keys'],name=spec['name'])
+    mongo_collection.insert_one({'_id':'one','file_name':'show 540p','indexed_at':'2026-10-29'})
+    result=profile(mongo_collection.database,('540p',),offsets=(1000,),indexed_tokens=True)
+    page=result['queries'][0]['pages'][0]
+    assert page['executionSuccess'] is True and SEARCH_PAGE_INDEX['name'] in page['indexesUsed']
+    assert 'SORT' not in page['stages']
 
 
 @pytest.mark.asyncio
@@ -147,3 +159,21 @@ async def test_text_update_invalidates_tokens_atomically_even_after_flag_rollbac
     assert operation['$set']==changes
     assert set(operation['$unset'])=={SEARCH_TOKEN_FIELD,SEARCH_TOKEN_VERSION_FIELD}
     assert changes=={'file_name':'New title'}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('multi',[False,True])
+@pytest.mark.parametrize('enabled,offset,expected',[(False,1000,False),(True,0,False),(True,1000,True)])
+async def test_deep_sort_index_only_used_when_optional_index_is_enabled(monkeypatch,multi,enabled,offset,expected):
+    from core.utils.search_tokens import SEARCH_PAGE_INDEX
+    monkeypatch.setattr(settings.features,'feature_indexed_media_search',enabled)
+    cache=SimpleNamespace(get=AsyncMock(return_value=None),set=AsyncMock(),
+        ensure_search_generation=AsyncMock(return_value=1))
+    manager=SimpleNamespace(count_across_all_databases=AsyncMock(return_value=1100),
+        search_across_all_databases=AsyncMock(return_value=[])) if multi else None
+    repo=MediaRepository(None,cache,manager)
+    repo._read_search_generation=AsyncMock(return_value=1)
+    repo.count=AsyncMock(return_value=1100);repo.find_many=AsyncMock(return_value=[])
+    await repo.search_files('540p',offset=offset)
+    call=manager.search_across_all_databases if multi else repo.find_many
+    assert call.await_args.kwargs.get('sort_index_hint')==(SEARCH_PAGE_INDEX['name'] if expected else None)
