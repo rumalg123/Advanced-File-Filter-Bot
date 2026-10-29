@@ -1,6 +1,5 @@
 """Telegram API retries with per-attempt concurrency and bounded flood cooldowns."""
 import asyncio
-import math
 import random
 import time
 from typing import Any, Callable, Optional
@@ -25,7 +24,11 @@ class TelegramAPIWrapper:
     def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
         self.max_retries = max_retries
         self.base_delay = base_delay
-        self._cooldowns: dict[tuple[str, int | None], float] = {}
+        self._cooldowns: dict[tuple[str, int | None], float] = {
+            ('telegram_send', None): 0.0,
+            ('telegram_fetch', None): 0.0,
+            ('telegram_general', None): 0.0,
+        }
         self._flood_wait_events = 0
         self._cooldown_scope_overflows = 0
 
@@ -60,7 +63,8 @@ class TelegramAPIWrapper:
         if scope not in self._cooldowns and len(self._cooldowns) >= self.MAX_COOLDOWN_SCOPES:
             # Remove only expired entries; do not discard a live cooldown in
             # order to admit a retry stampede from different chat identities.
-            expired = [key for key, value in self._cooldowns.items() if value <= now]
+            expired = [key for key, value in self._cooldowns.items()
+                       if key[1] is not None and value <= now]
             for key in expired:
                 self._cooldowns.pop(key, None)
             if len(self._cooldowns) >= self.MAX_COOLDOWN_SCOPES:
