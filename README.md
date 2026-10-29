@@ -438,7 +438,10 @@ The bot must be a member and usually an administrator in each configured channel
 
 ### Additive feature flags
 
-Every value below defaults to `false`:
+All flags below are available to the primary admin through `/bsetting` and
+take effect after restart. Environment values initialize missing MongoDB
+settings; existing saved values take precedence, including after Redis clearing.
+Defaults are `false`, with the activation-aware registry recommendation below.
 
 | Variable | Capability |
 |---|---|
@@ -453,6 +456,30 @@ Every value below defaults to `false`:
 | `FEATURE_RECENT_FILES` | Store successful deliveries and expose `/recent`, per-file removal, and `/clear_recent`. |
 | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Show a reason beside recommended files. |
 | `FEATURE_CONTENT_DASHBOARD` | Persist currently unresolved zero-result analytics, reconcile newly matching titles, and expose `/content_dashboard` to admins. |
+| `FEATURE_INDEXED_MEDIA_SEARCH` | Indexed word candidates followed by the legacy matcher; complete token backfill and verify optional indexes before rollout. |
+| `FEATURE_CANONICAL_MEDIA_METADATA` | Persist optional width, height and quality on new media; older-image rollback needs compatibility review. |
+| `FEATURE_QUOTA_DELIVERY_LEDGER` | Durable quota reservations and one-time settlements; uncertain deliveries need operator reconciliation. |
+| `PROCESSING_DURABLE_INDEXING` | MongoDB-backed channel indexing jobs with retries and restart recovery. |
+| `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` | MongoDB-backed alert jobs and bounded workers; also requires Saved Alerts enabled. |
+| `DATABASE_GLOBAL_OWNER_REGISTRY` | Coordinated permanent file ownership across multiple database sources; requires explicit ownership activation. |
+
+The **Media Owners** setting is locked when fewer than two distinct valid
+MongoDB URI/database pairs are configured. URI syntax and database names are
+validated without connecting or resolving SRV DNS for the menu. Repeated source
+identities, including credential/option variants of the same source, do not
+unlock it. Connection and complete activation checks still run at startup.
+Connection URIs/names remain environment configuration.
+
+With multiple valid sources, the recommended default is `false` until matching
+ownership activation is ready, then `true`. Existing saved choices are retained.
+You can stage `true` in `/bsetting` before maintenance, but stop all writers and
+complete activation before restarting. Once a source is bound, setting it to
+`false` is rejected; retiring ownership requires a separate migration. See
+[ownership rollout](docs/MULTIDB_GLOBAL_IDENTITY.md).
+
+Moving the four other operational flags into the menu does not complete their
+outstanding production acceptance drills. Their defaults remain off; use the
+individual metadata, quota and durable-queue rollout runbooks before enabling.
 
 ### Messages and presentation
 

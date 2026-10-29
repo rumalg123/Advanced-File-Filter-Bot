@@ -3,6 +3,9 @@
 **Status:** Code and CI passed ([run 40814929762](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40814929762)); staging and reconciliation acceptance pending. Draft PR #4; do not enable in production.
 This phase is opt-in and must satisfy CI plus isolated staging review.
 
+
+`PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
+
 ## Original failure
 
 The previous `FeatureService.schedule_new_media` spawned a new asyncio

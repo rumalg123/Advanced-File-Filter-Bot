@@ -141,7 +141,10 @@ activation; it does not require activating a one-source registry now.
    primary repositories at that empty database.
 4. Schedule another maintenance window, back up both sources, and follow the
    inventory/activation procedure below. Configure the two URI/name pairs and
-   enable the registry only after activation is ready.
+   stage the saved registry toggle through `/bsetting` with indexing paused.
+   Stop all writers and complete activation before restarting with it enabled.
+   Existing saved settings override `.env`; confirm the effective flag, not just
+   the environment line.
 5. Validate old and new media delivery, owner routing, storage measurements and
    automatic write-source switching before reopening indexing.
 

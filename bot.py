@@ -99,6 +99,11 @@ class BotConfig:
         'FEATURE_RECOMMENDATION_EXPLANATIONS': ('features', 'feature_recommendation_explanations'),
         'FEATURE_CONTENT_DASHBOARD': ('features', 'feature_content_dashboard'),
         'FEATURE_INDEXED_MEDIA_SEARCH': ('features', 'feature_indexed_media_search'),
+        'FEATURE_CANONICAL_MEDIA_METADATA': ('features', 'feature_canonical_media_metadata'),
+        'FEATURE_QUOTA_DELIVERY_LEDGER': ('features', 'feature_quota_delivery_ledger'),
+        'PROCESSING_DURABLE_INDEXING': ('processing', 'durable_indexing'),
+        'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': ('processing', 'durable_saved_search_alerts'),
+        'DATABASE_GLOBAL_OWNER_REGISTRY': ('database', 'global_owner_registry'),
         'PREMIUM_DURATION_DAYS': ('features', 'premium_duration_days'),
         'NON_PREMIUM_DAILY_LIMIT': ('features', 'non_premium_daily_limit'),
         'PREMIUM_PRICE': ('features', 'premium_price'),
@@ -195,6 +200,10 @@ class BotConfig:
         self.FEATURE_RECOMMENDATION_EXPLANATIONS = self._settings.features.feature_recommendation_explanations
         self.FEATURE_CONTENT_DASHBOARD = self._settings.features.feature_content_dashboard
         self.FEATURE_INDEXED_MEDIA_SEARCH = self._settings.features.feature_indexed_media_search
+        self.FEATURE_CANONICAL_MEDIA_METADATA = self._settings.features.feature_canonical_media_metadata
+        self.FEATURE_QUOTA_DELIVERY_LEDGER = self._settings.features.feature_quota_delivery_ledger
+        self.PROCESSING_DURABLE_INDEXING = self._settings.processing.durable_indexing
+        self.PROCESSING_DURABLE_SAVED_SEARCH_ALERTS = self._settings.processing.durable_saved_search_alerts
 
         # Limits
         self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days
@@ -739,73 +748,59 @@ class MediaSearchBot(Client):
             except Exception as e:
                 logger.warning(f"Failed to create media indexes for database {db_index + 1}: {e}")
 
+    async def _initialize_storage(self):
+        """Load primary-backed flags before constructing media routing/workers."""
+        await self.db_pool.initialize(self.config.DATABASE_URI, self.config.DATABASE_NAME)
+        # Initialize Redis cache
+        await self.cache.initialize()
+        logger.info("Redis cache initialized")
+        self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
+        self.bot_settings_service = BotSettingsService(
+            self.bot_settings_repo,
+            self.cache,
+            database_config=self.config._settings.database,
+        )
+        # Initialize settings from environment
+        await self.bot_settings_service.initialize_settings()
+        logger.info("Bot settings initialized")
+
+        # CRITICAL: Load settings from database and sync to all config objects
+        # This updates both BotConfig and the original settings objects (e.g., settings.features)
+        # so that module-level references like `_feature_config = settings.features` get updated values
+        db_settings = await self.bot_settings_service.get_all_settings()
+        self.config.sync_settings_from_db(db_settings)
+        logger.info("Loaded and synced settings from database")
+
+        if self.config.is_multi_database_enabled:
+            self.multi_db_manager = MultiDatabaseManager()
+            await self.multi_db_manager.initialize(
+                self.config.DATABASE_URIS,
+                self.config.DATABASE_NAMES,
+                size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
+                auto_switch=self.config.DATABASE_AUTO_SWITCH,
+                global_owner_registry=self.config.DATABASE_GLOBAL_OWNER_REGISTRY,
+            )
+            self.multi_db_manager.apply_runtime_settings(
+                size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
+                auto_switch=self.config.DATABASE_AUTO_SWITCH,
+                max_failures=self.config.DATABASE_MAX_FAILURES,
+                recovery_timeout=self.config.DATABASE_RECOVERY_TIMEOUT,
+                half_open_calls=self.config.DATABASE_HALF_OPEN_CALLS,
+            )
+
+        # Keep activation bindings authoritative even if a stored flag or the
+        # configured source list is changed. No activation is performed here.
+        owner_control = await self.db_pool.get_collection('media_owner_control')
+        owner_binding = await owner_control.find_one({'_id': 'binding-v1'})
+        if owner_binding and (not self.multi_db_manager or not self.config.DATABASE_GLOBAL_OWNER_REGISTRY):
+            raise RuntimeError('This database requires its activated media ownership configuration')
+        if self.config.DATABASE_GLOBAL_OWNER_REGISTRY and not self.multi_db_manager:
+            raise RuntimeError('Media ownership requires the complete multi-database topology')
+
     async def start(self):
         """Start the bot with all dependencies"""
         try:
-            # Initialize database connections
-            if self.config.is_multi_database_enabled:
-                logger.info(f"Multi-database mode enabled with {len(self.config.DATABASE_URIS)} databases")
-                
-                # Initialize multi-database manager
-                self.multi_db_manager = MultiDatabaseManager()
-                await self.multi_db_manager.initialize(
-                    self.config.DATABASE_URIS,
-                    self.config.DATABASE_NAMES,
-                    size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
-                    auto_switch=self.config.DATABASE_AUTO_SWITCH,
-                    global_owner_registry=self.config.DATABASE_GLOBAL_OWNER_REGISTRY,
-                )
-                logger.info("Multi-database manager initialized")
-                
-                # Still initialize single db_pool for backward compatibility
-                await self.db_pool.initialize(
-                    self.config.DATABASE_URI,
-                    self.config.DATABASE_NAME
-                )
-            else:
-                # Single database mode
-                await self.db_pool.initialize(
-                    self.config.DATABASE_URI,
-                    self.config.DATABASE_NAME
-                )
-                logger.info("Single database connection pool initialized")
-
-            # Ownership cannot be bypassed by disabling its environment flag or
-            # removing secondary sources. Registry retirement needs migration.
-            owner_control = await self.db_pool.get_collection('media_owner_control')
-            owner_binding = await owner_control.find_one({'_id': 'binding-v1'})
-            if owner_binding and (not self.multi_db_manager or not self.config.DATABASE_GLOBAL_OWNER_REGISTRY):
-                raise RuntimeError('This database requires its activated media ownership configuration')
-            if self.config.DATABASE_GLOBAL_OWNER_REGISTRY and not self.multi_db_manager:
-                raise RuntimeError('Media ownership requires the complete multi-database topology')
-
-            # Initialize Redis cache
-            await self.cache.initialize()
-            logger.info("Redis cache initialized")
-            self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
-            self.bot_settings_service = BotSettingsService(
-                self.bot_settings_repo,
-                self.cache
-            )
-            # Initialize settings from environment
-            await self.bot_settings_service.initialize_settings()
-            logger.info("Bot settings initialized")
-
-            # CRITICAL: Load settings from database and sync to all config objects
-            # This updates both BotConfig and the original settings objects (e.g., settings.features)
-            # so that module-level references like `_feature_config = settings.features` get updated values
-            db_settings = await self.bot_settings_service.get_all_settings()
-            self.config.sync_settings_from_db(db_settings)
-            logger.info("Loaded and synced settings from database")
-
-            if self.multi_db_manager:
-                self.multi_db_manager.apply_runtime_settings(
-                    size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
-                    auto_switch=self.config.DATABASE_AUTO_SWITCH,
-                    max_failures=self.config.DATABASE_MAX_FAILURES,
-                    recovery_timeout=self.config.DATABASE_RECOVERY_TIMEOUT,
-                    half_open_calls=self.config.DATABASE_HALF_OPEN_CALLS
-                )
+            await self._initialize_storage()
 
             # Initialize concurrency limits from settings
             concurrency_limits = settings.get_concurrency_limits()

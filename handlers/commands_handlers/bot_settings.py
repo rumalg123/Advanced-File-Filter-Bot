@@ -272,8 +272,11 @@ class BotSettingsHandler(BaseHandler):
             default_display = str(default_value)
 
         protection_status = ""
+        editable = key not in self.PROTECTED_SETTINGS and setting.get('editable', True)
         if key in self.PROTECTED_SETTINGS:
             protection_status = "\n🔒 <b>Protected:</b> This setting cannot be changed via bot"
+        if setting.get('edit_note'):
+            protection_status += f"\n{'ℹ️' if editable else '🔒'} {setting['edit_note']}"
 
         text = (
             f"⚙️ <b>Setting: {self._get_display_name(key)}</b>\n\n"
@@ -285,7 +288,7 @@ class BotSettingsHandler(BaseHandler):
         )
 
         buttons = []
-        if key not in self.PROTECTED_SETTINGS:
+        if editable:
             if setting_type == 'bool':
                 # Boolean settings get True/False buttons
                 buttons.append([
@@ -324,6 +327,12 @@ class BotSettingsHandler(BaseHandler):
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting using unified session manager"""
+        if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+            # Also reject a forged Edit callback when this boolean is locked.
+            setting = (await self.settings_service.get_all_settings()).get(key, {})
+            if not setting.get('editable', False):
+                await message.reply_text(setting.get('edit_note', 'This setting is locked.'))
+                return
         if not self.session_manager:
             await message.reply(ErrorMessageFormatter.format_error("Session management not available"))
             return
@@ -646,9 +655,12 @@ class BotSettingsHandler(BaseHandler):
                     else:
                         logger.info("Enabling filter handlers")
                 await self.show_setting_details(query.message, key)
+                notice = "Setting updated! Restart bot for changes to take effect."
+                if key == 'DATABASE_GLOBAL_OWNER_REGISTRY' and value:
+                    notice = "Setting saved. Ownership activation must be complete before restarting the bot."
                 await query.answer(
                     ErrorMessageFormatter.format_success(
-                        "Setting updated! Restart bot for changes to take effect.",
+                        notice,
                         plain_text=True
                     ),
                     show_alert=True
@@ -783,6 +795,11 @@ class BotSettingsHandler(BaseHandler):
             'FEATURE_RECENT_FILES': 'Recent Files',
             'FEATURE_RECOMMENDATION_EXPLANATIONS': 'Rec Reasons',
             'FEATURE_CONTENT_DASHBOARD': 'Content Dashboard',
+            'FEATURE_CANONICAL_MEDIA_METADATA': 'Canonical Metadata',
+            'FEATURE_QUOTA_DELIVERY_LEDGER': 'Quota Ledger',
+            'PROCESSING_DURABLE_INDEXING': 'Durable Indexing',
+            'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': 'Durable Alerts',
+            'DATABASE_GLOBAL_OWNER_REGISTRY': 'Media Owners',
             'DISABLE_PREMIUM': 'Disable Premium',
             'DISABLE_FILTER': 'Disable Filter',
             'PUBLIC_FILE_STORE': 'Public Store',

@@ -5,6 +5,9 @@
 The persisted fields are **default-off** behind `FEATURE_CANONICAL_MEDIA_METADATA=false`.
 Both CI jobs passed at code SHA `40b4a5da` on [run 40811505457](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40811505457). Staging acceptance remains outstanding before enabling writes.
 
+
+`FEATURE_CANONICAL_MEDIA_METADATA` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
+
 ## Root cause and source-of-truth contract
 
 The existing `MediaFile.resolution` contains **either** actual pixel

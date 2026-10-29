@@ -1,7 +1,10 @@
 # PH-028: Global media identity and ownership
 
 **Implementation complete; local and three-source remote QA passed.**
-`DATABASE_GLOBAL_OWNER_REGISTRY=false` is the default. Without activation and
+`DATABASE_GLOBAL_OWNER_REGISTRY` is managed through `/bsetting`, with an initial
+default of `false`. Multiple distinct valid URI/database pairs unlock editing;
+the recommended default becomes `true` once matching activation is ready.
+Existing saved values override environment initialization. Without activation and
 this flag, creation across independent databases remains blocked. Production
 rollout and merging remain separate operator decisions.
 
@@ -52,6 +55,15 @@ an additional database name in a capped cluster does not expand its capacity.
 
 ## Activation
 
+Before the maintenance window, with multiple sources configured and indexing
+paused, stage `DATABASE_GLOBAL_OWNER_REGISTRY=true` through `/bsetting`.
+Do not restart between staging that value and completing activation. Then stop
+every writer and follow the steps below. For an entirely offline rollout,
+explicitly update the primary's existing `bot_settings` record as part of the
+maintenance procedure; setting only `.env` will not override a saved `false`.
+Adding URI/name pairs requires loading the new environment through container
+recreation; it does not itself activate ownership.
+
 1. Back up the selected sources. Stop **every** writer, including index workers,
    old bot processes and maintenance jobs. Inventory is not a cross-cluster
    snapshot while external writers continue.
@@ -84,7 +96,8 @@ an additional database name in a capped cluster does not expand its capacity.
    creates the registry and required uniqueness indexes, and adopts existing
    records. Existing compatible unique indexes are reused. Incompatible indexes
    block activation; nothing is dropped, renamed or made less restrictive.
-5. Set `DATABASE_GLOBAL_OWNER_REGISTRY=true`, keep the entire original topology,
+5. Confirm the effective saved `DATABASE_GLOBAL_OWNER_REGISTRY=true` (or its
+   environment initialization when no record exists), keep the entire original topology,
    and restart the new bot. Startup only attaches to an already-ready registry;
    it never activates implicitly. Existing binding markers prevent silently
    disabling ownership or restarting as a single-source bot. Secondary ordering
@@ -112,6 +125,11 @@ keep writers stopped. An older image requires an offline export/consolidation,
 complete identity audit and explicit retirement of source bindings before writes
 resume. This runbook does not offer an automatic destructive retirement command.
 Search-token rollback is independent; see [its runbook](INDEXED_MEDIA_SEARCH.md).
+
+The settings backend rejects disabling bound ownership through boolean buttons,
+free-text edits, defaults or imports. A single/invalid-source configuration has
+no edit controls. Startup still rejects a missing binding/index, incomplete
+activation, or topology mismatch regardless of how the setting was changed.
 
 ## Local acceptance evidence, 2026-10-29
 

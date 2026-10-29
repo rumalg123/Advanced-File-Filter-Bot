@@ -2,6 +2,9 @@
 
 **Status:** code CI passed ([run 40820004258](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820004258)) at SHA `5a8c231f`; staging pending / Draft PR #4. **Do not enable in production.** No production data was accessed, no live collection/index was modified, and no application was deployed.
 
+
+`FEATURE_QUOTA_DELIVERY_LEDGER` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
+
 ## Defect
 
 Successful MongoDB daily quota reservations could previously be refunded more than once. Refund requests were constrained to the quota day (PH-021) but did not carry a durable reservation identity, so repeated calls could incorrectly credit unused quota. Concurrent Telegram sends create a separate problem: an API timeout or process cancellation is **not proof that a file was never delivered**. The old handlers sometimes refunded even after initiating such an ambiguous send.

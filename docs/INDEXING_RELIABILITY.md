@@ -2,6 +2,9 @@
 
 **Status:** in review, disabled by default. No production deployment.
 
+
+`PROCESSING_DURABLE_INDEXING` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
+
 ## Summary
 
 Old automatic channel indexing used bounded in-memory queues. Once both were full, the code discarded older overflow messages. Small main queues (10 items or fewer) also had an overflow-drain bug due to hard-coded size subtraction. In-memory queues were lost on restart.

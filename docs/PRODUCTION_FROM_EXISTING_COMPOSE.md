@@ -9,7 +9,9 @@ Target branch: `docs/production-hardening-source-of-truth-20261028`.
 The branch must include update-and-restart fix `c4c19b0` and startup fix
 `850bc31`. Fix `c4c19b0` supersedes the incorrect restart-only behavior in
 `ffd9d63`. The earlier full suite passed 776 tests; the corrected updater passed
-82 focused tests and an offline Docker update/restart probe. Offline Docker setup passed. No MongoDB ownership activation, token
+82 focused tests and an offline Docker update/restart probe. The subsequent
+operational-settings change passed the full 831-test suite with disposable
+MongoDB and dual Redis. Offline Docker setup passed. No MongoDB ownership activation, token
 backfill, canonical metadata migration or global Docker prune is part of this
 cutover. The older candidate image predating BUG-061 is superseded.
 
@@ -195,8 +197,10 @@ PROCESSING_DURABLE_SAVED_SEARCH_ALERTS=false
 
 The primary `DATABASE_URI` / `DATABASE_NAME` remain unchanged. Keep existing
 user-feature and premium/access choices. Existing managed `bot_settings` records
-override environment initialization: confirm `FEATURE_INDEXED_MEDIA_SEARCH` is
-off in that collection too if its record already exists. Redis clearing does
+override environment initialization for all 17 rollout flags, including the
+five operational flags listed above. Confirm their effective values in
+`/bsetting`; editing `.env` alone does not replace existing records. Media Owners
+is locked with one source. Redis clearing does
 not reset database settings, users, premium status or daily quota counters.
 Daily quota rollover in this version is 00:00 UTC.
 

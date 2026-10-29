@@ -85,6 +85,26 @@ class BotSettingsService:
             'type': 'bool', 'default': False,
             'description': 'Enable the admin content dashboard', 'category': 'features'
         },
+        'DATABASE_GLOBAL_OWNER_REGISTRY': {
+            'type': 'bool', 'default': False, 'category': 'database',
+            'description': 'Coordinate file ownership across multiple databases. Activate ownership with all writers stopped before restarting with this enabled. Restart required.'
+        },
+        'FEATURE_CANONICAL_MEDIA_METADATA': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Persist separate quality and pixel dimensions on new media. Check compatibility before rolling back to older images. Restart required.'
+        },
+        'FEATURE_QUOTA_DELIVERY_LEDGER': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Record quota reservations and one-time settlements. Uncertain deliveries require operator review. Restart required.'
+        },
+        'PROCESSING_DURABLE_INDEXING': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Store channel indexing jobs in MongoDB for retry and restart recovery. Restart required.'
+        },
+        'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Store saved-search alert jobs in MongoDB for retry and recovery. Also requires Saved Alerts to be enabled. Restart required.'
+        },
         'ADMINS': {
             'type': 'list',
             'default': [],
@@ -376,9 +396,49 @@ class BotSettingsService:
         },
     }
 
-    def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager):
+    def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager,
+                 *, database_config=None):
         self.settings_repo = settings_repo
         self.cache = cache_manager
+        if database_config is None:
+            from config.settings import settings
+            database_config = settings.database
+        self.database_config = database_config
+
+    async def owner_registry_policy(self) -> Dict[str, Any]:
+        """Source eligibility and activation recommendation; never activates data."""
+        from core.database.topology import validated_database_sources
+        from core.database.media_owners import GlobalMediaOwners
+        from types import SimpleNamespace
+
+        policy = {'editable': False, 'default': False, 'bound': False, 'note': ''}
+        try:
+            sources = validated_database_sources(self.database_config)
+        except ValueError as error:
+            policy['note'] = str(error)
+            return policy
+        if len(sources) < 2:
+            policy['note'] = 'Configure at least two distinct valid database sources to edit this setting.'
+            return policy
+        try:
+            collection = await self.settings_repo.db_pool.get_collection('media_owner_control')
+            binding = await collection.find_one({'_id': 'binding-v1'})
+            topology = await collection.find_one({'_id': 'topology-v1'})
+            owners = GlobalMediaOwners([SimpleNamespace(uri=uri, name=name) for uri, name in sources])
+            ready = bool(binding and binding.get('coordinator') == owners.primary
+                         and binding.get('source') == owners.primary and topology
+                         and topology.get('state') == 'ready'
+                         and topology.get('topology') == owners.topology)
+        except Exception:
+            policy['note'] = 'Cannot verify ownership activation. Check database connectivity before editing.'
+            return policy
+        policy.update(editable=True, default=ready, bound=bool(binding))
+        policy['note'] = (
+            'Recommended: True. Ownership is activated; disabling it requires a separate retirement migration.'
+            if ready else
+            'Recommended: False until ownership activation is complete. If enabling, stop all writers and activate ownership before restarting.'
+        )
+        return policy
 
     async def initialize_settings(self) -> None:
         """Initialize settings from environment or defaults"""
@@ -388,6 +448,9 @@ class BotSettingsService:
             # Check if setting exists in DB
             existing = await self.settings_repo.get_setting(key)
             if not existing:
+                default = metadata['default']
+                if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+                    default = (await self.owner_registry_policy())['default']
                 # Get from environment or use default
                 env_value = os.environ.get(key)
                 if env_value is None:
@@ -401,12 +464,12 @@ class BotSettingsService:
                 if env_value is not None:
                     value = self._parse_value(env_value, metadata['type'])
                 else:
-                    value = metadata['default']
+                    value = default
 
                 settings_to_save[key] = {
                     'value': value,
                     'type': metadata['type'],
-                    'default': metadata['default'],
+                    'default': default,
                     'description': metadata['description']
                 }
 
@@ -450,6 +513,12 @@ class BotSettingsService:
                     'category': metadata['category']
                 }
 
+        policy = await self.owner_registry_policy()
+        owner_setting = result['DATABASE_GLOBAL_OWNER_REGISTRY']
+        owner_setting.update(default=policy['default'], editable=policy['editable'],
+                             edit_note=policy['note'])
+        if 'DATABASE_GLOBAL_OWNER_REGISTRY' not in db_settings:
+            owner_setting['value'] = policy['default']
         return result
 
     async def get_setting(self, key: str) -> Optional[Any]:
@@ -460,6 +529,8 @@ class BotSettingsService:
 
         # Return default if not found
         if key in self.SETTINGS_METADATA:
+            if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+                return (await self.owner_registry_policy())['default']
             return self.SETTINGS_METADATA[key]['default']
 
         return None
@@ -474,12 +545,20 @@ class BotSettingsService:
         # Validate and parse value
         parsed_value = self._parse_value(value, metadata['type'], strict=True)
         parsed_value = self._validate_value_bounds(key, parsed_value, metadata)
+        default = metadata['default']
+        if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+            policy = await self.owner_registry_policy()
+            if not policy['editable']:
+                raise ValueError(policy['note'])
+            if not parsed_value and policy['bound']:
+                raise ValueError('Activated media ownership cannot be disabled. A separate retirement migration is required.')
+            default = policy['default']
 
         return await self.settings_repo.set_setting(
             key=key,
             value=parsed_value,
             value_type=metadata['type'],
-            default_value=metadata['default'],
+            default_value=default,
             description=metadata['description']
         )
 
@@ -501,15 +580,10 @@ class BotSettingsService:
         if key not in self.SETTINGS_METADATA:
             return False
 
-        metadata = self.SETTINGS_METADATA[key]
-
-        return await self.settings_repo.set_setting(
-            key=key,
-            value=metadata['default'],
-            value_type=metadata['type'],
-            default_value=metadata['default'],
-            description=metadata['description']
-        )
+        default = self.SETTINGS_METADATA[key]['default']
+        if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+            default = (await self.owner_registry_policy())['default']
+        return await self.update_setting(key, default)
 
     def _parse_value(self, value: Any, value_type: str, *, strict: bool = False) -> Any:
         """Parse value based on type"""
