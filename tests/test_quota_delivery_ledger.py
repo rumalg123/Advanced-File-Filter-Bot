@@ -141,7 +141,13 @@ async def test_real_mongo_idempotent_quota_settlement_and_midnight_recovery(monk
         ok, fourth, _ = await repo.reserve_quota_atomic(42, 1, 10)
         assert ok and fourth.quota_day == "2026-10-30"
         assert not await repo.release_quota(42, third)
-        assert (await users.find_one({"_id": 42}))["daily_retrieval_count"] == 1
+        rollover_doc = await users.find_one({"_id": 42})
+        assert rollover_doc["daily_retrieval_count"] == 1
+        # PH-022: unresolved earlier-day reservations MUST survive filtering
+        # when new quota is reserved and cannot silently disappear.
+        unresolved_ids = {x["id"] for x in rollover_doc["quota_delivery_ledger"]}
+        assert third.reservation_id in unresolved_ids
+        assert fourth.reservation_id in unresolved_ids
         assert await repo.release_quota(42, fourth)
         assert (await users.find_one({"_id": 42}))["daily_retrieval_count"] == 0
 
