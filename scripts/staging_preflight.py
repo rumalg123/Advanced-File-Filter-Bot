@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from dotenv import dotenv_values
 
 
 class StagingSafetyError(ValueError):
@@ -28,16 +27,38 @@ CHANNEL_KEYS = (
 
 
 def load_env(path: str) -> dict[str, str]:
+    """Minimal, non-interpolating KEY=VALUE parser for offline identity checks.
+
+    Rejects unsupported syntax instead of evaluating shell substitutions or
+    using an import that may not be present in a minimal Docker host.
+    """
     source = Path(path)
     if not source.is_file():
         raise StagingSafetyError("Environment file is missing")
     try:
-        return {str(k).upper(): str(v or "") for k, v in dotenv_values(
-            source, interpolate=False
-        ).items() if k is not None}
-    except (OSError, UnicodeError, ValueError):
-        raise StagingSafetyError("Environment file cannot be parsed") from None
-
+        data = source.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise StagingSafetyError("Environment file cannot be read") from None
+    config = {}
+    for line in data.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(r"(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)", line)
+        if not match:
+            raise StagingSafetyError("Unsupported environment file syntax")
+        key, value = match.groups()
+        key = key.upper()
+        if value and value[:1] in ("'", '"'):
+            if len(value) < 2 or value[-1] != value[0]:
+                raise StagingSafetyError("Invalid quoted environment value")
+            value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].strip()
+        if value.startswith("$") or "${" in value or "$(" in value:
+            raise StagingSafetyError("Environment interpolation is not allowed in identity checks")
+        config[key] = value
+    return config
 
 def _mongo_hosts(uri: str) -> frozenset[str]:
     """Compare MongoDB endpoints without DNS/network calls or logging URIs."""
