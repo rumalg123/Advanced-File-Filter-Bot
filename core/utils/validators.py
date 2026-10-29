@@ -168,7 +168,9 @@ class ValidationDecorators:
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
             user_id = ValidationUtils.extract_user_id(message)
             if not user_id or not ValidationUtils.is_admin(user_id, self.bot.config.ADMINS):
-                error_msg = ErrorMessageFormatter.format_warning("This command is restricted to bot admins only.")
+                error_msg = ErrorMessageFormatter.format_warning(
+                    'This command is restricted to bot admins only.', plain_text=isinstance(message, CallbackQuery)
+                )
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -186,7 +188,9 @@ class ValidationDecorators:
             # Get the first admin as primary owner
             owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
             if not user_id or user_id != owner_id:
-                error_msg = ErrorMessageFormatter.format_warning("This command is restricted to the bot owner only.")
+                error_msg = ErrorMessageFormatter.format_warning(
+                    'This command is restricted to the bot owner only.', plain_text=isinstance(message, CallbackQuery)
+                )
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -201,7 +205,9 @@ class ValidationDecorators:
         @wraps(func)
         async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
             if not ValidationUtils.is_private_chat(message):
-                error_msg = ErrorMessageFormatter.format_warning("This command can only be used in private chats.")
+                error_msg = ErrorMessageFormatter.format_warning(
+                    'This command can only be used in private chats.', plain_text=isinstance(message, CallbackQuery)
+                )
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):
@@ -226,7 +232,9 @@ class ValidationDecorators:
             # Check auth users
             auth_users = getattr(self.bot.config, 'AUTH_USERS', [])
             if not ValidationUtils.is_auth_user(user_id, auth_users):
-                error_msg = ErrorMessageFormatter.format_warning("You are not authorized to use this command.")
+                error_msg = ErrorMessageFormatter.format_warning(
+                    'You are not authorized to use this command.', plain_text=isinstance(message, CallbackQuery)
+                )
                 if isinstance(message, Message):
                     await message.reply_text(error_msg)
                 elif isinstance(message, CallbackQuery):

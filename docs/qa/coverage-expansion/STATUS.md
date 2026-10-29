@@ -32,3 +32,8 @@ The 100% target is not yet reached.
 
 Completed historical reports retain their timestamps; operational instructions
 that are still needed are not treated as obsolete merely because a bug is fixed.
+
+- **Passed QA:** admin/owner/private/auth-user permission decorators now use
+  plain-text callback alerts. Four regressions reproduced literal HTML before
+  the fix; 31 authorization/formatting tests pass. Database callbacks were
+  already correctly admin-protected; the added tests preserve that behavior.
