@@ -319,7 +319,10 @@ class IndexingService:
                 if status_code == 1:
                     feature_service = getattr(self, 'feature_service', None)
                     if feature_service:
-                        feature_service.schedule_new_media(media_file)
+                        if hasattr(feature_service, "persist_new_media"):
+                            await feature_service.persist_new_media(media_file)
+                        else:
+                            feature_service.schedule_new_media(media_file)
                     return "saved"
                 elif status_code == 0:
                     return "duplicate"
@@ -355,7 +358,10 @@ class IndexingService:
                                 saved_count += 1
                                 feature_service = getattr(self, 'feature_service', None)
                                 if feature_service:
-                                    feature_service.schedule_new_media(media_file)
+                                    if hasattr(feature_service, "persist_new_media"):
+                                        await feature_service.persist_new_media(media_file)
+                                    else:
+                                        feature_service.schedule_new_media(media_file)
                                 # Cache invalidation handled by repository
                             else:
                                 error_count += 1
