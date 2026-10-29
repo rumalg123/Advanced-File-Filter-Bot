@@ -43,7 +43,9 @@ def audit_media_indexes(collection, *, include_usage=False, max_time_ms=3000):
     """
     if not 100 <= max_time_ms <= 10000:
         raise ValueError("max_time_ms must be 100..10000")
-    observed = list(islice(collection.list_indexes(maxTimeMS=max_time_ms), MAX_INDEXES + 1))
+    # PyMongo Collection.list_indexes() has no maxTimeMS kwarg. The CLI's
+    # MongoClient socketTimeoutMS bounds the remote read instead.
+    observed = list(islice(collection.list_indexes(), MAX_INDEXES + 1))
     if len(observed) > MAX_INDEXES:
         raise ValueError("Media index count exceeds safe inventory limit")
     by_name = {spec["name"]: dict(spec) for spec in observed}
