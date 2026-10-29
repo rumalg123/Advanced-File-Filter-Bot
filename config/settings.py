@@ -208,6 +208,7 @@ class FeatureConfig(BaseSettings):
     feature_recent_files: bool = Field(default=False, description="Enable recent successful-delivery history")
     feature_recommendation_explanations: bool = Field(default=False, description="Show recommendation reasons")
     feature_content_dashboard: bool = Field(default=False, description="Enable the admin content dashboard")
+    feature_canonical_media_metadata: bool = Field(default=False, description="PH-015: opt in to persisting quality, width and height on new media; disable until rollback compatibility approved")
 
     # Premium system
     premium_duration_days: int = Field(
