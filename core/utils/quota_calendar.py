@@ -22,7 +22,7 @@ class QuotaReservation(int):
     No new MongoDB fields, return tuple members, or callback formats.
     """
 
-    def __new__(cls, amount: int, quota_day: date | str):
+    def __new__(cls, amount: int, quota_day: date | str, reservation_id: str | None = None):
         if type(amount) is not int or amount < 0:
             raise ValueError("Reserved quota amount must be a nonnegative integer")
         day = date.fromisoformat(quota_day) if isinstance(quota_day, str) else quota_day
@@ -30,10 +30,11 @@ class QuotaReservation(int):
             raise ValueError("Quota reservation requires a calendar date")
         value = int.__new__(cls, amount)
         value.quota_day = day.isoformat()
+        value.reservation_id = reservation_id
         return value
 
     def __sub__(self, other):
         result = int.__sub__(self, other)
         if result is NotImplemented:
             return NotImplemented
-        return QuotaReservation(int(result), self.quota_day) if result >= 0 else result
+        return QuotaReservation(int(result), self.quota_day, self.reservation_id) if result >= 0 else result
