@@ -163,3 +163,64 @@ def test_rollback_reports_copy_failure(updater, tmp_path, monkeypatch):
     (backup/'bot.py').write_text('backup application')
     monkeypatch.setattr(updater_module.shutil, 'copy2', Mock(side_effect=PermissionError('fixture')))
     assert updater.rollback(str(backup)) is False
+
+
+@pytest.mark.parametrize('docker,venv', [(False, False), (True, False), (True, True)])
+def test_explicit_update_installs_changed_requirements_with_matching_python(
+        updater, tmp_path, monkeypatch, docker, venv):
+    source = tmp_path / 'incoming'; source.mkdir()
+    (source / 'requirements.txt').write_text('new-package==2\n')
+    (updater.current_dir / 'requirements.txt').write_text('old-package==1\n')
+    updater.in_docker = docker
+    monkeypatch.setattr(updater_module.sys, 'prefix', '/fixture-venv' if venv else updater_module.sys.base_prefix)
+    run = Mock()
+    monkeypatch.setattr(updater, '_run_command', run)
+    updater._install_changed_requirements(source)
+    command = run.call_args.args[0]
+    assert command[:4] == [updater_module.sys.executable, '-m', 'pip', 'install']
+    assert command[-2:] == ['-r', str(source / 'requirements.txt')]
+    assert ('--user' in command) == (docker and not venv)
+    assert '--no-deps' not in command
+
+
+def test_unchanged_requirements_do_not_contact_package_index(updater, tmp_path, monkeypatch):
+    source = tmp_path / 'incoming'; source.mkdir()
+    for directory in [source, updater.current_dir]:
+        (directory / 'requirements.txt').write_text('wzgram\n')
+    run = Mock()
+    monkeypatch.setattr(updater, '_run_command', run)
+    updater._install_changed_requirements(source)
+    run.assert_not_called()
+
+
+def test_partial_apply_failure_restores_previous_source_and_revision(updater, tmp_path, monkeypatch):
+    live = updater.current_dir
+    (live / 'bot.py').write_text('version="old"\n')
+    (live / '.runtime_revision.json').write_text('{"full_hash":"old"}')
+    (live / '.env').write_text('PRIVATE=original\n')
+    source = tmp_path / 'incoming'; source.mkdir()
+    (source / 'bot.py').write_text('version="new"\n')
+    (source / 'requirements.txt').write_text('# fixture\n')
+    monkeypatch.setattr(updater, '_clone_repository', Mock(return_value=source))
+
+    def interrupted_copy(source_dir):
+        (live / 'bot.py').write_text('version="partially applied"\n')
+        raise OSError('fixture disk failure')
+
+    monkeypatch.setattr(updater, '_apply_update', interrupted_copy)
+    assert updater.update() is False
+    assert (live / 'bot.py').read_text() == 'version="old"\n'
+    assert (live / '.runtime_revision.json').read_text() == '{"full_hash":"old"}'
+    assert (live / '.env').read_text() == 'PRIVATE=original\n'
+    assert (updater.last_backup / 'bot.py').read_text() == 'version="old"\n'
+
+
+def test_rollback_to_image_source_removes_later_applied_revision(updater):
+    live = updater.current_dir
+    (live / 'bot.py').write_text('version="old"\n')
+    backup = updater._create_backup()
+    (live / 'bot.py').write_text('version="new"\n')
+    (live / '.runtime_revision.json').write_text('{"full_hash":"new"}')
+    assert updater.rollback(str(backup))
+    assert (live / 'bot.py').read_text() == 'version="old"\n'
+    assert not (live / '.runtime_revision.json').exists()

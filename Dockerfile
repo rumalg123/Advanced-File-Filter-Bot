@@ -25,8 +25,7 @@ ENV LC_ALL=en_US.UTF-8
 
 # Create directories for persistent data
 RUN mkdir -p /usr/src/app/backups \
-             /usr/src/app/logs \
-             /usr/src/app/.git
+             /usr/src/app/logs
 
 # Copy requirements first for better caching
 COPY requirements.txt .

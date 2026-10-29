@@ -675,122 +675,71 @@ class BotSettingsHandler(BaseHandler):
             await query.answer(ErrorMessageFormatter.format_error(str(e), plain_text=True), show_alert=True)
 
     def _get_git_info(self):
-        """Get current git information"""
-        if not (Path('.git').is_file() or Path('.git/HEAD').is_file()):
-            return None
-        import subprocess
-        try:
-            # Get current commit hash
-            hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
-                                       capture_output=True, text=True, check=True)
-            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
-            
-            # Get commit date and message
-            commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
-                                       capture_output=True, text=True, check=True)
-            commit_date, commit_message = commit_info.stdout.strip().split('|', 1)
-            
-            # Check for uncommitted changes
-            status_result = subprocess.run(['git', 'status', '--porcelain'], 
-                                         capture_output=True, text=True, check=True)
-            has_changes = bool(status_result.stdout.strip())
-            
-            return {
-                'hash': commit_hash,
-                'date': commit_date,
-                'message': commit_message,
-                'has_changes': has_changes,
-                'full_hash': hash_result.stdout.strip()
-            }
-        except Exception as e:
-            logger.error(f"Failed to get git info: {e}")
-            return None
+        """Get the Git checkout or last successfully applied update revision."""
+        from core.utils.runtime_version import get_runtime_version
+        return get_runtime_version()
 
     async def restart_command(self, client: Client, message: Message):
-        """Handle /restart command"""
+        """Update from the configured upstream, then restart the bot process."""
+        import json
         import os
         import sys
         import subprocess
         import platform
-        import shutil
         import signal
+        from update import SecureUpdater
+
+        if getattr(self, '_restart_in_progress', False):
+            await message.reply_text("🔄 An update and restart is already in progress.")
+            return
+        self._restart_in_progress = True
+        restart_msg = None
+        try:
+            restart_msg = await message.reply_text("🔄 <b>Fetching and validating bot updates...</b>")
+            upstream_repo = await self.settings_service.get_setting('UPSTREAM_REPO')
+            upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
+            if not upstream_repo or not upstream_branch:
+                raise ValueError('UPSTREAM_REPO and UPSTREAM_BRANCH must be configured')
+
+            git_info_before = self._get_git_info()
+            updater = SecureUpdater(upstream_repo, upstream_branch)
+            # Clone into a temporary checkout: source-only Docker images do not
+            # have .git. Back up and validate before changing the running source.
+            updated = await asyncio.to_thread(updater.update, install_dependencies=True)
+            if not updated:
+                raise RuntimeError('Upstream update failed; see the update log and backups')
+
+            restart_data = {
+                'chat_id': restart_msg.chat.id,
+                'message_id': restart_msg.id,
+                'git_before': git_info_before,
+            }
+            Path('restart_msg.txt').write_text(json.dumps(restart_data), encoding='utf-8')
+        except Exception:
+            self._restart_in_progress = False
+            logger.exception('Update and restart aborted')
+            if restart_msg is not None:
+                await restart_msg.edit_text(
+                    "❌ <b>Update failed; restart cancelled.</b> Check the update log and backups. "
+                    "Confirm UPSTREAM_REPO and UPSTREAM_BRANCH in /bsetting.")
+            return
+
+        # A deleted Telegram status message must not strand already updated code.
+        try:
+            await restart_msg.edit_text("✅ <b>Bot code updated. Restarting...</b>")
+        except Exception:
+            logger.warning('Cannot edit update status; continuing restart', exc_info=True)
 
         in_container = (
             Path('/.dockerenv').exists()
             or os.environ.get('IN_DOCKER', '').lower() in ('1', 'true', 'yes')
             or bool(os.environ.get('KUBERNETES_SERVICE_HOST'))
         )
-
-        # Get current git info before restart
-        git_info_before = None if in_container else self._get_git_info()
-        
-        restart_msg = await message.reply_text("🔄 <b>Restarting bot...</b>")
-
-        # Save restart message info and git info
-        restart_data = {
-            'chat_id': restart_msg.chat.id,
-            'message_id': restart_msg.id,
-            'git_before': git_info_before
-        }
-        
-        with open("restart_msg.txt", "w") as f:
-            import json
-            f.write(json.dumps(restart_data))
-
         if in_container:
-            # wzgram's idle() handles SIGTERM, then Client.run awaits stop().
-            # Once Python exits, start.sh exits and Compose's restart policy
-            # restarts this same image. No Git checkout or Docker socket needed.
+            # idle() handles SIGTERM, Client.run() awaits stop(), and Compose's
+            # unless-stopped policy restarts this container with the updated files.
             os.kill(os.getpid(), signal.SIGTERM)
             return
-
-        # Get upstream settings
-        upstream_repo = await self.settings_service.get_setting('UPSTREAM_REPO')
-        upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
-
-        if upstream_repo and upstream_branch and git_info_before:
-            await restart_msg.edit_text("🔄 <b>Force pulling updates from upstream...</b>")
-
-            try:
-                # Force pull from upstream (overwrites local changes)
-                subprocess.run(["git", "fetch", upstream_repo, upstream_branch], capture_output=True, text=True, check=True)
-                subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], capture_output=True, text=True, check=True)
-                
-                # Try git clean with error handling for Docker environments
-                try:
-                    subprocess.run(["git", "clean", "-fd"], capture_output=True, text=True, check=True)
-                except subprocess.CalledProcessError as clean_error:
-                    logger.warning(f"Git clean failed (likely permission issue in Docker): {clean_error}")
-                    # Try alternative cleanup for Docker environments
-                    try:
-                        # Clean only files that git can access
-                        subprocess.run(["git", "clean", "-f"], capture_output=True, text=True, check=False)
-                    except Exception:
-                        logger.info("Git clean alternative also failed, continuing anyway")
-                
-                shutil.rmtree("logs", ignore_errors=True)
-                
-                # Get updated git info
-                git_info_after = self._get_git_info()
-                
-                if git_info_before and git_info_after:
-                    if git_info_before['full_hash'] != git_info_after['full_hash']:
-                        update_msg = (
-                            ErrorMessageFormatter.format_success("Updates pulled!", title="Updates") + "\n\n"
-                            f"📝 <b>Latest Commit:</b>\n"
-                            f"🔗 `{git_info_after['hash']}` - {git_info_after['date']}\n"
-                            f"💬 {git_info_after['message']}\n\n"
-                            f"🔄 <b>Restarting...</b>"
-                        )
-                    else:
-                        update_msg = ErrorMessageFormatter.format_info("No new updates available. Restarting...", include_prefix=False)
-                else:
-                    update_msg = ErrorMessageFormatter.format_success("Updates pulled! Restarting...", include_prefix=False)
-                    
-                await restart_msg.edit_text(update_msg)
-            except Exception as e:
-                logger.error(f"Failed to force pull updates: {e}")
-                await restart_msg.edit_text(ErrorMessageFormatter.format_warning("Failed to force pull updates. Restarting anyway...", include_prefix=False))
 
         # Platform-specific restart
         if platform.system() == "Windows":

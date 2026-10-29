@@ -157,3 +157,5 @@ bot.txt
 
 # PH-010 local Redis ACL credentials, never commit secrets
 .secrets/
+/.runtime_revision.json
+/.runtime_revision.tmp

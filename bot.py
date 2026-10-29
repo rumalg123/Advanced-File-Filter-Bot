@@ -1045,36 +1045,9 @@ class MediaSearchBot(Client):
         logger.info("=" * 60)
 
     def _get_git_info(self):
-        """Get current git information"""
-        if not (Path('.git').is_file() or Path('.git/HEAD').is_file()):
-            return None
-        import subprocess
-        try:
-            # Get current commit hash
-            hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
-                                       capture_output=True, text=True, check=True)
-            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
-            
-            # Get commit date and message
-            commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
-                                       capture_output=True, text=True, check=True)
-            commit_date, commit_message = commit_info.stdout.strip().split('|', 1)
-            
-            # Check for uncommitted changes
-            status_result = subprocess.run(['git', 'status', '--porcelain'], 
-                                         capture_output=True, text=True, check=True)
-            has_changes = bool(status_result.stdout.strip())
-            
-            return {
-                'hash': commit_hash,
-                'date': commit_date,
-                'message': commit_message,
-                'has_changes': has_changes,
-                'full_hash': hash_result.stdout.strip()
-            }
-        except Exception as e:
-            logger.error(f"Failed to get git info: {e}")
-            return None
+        """Get the Git checkout or last successfully applied update revision."""
+        from core.utils.runtime_version import get_runtime_version
+        return get_runtime_version()
 
     async def _send_startup_message(self):
         """Send startup message to log channel"""

@@ -274,9 +274,17 @@ database later, follow the [production cutover runbook](docs/PRODUCTION_CUTOVER.
 It distinguishes disposable Redis volumes from application backups/data and
 documents capacity headroom, ownership activation and rollback.
 
-In a container, `/restart` restarts the currently deployed image through its
-restart policy. It does not pull code or switch Git branches. Deploy source
-updates with a host Git checkout and Docker rebuild/recreation.
+`/restart` updates the bot from the database-backed `UPSTREAM_REPO` and
+`UPSTREAM_BRANCH` settings, then restarts it. The updater backs up application
+files, clones and validates the requested branch, and installs requirements if
+they changed. It preserves `.env`, sessions, logs and data. Failed updates cancel
+the restart. In Docker, graceful shutdown lets the `unless-stopped` restart
+policy start the same container with the updated source. No image Git checkout
+or Docker socket is required. Normal startup still uses installed dependencies.
+
+These source changes survive container restarts. Recreating the container uses
+the built image, so also update the host checkout and rebuild when making a
+release permanent or changing Docker/system dependencies.
 
 The `Dockerfile` can be used on a VPS or a container PaaS.
 
