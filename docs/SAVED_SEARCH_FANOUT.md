@@ -1,6 +1,6 @@
 # PH-017: Complete saved-search subscriber traversal
 
-**Status:** implementation on existing hardening branch / Draft PR #4. No production
+**Status:** code CI passed ([run 40813794658](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40813794658)); staging pending / Draft PR #4. No production
 database access, deployment or migration. PH-018 remains responsible for
 durable notification scheduling/retry and bounded background fan-out.
 
@@ -55,8 +55,11 @@ https://www.mongodb.com/docs/manual/reference/method/cursor.sort/
 
 ## Tests and release gates
 
-- [ ] CI: full Python, real disposable MongoDB/Redis, container preflight
-      pass at PH-017 code SHA.
+- [x] Full Python tests with real disposable MongoDB/dual Redis, compile/lint,
+      Docker/Compose preflight passed at tested code SHA `7f6d1327`:
+      [CI run 40813794658](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40813794658).
+      The first run caught an incorrect expected page-boundary cursor in the
+      regression fixture; assertion corrected with no service logic changes.
 - [ ] Fixtures exceeding 1,200 active records verify early and late
       matching users, no duplicates on repeated scans, bounded pages and
       stable traversal when `updated_at` changes.
