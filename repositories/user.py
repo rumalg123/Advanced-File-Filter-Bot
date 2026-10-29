@@ -604,7 +604,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 '$filter': {
                     'input': {'$ifNull': ['$quota_delivery_ledger', []]},
                     'as': 'item',
-                    'cond': {'$in': ['$item.status', ['reserved', 'uncertain']]}
+                    'cond': {'$in': ['$$item.status', ['reserved', 'uncertain']]}
                 }
             }
             selector['$expr'] = {'$lt': [{'$size': unresolved}, 256]}
