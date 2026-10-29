@@ -34,59 +34,27 @@ class CacheInvalidator:
         return succeeded
 
     async def get_search_cache_version(self) -> int:
-        """Return a valid cache generation or refuse unsafe split-state reads."""
-        version = await self.cache.get(self.SEARCH_CACHE_VERSION_KEY)
+        """Read/init a never-defaulted search generation atomically in Redis.
 
-        # A separate protected state instance can lose all state after a disk
-        # restore/reset. Initializing with a random positive counter ensures
-        # old search pages on the disposable cache cannot collide with v1.
-        if getattr(self.cache, "protected_state_enabled", False):
-            try:
-                parsed = int(version) if version is not None else None
-                if parsed is not None and parsed >= 1:
-                    return parsed
-                if version is not None:
-                    logger.warning("Invalid protected search cache counter; reinitializing")
-                    await self.cache.delete(self.SEARCH_CACHE_VERSION_KEY)
-
-                new_version = await self.cache.ensure_counter_initialized(
-                    self.SEARCH_CACHE_VERSION_KEY, secrets.randbits(60) + 1
-                )
-                if new_version is None or int(new_version) < 1:
-                    raise RuntimeError("Protected search cache generation unavailable")
-                return int(new_version)
-            except (TypeError, ValueError) as exc:
-                raise RuntimeError("Protected search cache generation invalid") from exc
-
-        # Legacy single-Redis behavior is unchanged.
-        if version is None:
-            return 1
-        try:
-            parsed = int(version)
-            if parsed < 1:
-                raise ValueError("version must be positive")
-            return parsed
-        except (TypeError, ValueError):
-            logger.warning("Discarding malformed search cache version")
-            await self.cache.delete(self.SEARCH_CACHE_VERSION_KEY)
-            return 1
+        A missing key after cache eviction or a Redis restore gets a fresh,
+        unpredictable counter. Never fall back to v1 or delete malformed
+        counters, because that can resurrect stale cache entries.
+        """
+        generation = await self.cache.ensure_search_generation(
+            self.SEARCH_CACHE_VERSION_KEY, secrets.randbits(60) + 1
+        )
+        if generation is None or generation < 1:
+            raise RuntimeError("Search cache generation unavailable")
+        return int(generation)
 
     async def increment_search_cache_version(self) -> Optional[int]:
-        """Increment search cache version to invalidate all search caches lazily"""
-        if getattr(self.cache, "protected_state_enabled", False):
-            # Create an unpredictable base before the first mutation as well
-            # as before the first query, never plain v1 after state loss.
-            await self.get_search_cache_version()
-        new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
-        if new_version is None:
+        """Atomically initialize and increment, even during Redis restarts."""
+        version = await self.cache.advance_search_generation(
+            self.SEARCH_CACHE_VERSION_KEY, secrets.randbits(60) + 1
+        )
+        if version is None or version < 1:
             return None
-        if new_version == 1:
-            # First increment, set to 2 to ensure version exists
-            new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
-            # Set a very long expiration (1 year) for the version key since it's a persistent counter
-            # This prevents memory leaks while keeping the version persistent
-            await self.cache.expire(self.SEARCH_CACHE_VERSION_KEY, 31536000)  # 1 year
-        return new_version
+        return int(version)
 
     async def invalidate_user_data(self, user_id: int) -> bool:
         """Invalidate just the user data cache (lightweight)"""
