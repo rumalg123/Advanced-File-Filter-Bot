@@ -210,17 +210,41 @@ The V2 candidate supersedes the earlier candidate and has a separately verified
 archive; the earlier artifact is historical. A native production build remains
 the default in the exact command guide, avoiding architecture assumptions.
 
-## Container restart follow-up (BUG-062)
+## Update-and-restart correction (BUG-062)
 
-Commit `ffd9d63` fixes the supplied production `/restart` Git exit-128 reports.
-Container images have no Git checkout; restart now signals its own process, lets
-wzgram finish stop, and relies on the configured restart policy to reload the
-same image. It does not consult upstream settings or run Git fetch/reset. Both
-Git-info readers skip absent/empty image metadata. Six pre-fix failures were
-reproduced; 27 focused restart/settings tests passed, including a real child
-process SIGTERM through wzgram idle/stop. Changed-source compilation and
-undefined-name lint passed. The full 776-test/coverage snapshot above remains
-associated with source `850bc31`; it was not rerun for this focused follow-up.
-The archived V2 candidate predates this fix: build the current branch for the
-new restart behavior. No production container was located, connected to or
-modified from QA.
+Commit `c4c19b0` restores the intended `/restart` contract: fetch the configured
+upstream branch, back up and validate the code, apply it, then restart the bot.
+The initial `ffd9d63` change passed 27 focused checks but incorrectly disabled
+code updates; its restart-only contract is superseded. The original Git exit-128
+failure came from running Git in a source-only image without a valid checkout,
+not from using a branch other than main.
+
+The corrected command uses the existing updater's temporary clone, so the image
+needs no `.git`. It preserves `.env`, Telegram sessions, logs and data, installs
+changed requirements explicitly, saves the fetched revision for startup output,
+and cancels the restart on update failure. Overlapping commands cannot start
+concurrent updates. Failed application copying attempts to restore the saved
+application files. Dependency/environment changes are not reverted by a file
+backup; rebuilding the previous image remains the deployment recovery path.
+
+Validation on 2026-10-29:
+
+- **82 focused tests passed** across container restart, secure updater, settings
+  callbacks and settings edit lifecycle. Real local Git repositories have
+  different main/release commits; tests prove the configured slash-containing
+  branch is applied before SIGTERM. Missing branches, invalid Python and failed
+  dependency installation cancel restart. Backup recovery, version reporting,
+  session/data preservation and concurrent requests pass.
+- A child process exercised real wzgram `Client.run()` / idle / stop after a real
+  source update. Telegram message objects were test doubles; no live Telegram
+  or Atlas connections were made for this correction.
+- An isolated Docker probe, with network disabled and `unless-stopped`, applied
+  the requested branch, completed client stop, automatically restarted exactly
+  once and executed the new `bot.py`. `.env` and session state were preserved.
+  Its temporary container was removed; existing services were untouched.
+- Changed Python syntax, undefined-name lint and `git diff --check` passed.
+
+The full 776-test/coverage snapshot above remains associated with `850bc31`;
+whole-bot coverage was not rerun or claimed as 100% for this focused correction.
+Archived candidate images predate this correction: build the current branch.
+No production server or production container was accessed from QA.

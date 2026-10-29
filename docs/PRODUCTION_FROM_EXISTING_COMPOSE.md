@@ -6,15 +6,37 @@ containers, the existing Compose project, and the external Atlas Free database.
 No production command in this document was executed from QA.
 
 Target branch: `docs/production-hardening-source-of-truth-20261028`.
-The branch must include container restart fix `ffd9d63` and startup fix
-`850bc31`. The earlier full suite passed 776 tests; the restart follow-up passed
-27 focused tests, including real signal/stop behavior. Offline Docker setup passed. No MongoDB ownership activation, token
+The branch must include update-and-restart fix `c4c19b0` and startup fix
+`850bc31`. Fix `c4c19b0` supersedes the incorrect restart-only behavior in
+`ffd9d63`. The earlier full suite passed 776 tests; the corrected updater passed
+82 focused tests and an offline Docker update/restart probe. Offline Docker setup passed. No MongoDB ownership activation, token
 backfill, canonical metadata migration or global Docker prune is part of this
 cutover. The older candidate image predating BUG-061 is superseded.
 
 Run blocks in order, in the same Bash/SSH session on production. Stop at any
 error. Keep the backup directory private: it contains credentials and user data.
 Do not paste its contents into a chat.
+
+## Already running this branch: apply only the restart correction
+
+When the hardening branch is already deployed and healthy, install the correction
+with the following commands in the production checkout. This updates only the
+bot container; keep the existing MongoDB, Redis services and volumes.
+
+```bash
+cd ~/Advanced-File-Filter-Bot
+git switch docs/production-hardening-source-of-truth-20261028
+git pull --ff-only origin docs/production-hardening-source-of-truth-20261028
+git merge-base --is-ancestor c4c19b0 HEAD
+sudo docker compose build file-filter-bot
+sudo docker compose up -d --no-deps --force-recreate file-filter-bot
+sudo docker compose logs --tail=80 file-filter-bot
+```
+
+Run `/restart` after startup to exercise update-and-restart. Future invocations
+use `UPSTREAM_REPO` / `UPSTREAM_BRANCH` from `/bsetting`, including a non-main
+branch. The one-time host rebuild above is needed to install the corrected
+command into an already running image.
 
 ## 1. Snapshot the deployment, then stop the bot
 
@@ -142,7 +164,7 @@ else
   git switch --track -c "$prod_branch" "origin/$prod_branch"
 fi
 git merge --ff-only "origin/$prod_branch"
-git merge-base --is-ancestor ffd9d63 HEAD
+git merge-base --is-ancestor c4c19b0 HEAD
 git log -1 --oneline
 ```
 
@@ -232,12 +254,20 @@ delivery, Send All, subscription and premium/quota checks with controlled
 accounts. Catch up channel indexing over the downtime interval. Old Redis-backed
 menus/sessions expire and users may need to search/reopen links again.
 
-After BUG-062, the bot's container `/restart` command reloads the deployed image
-through graceful process shutdown and the existing `unless-stopped` policy. It
-does not fetch/reset Git or switch branches. Deploy new source with a host-side
-Git checkout and Docker rebuild/recreation. `sudo docker compose --profile
-protected-state restart file-filter-bot` also reloads database-backed settings;
-use recreation when changing the container environment.
+The bot's `/restart` command fetches and validates the database-backed
+`UPSTREAM_REPO` / `UPSTREAM_BRANCH`, backs up and updates the application, then
+restarts the container through graceful shutdown and `unless-stopped`. It works
+without an image Git checkout. Failed updates cancel the restart. Changed Python
+requirements are installed during this explicit update; ordinary boot does not
+install packages. Confirm `/bsetting` targets the intended branch; an existing
+MongoDB setting overrides the initial environment default.
+
+Runtime source changes survive `docker restart` but are held in that container's
+writable layer. A new container starts from the built image. Also update the
+host checkout and rebuild to make releases permanent, and whenever Docker/system
+dependencies change. `sudo docker compose --profile protected-state restart
+file-filter-bot` reloads settings using the current source; use recreation when
+changing the container environment.
 
 ## Rollback
 
