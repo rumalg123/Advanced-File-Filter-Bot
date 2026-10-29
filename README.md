@@ -130,6 +130,8 @@ PH-010 Redis security: [optional file-backed Redis ACL authentication and stagin
 
 PH-011 search-cache consistency: [atomic Redis generations, bounded search retry and staging verification guide](docs/SEARCH_CACHE_GENERATION.md). Missing/malformed Redis counters never default to `v1`, and concurrent invalidations trigger bounded search retries.
 
+PH-012 staging and recovery: [isolated staging deployment and Atlas/Redis backup-restore rehearsal](docs/STAGING_AND_RECOVERY.md), [evidence template](docs/RECOVERY_EVIDENCE_TEMPLATE.md), and a [separate staging Compose project](docker-compose.staging.yml) that requires dedicated Telegram, MongoDB and Redis resources. The host preflight is offline; no production environment was accessed.
+
 ### Wzgram compatibility note
 
 The project dependency is pinned to a specific `wzgram` Git commit in `pyproject.toml` and `requirements.txt`. Wzgram exposes a Pyrogram-compatible import namespace, so source imports such as `from pyrogram import Client` are expected; they do not mean the project still installs the unmaintained upstream Pyrogram distribution.
