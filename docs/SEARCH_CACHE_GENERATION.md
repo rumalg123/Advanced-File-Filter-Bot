@@ -108,7 +108,7 @@ This is an availability-versus-correctness choice.
 - [Redis SET semantics](https://redis.io/docs/latest/commands/set/)
 - [Redis INCR semantics](https://redis.io/docs/latest/commands/incr/)
 
-**Remaining acceptance:** final green CI, real Telegram staging behavior,
+**Verified in CI:** [run 40803258303](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40803258303) passed full pytest, live Redis integration, compile/lint and Docker preflight.\n\n**Remaining acceptance:** real Telegram staging behavior,
 controlled Redis restart/race drills, and operator approval. This phase
 does not claim true snapshot isolation or cover PH-027 multi-DB partial
 failures.
