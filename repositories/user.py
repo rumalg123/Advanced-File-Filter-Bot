@@ -1049,36 +1049,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         return success, user
 
     async def reset_daily_counters(self) -> int:
-        """
-        Reset daily counters for all users (for scheduled maintenance)
-        Returns: Number of users updated
-        """
-        try:
-            collection = await self.collection()
+        """Deprecated compatibility API: daily quota rollover is lazy and atomic.
 
-            # Update all users to reset daily counters
-            # This is typically run once per day via a scheduled task
-            # Use semaphore to control concurrent database write operations
-            async with semaphore_manager.acquire('database_write'):
-                update_result = await self.db_pool.execute_with_retry(
-                    collection.update_many,
-                    {},  # Update all users
-                    {
-                        '$set': {
-                            'daily_retrieval_count': 0,
-                            'daily_request_count': 0,
-                            'updated_at': datetime.now(UTC)
-                        }
-                    }
-                )
-
-            # Clear all user caches since we've updated all users
-            await self.cache_invalidator.invalidate_all_users_cache()
-            
-            updated_count = update_result.modified_count if update_result else 0
-            logger.info(f"Reset daily counters for {updated_count} users")
-            return updated_count
-            
-        except Exception as e:
-            logger.error(f"Error resetting daily counters: {e}")
-            return 0
+        PH-021: Never bulk-zero the entire users collection. Doing so after
+        some requests have already reserved quota for the new UTC day allows
+        extra usage and can erase in-flight reservations. The read/consume
+        paths compare last_*_date against UTC today and reset *per user*
+        atomically on the next guarded update. No migration required.
+        """
+        logger.debug("Daily quota counters roll over per user; bulk reset skipped")
+        return 0
