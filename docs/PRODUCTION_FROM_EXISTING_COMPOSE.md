@@ -231,8 +231,12 @@ delivery, Send All, subscription and premium/quota checks with controlled
 accounts. Catch up channel indexing over the downtime interval. Old Redis-backed
 menus/sessions expire and users may need to search/reopen links again.
 
-Use Docker to restart this branch. The bot's owner `/restart` command can pull
-the database-backed `UPSTREAM_BRANCH`, which may still be `main`.
+After BUG-062, the bot's container `/restart` command reloads the deployed image
+through graceful process shutdown and the existing `unless-stopped` policy. It
+does not fetch/reset Git or switch branches. Deploy new source with a host-side
+Git checkout and Docker rebuild/recreation. `sudo docker compose --profile
+protected-state restart file-filter-bot` also reloads database-backed settings;
+use recreation when changing the container environment.
 
 ## Rollback
 

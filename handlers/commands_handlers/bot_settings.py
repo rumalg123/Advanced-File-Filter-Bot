@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from pyrogram import Client
 from pyrogram import StopPropagation
@@ -675,6 +676,8 @@ class BotSettingsHandler(BaseHandler):
 
     def _get_git_info(self):
         """Get current git information"""
+        if not (Path('.git').is_file() or Path('.git/HEAD').is_file()):
+            return None
         import subprocess
         try:
             # Get current commit hash
@@ -710,9 +713,16 @@ class BotSettingsHandler(BaseHandler):
         import subprocess
         import platform
         import shutil
+        import signal
+
+        in_container = (
+            Path('/.dockerenv').exists()
+            or os.environ.get('IN_DOCKER', '').lower() in ('1', 'true', 'yes')
+            or bool(os.environ.get('KUBERNETES_SERVICE_HOST'))
+        )
 
         # Get current git info before restart
-        git_info_before = self._get_git_info()
+        git_info_before = None if in_container else self._get_git_info()
         
         restart_msg = await message.reply_text("🔄 <b>Restarting bot...</b>")
 
@@ -727,11 +737,18 @@ class BotSettingsHandler(BaseHandler):
             import json
             f.write(json.dumps(restart_data))
 
+        if in_container:
+            # wzgram's idle() handles SIGTERM, then Client.run awaits stop().
+            # Once Python exits, start.sh exits and Compose's restart policy
+            # restarts this same image. No Git checkout or Docker socket needed.
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
         # Get upstream settings
         upstream_repo = await self.settings_service.get_setting('UPSTREAM_REPO')
         upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
 
-        if upstream_repo and upstream_branch:
+        if upstream_repo and upstream_branch and git_info_before:
             await restart_msg.edit_text("🔄 <b>Force pulling updates from upstream...</b>")
 
             try:

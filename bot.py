@@ -1046,6 +1046,8 @@ class MediaSearchBot(Client):
 
     def _get_git_info(self):
         """Get current git information"""
+        if not (Path('.git').is_file() or Path('.git/HEAD').is_file()):
+            return None
         import subprocess
         try:
             # Get current commit hash

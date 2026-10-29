@@ -274,6 +274,10 @@ database later, follow the [production cutover runbook](docs/PRODUCTION_CUTOVER.
 It distinguishes disposable Redis volumes from application backups/data and
 documents capacity headroom, ownership activation and rollback.
 
+In a container, `/restart` restarts the currently deployed image through its
+restart policy. It does not pull code or switch Git branches. Deploy source
+updates with a host Git checkout and Docker rebuild/recreation.
+
 The `Dockerfile` can be used on a VPS or a container PaaS.
 
 ### Required services
