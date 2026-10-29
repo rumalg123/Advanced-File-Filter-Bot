@@ -8,6 +8,7 @@ import pytest
 from core.utils.quota_calendar import QuotaReservation
 from handlers.callbacks_handlers.file import FileCallbackHandler
 from handlers.deeplink import DeepLinkHandler
+from repositories.user import User
 
 
 def bot_fixture():
@@ -123,3 +124,49 @@ async def test_deeplink_failure_before_telegram_attempt_refunds_exactly_once(mon
         42, reserved, 0, uncertain=False
     )
     client.send_cached_media.assert_not_awaited()
+
+
+
+@pytest.mark.asyncio
+async def test_sendall_setup_failure_closes_tokenized_reservation_once(monkeypatch):
+    reservation = QuotaReservation(2, date(2026, 10, 29), "sendall-token")
+    repo = SimpleNamespace(
+        can_retrieve_file=AsyncMock(return_value=(True, "allowed")),
+        get_user=AsyncMock(return_value=User(id=42, name="User")),
+        reserve_quota_atomic=AsyncMock(return_value=(True, reservation, "reserved")),
+        settle_quota_delivery=AsyncMock(return_value=True),
+        release_quota=AsyncMock(return_value=True),
+    )
+    bot = SimpleNamespace(
+        bot_username="testbot",
+        config=SimpleNamespace(
+            ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[],
+            DISABLE_PREMIUM=False, NON_PREMIUM_DAILY_LIMIT=10
+        ),
+        cache=SimpleNamespace(get=AsyncMock(return_value={
+            "files": [{"file_unique_id": "one"}, {"file_unique_id": "two"}],
+            "query": "matrix",
+        })),
+        user_repo=repo,
+    )
+    handler = FileCallbackHandler(bot)
+    query = SimpleNamespace(
+        from_user=SimpleNamespace(id=42),
+        data="sendall#cached-search#42",
+        chat=SimpleNamespace(type="private"),
+        answer=AsyncMock(side_effect=RuntimeError("callback no longer valid"))
+    )
+    client = SimpleNamespace(get_chat=AsyncMock())
+    monkeypatch.setattr("handlers.callbacks_handlers.file.is_private_chat",
+                        lambda _query: True)
+    monkeypatch.setattr("handlers.callbacks_handlers.file.telegram_api.call_api",
+                        AsyncMock())
+
+    with pytest.raises(RuntimeError, match="callback no longer valid"):
+        await FileCallbackHandler.handle_sendall_callback.__wrapped__(
+            handler, client, query
+        )
+    repo.settle_quota_delivery.assert_awaited_once_with(
+        42, reservation, 0, uncertain=False
+    )
+    repo.release_quota.assert_not_awaited()
