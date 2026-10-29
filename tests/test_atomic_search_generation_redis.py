@@ -29,6 +29,9 @@ async def test_real_redis_concurrent_increment_and_nonexpiring_generation():
         pytest.skip("Requires local CI Redis")
     assert is_local(uri, 6379)
     cache = CacheManager(uri)
+    # Exercise 100 truly concurrent Redis commands without hitting this
+    # test client's default 20-connection pool limit.
+    cache._max_connections = 150
     await cache.initialize()
     key = f"cache:search:version:ph011:{uuid4().hex}"
     try:
