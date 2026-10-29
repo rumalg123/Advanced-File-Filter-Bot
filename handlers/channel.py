@@ -388,7 +388,13 @@ class ChannelHandler:
                         feature_service = getattr(self.bot, "feature_service", None)
                         if feature_service:
                             try:
-                                feature_service.schedule_new_media(media_file)
+                                if hasattr(feature_service, "persist_new_media"):
+                                    await feature_service.persist_new_media(media_file)
+                                else:
+                                    if hasattr(feature_service, "persist_new_media"):
+                        await feature_service.persist_new_media(media_file)
+                    else:
+                        feature_service.schedule_new_media(media_file)
                             except Exception:
                                 logger.exception("Indexed file but notification scheduling failed")
                     await asyncio.sleep(self.processing_config.inter_message_delay)
