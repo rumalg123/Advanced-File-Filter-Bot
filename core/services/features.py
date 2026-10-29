@@ -6,6 +6,9 @@ from typing import Any
 
 from pyrogram.types import InlineKeyboardMarkup
 
+from config.settings import settings
+from repositories.saved_search_alert_jobs import SavedSearchAlertJobRepository
+from repositories.media import FileType
 from core.utils.button_builder import ButtonBuilder
 from core.utils.helpers import find_similar_queries
 from core.utils.logger import get_logger
@@ -46,6 +49,9 @@ class FeatureService:
         self.search_history_service = search_history_service
         self.config = config
         self.bot = bot
+        # Created lazily, and only exercised by the explicitly opted-in queue.
+        self._alert_jobs = None
+        self._alert_worker_started = False
 
     def enabled(self, flag: str) -> bool:
         return bool(getattr(self.config, flag, False))
@@ -57,7 +63,178 @@ class FeatureService:
         if not self.any_enabled():
             logger.info("All additive feature flags are disabled; feature indexes were not created")
             return {}
-        return await self.repository.create_indexes()
+        results = await self.repository.create_indexes()
+        if self.durable_alerts_enabled():
+            await self._durable_jobs().ensure_indexes()
+        return results
+
+    def durable_alerts_enabled(self):
+        return (self.enabled('FEATURE_SAVED_SEARCH_ALERTS')
+                and settings.processing.durable_saved_search_alerts)
+
+    def _durable_jobs(self):
+        if self._alert_jobs is None:
+            self._alert_jobs = SavedSearchAlertJobRepository(self.repository.db_pool)
+        return self._alert_jobs
+
+    async def persist_new_media(self, media: MediaFile) -> None:
+        """Await queue persistence after indexing when durable mode is opted in.
+
+        The media write and queue insert aren't in one Mongo transaction:
+        indexing errors must surface for reconciliation on staging.
+        """
+        if not self.enabled('FEATURE_SAVED_SEARCH_ALERTS') or not self.bot:
+            return
+        if not self.durable_alerts_enabled():
+            self.schedule_new_media(media)
+            return
+        await self._durable_jobs().enqueue(media)
+
+    def start_alert_workers(self) -> None:
+        """Start a fixed-size pool, not one task per incoming media file."""
+        if not self.durable_alerts_enabled() or not self.bot or self._alert_worker_started:
+            return
+        manager = getattr(self.bot, 'handler_manager', None)
+        if manager is None:
+            logger.error("Durable saved-search workers require a handler manager")
+            return
+        self._alert_worker_started = True
+        for index in range(settings.processing.saved_search_alert_workers):
+            manager.create_background_task(
+                self._run_alert_worker(),
+                name=f"saved_alert_worker_{index}",
+            )
+
+    async def _alert_heartbeat(self, job, stop, lost):
+        try:
+            while not stop.is_set():
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=30)
+                    break
+                except asyncio.TimeoutError:
+                    pass
+                if not await self._durable_jobs().renew(job):
+                    lost.set()
+                    return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            lost.set()
+            logger.exception("Durable saved-search lease heartbeat failed")
+
+    async def _run_alert_worker(self):
+        """Lease-fenced, bounded-concurrency worker with recoverable retries."""
+        jobs = self._durable_jobs()
+        while self.durable_alerts_enabled():
+            try:
+                job = await jobs.claim()
+                if not job:
+                    await asyncio.sleep(1)
+                    continue
+                stop, lost = asyncio.Event(), asyncio.Event()
+                heartbeat = asyncio.create_task(self._alert_heartbeat(job, stop, lost))
+                try:
+                    await self._notify_durable_job(job, lost)
+                    if lost.is_set() or not await jobs.acknowledge(job):
+                        raise RuntimeError("Lost saved-search job lease before acknowledgement")
+                except asyncio.CancelledError:
+                    # Leave the leased job to expire and recover on another worker.
+                    raise
+                except Exception as exc:
+                    state = await jobs.fail(job, exc)
+                    logger.warning(
+                        "Saved-search alert job retry state=%s error_type=%s",
+                        state, type(exc).__name__,
+                    )
+                finally:
+                    stop.set()
+                    heartbeat.cancel()
+                    await asyncio.gather(heartbeat, return_exceptions=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Saved-search alert worker unavailable")
+                await asyncio.sleep(5)
+
+    async def _notify_durable_job(self, job, lost) -> int:
+        """Checkpoint only after every recipient in a page is resolved."""
+        snapshot = job['media']
+        media = MediaFile(
+            file_unique_id=snapshot['file_unique_id'],
+            file_id=snapshot['file_id'], file_ref=snapshot.get('file_ref'),
+            file_name=snapshot['file_name'], file_size=snapshot['file_size'],
+            file_type=FileType(snapshot['file_type']),
+            mime_type=snapshot.get('mime_type'), caption=snapshot.get('caption'),
+        )
+        haystack = normalize_feature_text(
+            f"{media.file_name or ''} {media.caption or ''}"
+        )
+        after_id = job.get('after_id')
+        sent = 0
+        while True:
+            if lost.is_set():
+                raise RuntimeError("Saved-search job lease lost")
+            page = await self.repository.get_active_saved_search_page(
+                after_id=after_id, limit=100
+            )
+            if not page:
+                return sent
+            if len(page) > 100:
+                raise RuntimeError("Oversized saved-search alert page")
+            last_id = after_id
+            for entry in page:
+                if lost.is_set():
+                    raise RuntimeError("Saved-search job lease lost during delivery")
+                search_id = entry['_id']
+                if not isinstance(search_id, str) or (
+                    last_id is not None and search_id <= last_id
+                ):
+                    raise RuntimeError("Saved-search cursor order invalid")
+                last_id = search_id
+                tokens = entry.get('normalized_query', '').split()
+                if not tokens or not all(token in haystack for token in tokens):
+                    continue
+                state, token = await self._durable_jobs().begin_delivery(
+                    search_id, media.file_unique_id
+                )
+                if state == 'delivered':
+                    continue
+                if state != 'claimed':
+                    # A crashed sender still owns a delivery lease. Do not
+                    # checkpoint past an unresolved recipient: retry later.
+                    raise RuntimeError("Saved-search recipient delivery is in flight")
+                user_id = int(entry['user_id'])
+                try:
+                    button = ButtonBuilder.file_button(media, user_id=user_id, is_private=True)
+                    await telegram_api.call_api(
+                        self.bot.send_message,
+                        user_id,
+                        (
+                            "🔔 <b>Saved search match</b>\n\n"
+                            f"<b>Search:</b> <code>{html.escape(entry['query'])}</code>\n"
+                            f"<b>File:</b> <code>{html.escape(media.file_name)}</code>"
+                        ),
+                        reply_markup=InlineKeyboardMarkup([[button]]),
+                        chat_id=user_id,
+                    )
+                    if not await self._durable_jobs().finish_delivery(
+                        search_id, media.file_unique_id, token
+                    ):
+                        raise RuntimeError("Saved-search delivery lease was lost")
+                    sent += 1
+                except Exception:
+                    await self._durable_jobs().release_delivery(
+                        search_id, media.file_unique_id, token
+                    )
+                    raise
+            if lost.is_set() or not await self._durable_jobs().checkpoint(
+                job, last_id
+            ):
+                raise RuntimeError("Lost saved-search lease at page checkpoint")
+            after_id = last_id
+            await asyncio.sleep(0)
+            if len(page) < 100:
+                return sent
 
     async def record_recent_file(self, user_id: int, file_unique_id: str) -> None:
         if not self.enabled('FEATURE_RECENT_FILES'):
@@ -100,6 +277,11 @@ class FeatureService:
     def schedule_new_media(self, media: MediaFile) -> None:
         """Schedule alert matching without delaying or failing the indexing path."""
         if not self.enabled('FEATURE_SAVED_SEARCH_ALERTS') or not self.bot:
+            return
+        if self.durable_alerts_enabled():
+            # External legacy synchronous callers cannot await Mongo persistence.
+            # All production media indexing entrypoints use persist_new_media().
+            logger.error("Sync saved-search scheduler used in durable mode; caller must await persist_new_media")
             return
         coroutine = self.notify_saved_search_matches(media)
         manager = getattr(self.bot, 'handler_manager', None)
