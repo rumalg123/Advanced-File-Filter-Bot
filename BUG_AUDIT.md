@@ -51,6 +51,12 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 ## Verification log
 
+- 2026-10-29 live QA: a private indexing link produced both its indexing
+  confirmation and a false file-search no-results response. Indexing input now
+  raises `StopPropagation` after its own response; valid and inaccessible-channel
+  regressions ensure the later search group cannot consume it again. No schema
+  changes; rollback is a code revert.
+
 - 2026-10-29 live QA: `/add_channel` raised `AttributeError` because managed
   startup never populated the bot's public handler references. All configured
   handler aliases now point to the same instances owned by `HandlerManager`.

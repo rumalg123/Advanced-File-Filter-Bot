@@ -1,7 +1,7 @@
 import asyncio
 import re
 
-from pyrogram import Client, filters, enums
+from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -113,6 +113,11 @@ class IndexingHandler:
         self._handlers.clear()
         logger.info("IndexingHandler cleanup complete")
     async def handle_index_request(self, client: Client, message: Message):
+        """Consume indexing input before the lower-priority text-search group."""
+        await self._process_index_request(client, message)
+        raise StopPropagation
+
+    async def _process_index_request(self, client: Client, message: Message):
         """Handle index request from forwarded message or link"""
         user_id = extract_user_id(message)
         if not user_id:
