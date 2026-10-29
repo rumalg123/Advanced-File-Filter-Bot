@@ -88,3 +88,36 @@ async def test_ordinary_text_without_edit_session_is_not_consumed(monkeypatch,ma
     assert await handler.handle_edit_input(client,message) is None
     handler.bot.cache.set.assert_not_awaited()
     handler.settings_service.update_setting.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_completing_old_edit_does_not_cancel_newer_owner_session(monkeypatch):
+    from core.session.manager import UnifiedSessionManager
+    from test_cache_audit import MemoryCache
+    handler,message,client=fixture(monkeypatch)
+    manager=UnifiedSessionManager(MemoryCache());handler.session_manager=manager
+    old=await manager.create_edit_session(1,{'key':'CACHE_TIME','message_id':10})
+    created=[]
+    async def persist(*args):
+        created.append(await manager.create_edit_session(1,{'key':'MAX_BTN_SIZE','message_id':20}))
+        return True
+    handler.settings_service.update_setting.side_effect=persist
+    with pytest.raises(StopPropagation):await handler.handle_edit_input(client,message)
+    latest=await manager.get_edit_session(1)
+    assert latest is not None and latest.session_id==created[0] and latest.session_id!=old
+
+
+@pytest.mark.asyncio
+async def test_cancel_of_old_edit_does_not_cancel_newer_owner_session(monkeypatch):
+    from core.session.manager import UnifiedSessionManager
+    from test_cache_audit import MemoryCache
+    handler,message,client=fixture(monkeypatch)
+    manager=UnifiedSessionManager(MemoryCache());handler.session_manager=manager
+    await manager.create_edit_session(1,{'key':'CACHE_TIME','message_id':10})
+    created=[]
+    async def delete_old_message(*args):
+        created.append(await manager.create_edit_session(1,{'key':'MAX_BTN_SIZE','message_id':20}))
+    client.delete_messages.side_effect=delete_old_message
+    with pytest.raises(StopPropagation):await handler.handle_cancel(client,message)
+    latest=await manager.get_edit_session(1)
+    assert latest is not None and latest.session_id==created[0]

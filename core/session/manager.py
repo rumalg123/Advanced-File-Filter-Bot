@@ -391,8 +391,10 @@ class UnifiedSessionManager:
         """Get edit session (backward compatibility)"""
         return await self.get_session(user_id, SessionType.EDIT)
     
-    async def cancel_edit_session(self, user_id: int) -> bool:
+    async def cancel_edit_session(self, user_id: int, session_id: Optional[str] = None) -> bool:
         """Cancel edit session (backward compatibility)"""
+        if session_id is not None:
+            return await self.cancel_session(user_id, SessionType.EDIT, session_id)
         return await self.cancel_session(user_id, SessionType.EDIT)
     
     async def create_search_session(self, user_id: int, session_id: str, data: Dict[str, Any]) -> str:

@@ -52,6 +52,13 @@ class BotSettingsHandler(BaseHandler):
         await self.bot.cache_invalidator.invalidate_settings_cache(key)
         logger.info(f"Invalidated caches for setting: {key}")
 
+    async def _cancel_captured_edit(self, user_id: int, session):
+        """A completed older input must not cancel a newer owner dialog."""
+        session_id = getattr(session, 'session_id', None)
+        if session_id is None:
+            return await self.session_manager.cancel_edit_session(user_id)
+        return await self.session_manager.cancel_edit_session(user_id, session_id=session_id)
+
     async def bsetting_command(self, client: Client, message: Message):
         """Handle /bsetting command"""
         await self.show_settings_menu(message, page=0)
@@ -448,7 +455,7 @@ class BotSettingsHandler(BaseHandler):
             logger.warning(f"Could not delete editing message: {e}")
             
         # Cancel the session
-        await self.session_manager.cancel_edit_session(user_id)
+        await self._cancel_captured_edit(user_id, session)
             
         # Delete the cancel message itself
         try:
@@ -516,7 +523,7 @@ class BotSettingsHandler(BaseHandler):
                 pass
 
             # Clean up session
-            await self.session_manager.cancel_edit_session(user_id)
+            await self._cancel_captured_edit(user_id, session)
             raise StopPropagation  # Prevent any other handlers from processing this message
 
         # Update the setting
@@ -535,7 +542,7 @@ class BotSettingsHandler(BaseHandler):
                         title="Security Warning"
                     )
                 )
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
                 raise StopPropagation  # Prevent other handlers from processing this message
             success = await self.settings_service.update_setting(key, new_value)
 
@@ -576,7 +583,7 @@ class BotSettingsHandler(BaseHandler):
                 )
 
                 # Clean up session immediately to prevent search triggers
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
                 
                 # Schedule auto-delete of success message
                 self._schedule_auto_delete(success_msg, 10)
@@ -585,7 +592,7 @@ class BotSettingsHandler(BaseHandler):
                 raise StopPropagation
             else:
                 # Clean up session on failure too
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
                 await message.reply_text(ErrorMessageFormatter.format_failed("to update setting"))
                 raise StopPropagation  # Prevent search trigger even on failure
         except StopPropagation:
@@ -594,7 +601,7 @@ class BotSettingsHandler(BaseHandler):
         except Exception as e:
             # Clean up session on error
             if self.session_manager:
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
             
             # Better error message handling
             error_msg = str(e).strip() if str(e).strip() else "Unknown error occurred"
