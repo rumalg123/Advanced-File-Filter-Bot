@@ -8,7 +8,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
-from core.utils.quota_delivery import settle_delivery_quota
+from core.utils.quota_delivery import settle_delivery_quota, bulk_delivery_quota
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 from repositories.user import UserStatus
@@ -238,40 +238,38 @@ class DeepLinkHandler(BaseCommandHandler):
                 )
                 return
 
-        sts = await message.reply("<b>Processing files...</b>")
+        async with bulk_delivery_quota(self.bot.user_repo, user_id, reserved_count) as delivery:
+            sts = await message.reply("<b>Processing files...</b>")
 
-        # Send files - pass self.bot instead of client
+            # Send files - pass self.bot instead of client
 
-        success_count, total_count, media_success_count = await self.bot.filestore_service.send_channel_files(
-            self.bot,  # Changed from client to self.bot
-            user_id,
-            chat_id,
-            f_msg_id,
-            l_msg_id,
-            protect=protect
-        )
-
-        if access_ctx.should_track_retrieval and reserved_count:
-            await settle_delivery_quota(
-                self.bot.user_repo, user_id, reserved_count, media_success_count,
-                uncertain=media_success_count < int(reserved_count)
+            success_count, total_count, media_success_count = await self.bot.filestore_service.send_channel_files(
+                self.bot,  # Changed from client to self.bot
+                user_id,
+                chat_id,
+                f_msg_id,
+                l_msg_id,
+                protect=protect,
+                delivery_progress=delivery
             )
 
-        await sts.delete()
 
-        if success_count > 0:
-            transfer_msg = await message.reply_text(
-                ErrorMessageFormatter.format_success("Transfer completed!") + "\n"
-                f"Files sent: {success_count}/{total_count}"
-            )
-            # Schedule auto-delete for transfer complete message
-            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and transfer_msg:
-                self._schedule_auto_delete(transfer_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-        else:
-            failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("to send files"))
-            # Schedule auto-delete for error message
-            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
-                self._schedule_auto_delete(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+
+            await sts.delete()
+
+            if success_count > 0:
+                transfer_msg = await message.reply_text(
+                    ErrorMessageFormatter.format_success("Transfer completed!") + "\n"
+                    f"Files sent: {success_count}/{total_count}"
+                )
+                # Schedule auto-delete for transfer complete message
+                if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and transfer_msg:
+                    self._schedule_auto_delete(transfer_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            else:
+                failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("to send files"))
+                # Schedule auto-delete for error message
+                if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
+                    self._schedule_auto_delete(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
 
 
     async def _send_all_from_search(self, client: Client, message: Message, search_key: str):
@@ -328,78 +326,78 @@ class DeepLinkHandler(BaseCommandHandler):
                 )
                 return
 
-        # Send files without progress updates (simplified)
-        sending_file_msg = await message.reply_text(f"📤 Sending {len(files_data)} files...")
+        async with bulk_delivery_quota(self.bot.user_repo, user_id, reserved_count) as delivery:
+            # Send files without progress updates (simplified)
+            sending_file_msg = await message.reply_text(f"📤 Sending {len(files_data)} files...")
 
-        # Batch fetch all files in one query instead of N individual queries
-        file_unique_ids = [f['file_unique_id'] for f in files_data]
-        files_map = await self.bot.media_repo.find_files_batch(file_unique_ids)
+            # Batch fetch all files in one query instead of N individual queries
+            file_unique_ids = [f['file_unique_id'] for f in files_data]
+            files_map = await self.bot.media_repo.find_files_batch(file_unique_ids)
 
-        success_count = 0
-        for file_data in files_data:
-            try:
-                file_unique_id = file_data['file_unique_id']
-                file = files_map.get(file_unique_id)
+            success_count = 0
+            for file_data in files_data:
+                try:
+                    file_unique_id = file_data['file_unique_id']
+                    file = files_map.get(file_unique_id)
 
-                if not file:
-                    logger.warning(f"File {file_unique_id} not found.")
+                    if not file:
+                        logger.warning(f"File {file_unique_id} not found.")
+                        continue
+
+                    caption = CaptionFormatter.format_file_caption(
+                        file=file,
+                        custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
+                        batch_caption=self.bot.config.BATCH_FILE_CAPTION,
+                        keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
+                        is_batch=False,  # These are NOT batch files, they're from search
+                        auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
+                        auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
+                    )
+                    # Use telegram_api for concurrency control
+                    delivery.attempted += 1
+                    sent_msg = await telegram_api.call_api(
+                        client.send_cached_media,
+                        user_id,
+                        file.file_id,
+                        caption=caption,
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                        chat_id=user_id
+                    )
+
+                    delivery.confirmed += 1
+                    success_count += 1
+
+                    # Schedule auto-deletion if enabled
+                    if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+                        self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+
+                    feature_service = getattr(self.bot, 'feature_service', None)
+                    if feature_service:
+                        await feature_service.record_recent_file(user_id, file.file_unique_id)
+
+                    # Note: We'll increment all at once after the loop to avoid race conditions
+
+                    await asyncio.sleep(1)  # Avoid flooding
+
+                except Exception as e:
+                    logger.error(f"Error sending file: {e}")
                     continue
 
-                caption = CaptionFormatter.format_file_caption(
-                    file=file,
-                    custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
-                    batch_caption=self.bot.config.BATCH_FILE_CAPTION,
-                    keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
-                    is_batch=False,  # These are NOT batch files, they're from search
-                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
-                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
-                )
-                # Use telegram_api for concurrency control
-                sent_msg = await telegram_api.call_api(
-                    client.send_cached_media,
-                    user_id,
-                    file.file_id,
-                    caption=caption,
-                    parse_mode=CaptionFormatter.get_parse_mode(),
-                    chat_id=user_id
-                )
 
-                # Schedule auto-deletion if enabled
-                if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
-                    self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-                success_count += 1
 
-                feature_service = getattr(self.bot, 'feature_service', None)
-                if feature_service:
-                    await feature_service.record_recent_file(user_id, file.file_unique_id)
-
-                # Note: We'll increment all at once after the loop to avoid race conditions
-
-                await asyncio.sleep(1)  # Avoid flooding
-
-            except Exception as e:
-                logger.error(f"Error sending file: {e}")
-                continue
-
-        if access_ctx.should_track_retrieval and reserved_count:
-            await settle_delivery_quota(
-                self.bot.user_repo, user_id, reserved_count, success_count,
-                uncertain=success_count < int(reserved_count)
+            sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
+            # Schedule auto-delete for completion message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_msg:
+                self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            await telegram_api.call_api(
+                client.delete_messages,
+                sending_file_msg.chat.id,
+                sending_file_msg.id,
+                chat_id=sending_file_msg.chat.id
             )
 
-        sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files_data)} files!"))
-        # Schedule auto-delete for completion message
-        if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_msg:
-            self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-        await telegram_api.call_api(
-            client.delete_messages,
-            sending_file_msg.chat.id,
-            sending_file_msg.id,
-            chat_id=sending_file_msg.chat.id
-        )
-
-        # Delete the command message
-        await self.safe_delete(message)
+            # Delete the command message
+            await self.safe_delete(message)
 
     async def _send_batch(self, client: Client, message: Message, batch_id: str):
         """Send batch files from a batch ID"""
@@ -438,32 +436,30 @@ class DeepLinkHandler(BaseCommandHandler):
                 )
                 return
 
-        # Send batch files
-        success_count, total_count = await self.bot.filestore_service.send_batch_files(
-            client,
-            user_id,
-            batch_data
-        )
-
-        if access_ctx.should_track_retrieval and reserved_count:
-            await settle_delivery_quota(
-                self.bot.user_repo, user_id, reserved_count, success_count,
-                uncertain=success_count < int(reserved_count)
+        async with bulk_delivery_quota(self.bot.user_repo, user_id, reserved_count) as delivery:
+            # Send batch files
+            success_count, total_count = await self.bot.filestore_service.send_batch_files(
+                client,
+                user_id,
+                batch_data,
+                delivery_progress=delivery
             )
 
-        if success_count > 0:
-            batch_msg = await message.reply_text(
-                f"✅ Batch transfer completed!\n"
-                f"Files sent: {success_count}/{total_count}"
-            )
-            # Schedule auto-delete for batch transfer complete message
-            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and batch_msg:
-                self._schedule_auto_delete(batch_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-        else:
-            failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("to send batch files"))
-            # Schedule auto-delete for error message
-            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
-                self._schedule_auto_delete(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+
+
+            if success_count > 0:
+                batch_msg = await message.reply_text(
+                    f"✅ Batch transfer completed!\n"
+                    f"Files sent: {success_count}/{total_count}"
+                )
+                # Schedule auto-delete for batch transfer complete message
+                if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and batch_msg:
+                    self._schedule_auto_delete(batch_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            else:
+                failed_msg = await message.reply_text(ErrorMessageFormatter.format_failed("to send batch files"))
+                # Schedule auto-delete for error message
+                if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and failed_msg:
+                    self._schedule_auto_delete(failed_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
 
     async def _send_all_files(self, client: Client, message: Message, key: str, file_type: str):
         """Send all files of a specific type"""
@@ -526,60 +522,60 @@ class DeepLinkHandler(BaseCommandHandler):
                 )
                 return
 
-        # Send files
-        await message.reply_text(f"📤 Sending {len(files)} {file_type or 'all'} files...")
+        async with bulk_delivery_quota(self.bot.user_repo, user_id, reserved_count) as delivery:
+            # Send files
+            await message.reply_text(f"📤 Sending {len(files)} {file_type or 'all'} files...")
 
-        success_count = 0
-        for file in files:
-            try:
-                caption = CaptionFormatter.format_file_caption(
-                    file=file,
-                    custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
-                    batch_caption=self.bot.config.BATCH_FILE_CAPTION,
-                    keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
-                    is_batch=False,
-                    auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
-                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
-                )
+            success_count = 0
+            for file in files:
+                try:
+                    caption = CaptionFormatter.format_file_caption(
+                        file=file,
+                        custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
+                        batch_caption=self.bot.config.BATCH_FILE_CAPTION,
+                        keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
+                        is_batch=False,
+                        auto_delete_minutes=self.bot.config.MESSAGE_DELETE_SECONDS // 60 if self.bot.config.MESSAGE_DELETE_SECONDS > 0 else None,
+                        auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
+                    )
 
-                # Use telegram_api for concurrency control
-                sent_msg = await telegram_api.call_api(
-                    client.send_cached_media,
-                    user_id,
-                    file.file_id,
-                    caption=caption,
-                    parse_mode=CaptionFormatter.get_parse_mode(),
-                    chat_id=user_id
-                )
+                    # Use telegram_api for concurrency control
+                    delivery.attempted += 1
+                    sent_msg = await telegram_api.call_api(
+                        client.send_cached_media,
+                        user_id,
+                        file.file_id,
+                        caption=caption,
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                        chat_id=user_id
+                    )
 
-                # Schedule auto-deletion if enabled
-                if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
-                    self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-                success_count += 1
+                    delivery.confirmed += 1
+                    success_count += 1
 
-                feature_service = getattr(self.bot, 'feature_service', None)
-                if feature_service:
-                    await feature_service.record_recent_file(user_id, file.file_unique_id)
+                    # Schedule auto-deletion if enabled
+                    if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+                        self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
 
-                await asyncio.sleep(1)  # Avoid flooding
+                    feature_service = getattr(self.bot, 'feature_service', None)
+                    if feature_service:
+                        await feature_service.record_recent_file(user_id, file.file_unique_id)
 
-            except Exception as e:
-                logger.error(f"Error sending file: {e}")
-                continue
+                    await asyncio.sleep(1)  # Avoid flooding
 
-        if access_ctx.should_track_retrieval and reserved_count:
-            await settle_delivery_quota(
-                self.bot.user_repo, user_id, reserved_count, success_count,
-                uncertain=success_count < int(reserved_count)
-            )
+                except Exception as e:
+                    logger.error(f"Error sending file: {e}")
+                    continue
 
-        sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
-        # Schedule auto-delete for completion message
-        if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_msg:
-            self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
 
-        # Delete the command message
-        await self.safe_delete(message)
+
+            sent_msg = await message.reply_text(ErrorMessageFormatter.format_success(f"Sent {success_count}/{len(files)} files!"))
+            # Schedule auto-delete for completion message
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0 and sent_msg:
+                self._schedule_auto_delete(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+
+            # Delete the command message
+            await self.safe_delete(message)
 
     async def _send_premium_batch(self, client: Client, message: Message, batch_id: str):
         """Send premium batch files with access control"""

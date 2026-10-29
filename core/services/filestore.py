@@ -561,7 +561,8 @@ class FileStoreService:
             user_id: int,
             file_identifier: str,
             protect: bool = False,
-            caption_func=None
+            caption_func=None,
+            delivery_progress=None,
     ) -> bool:
         """Send a stored file to user using file identifier"""
         try:
@@ -607,7 +608,8 @@ class FileStoreService:
             client: Client,
             user_id: int,
             batch_data: List[Dict[str, Any]],
-            caption_func=None
+            caption_func=None,
+            delivery_progress=None,
     ) -> Tuple[int, int]:
         """
         Send batch files to user
@@ -642,6 +644,8 @@ class FileStoreService:
                 )
 
                 # telegram_api.call_api already uses semaphore_manager internally
+                if delivery_progress is not None:
+                    delivery_progress.attempted += 1
                 sent_msg = await telegram_api.call_api(
                     client.send_cached_media,
                     user_id,
@@ -651,6 +655,9 @@ class FileStoreService:
                     parse_mode=CaptionFormatter.get_parse_mode(),
                     chat_id=user_id
                 )
+
+                if delivery_progress is not None:
+                    delivery_progress.confirmed += 1
 
                 # Schedule auto-deletion if enabled
                 if self.config.MESSAGE_DELETE_SECONDS > 0:
@@ -695,6 +702,7 @@ class FileStoreService:
             first_msg_id: int,
             last_msg_id: int,
             protect: bool = False,
+            delivery_progress=None,
     ) -> Tuple[int, int, int]:
         """
         Send files directly from channel (DSTORE method)
@@ -746,6 +754,8 @@ class FileStoreService:
                         )
 
                         # telegram_api.call_api already uses semaphore_manager internally
+                        if delivery_progress is not None:
+                            delivery_progress.attempted += 1
                         sent_msg = await telegram_api.call_api(
                             message.copy,
                             user_id,
@@ -753,6 +763,9 @@ class FileStoreService:
                             protect_content=protect,
                             parse_mode=CaptionFormatter.get_parse_mode()
                         )
+
+                        if delivery_progress is not None:
+                            delivery_progress.confirmed += 1
 
                         # Schedule auto-deletion if enabled
                         if self.config.MESSAGE_DELETE_SECONDS > 0:

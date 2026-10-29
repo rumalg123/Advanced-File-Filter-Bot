@@ -4,6 +4,27 @@ The optional tokenized ledger is authoritative when enabled. Legacy integer
 reservations retain the existing release path for backwards compatibility.
 """
 import asyncio
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+
+
+@dataclass
+class DeliveryProgress:
+    """Keep confirmed sends across cancellation inside a bulk service."""
+    attempted: int = 0
+    confirmed: int = 0
+
+
+@asynccontextmanager
+async def bulk_delivery_quota(user_repo, user_id: int, reservation: int):
+    progress = DeliveryProgress()
+    try:
+        yield progress
+    finally:
+        await settle_delivery_quota(
+            user_repo, user_id, reservation, progress.confirmed,
+            uncertain=progress.attempted > progress.confirmed,
+        )
 
 
 async def settle_delivery_quota(

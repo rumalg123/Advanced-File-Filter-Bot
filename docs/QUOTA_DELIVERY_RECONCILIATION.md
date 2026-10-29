@@ -35,7 +35,19 @@ Each new opt-in reservation prunes `settled` ledger entries and retains unresolv
 
 The old two-argument `release_quota(user_id, count)` API remains callable. Tokenized amounts settle idempotently, while untagged legacy integer refunds retain PH-021's date-scoped guarded decrement and **are not made globally idempotent**. Older bot replicas without the new flag must not be mixed with ledger-enabled replicas.
 
-The current implementation covers single-file callbacks, single-file deep links, send-all callbacks, and normal completion of multi-file deep-link workflows. **Unhandled process termination and some uncaught bulk cancellation paths may leave a `reserved` record without a final `uncertain` state**; they must be found and reconciled in staging. The default-off rollout is intentional until these paths and operator procedures are reviewed.
+The current implementation covers single-file callbacks, single-file deep links,
+send-all callbacks, and multi-file deep-link workflows. Bulk deep links now settle
+in a `finally` block, including setup failure and cancellation. Batch/channel
+services report attempted and confirmed sends to the enclosing handler so a
+cancelled service retains confirmed delivery counts. Missing files and failures
+before a send are definitely unsent; interrupted API calls remain uncertain.
+**Process termination can still leave a `reserved` record without a final
+`uncertain` state** and requires operator reconciliation.
+
+QA on 2026-10-29 reproduced four failures before the fix (setup exception,
+setup cancellation, missing-media uncertainty, and batch cancellation). Added
+partial-send cancellation tests with the ledger both enabled and disabled.
+Rollback is a code revert; no ledger schema or existing records are migrated.
 
 ## Acceptance checklist
 
