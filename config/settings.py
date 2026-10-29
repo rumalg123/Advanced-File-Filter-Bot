@@ -167,6 +167,14 @@ class ProcessingLimitsConfig(BaseSettings):
     durable_indexing_lease_seconds: int = Field(
         default=180, ge=30, description="Recovery lease on channel indexing jobs"
     )
+    # PH-018 opt-in durable saved-search notifications. BOTH this and
+    # FEATURE_SAVED_SEARCH_ALERTS must be true before any queue writes.
+    durable_saved_search_alerts: bool = Field(
+        default=False, description="Enable Mongo-backed alert scheduling and recovery"
+    )
+    saved_search_alert_workers: int = Field(
+        default=2, ge=1, le=4, description="Bound per-instance alert workers"
+    )
 
     # Processing delays
     inter_message_delay: float = Field(default=0.5, description="Delay between processing messages in seconds")
