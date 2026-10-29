@@ -20,6 +20,21 @@ class MemoryCache:
         self.writes = []
         self.deletes = []
 
+    async def ensure_search_generation(self, key, initial):
+        current = self.values.setdefault(key, int(initial))
+        try:
+            value = int(current)
+            return value if value > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    async def advance_search_generation(self, key, initial):
+        current = await self.ensure_search_generation(key, initial)
+        if current is None:
+            return None
+        self.values[key] = current + 1
+        return self.values[key]
+
     async def get(self, key):
         return self.values.get(key)
 
