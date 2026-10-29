@@ -1,6 +1,6 @@
 # PH-016: Media index ownership and read-only evidence gate
 
-**Status:** implementation branch / Draft PR #4. Existing MongoDB collections,
+**Status:** code CI passed ([run 40812661483](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40812661483)) / Draft PR #4. Existing MongoDB collections,
 documents and indexes were **not queried or modified** during implementation.
 The operator-reported ~18 indexes is an approximate snapshot, **not** a
 verified list of index definitions or utilization. Real staging/prod plans are
@@ -123,8 +123,12 @@ Official references:
 
 ## Verification and rollback
 
-- [ ] Both code CI jobs pass at the final PH-016 code SHA: Python compile/
-  lint, complete tests, disposable MongoDB/dual Redis, Docker preflight.
+- [x] Both code CI jobs passed on SHA `65da6746` (Python compile/lint,
+  complete tests, disposable MongoDB/dual Redis and Docker preflight) in
+  [GitHub Actions run 40812661483](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40812661483).
+  The first run caught an unsupported `maxTimeMS` argument to PyMongo
+  `list_indexes()`, fixed before this passing run. `listIndexes` is bounded
+  by the CLI client socket timeout rather than that unsupported option.
 - [ ] Confirm `listIndexes` report against operator snapshot with exact
   count and options; explicitly account for the default `_id_` and any
   extra unmanaged names without dropping anything.
