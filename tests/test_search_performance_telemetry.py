@@ -127,4 +127,6 @@ async def test_media_repository_failure_telemetry_not_cached(monkeypatch):
     assert telemetry.snapshot()["events"]["cache_miss"]["count"] == 1
     assert telemetry.snapshot()["events"]["search"]["count"] == 0
     assert repo.find_many.await_count == 0
-    assert not any("search:" in k for k in cache.values)
+    # Generation metadata now exists in the cache, but no failed search
+    # page itself must have been cached.
+    assert not any(k.startswith("search:") for k in cache.values)
