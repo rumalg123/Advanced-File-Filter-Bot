@@ -1,6 +1,6 @@
 # PH-027: Fail-visible partial failures in multi-database reads
 
-**Status:** Code and disposable regression tests committed to the existing hardening branch and Draft PR #4. Full CI and isolated staging pending. Production still has exactly **one MongoDB database**.
+**Status:** Code and disposable regression tests committed to the existing hardening branch and Draft PR #4. Full code CI passed at `01be21f3`; isolated staging pending. Production still has exactly **one MongoDB database**.
 
 ## Root cause
 
@@ -23,7 +23,7 @@ This gives **all-or-error responses**, not a complete distributed snapshot, cons
 
 ## Validation
 
-- [ ] Full Python regression and disposable MongoDB/dual Redis and Docker/Compose CI pass at exact code SHA.
+- [x] Full Python regression, disposable MongoDB/dual Redis and Docker/Compose preflight **passed** on code SHA `01be21f3` ([CI run 40823704857](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40823704857)).
 - [ ] Local-only two-DB fixture: count=2, find and aggregate complete when both are available; one forced failing pool causes explicit errors for all read helpers rather than partial results.
 - [ ] Active and inactive circuits, cursor error, duplicate-owner read, and failing collection discovery never return a valid zero or a partial result.
 - [ ] Inject network partition and recovery under staging concurrency. Verify upstream callback retry errors, no Redis search-cache poisoning, stale-results telemetry and cache-generation behavior.
