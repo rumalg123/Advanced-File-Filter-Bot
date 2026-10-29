@@ -99,6 +99,11 @@ class RedisConfig(BaseSettings):
     # Empty by default: existing single-Redis deployments are unchanged.
     # Must target a separate Redis server, not merely another database number.
     state_uri: str = Field(default='', description="Optional protected Redis state URI")
+    # PH-010 opt-in: file-backed ACL credentials. Both empty by default.
+    username: str = Field(default='', description="Optional Redis ACL username")
+    password_file: str = Field(default='', description="Absolute path to Redis password secret file")
+    state_username: str = Field(default='', description="Optional protected state ACL username")
+    state_password_file: str = Field(default='', description="Absolute path to protected state password file")
 
     @field_validator('uri')
     def validate_uri(cls, v):
