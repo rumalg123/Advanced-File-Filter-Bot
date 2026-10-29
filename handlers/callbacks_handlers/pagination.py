@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from pyrogram import Client
@@ -24,6 +25,8 @@ logger = get_logger(__name__)
 
 class PaginationCallbackHandler(BaseCommandHandler):
     """Handler for search pagination callbacks"""
+
+    PAGE_READ_TIMEOUT_SECONDS = 8.0
 
     async def handle_search_pagination(self, client: Client, query: CallbackQuery):
         """Handle search pagination callbacks"""
@@ -61,13 +64,15 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         new_offset = current_offset
         # Search for files
-        files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
-            user_id=user_id,
-            query=search_query,
-            chat_id=user_id,
-            offset=new_offset,
-            limit=page_size
-        )
+        try:
+            files, next_offset, total, has_access, access_reason = await asyncio.wait_for(
+                self.bot.file_service.search_files_with_access_check(
+                    user_id=user_id, query=search_query, chat_id=user_id,
+                    offset=new_offset, limit=page_size),
+                timeout=self.PAGE_READ_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return await query.answer(SEARCH_RETRY_MESSAGE, show_alert=True)
 
         if not has_access:
             if access_reason == SEARCH_RETRY_MESSAGE:

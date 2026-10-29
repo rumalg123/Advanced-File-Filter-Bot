@@ -276,3 +276,27 @@ async def test_pagination_backend_failure_shows_retry_alert(monkeypatch):
     await handler.handle_search_pagination(None, callback)
 
     callback.answer.assert_awaited_once_with(SEARCH_RETRY_MESSAGE, show_alert=True)
+
+
+@pytest.mark.asyncio
+async def test_pagination_slow_backend_returns_retry_before_callback_expiry(monkeypatch):
+    import asyncio
+    from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
+    import handlers.callbacks_handlers.pagination as pagination_handler
+    cancelled=asyncio.Event()
+    async def slow_read(**kwargs):
+        try:await asyncio.sleep(60)
+        finally:cancelled.set()
+    cache=MemoryCache()
+    handler=PaginationCallbackHandler(SimpleNamespace(
+        file_service=SimpleNamespace(search_files_with_access_check=slow_read),
+        cache=cache,config=SimpleNamespace(MAX_BTN_SIZE=10)))
+    handler.PAGE_READ_TIMEOUT_SECONDS=.01
+    callback=SimpleNamespace(from_user=SimpleNamespace(id=42),data='unused',answer=AsyncMock())
+    monkeypatch.setattr(pagination_handler.PaginationHelper,'parse_callback_data',
+        lambda _:{'query':'doctor x','offset':10,'total':20,'user_id':42})
+    monkeypatch.setattr(pagination_handler,'is_private_chat',lambda _:True)
+    await asyncio.wait_for(handler.handle_search_pagination(None,callback),.3)
+    callback.answer.assert_awaited_once_with(SEARCH_RETRY_MESSAGE,show_alert=True)
+    assert cancelled.is_set()
+    assert not cache.writes
