@@ -121,46 +121,80 @@ class FeatureService:
             logger.warning(f"Saved-search notification task failed: {error}")
 
     async def notify_saved_search_matches(self, media: MediaFile) -> int:
+        """PH-017: visit every eligible search in bounded keyset pages.
+
+        One invocation streams pages of at most 100 docs and yields after each
+        page. PH-018 will address crash-durable delivery and queue admission.
+        """
         if not self.enabled('FEATURE_SAVED_SEARCH_ALERTS') or not self.bot:
             return 0
 
         haystack = normalize_feature_text(
             f"{media.file_name or ''} {media.caption or ''}"
         )
-        saved_searches = await self.repository.get_active_saved_searches(limit=500)
+        page_size = 100
+        after_id = None
         sent = 0
-        for saved_search in saved_searches:
-            tokens = saved_search.get('normalized_query', '').split()
-            if not tokens or not all(token in haystack for token in tokens):
-                continue
+        scanned = 0
+        pages = 0
 
-            search_id = saved_search['_id']
-            claimed = await self.repository.claim_saved_search_notification(
-                search_id, media.file_unique_id
+        while True:
+            saved_searches = await self.repository.get_active_saved_search_page(
+                after_id=after_id, limit=page_size
             )
-            if not claimed:
-                continue
+            if not saved_searches:
+                break
+            if len(saved_searches) > page_size:
+                raise RuntimeError("Saved-search repository returned an oversized page")
 
-            user_id = int(saved_search['user_id'])
-            try:
-                button = ButtonBuilder.file_button(media, user_id=user_id, is_private=True)
-                await telegram_api.call_api(
-                    self.bot.send_message,
-                    user_id,
-                    (
-                        "🔔 <b>Saved search match</b>\n\n"
-                        f"<b>Search:</b> <code>{html.escape(saved_search['query'])}</code>\n"
-                        f"<b>File:</b> <code>{html.escape(media.file_name)}</code>"
-                    ),
-                    reply_markup=InlineKeyboardMarkup([[button]]),
-                    chat_id=user_id
-                )
-                sent += 1
-            except Exception as e:
-                logger.debug(f"Could not notify saved search {search_id}: {e}")
-                await self.repository.release_saved_search_notification(
+            pages += 1
+            for saved_search in saved_searches:
+                search_id = saved_search['_id']
+                if (not isinstance(search_id, str) or
+                        (after_id is not None and search_id <= after_id)):
+                    raise RuntimeError("Saved-search page order/cursor contract violated")
+                after_id = search_id
+                scanned += 1
+
+                tokens = saved_search.get('normalized_query', '').split()
+                if not tokens or not all(token in haystack for token in tokens):
+                    continue
+
+                claimed = await self.repository.claim_saved_search_notification(
                     search_id, media.file_unique_id
                 )
+                if not claimed:
+                    continue
+
+                user_id = int(saved_search['user_id'])
+                try:
+                    button = ButtonBuilder.file_button(media, user_id=user_id, is_private=True)
+                    await telegram_api.call_api(
+                        self.bot.send_message,
+                        user_id,
+                        (
+                            "🔔 <b>Saved search match</b>\n\n"
+                            f"<b>Search:</b> <code>{html.escape(saved_search['query'])}</code>\n"
+                            f"<b>File:</b> <code>{html.escape(media.file_name)}</code>"
+                        ),
+                        reply_markup=InlineKeyboardMarkup([[button]]),
+                        chat_id=user_id
+                    )
+                    sent += 1
+                except Exception as e:
+                    logger.debug(f"Could not notify saved search {search_id}: {e}")
+                    await self.repository.release_saved_search_notification(
+                        search_id, media.file_unique_id
+                    )
+
+            if len(saved_searches) < page_size:
+                break
+            await asyncio.sleep(0)
+
+        logger.debug(
+            "Saved-search matching completed: scanned=%d pages=%d sent=%d",
+            scanned, pages, sent
+        )
         return sent
 
     async def dashboard(self) -> dict[str, Any]:
