@@ -981,6 +981,9 @@ class MediaSearchBot(Client):
             await self._set_bot_commands()
             # Initialize handlers after bot is started
             await self._initialize_handlers()
+            # PH-018: only the explicitly opted-in durable alert mode creates
+            # a fixed number of restart-recoverable queue workers.
+            self.feature_service.start_alert_workers()
             
             # Start session manager cleanup task
             if hasattr(self, 'session_manager'):
