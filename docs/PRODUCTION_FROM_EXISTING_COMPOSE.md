@@ -6,8 +6,9 @@ containers, the existing Compose project, and the external Atlas Free database.
 No production command in this document was executed from QA.
 
 Target branch: `docs/production-hardening-source-of-truth-20261028`.
-The branch must include startup fix `850bc31`. Local acceptance: 776 tests
-passed; offline Docker setup passed. No MongoDB ownership activation, token
+The branch must include container restart fix `ffd9d63` and startup fix
+`850bc31`. The earlier full suite passed 776 tests; the restart follow-up passed
+27 focused tests, including real signal/stop behavior. Offline Docker setup passed. No MongoDB ownership activation, token
 backfill, canonical metadata migration or global Docker prune is part of this
 cutover. The older candidate image predating BUG-061 is superseded.
 
@@ -141,7 +142,7 @@ else
   git switch --track -c "$prod_branch" "origin/$prod_branch"
 fi
 git merge --ff-only "origin/$prod_branch"
-git merge-base --is-ancestor 850bc31 HEAD
+git merge-base --is-ancestor ffd9d63 HEAD
 git log -1 --oneline
 ```
 

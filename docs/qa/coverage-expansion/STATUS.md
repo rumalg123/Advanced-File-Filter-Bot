@@ -209,3 +209,18 @@ validated on local disposable data using the host UID for private-file access.
 The V2 candidate supersedes the earlier candidate and has a separately verified
 archive; the earlier artifact is historical. A native production build remains
 the default in the exact command guide, avoiding architecture assumptions.
+
+## Container restart follow-up (BUG-062)
+
+Commit `ffd9d63` fixes the supplied production `/restart` Git exit-128 reports.
+Container images have no Git checkout; restart now signals its own process, lets
+wzgram finish stop, and relies on the configured restart policy to reload the
+same image. It does not consult upstream settings or run Git fetch/reset. Both
+Git-info readers skip absent/empty image metadata. Six pre-fix failures were
+reproduced; 27 focused restart/settings tests passed, including a real child
+process SIGTERM through wzgram idle/stop. Changed-source compilation and
+undefined-name lint passed. The full 776-test/coverage snapshot above remains
+associated with source `850bc31`; it was not rerun for this focused follow-up.
+The archived V2 candidate predates this fix: build the current branch for the
+new restart behavior. No production container was located, connected to or
+modified from QA.
