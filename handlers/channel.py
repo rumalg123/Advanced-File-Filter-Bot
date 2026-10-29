@@ -542,7 +542,10 @@ class ChannelHandler:
             # Remove existing handlers
             for handler in self._handlers:
                 try:
-                    self.bot.remove_handler(handler)
+                    if self.bot.handler_manager:
+                        self.bot.handler_manager.remove_handler(handler)
+                    else:
+                        self.bot.remove_handler(handler)
                 except Exception as e:
                     logger.error(f"Error removing handler: {e}")
             self._handlers.clear()

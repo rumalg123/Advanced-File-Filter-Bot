@@ -13,6 +13,10 @@
 - Broadcast owns its task explicitly; session maintenance owns and cancels its
   cleanup task; alert lease heartbeats are cancelled/awaited by their workers.
 - Full isolated MongoDB/dual-Redis suite after these fixes: 453 passed.
+- Additional channel QA reproduced stale manager registrations after each
+  periodic refresh and ignored removal after re-registration. Channel refreshes
+  now remove through the manager, and re-adding clears old removal markers.
+  Five refresh cycles and the empty-channel transition retain accurate tracking.
 - Rollback: revert the lifecycle-fix commit; no data/schema changes are involved.
 
 ## 1. Missing `# noqa` comments for `create_background_task`

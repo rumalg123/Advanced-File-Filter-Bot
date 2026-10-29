@@ -51,6 +51,9 @@ class HandlerManager:
             else:
                 self.bot.add_handler(handler)
             self.handlers.append(handler)
+            # Dispatcher registrations can be re-added, and Python can reuse
+            # identities after a dynamic handler is released.
+            self.removed_handlers.discard(id(handler))
             self.handler_groups[id(handler)] = group
             self.stats['handlers_registered'] += 1
             logger.debug(
