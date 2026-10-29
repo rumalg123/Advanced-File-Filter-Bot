@@ -154,3 +154,6 @@ bot.txt
 
 .claude/
 
+
+# PH-010 local Redis ACL credentials, never commit secrets
+.secrets/
