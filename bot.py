@@ -882,8 +882,7 @@ class MediaSearchBot(Client):
                 self.user_repo,
                 self.media_repo,
                 self.cache,
-                self.batch_link_repo,
-                task_manager=self.handler_manager,
+                self.batch_link_repo
             )
 
             self.indexing_service = IndexingService(
