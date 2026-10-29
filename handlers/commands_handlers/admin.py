@@ -3,7 +3,7 @@ import html
 import os
 import re
 import shlex
-import subprocess
+import signal
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +32,7 @@ class AdminCommandHandler(BaseCommandHandler):
     """Handler for admin-only commands"""
 
     MAX_PREMIUM_OVERRIDE_DAYS = 36500
+    SHELL_TIMEOUT_SECONDS = 300
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1037,6 +1038,16 @@ class AdminCommandHandler(BaseCommandHandler):
         except Exception as e:
             await status_msg.edit_text(ErrorMessageFormatter.format_error(str(e)))
 
+    @staticmethod
+    def _terminate_shell_process(process):
+        try:
+            if os.name == 'posix':
+                os.killpg(process.pid, signal.SIGKILL)
+            elif process.returncode is None:
+                process.kill()
+        except ProcessLookupError:
+            pass
+
     @owner_only
     async def shell_command(self, client: Client, message: Message):
         """Execute shell commands via bot (Owner only)."""
@@ -1066,6 +1077,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 return
             
             command = command_parts[1].strip()
+            command_html = html.escape(command)
             
             # Security warning for dangerous commands
             dangerous_patterns = [
@@ -1080,10 +1092,10 @@ class AdminCommandHandler(BaseCommandHandler):
             if is_dangerous:
                 await message.reply_text(
                     ErrorMessageFormatter.format_warning("Potentially Dangerous Command Detected", title="Potentially Dangerous Command Detected") + "\n\n"
-                    f"<b>Command:</b> <code>{command}</code>\n\n"
+                    f"<b>Command:</b> <code>{command_html}</code>\n\n"
                     f"This command appears to be potentially destructive. "
                     f"Please review carefully before execution.\n\n"
-                    f"Reply with <code>EXECUTE ANYWAY</code> to proceed or cancel this operation.",
+                    f"Review and execute this command from your server terminal.",
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
                 return
@@ -1091,7 +1103,7 @@ class AdminCommandHandler(BaseCommandHandler):
             # Send initial status message
             status_msg = await message.reply_text(
                 f"🐚 <b>Executing Shell Command</b>\n\n"
-                f"<b>Command:</b> <code>{command}</code>\n"
+                f"<b>Command:</b> <code>{command_html}</code>\n"
                 f"<b>Status:</b> Running...\n\n"
                 f"⏳ Please wait for output...",
                 parse_mode=CaptionFormatter.get_parse_mode()
@@ -1102,35 +1114,35 @@ class AdminCommandHandler(BaseCommandHandler):
             
             # Execute command with timeout
             try:
-                # Use subprocess for better control and security
-                process = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    cwd=os.getcwd(),
-                    env=os.environ.copy()
+                process = await asyncio.create_subprocess_shell(
+                    command, stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE, cwd=os.getcwd(),
+                    env=os.environ.copy(), start_new_session=os.name == 'posix',
                 )
-                
-                # Wait for completion with timeout (max 5 minutes)
+                communication = asyncio.create_task(process.communicate())
                 try:
-                    stdout, stderr = process.communicate(timeout=300)
+                    stdout, stderr = await asyncio.wait_for(
+                        asyncio.shield(communication), timeout=self.SHELL_TIMEOUT_SECONDS)
                     return_code = process.returncode
                     execution_time = (datetime.now() - start_time).total_seconds()
-                    
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    stdout, stderr = process.communicate()
+                except asyncio.TimeoutError:
+                    self._terminate_shell_process(process)
+                    stdout, stderr = await communication
                     return_code = -1
-                    execution_time = 300
-                    stderr += "\n" + ErrorMessageFormatter.format_warning("Command timed out after 5 minutes", include_prefix=False)
-                
+                    execution_time = self.SHELL_TIMEOUT_SECONDS
+                    stderr += b'\nCommand timed out; its process group was terminated.'
+                except asyncio.CancelledError:
+                    self._terminate_shell_process(process)
+                    await asyncio.shield(communication)
+                    raise
+                stdout = stdout.decode('utf-8', errors='replace')
+                stderr = stderr.decode('utf-8', errors='replace')
+
             except Exception as e:
                 await status_msg.edit_text(
                     f"🐚 <b>Shell Command Failed</b>\n\n" +
-                    f"<b>Command:</b> <code>{command}</code>\n" +
-                    f"<b>Error:</b> {str(e)}\n\n" +
+                    f"<b>Command:</b> <code>{command_html}</code>\n" +
+                    f"<b>Error:</b> {html.escape(str(e))}\n\n" +
                     ErrorMessageFormatter.format_failed("Execution failed before completion"),
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
@@ -1143,9 +1155,9 @@ class AdminCommandHandler(BaseCommandHandler):
             # Combine stdout and stderr
             output_parts = []
             if stdout.strip():
-                output_parts.append(f"<b>📤 STDOUT:</b>\n<pre>\n{stdout.strip()}\n</pre>")
+                output_parts.append(f"<b>📤 STDOUT:</b>\n<pre>\n{html.escape(stdout.strip())}\n</pre>")
             if stderr.strip():
-                output_parts.append(f"<b>📥 STDERR:</b>\n<pre>\n{stderr.strip()}\n</pre>")
+                output_parts.append(f"<b>📥 STDERR:</b>\n<pre>\n{html.escape(stderr.strip())}\n</pre>")
             
             if not output_parts:
                 output_text = "<i>(No output generated)</i>"
@@ -1155,7 +1167,7 @@ class AdminCommandHandler(BaseCommandHandler):
             # Create result message
             result_message = f"""🐚 <b>Shell Command Executed</b>
 
-<b>Command:</b> <code>{command}</code>
+<b>Command:</b> <code>{command_html}</code>
 <b>Status:</b> {execution_status}
 <b>Execution Time:</b> {execution_time:.2f}s
 <b>Return Code:</b> {return_code}
@@ -1167,7 +1179,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 # Send basic info first
                 basic_info = f"""🐚 <b>Shell Command Executed</b>
 
-<b>Command:</b> <code>{command}</code>
+<b>Command:</b> <code>{command_html}</code>
 <b>Status:</b> {execution_status}
 <b>Execution Time:</b> {execution_time:.2f}s
 <b>Return Code:</b> {return_code}
@@ -1177,7 +1189,6 @@ class AdminCommandHandler(BaseCommandHandler):
                 await status_msg.edit_text(basic_info, parse_mode=CaptionFormatter.get_parse_mode())
                 
                 # Create output file
-                output_filename = f"shell_output_{int(start_time.timestamp())}.txt"
                 full_output = f"Shell Command: {command}\n"
                 full_output += f"Executed at: {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
                 full_output += f"Return Code: {return_code}\n"
@@ -1189,18 +1200,22 @@ class AdminCommandHandler(BaseCommandHandler):
                 if stderr.strip():
                     full_output += "STDERR:\n" + stderr + "\n"
                 
-                # Write to temp file and send
-                with open(output_filename, 'w', encoding='utf-8') as f:
-                    f.write(full_output)
-                
-                await message.reply_document(
-                    output_filename,
-                    caption=f"📄 Shell command output\n<b>Command:</b> <code>{command}</code>",
-                    parse_mode=CaptionFormatter.get_parse_mode()
-                )
-                
-                # Clean up temp file
-                os.remove(output_filename)
+                # Unique files avoid concurrent command collisions; cleanup
+                # also runs when Telegram upload fails or is cancelled.
+                output_path = None
+                try:
+                    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                            prefix='shell_output_', suffix='.txt', delete=False) as output:
+                        output_path = output.name
+                        output.write(full_output)
+                    await message.reply_document(
+                        output_path,
+                        caption=f"📄 Shell command output\n<b>Command:</b> <code>{command_html}</code>",
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                    )
+                finally:
+                    if output_path is not None:
+                        Path(output_path).unlink(missing_ok=True)
             else:
                 # Send normal message
                 await status_msg.edit_text(result_message, parse_mode=CaptionFormatter.get_parse_mode())
@@ -1212,15 +1227,15 @@ class AdminCommandHandler(BaseCommandHandler):
             try:
                 await status_msg.edit_text(
                     f"🐚 <b>Shell Command Error</b>\n\n"
-                    f"<b>Command:</b> <code>{command if 'command' in locals() else 'Unknown'}</code>\n"
-                    f"<b>Error:</b> {str(e)}\n\n"
+                    f"<b>Command:</b> <code>{command_html if 'command_html' in locals() else 'Unknown'}</code>\n"
+                    f"<b>Error:</b> {html.escape(str(e))}\n\n"
                     f"{ErrorMessageFormatter.format_error('Unexpected error occurred')}",
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
             except Exception:
                 await message.reply_text(
                     f"🐚 <b>Shell Command Error</b>\n\n"
-                    f"<b>Error:</b> {str(e)}\n\n"
+                    f"<b>Error:</b> {html.escape(str(e))}\n\n"
                     f"{ErrorMessageFormatter.format_failed('to execute shell command')}",
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
