@@ -54,6 +54,13 @@ def index_definition(index: dict[str, Any]) -> dict[str, Any]:
     if isinstance(keys, dict):
         keys = list(keys.items())
     options = index.get("options", index)
+    # MongoDB rewrites a text index's reported key to _fts/_ftsx and
+    # retains the original indexed fields in its weights map.
+    if keys == [("_fts", "text"), ("_ftsx", 1)]:
+        weights = options.get("weights", {})
+        keys = [(field, "text") for field in sorted(weights)]
+    if any(kind == "text" for _, kind in keys):
+        keys = sorted(keys, key=lambda pair: pair[0])
     # Do not expose fields outside the approved index spec metadata.
     material = {
         k: options[k] for k in MATERIAL_INDEX_OPTIONS if k in options
