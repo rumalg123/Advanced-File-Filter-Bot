@@ -27,11 +27,13 @@ References: https://docs.pyrogram.org/start/errors and https://docs.pyrogram.org
 ## Acceptance and rollback
 
 - [x] Full Python regression with MongoDB/dual Redis integration, compile/lint and Docker preflight passed at code SHA `89fadb57` ([CI run 40820968179](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820968179)). Initial test used fractional FloodWait seconds that Wzgram normalized to zero; fixed to use integer seconds with genuine waiting.
-- [ ] Inject long FloodWait from one chat with `telegram_send` limit=1. Another chat succeeds while the first is sleeping and active-slot count remains zero.
-- [ ] Concurrent same-chat calls honor shared deadline before re-entering; no retry stampede.
-- [ ] Test cancellation during delay, 5xx delay, genuine FloodWait on max retries, dynamic limits, bounded 2048 scopes and unmodified 4xx behavior.
+- [x] Inject long FloodWait from one chat with `telegram_send` limit=1. Another chat succeeds while the first is sleeping and active-slot count remains zero.
+- [x] Concurrent same-chat calls honor shared deadline before re-entering; no retry stampede.
+- [x] Test cancellation during delay, 5xx delay, genuine FloodWait on max retries, dynamic limits, bounded 2048 scopes and unmodified 4xx behavior.
 - [ ] Isolated staging measurements with real Telegram: per-chat vs global FloodWait, slow mode, Pyrogram automatic internal retry, queue depth, starvation, tail latency, floods per minute and throughput.
 - [ ] Multiple replica and long-retry tests; confirm safe shutdown and no leaked permits or infinite retry loops. Set explicit operational thresholds.
 - [ ] Rollback to prior approved image needs no schema/Redis migration, but reinstates semaphore-slot starvation.
 
 PH-024 remains **In review** until CI and live staging results. Nothing was merged or deployed.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked composite operational/load/rollout gates remain pending; an automated injection is not labeled a real upstream FloodWait.

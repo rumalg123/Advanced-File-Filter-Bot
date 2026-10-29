@@ -1,0 +1,710 @@
+[
+  {
+    "file": "handlers/search.py",
+    "missing_lines": 237,
+    "missing_branches": 111,
+    "line_percent": 39.23
+  },
+  {
+    "file": "handlers/commands_handlers/admin.py",
+    "missing_lines": 218,
+    "missing_branches": 88,
+    "line_percent": 63.36
+  },
+  {
+    "file": "core/services/filestore.py",
+    "missing_lines": 215,
+    "missing_branches": 91,
+    "line_percent": 38.75
+  },
+  {
+    "file": "bot.py",
+    "missing_lines": 187,
+    "missing_branches": 86,
+    "line_percent": 73.25
+  },
+  {
+    "file": "repositories/user.py",
+    "missing_lines": 179,
+    "missing_branches": 111,
+    "line_percent": 69.19
+  },
+  {
+    "file": "core/database/multi_pool.py",
+    "missing_lines": 166,
+    "missing_branches": 101,
+    "line_percent": 73.65
+  },
+  {
+    "file": "core/services/indexing.py",
+    "missing_lines": 164,
+    "missing_branches": 65,
+    "line_percent": 30.8
+  },
+  {
+    "file": "handlers/channel.py",
+    "missing_lines": 163,
+    "missing_branches": 64,
+    "line_percent": 54.47
+  },
+  {
+    "file": "handlers/request.py",
+    "missing_lines": 158,
+    "missing_branches": 67,
+    "line_percent": 21.0
+  },
+  {
+    "file": "handlers/connection.py",
+    "missing_lines": 149,
+    "missing_branches": 72,
+    "line_percent": 19.89
+  },
+  {
+    "file": "handlers/features.py",
+    "missing_lines": 142,
+    "missing_branches": 93,
+    "line_percent": 80.78
+  },
+  {
+    "file": "handlers/deeplink.py",
+    "missing_lines": 138,
+    "missing_branches": 72,
+    "line_percent": 55.77
+  },
+  {
+    "file": "handlers/commands_handlers/bot_settings.py",
+    "missing_lines": 138,
+    "missing_branches": 61,
+    "line_percent": 64.8
+  },
+  {
+    "file": "core/services/filter.py",
+    "missing_lines": 128,
+    "missing_branches": 70,
+    "line_percent": 20.0
+  },
+  {
+    "file": "handlers/filter.py",
+    "missing_lines": 127,
+    "missing_branches": 79,
+    "line_percent": 27.84
+  },
+  {
+    "file": "repositories/media.py",
+    "missing_lines": 124,
+    "missing_branches": 58,
+    "line_percent": 73.67
+  },
+  {
+    "file": "handlers/callbacks_handlers/file.py",
+    "missing_lines": 121,
+    "missing_branches": 41,
+    "line_percent": 64.2
+  },
+  {
+    "file": "handlers/delete.py",
+    "missing_lines": 115,
+    "missing_branches": 40,
+    "line_percent": 51.48
+  },
+  {
+    "file": "core/cache/redis_cache.py",
+    "missing_lines": 113,
+    "missing_branches": 37,
+    "line_percent": 62.58
+  },
+  {
+    "file": "repositories/features.py",
+    "missing_lines": 111,
+    "missing_branches": 52,
+    "line_percent": 75.39
+  },
+  {
+    "file": "core/utils/subscription.py",
+    "missing_lines": 102,
+    "missing_branches": 32,
+    "line_percent": 29.66
+  },
+  {
+    "file": "handlers/indexing.py",
+    "missing_lines": 98,
+    "missing_branches": 46,
+    "line_percent": 43.02
+  },
+  {
+    "file": "core/cache/invalidation.py",
+    "missing_lines": 97,
+    "missing_branches": 9,
+    "line_percent": 53.59
+  },
+  {
+    "file": "repositories/batch_link.py",
+    "missing_lines": 96,
+    "missing_branches": 44,
+    "line_percent": 49.21
+  },
+  {
+    "file": "handlers/commands_handlers/channel.py",
+    "missing_lines": 92,
+    "missing_branches": 30,
+    "line_percent": 38.26
+  },
+  {
+    "file": "handlers/callbacks_handlers/subscription.py",
+    "missing_lines": 85,
+    "missing_branches": 32,
+    "line_percent": 13.27
+  },
+  {
+    "file": "core/utils/helpers.py",
+    "missing_lines": 78,
+    "missing_branches": 47,
+    "line_percent": 66.38
+  },
+  {
+    "file": "core/services/connection.py",
+    "missing_lines": 78,
+    "missing_branches": 33,
+    "line_percent": 23.53
+  },
+  {
+    "file": "core/session/manager.py",
+    "missing_lines": 78,
+    "missing_branches": 28,
+    "line_percent": 64.22
+  },
+  {
+    "file": "core/services/maintenance.py",
+    "missing_lines": 75,
+    "missing_branches": 16,
+    "line_percent": 59.89
+  },
+  {
+    "file": "handlers/commands_handlers/database.py",
+    "missing_lines": 74,
+    "missing_branches": 27,
+    "line_percent": 58.19
+  },
+  {
+    "file": "core/utils/link_parser.py",
+    "missing_lines": 66,
+    "missing_branches": 30,
+    "line_percent": 24.14
+  },
+  {
+    "file": "core/services/features.py",
+    "missing_lines": 59,
+    "missing_branches": 34,
+    "line_percent": 78.55
+  },
+  {
+    "file": "core/services/broadcast.py",
+    "missing_lines": 57,
+    "missing_branches": 34,
+    "line_percent": 40.62
+  },
+  {
+    "file": "repositories/optimizations/batch_operations.py",
+    "missing_lines": 57,
+    "missing_branches": 20,
+    "line_percent": 48.65
+  },
+  {
+    "file": "handlers/callbacks_handlers/user.py",
+    "missing_lines": 57,
+    "missing_branches": 19,
+    "line_percent": 38.04
+  },
+  {
+    "file": "core/services/bot_settings.py",
+    "missing_lines": 55,
+    "missing_branches": 29,
+    "line_percent": 65.41
+  },
+  {
+    "file": "handlers/callbacks_handlers/filter.py",
+    "missing_lines": 52,
+    "missing_branches": 14,
+    "line_percent": 17.46
+  },
+  {
+    "file": "core/services/recommendation.py",
+    "missing_lines": 50,
+    "missing_branches": 22,
+    "line_percent": 76.85
+  },
+  {
+    "file": "core/utils/file_emoji.py",
+    "missing_lines": 46,
+    "missing_branches": 48,
+    "line_percent": 33.33
+  },
+  {
+    "file": "core/database/indexes.py",
+    "missing_lines": 46,
+    "missing_branches": 13,
+    "line_percent": 61.98
+  },
+  {
+    "file": "handlers/base.py",
+    "missing_lines": 45,
+    "missing_branches": 25,
+    "line_percent": 63.11
+  },
+  {
+    "file": "handlers/commands_handlers/user.py",
+    "missing_lines": 41,
+    "missing_branches": 30,
+    "line_percent": 84.35
+  },
+  {
+    "file": "core/utils/logger.py",
+    "missing_lines": 40,
+    "missing_branches": 5,
+    "line_percent": 60.78
+  },
+  {
+    "file": "core/utils/verify_alignment.py",
+    "missing_lines": 38,
+    "missing_branches": 36,
+    "line_percent": 75.32
+  },
+  {
+    "file": "core/cache/monitor.py",
+    "missing_lines": 37,
+    "missing_branches": 25,
+    "line_percent": 79.1
+  },
+  {
+    "file": "repositories/bot_settings.py",
+    "missing_lines": 37,
+    "missing_branches": 22,
+    "line_percent": 59.34
+  },
+  {
+    "file": "handlers/manager.py",
+    "missing_lines": 36,
+    "missing_branches": 16,
+    "line_percent": 80.33
+  },
+  {
+    "file": "handlers/filestore.py",
+    "missing_lines": 36,
+    "missing_branches": 12,
+    "line_percent": 53.25
+  },
+  {
+    "file": "handlers/decorators.py",
+    "missing_lines": 35,
+    "missing_branches": 25,
+    "line_percent": 62.77
+  },
+  {
+    "file": "core/utils/validators.py",
+    "missing_lines": 35,
+    "missing_branches": 23,
+    "line_percent": 90.98
+  },
+  {
+    "file": "repositories/filter.py",
+    "missing_lines": 35,
+    "missing_branches": 14,
+    "line_percent": 73.08
+  },
+  {
+    "file": "scripts/profile_media_search.py",
+    "missing_lines": 34,
+    "missing_branches": 13,
+    "line_percent": 69.09
+  },
+  {
+    "file": "update.py",
+    "missing_lines": 33,
+    "missing_branches": 22,
+    "line_percent": 85.96
+  },
+  {
+    "file": "scripts/staging_preflight.py",
+    "missing_lines": 33,
+    "missing_branches": 16,
+    "line_percent": 73.81
+  },
+  {
+    "file": "scripts/migrate_redis_state.py",
+    "missing_lines": 33,
+    "missing_branches": 12,
+    "line_percent": 51.47
+  },
+  {
+    "file": "core/utils/pagination.py",
+    "missing_lines": 32,
+    "missing_branches": 24,
+    "line_percent": 78.08
+  },
+  {
+    "file": "core/utils/media_extractor.py",
+    "missing_lines": 30,
+    "missing_branches": 27,
+    "line_percent": 41.18
+  },
+  {
+    "file": "scripts/audit_media_indexes.py",
+    "missing_lines": 24,
+    "missing_branches": 13,
+    "line_percent": 71.43
+  },
+  {
+    "file": "scripts/audit_redis_serialization.py",
+    "missing_lines": 23,
+    "missing_branches": 12,
+    "line_percent": 64.62
+  },
+  {
+    "file": "core/services/search_history.py",
+    "missing_lines": 23,
+    "missing_branches": 8,
+    "line_percent": 72.29
+  },
+  {
+    "file": "repositories/channel.py",
+    "missing_lines": 20,
+    "missing_branches": 12,
+    "line_percent": 79.8
+  },
+  {
+    "file": "core/database/pool.py",
+    "missing_lines": 19,
+    "missing_branches": 12,
+    "line_percent": 82.57
+  },
+  {
+    "file": "config/settings.py",
+    "missing_lines": 19,
+    "missing_branches": 10,
+    "line_percent": 91.28
+  },
+  {
+    "file": "core/utils/caption.py",
+    "missing_lines": 18,
+    "missing_branches": 14,
+    "line_percent": 72.73
+  },
+  {
+    "file": "core/cache/serialization.py",
+    "missing_lines": 18,
+    "missing_branches": 12,
+    "line_percent": 90.11
+  },
+  {
+    "file": "core/concurrency/semaphore_manager.py",
+    "missing_lines": 18,
+    "missing_branches": 9,
+    "line_percent": 86.05
+  },
+  {
+    "file": "scripts/backfill_search_tokens.py",
+    "missing_lines": 18,
+    "missing_branches": 4,
+    "line_percent": 70.0
+  },
+  {
+    "file": "repositories/connection.py",
+    "missing_lines": 16,
+    "missing_branches": 16,
+    "line_percent": 87.5
+  },
+  {
+    "file": "handlers/callbacks_handlers/pagination.py",
+    "missing_lines": 16,
+    "missing_branches": 12,
+    "line_percent": 79.49
+  },
+  {
+    "file": "core/utils/messages.py",
+    "missing_lines": 15,
+    "missing_branches": 11,
+    "line_percent": 70.59
+  },
+  {
+    "file": "core/database/base.py",
+    "missing_lines": 13,
+    "missing_branches": 6,
+    "line_percent": 92.66
+  },
+  {
+    "file": "scripts/validate_staging_compose.py",
+    "missing_lines": 12,
+    "missing_branches": 5,
+    "line_percent": 72.09
+  },
+  {
+    "file": "vulture_whitelist.py",
+    "missing_lines": 12,
+    "missing_branches": 0,
+    "line_percent": 0.0
+  },
+  {
+    "file": "core/services/search_results.py",
+    "missing_lines": 11,
+    "missing_branches": 12,
+    "line_percent": 89.62
+  },
+  {
+    "file": "core/utils/rate_limiter.py",
+    "missing_lines": 11,
+    "missing_branches": 12,
+    "line_percent": 89.32
+  },
+  {
+    "file": "core/utils/media_factory.py",
+    "missing_lines": 11,
+    "missing_branches": 10,
+    "line_percent": 78.85
+  },
+  {
+    "file": "handlers/commands.py",
+    "missing_lines": 11,
+    "missing_branches": 6,
+    "line_percent": 88.89
+  },
+  {
+    "file": "scripts/generate_redis_acl.py",
+    "missing_lines": 11,
+    "missing_branches": 3,
+    "line_percent": 72.5
+  },
+  {
+    "file": "handlers/commands_handlers/base.py",
+    "missing_lines": 10,
+    "missing_branches": 3,
+    "line_percent": 77.27
+  },
+  {
+    "file": "core/utils/button_builder.py",
+    "missing_lines": 9,
+    "missing_branches": 9,
+    "line_percent": 86.57
+  },
+  {
+    "file": "core/services/file_access.py",
+    "missing_lines": 9,
+    "missing_branches": 8,
+    "line_percent": 87.67
+  },
+  {
+    "file": "core/utils/telegram_api.py",
+    "missing_lines": 9,
+    "missing_branches": 6,
+    "line_percent": 89.66
+  },
+  {
+    "file": "core/cache/routed_cache.py",
+    "missing_lines": 8,
+    "missing_branches": 4,
+    "line_percent": 91.92
+  },
+  {
+    "file": "core/services/bulk_media_deletion.py",
+    "missing_lines": 8,
+    "missing_branches": 4,
+    "line_percent": 87.3
+  },
+  {
+    "file": "core/utils/feature_search.py",
+    "missing_lines": 7,
+    "missing_branches": 8,
+    "line_percent": 89.55
+  },
+  {
+    "file": "core/utils/performance.py",
+    "missing_lines": 6,
+    "missing_branches": 4,
+    "line_percent": 84.21
+  },
+  {
+    "file": "core/utils/service_tasks.py",
+    "missing_lines": 5,
+    "missing_branches": 4,
+    "line_percent": 84.38
+  },
+  {
+    "file": "migrate_media_metadata.py",
+    "missing_lines": 4,
+    "missing_branches": 9,
+    "line_percent": 97.45
+  },
+  {
+    "file": "core/utils/error_formatter.py",
+    "missing_lines": 4,
+    "missing_branches": 6,
+    "line_percent": 94.12
+  },
+  {
+    "file": "core/cache/config.py",
+    "missing_lines": 4,
+    "missing_branches": 2,
+    "line_percent": 98.12
+  },
+  {
+    "file": "core/utils/search_matcher.py",
+    "missing_lines": 3,
+    "missing_branches": 5,
+    "line_percent": 96.74
+  },
+  {
+    "file": "repositories/saved_search_alert_jobs.py",
+    "missing_lines": 3,
+    "missing_branches": 3,
+    "line_percent": 97.12
+  },
+  {
+    "file": "core/cache/auth.py",
+    "missing_lines": 3,
+    "missing_branches": 1,
+    "line_percent": 89.29
+  },
+  {
+    "file": "core/utils/premium.py",
+    "missing_lines": 2,
+    "missing_branches": 2,
+    "line_percent": 91.3
+  },
+  {
+    "file": "core/utils/quota_calendar.py",
+    "missing_lines": 2,
+    "missing_branches": 2,
+    "line_percent": 91.3
+  },
+  {
+    "file": "core/utils/search_observability.py",
+    "missing_lines": 2,
+    "missing_branches": 2,
+    "line_percent": 96.3
+  },
+  {
+    "file": "repositories/channel_index_jobs.py",
+    "missing_lines": 2,
+    "missing_branches": 1,
+    "line_percent": 96.67
+  },
+  {
+    "file": "core/utils/file_type.py",
+    "missing_lines": 2,
+    "missing_branches": 0,
+    "line_percent": 85.71
+  },
+  {
+    "file": "core/services/health_probes.py",
+    "missing_lines": 1,
+    "missing_branches": 1,
+    "line_percent": 98.8
+  },
+  {
+    "file": "core/utils/quota_delivery.py",
+    "missing_lines": 1,
+    "missing_branches": 1,
+    "line_percent": 96.0
+  },
+  {
+    "file": "core/utils/search_tokens.py",
+    "missing_lines": 0,
+    "missing_branches": 1,
+    "line_percent": 100.0
+  },
+  {
+    "file": "config/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/cache/errors.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/concurrency/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/constants.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/database/errors.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/database/media_indexes.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/database/media_owners.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/database/topology.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/services/bulk_delete_policy.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/session/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "core/utils/media_metadata.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "handlers/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "handlers/callbacks_handlers/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "handlers/commands_handlers/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "repositories/optimizations/__init__.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  },
+  {
+    "file": "scripts/activate_media_owners.py",
+    "missing_lines": 0,
+    "missing_branches": 0,
+    "line_percent": 100.0
+  }
+]

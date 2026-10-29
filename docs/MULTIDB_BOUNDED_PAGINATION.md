@@ -1,6 +1,6 @@
 # PH-026: Bounded distributed MongoDB pagination and stable merge
 
-**Status:** Implemented on the existing hardening branch and Draft PR #4; Full CI passed at SHA `6b7e64bf`; isolated staging acceptance pending. Production still uses only one MongoDB database. **This work does not authorize activating additional databases.**
+**Status:** Local ordering/merge regressions and real three-source deep pagination passed. Current optional indexes and guaranteed-prefix behavior are described below; production load acceptance remains open. See the [current QA report](qa/coverage-expansion/STATUS.md).
 
 ## Prior behavior
 
@@ -26,11 +26,13 @@ Unlike native MongoDB sharding with `mongos`, this application is combining inde
 ## Test and release gates
 
 - [x] Full Python regression, disposable MongoDB/dual Redis, compile/lint and Docker/Compose preflight passed at SHA `6b7e64bf` ([run 40822577874](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40822577874), attempt 2). Docker Hub returned HTTP 500 resolving the existing Python base image on attempt 1; the failed job was retried successfully without changing code or Dockerfile.
-- [ ] Two/three isolated MongoDB databases with **3,750 synthetic media documents** and repeated timestamps: verify pages 0, 50, 1050 and 3200 agree with a deterministic reference ordering. Repeat deep pages to rule out unstable ties. Check disjoint adjacent pages.
-- [ ] Instrumented cursor: every `to_list` fetch must request at most 64 records; ensure every cursor closes, and one-source errors cause a hard failure rather than incomplete results.
-- [ ] Validate malformed limits, unavailable DBs, partially failed cursor reads and exhausted results.
+- [x] Two/three isolated MongoDB databases with **3,750 synthetic media documents** and repeated timestamps: verify pages 0, 50, 1050 and 3200 agree with a deterministic reference ordering. Repeat deep pages to rule out unstable ties. Check disjoint adjacent pages.
+- [x] Instrumented cursor: every `to_list` fetch must request at most 64 records; ensure every cursor closes, and one-source errors cause a hard failure rather than incomplete results.
+- [x] Validate malformed limits, unavailable DBs, partially failed cursor reads and exhausted results.
 - [ ] Stage benchmarks at offsets 0, 100, 1,000, 10,000+ with production-shaped index/timestamp distributions, many concurrent searches, peak RSS, latency and MongoDB `explain`.
-- [ ] Before enabling a second database: design stable keyset continuation if deep offsets fail latency limits; integrate PH-027 partial failure handling and PH-028 global uniqueness/ownership. Decide when to migrate from manual multi-DB aggregation to native sharding.
+- [x] Integrate PH-027 complete-or-error reads and PH-028 ownership; preserve numeric offset controls after measured deep-page QA passed.
+- [x] Disposable remote EXPLAIN at offsets 0, 10, 1,000 and 36,550; real next/back ordering and final page 3,657 passed.
+- [ ] Production architecture/capacity acceptance; revisit keyset continuation if agreed latency thresholds are exceeded.
 
 **Rollback:** revert to the prior approved image if necessary, but **do not enable multi-DB**. No media schema/backfill, index DDL, production data modification, deployment or PR merge.
 
@@ -66,3 +68,10 @@ matches the reference page while skipping 1,985 guaranteed earlier owner rows.
 Fifty-seven focused multi-source cases pass. Balanced middle pages may still
 require substantial merging, and count/page reads are not a distributed snapshot;
 repository generation checks continue rejecting concurrent known mutations.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked operational/load/rollout gates remain pending.
+
+**Activated topology rollback:** the historical pre-registry rollback statements
+above do not authorize an older writer against a bound source. Follow the
+[PH-028 offline rollback procedure](MULTIDB_GLOBAL_IDENTITY.md) after activation;
+keep the full topology and compatible ownership protocol until that migration.

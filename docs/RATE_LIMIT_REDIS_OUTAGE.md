@@ -27,10 +27,12 @@ The max-entries guard is deliberately fail-closed rather than allocating unbound
 ## Verification
 
 - [x] Full Python tests, local disposable MongoDB/dual Redis, compile/lint and production Docker/Compose preflight passed at code SHA `89fadb57` ([CI run 40820968179](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820968179)). The first run exposed a test's fractional FloodWait fixture; fixed in PH-024 without changing production logic.
-- [ ] Simulate both Redis exceptions and missing incremental results; verify normal per-action limits/cooldowns and 50-way concurrent requests for one identity.
-- [ ] Check independent users/actions, protected state still fails closed, healthy Redis unchanged, and reset/health recovery.
-- [ ] Fill local capacity, verify new identities denied, active counters not evicted and expired windows reclaimed; verify memory.
+- [x] Simulate both Redis exceptions and missing incremental results; verify normal per-action limits/cooldowns and 50-way concurrent requests for one identity.
+- [x] Check independent users/actions, protected state still fails closed, healthy Redis unchanged, and reset/health recovery.
+- [x] Fill local capacity, verify new identities denied, active counters not evicted and expired windows reclaimed; verify memory.
 - [ ] Isolated staging: restart, repeated outages/flapping, 1 and multiple replicas, real attack/burst traffic, acceptable user impact and metrics threshold.
 - [ ] Rollback of application image requires no data migration; older image reintroduces the fail-open gap.
 
 **PH-023 remains In review** until CI and staging signoff. Do not mark this as cluster-wide protection.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked operational/load/rollout gates remain pending.

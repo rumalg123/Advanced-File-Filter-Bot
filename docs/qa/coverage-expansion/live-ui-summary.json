@@ -1,0 +1,23 @@
+{
+  "settings_details": 62,
+  "settings_pages": 8,
+  "edit_cancel": true,
+  "invalid_integer_rejected": true,
+  "valid_integer_saved": true,
+  "repeated_boolean_updates_confirmed": 13,
+  "final_source_pagination": [
+    {
+      "broad_query_first_page": true,
+      "reply_ms": 1092.3
+    },
+    {
+      "last_page": true,
+      "callback_and_refresh_ms": 1154.8,
+      "page": 3657
+    },
+    {
+      "next_page": true,
+      "back_page_equal": true
+    }
+  ]
+}

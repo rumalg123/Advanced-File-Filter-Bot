@@ -1,5 +1,7 @@
 # Cache Correctness Audit and Remediation Register
 
+> Current continuation: [QA evidence and remaining gates](docs/qa/coverage-expansion/STATUS.md). Earlier dated test counts below are historical; source defaults and production rollout status remain separate from QA enablement.
+
 This document is the source of truth for the whole-system cache audit started on
 2026-07-18. Every cache-related runtime change and regression test must reference
 an issue ID below. The audit covers Redis access, serialization, key generation,
@@ -7,6 +9,15 @@ TTLs, repository caches, sessions, rate limits, invalidation, monitoring, and
 MongoDB/cache boundaries.
 
 Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
+
+## Current QA, 2026-10-29
+
+The final full suite passed **769 tests with zero failures or skips** on the
+rebuilt wzgram 3.1.5 runtime. Real-account feature/settings, three-source media
+indexing/delivery, deep pagination and partition/recovery evidence is recorded
+in the [current QA report](docs/qa/coverage-expansion/STATUS.md). Whole-bot 100%
+coverage and the named production operational gates remain open. Dated counts
+below describe earlier checkpoints; feature source defaults remain off.
 
 ## Live-safety contract
 

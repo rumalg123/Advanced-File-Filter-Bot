@@ -1,5 +1,7 @@
 # PH-016: Media index ownership and read-only evidence gate
 
+**Current continuation (2026-10-29):** inventory and EXPLAIN were subsequently collected on all three authorized disposable sources. The manifest now also owns the two default-off search/page indexes. No production DDL or automatic index drops/renames occurred. See [current QA](qa/coverage-expansion/STATUS.md) and [indexed-search rollout](INDEXED_MEDIA_SEARCH.md).
+
 **Status:** code CI passed ([run 40812661483](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40812661483)) / Draft PR #4. Existing MongoDB collections,
 documents and indexes were **not queried or modified** during implementation.
 The operator-reported ~18 indexes is an approximate snapshot, **not** a

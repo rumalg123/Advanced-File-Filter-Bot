@@ -1,5 +1,7 @@
 # Search performance baseline and indexed-search decision (PH-006)
 
+**Current continuation (2026-10-29):** a default-off candidate index was implemented after complete-result equivalence and measured plans. Five remote query samples on disposable sources improved median 3.35–5.32s to 59–137ms; five repetitions are not production tail-latency evidence. See [sanitized plans](qa/coverage-expansion/remote-indexed-search.json), [current QA](qa/coverage-expansion/STATUS.md), and [rollout/rollback](INDEXED_MEDIA_SEARCH.md).
+
 **Status:** instrumented on a draft branch; **no production measurements collected**, no new production indexes, migration or search-algorithm replacement.
 
 ## Why this comes before redesign

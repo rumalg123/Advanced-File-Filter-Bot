@@ -1,5 +1,7 @@
 # Bug Audit and Fix Register
 
+> Current continuation: [QA evidence and remaining gates](docs/qa/coverage-expansion/STATUS.md). Earlier dated test counts below are historical; source defaults and production rollout status remain separate from QA enablement.
+
 This document is the source of truth for bugs found during the Pyrogram-to-Wzgram
 migration audit. Implementation work must reference an ID below, and an item may
 be marked `Fixed` only after its acceptance criteria have been verified.
@@ -48,6 +50,33 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-038 | High | Fixed | Handler lifecycle | Command and database handlers bypass `HandlerManager`, dispatcher groups are discarded, managed cleanup marks handlers removed without removing them, and `/verify` can still report 100/100 while listing issues. | Every top-level handler has managed cleanup and shutdown signaling; registration/removal preserves dispatcher groups; shutdown removes tracked handlers; the verifier recognizes the complete configured handler set and any warning or issue lowers its score. |
 | BUG-039 | Medium | Fixed | Command routing | Search excludes a hard-coded command list, so newer commands such as `/verify` also run as file searches and send a false no-results response. | Text beginning with `/` never reaches file search, including bot-qualified and future command names; ordinary text search remains unchanged. |
 | BUG-040 | Medium | Fixed | Transient command messages | Core user responses such as `/start`, `/help`, and `/stats`, plus several user feature-command confirmations, bypass `MESSAGE_DELETE_SECONDS` and leave stale menus in private chats. | User-facing informational responses and feature confirmations use one task-managed cleanup path, respect the current configured delay, and remain persistent when the delay is `0`; admin diagnostics and deep-link subscription gates are not shortened. |
+| BUG-041 | High | Fixed | Owner shell | Synchronous process waits block the bot; command/output HTML is interpreted; failed or concurrent file output can leak/collide. | Async children keep unrelated work responsive; timeout/cancel terminates the owned process group; output is literal; unique files are removed on write/upload failure. Nine process/authorization cases pass. |
+| BUG-042 | High | Fixed | Multi-source search | Broad/deep distributed sorts exceed MongoDB memory; earlier rows cross the network before a last-page callback can answer. | Bound each server top K, use the optional stable sort index for deep pages, and skip only mathematically guaranteed prefixes. Real page 3,657 returns in about 1.15s with exact file order. |
+| BUG-043 | High | Fixed | Callback outage UX | Pagination can wait through long database retries until Telegram expires its answer; settings page acknowledgment follows slow rendering. | Page reads have an eight-second deadline with a safe retry alert and no partial publication; settings navigation answers before rendering. Real secondary-partition alert returned in 8.047s and recovered. |
+| BUG-044 | High | Fixed | Search-token backfill | Ordinary array equality can accept an old array inside a concurrently nested source, storing incomplete tokens and hiding a legacy match. | Exact expression/literal snapshot equality skips concurrent changes; real-Mongo legacy/indexed equivalence is preserved. |
+| BUG-045 | High | Fixed | Topology configuration | URI-only deduplication drops distinct databases on one deployment and can shift the following database's name. | Normalize URI/name pairs together, deduplicate exact pairs only, retain documented fallback names and reject excess names. |
+| BUG-046 | High | Fixed | Connection recovery | Failed/canceled clients and partially initialized multi-source topology survive into a later startup attempt. | Roll back client/topology publication and close every opened pool before retry. Failure and cancellation regressions pass. |
+| BUG-047 | Medium | Fixed | Repository writes | Matched no-op updates report failure and upsert success can return an identity rather than a boolean. | Matched records/upserted identities return an actual success boolean, including identity zero; real-Mongo CRUD contracts pass. |
+| BUG-048 | Medium | Fixed | Settings validation | Malformed numeric/boolean edits silently coerce to zero/false and unsafe bounds can persist. | Reject malformed/non-finite/out-of-range writes; invalid legacy values fall back without rewriting records; imports count acknowledged writes. |
+| BUG-049 | Medium | Fixed | Update recovery | Same-second backups overwrite a recovery point; failed backup copies do not stop update application. | Unique complete backups are required before clone/apply; operator scripts participate in backup/restore; temporary-installation recovery tests pass. |
+| BUG-050 | Medium | Fixed | Legacy migration | Unsafe batch/limit inputs, naive timestamps and stale optimistic writes misreport or overwrite metadata. | Validate bounds, write UTC, preserve concurrent source/metadata changes and count actual modifications; dry-run/global multi-source limits pass. |
+| BUG-051 | Medium | Fixed | Premium expiry | Entitlement remains valid at the exact expiry instant despite zero remaining time. | Only a future expiry grants entitlement; boundary and access contracts pass. |
+| BUG-052 | Medium | Fixed | Batch delivery | A failed source can become a partial missing-file mapping, and duplicate owners silently overwrite a batch result. | Complete-or-error batches use authoritative owners where enabled, reject ambiguity, avoid partial cache entries, show retry UX and refund unsent quota. |
+| BUG-053 | Medium | Fixed | Settings edit lifecycle | Failed input deletion misreports a persisted save; older completion can clear a newer edit; cancellation leaves captured sessions pending. | Confirm successful writes independently of optional message cleanup; fence cancellation to the captured session and await cleanup during shutdown. Behavioral and real-Redis tests passed. |
+| BUG-054 | Medium | Fixed | Edit expiry | UI advertises 60 seconds but stored edits live 300 seconds and accept the exact expiry boundary. | Session TTL matches the UI and expires at the deadline; real-Redis pointer/TTL contracts passed. |
+| BUG-055 | High | Fixed | Media references | Empty wzgram file references collide in the sparse unique index and silently discard later media. | Generate a stable fallback only at writes; real codec and MongoDB tests preserve legacy null reads and caller values. |
+| BUG-056 | High | Fixed | Media aliases | A colliding alias can be reported as a harmless duplicate or return another canonical identity. | Different canonical identities return an explicit conflict; real-Mongo sparse-index/cross-namespace regressions passed. |
+| BUG-057 | High | Fixed | Ownership activation | A one-source activation writes permanent bindings although the bot cannot start that configuration. | Reject before binding/index writes; read-only one-source inventory remains allowed. Library and CLI regressions passed. |
+| BUG-058 | Medium | Fixed | Settings retries | Selecting the already-saved boolean or reset value reports MESSAGE_NOT_MODIFIED as failure. | Treat unchanged detail rendering as successful; both callback regressions and real repeated-boolean edits passed. |
+
+## Current QA, 2026-10-29
+
+The final full suite passed **769 tests with zero failures or skips** on the
+rebuilt wzgram 3.1.5 runtime. Real-account feature/settings, three-source media
+indexing/delivery, deep pagination and partition/recovery evidence is recorded
+in the [current QA report](docs/qa/coverage-expansion/STATUS.md). Whole-bot 100%
+coverage and the named production operational gates remain open. Dated counts
+below describe earlier checkpoints; feature source defaults remain off.
 
 ## Verification log
 

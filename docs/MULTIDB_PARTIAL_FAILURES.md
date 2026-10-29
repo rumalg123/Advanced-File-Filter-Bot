@@ -1,6 +1,6 @@
 # PH-027: Fail-visible partial failures in multi-database reads
 
-**Status:** Code and disposable regression tests committed to the existing hardening branch and Draft PR #4. Full code CI passed at `01be21f3`; isolated staging pending. Production still has exactly **one MongoDB database**.
+**Status:** Complete-or-error regressions and real secondary-partition/recovery checks passed on the three authorized QA sources. Production rollout and multi-replica load acceptance remain open. See the [current QA report](qa/coverage-expansion/STATUS.md).
 
 ## Root cause
 
@@ -19,14 +19,15 @@ The public successful return types remain the same (`int`, list, optional entity
 
 ### Limits
 
-This gives **all-or-error responses**, not a complete distributed snapshot, consistent count/page pair, replica freshness version, or a partial data mode. A document can change between independent database reads. The existing cache cannot prove global cross-database snapshot freshness. An opt-in partial-result UI with completeness/freshness metadata would require a separate public contract and explicit non-cacheable response type; **it is not enabled by this phase**. Multi-DB delete helpers remain separate potentially dangerous operations and should stay disabled in operational workflows pending an ownership strategy.
+This gives **all-or-error responses**, not a complete distributed snapshot, consistent count/page pair, replica freshness version, or a partial data mode. A document can change between independent database reads. The existing cache cannot prove global cross-database snapshot freshness. An opt-in partial-result UI with completeness/freshness metadata would require a separate public contract and explicit non-cacheable response type; **it is not enabled by this phase**. Activated media deletion routes only to its immutable owner. Multi-source keyword bulk deletion remains unsupported; there is no automatic owner transfer.
 
 ## Validation
 
 - [x] Full Python regression, disposable MongoDB/dual Redis and Docker/Compose preflight **passed** on code SHA `01be21f3` ([CI run 40823704857](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40823704857)).
-- [ ] Local-only two-DB fixture: count=2, find and aggregate complete when both are available; one forced failing pool causes explicit errors for all read helpers rather than partial results.
-- [ ] Active and inactive circuits, cursor error, duplicate-owner read, and failing collection discovery never return a valid zero or a partial result.
-- [ ] Inject network partition and recovery under staging concurrency. Verify upstream callback retry errors, no Redis search-cache poisoning, stale-results telemetry and cache-generation behavior.
+- [x] Local-only two-DB fixture: count=2, find and aggregate complete when both are available; one forced failing pool causes explicit errors for all read helpers rather than partial results.
+- [x] Active and inactive circuits, cursor error, duplicate-owner read, and failing collection discovery never return a valid zero or a partial result.
+- [x] Real source-3 network partition/recovery with simultaneous liveness/readiness checks: callback retry at 8.047s, no partial page cache, successful same-callback recovery.
+- [ ] Representative multi-replica contention, sustained outage/flapping load and telemetry acceptance.
 - [ ] Review all multi-DB consumers and their exception handling before enabling a second DB; benchmark all-or-error availability impact.
 
 **Rollback:** previous approved image reintroduces partial failures in optional multi-DB mode. No schema/backfill, index/Redis mutation, deployment or PR merge is part of this change.
@@ -39,3 +40,18 @@ requires every source and rejects duplicate canonical owners. Neither publishes
 partial cache entries. A real missing identity remains `None`; backend failure
 raises `SearchBackendUnavailableError` so delivery cannot label an outage as a
 missing file. Five added contracts and the ownership/search suites pass.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked operational/load/rollout gates remain pending.
+
+Pagination callback reads now have an eight-second deadline. If a backend's
+retry policy runs longer, the read is canceled and the existing safe retry alert
+is answered before Telegram expires the callback. The current result message
+remains available for retry; incomplete data cannot publish a new search session.
+This is distinct from ordinary text searches, whose existing driver retries can
+take about 49 seconds during a real secondary partition. Slow-read cancellation
+and no-cache/session publication are covered by regression tests.
+
+**Activated topology rollback:** the historical pre-registry rollback statements
+above do not authorize an older writer against a bound source. Follow the
+[PH-028 offline rollback procedure](MULTIDB_GLOBAL_IDENTITY.md) after activation;
+keep the full topology and compatible ownership protocol until that migration.

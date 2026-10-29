@@ -1,5 +1,7 @@
 # PH-014: Deterministic offset paging and deep-page profiling
 
+**Current continuation (2026-10-29):** exact numeric-offset buttons remain. Bounded server top-K, an optional stable sort index and guaranteed distributed prefix skips fixed observed sort-memory/callback failures. Live next/back retained canonical IDs and last page 3,657 completed in 1.15s. See [plans](qa/coverage-expansion/remote-deep-sort-plans.json), [current QA](qa/coverage-expansion/STATUS.md), and [multi-source behavior](MULTIDB_BOUNDED_PAGINATION.md).
+
 **Status:** implementation and tests committed to the existing hardening branch
 and Draft PR #4. Both CI jobs passed on [run 40809408684](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40809408684).
 **No production measurements or deployment have occurred.**

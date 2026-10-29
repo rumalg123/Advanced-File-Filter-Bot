@@ -126,12 +126,12 @@ throughput. No separate broker or hidden Redis key migration.
 - [x] Full CI passed at SHA `e092b9af`: Python, disposable MongoDB/dual
       Redis, compile/lint and Docker/Compose preflight.
       [Run 40814929762](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40814929762).
-- [ ] Verify both flags default off and **no new collection or index**
+- [x] Verify both flags default off and **no new collection or index**
       is created in the default deployment.
-- [ ] Verify queue duplicate submission, claim/reclaim, lease fencing,
+- [x] Verify queue duplicate submission, claim/reclaim, lease fencing,
       checkpoints, worker cancellation, bounded worker count,
       exponential retry/dead letters and explicit operator replay.
-- [ ] Verify real MongoDB recipient claims, legacy claim compatibility,
+- [x] Verify real MongoDB recipient claims, legacy claim compatibility,
       success acknowledgement, failure release, stale lease and
       recovery from a partial page without duplicate acknowledged sends.
 - [ ] Stage producer crashes between media save and job enqueue, worker
@@ -158,3 +158,5 @@ the rollout; coordinate the cutover.
 No production deployment, PR merge, Redis flush, existing media schema
 change, automatic index deletion or legacy record migration was
 performed as part of this phase.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked operational/load/rollout gates remain pending.

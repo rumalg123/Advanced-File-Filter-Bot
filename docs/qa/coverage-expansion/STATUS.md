@@ -1,169 +1,167 @@
-# Coverage expansion and remaining gates
+# Final-source QA and remaining coverage
 
-This is the active continuation of the 2026-10-29 QA report. The operator has
-confirmed that all MongoDB URIs and channel/group destinations in `.env` are
-QA fixtures and authorized their mutation for testing. Messaging stays confined
-to the supplied accounts and QA destinations, because copied databases may
-contain unrelated user identities.
+QA date: 2026-10-29. Application source: `c83344e` (documentation follows).
+The operator authorized all supplied MongoDB copies, extra commented sources,
+two user sessions and declared QA chats. Original server containers were left
+running. No push, merge or production deployment was performed.
 
-## Measurement
+## Result
 
-Coverage now includes `bot`, `config`, `core`, `handlers`, `repositories`, and
-`scripts`, with branch measurement enabled. The expanded baseline is 470 passing
-tests, 16,322 executable statements, and 44% combined statement/branch coverage.
-The earlier 48.05% line measurement had a smaller source denominator. Neither
-measurement excludes uncovered application files to improve the percentage.
-Live execution is instrumented and will be combined with automated coverage.
-The 100% target is not yet reached.
+**769 tests passed, zero failed/skipped**, using disposable MongoDB and two
+separate Redis instances on the rebuilt wzgram 3.1.5 runtime. The warning audit
+identified 22 Redis `setex` deprecation/aiohttp app-key notices; no resource-leak
+warning was observed. Compile, undefined-name Ruff, dependency consistency,
+production/staging Compose, offline staging identity checks and image-source
+hash verification passed. The image runs as a nonroot user.
 
-## Verified fixes in this continuation
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 54.64% | 40.63% | 51.15% |
+| Source-matched automated + live | 67.64% | 53.35% | 64.08% |
 
-| Finding | Status | Evidence |
-|---|---|---|
-| Failed/cancelled Mongo initialization retained a dead client; multi-DB startup could retain and later accept an incomplete topology. | Passed QA | Four reproductions failed before remediation. Failed clients and partial topology are rolled back; retry initializes every source. Twelve focused recovery/multi-DB tests passed. |
+The denominator is **17,440 executable statements, 5,784 branches and all 118
+tracked application/operator Python files**. Namespace discovery now includes
+unimported modules; no uncovered application file was removed to improve the
+metric. The earlier 470-test expanded baseline measured 44% combined coverage
+across a smaller 16,322-statement source. Whole-bot **100% is not achieved**.
+The registry and activation tool individually have **100% line and branch
+coverage** (298 statements and 124 branches).
 
-## Work still in progress
+Live coverage is accepted only when a file's SHA256 at process start, process
+end and current source all match. Changed-file shards are discarded, rather
+than remapped to new line numbers. The [coverage summary](coverage-summary.json)
+and [provenance](coverage-provenance.json) record those rules and current gaps.
 
-- Instrumented live coverage of the supplied QA bot, accounts and existing chats.
-- High-gap settings, administration, search, repositories and failure branches.
-- PH-006 representative query performance and PH-028 authoritative ownership.
-- Current operator docs, passed-status reconciliation and removal of obsolete
-  candidate notes after their remaining items are covered.
+## Multidatabase acceptance
 
-Completed historical reports retain their timestamps; operational instructions
-that are still needed are not treated as obsolete merely because a bug is fixed.
+- **Passed:** complete inventory and activation of 96,908 existing records on
+  three independent disposable MongoDB sources, without identity conflicts.
+  Later fixture counts differ because live tests add/remove records.
+- **Passed:** 100 concurrent remote creators chose one permanent owner and
+  produced one physical media record. Restart, uncertain acknowledgment,
+  owner/coordinator failure, owner-only update/delete and reingestion passed.
+  All aliases share one unique multikey registry index; reservations never
+  expire or move. See [ownership evidence](remote-ownership.json).
+- **Passed:** actual `/dbswitch` writes on sources 2 and 3, generated links,
+  normal-account delivery, dedicated-channel automatic indexing, complete
+  distributed search and the real Send All callback. The final replay delivered
+  three distinct documents and restored the primary write selection.
+- **Passed:** source 3 network partition scoped to the QA Docker network
+  namespace. Readiness returned 503 while primary access/liveness stayed
+  available. Pagination returned safe retry in **8.047s** and published no
+  incomplete page cache. Removing the rules restored readiness and the same
+  callback's valid page. Ordinary text search took **49.28s** under existing
+  driver retries. See [callback](live-callback-outage.json) and
+  [text/readiness](live-secondary-outage.json) evidence.
+- **Passed:** activation now rejects one-source writes before permanent bindings
+  or index changes. Read-only one-source inventory remains available. Full
+  intended membership must be configured before activation.
 
-- **Passed QA:** admin/owner/private/auth-user permission decorators now use
-  plain-text callback alerts. Four regressions reproduced literal HTML before
-  the fix; 31 authorization/formatting tests pass. Database callbacks were
-  already correctly admin-protected; the added tests preserve that behavior.
+The [ownership runbook](../../MULTIDB_GLOBAL_IDENTITY.md) documents permanent
+bindings, stopped-writer activation, coordinator sizing and offline rollback.
+These QA databases now retain their activated registry and optional indexes.
+Using them again requires the complete three-source configuration and registry
+flag; turning the flag off or omitting a source intentionally fails startup.
+Private credentials/configuration remain outside Git.
 
-- **Passed automated QA:** settings View/Edit/Back/Close callbacks acknowledge
-  Telegram before performing slow work. Four pre-fix failures reproduced the
-  missing answers; eight focused navigation/formatting tests pass. Live sweep
-  also observed the View callback timeout before this fix.
+## Search and pagination acceptance
 
-- **Passed QA:** generic repository updates now treat matched no-op writes as
-  successful and return an actual boolean for upserts, including an inserted
-  identity of zero. Real-Mongo CRUD/cache/aggregation/connection/filter contracts
-  and existing regression suites passed (76 focused cases).
+Optional `FEATURE_INDEXED_MEDIA_SEARCH` retains the legacy final matcher and
+uses versioned necessary-word candidates only where safe. Untagged, invalidated
+or unknown-version rows retain the legacy path. Edits invalidate token metadata;
+bounded optimistic backfill skips changed documents, including nested-array
+races. Source defaults remain off.
 
-- **Passed QA:** premium entitlement now ends at the exact expiry instant,
-  consistent with zero remaining days and the documented future-expiry policy.
-  Validation/permissions/premium/access boundary suites pass; 49 new validation
-  cases cover public inputs and remote permission outcomes.
+Complete-result ID equivalence passed on eight local and five remote queries.
+Five repetitions per remote query measured median **3.35–5.32s legacy versus
+59–137ms indexed**. These are small QA samples, not production percentile/SLO
+claims. [Sanitized plans](remote-indexed-search.json) identify query hashes and
+indexes without exposing titles or connection details.
 
-- **Passed QA:** settings writes now reject malformed integers/booleans,
-  non-finite floats and unsafe numeric bounds instead of silently persisting
-  zero/false. Legacy invalid stored values fall back without rewriting records;
-  imports count only acknowledged writes. Nineteen new pre-fix failures were
-  reproduced; 60 focused settings/config/access cases pass.
-- **Live passed:** all 61 settings details across eight pages rendered through
-  the real bot after callback-ack remediation. Edit/cancel and mutations are
-  being exercised separately using actual current keyboard buttons.
+Bounded server top-K sorts, the optional stable page index, 64-row merge buffers
+and mathematically guaranteed per-source prefix skips fixed real MongoDB sort
+memory/callback failures. Remote deep-source offset 36,550 used no blocking
+SORT and completed in **0.500s** ([plans](remote-deep-sort-plans.json)). Final
+real next/back preserved canonical file order; page **3,657** completed in
+**1,154.8ms**. Counts/page reads remain independent rather than a distributed
+snapshot. Balanced middle pages can still require substantial residual merging.
 
-- **PH-006 candidate implementation passed local QA:** optional, default-off
-  versioned word candidates preserve the existing final matcher. Eight complete
-  result-set comparisons on 96,913 records matched, with representative title
-  queries improving from 2.7–4.4s to 1–46ms. Metadata-only paths retain legacy
-  performance. Bounded backfill, edit invalidation and older-image rollback are
-  documented in `docs/INDEXED_MEDIA_SEARCH.md`. Remote p95 remains unmeasured.
-- **Live settings edit passed:** invalid integer rejected without persistence,
-  valid edit saved, cancel cleared the pending edit; all eleven pre-existing
-  optional feature flags were enabled through real current keyboard buttons.
+## User, admin, feature and cache acceptance
 
-- **PH-028 implementation complete; local acceptance passed:** immutable
-  majority-acknowledged coordinator reservations enforce cross-namespace alias
-  uniqueness and owner-only CRUD, with stopped-writer activation, source bindings
-  and explicit crash recovery. The 37 registry/operator cases achieve **100%
-  line and branch coverage for those two modules**; 49 focused multi-DB/recovery
-  cases pass. This does not imply whole-bot 100% coverage or a production rollout.
-- **Remote activation passed:** all 96,908 records across the three authorized
-  disposable MongoDB sources were inventoried without conflicts and adopted.
-  Full remote race/restart/update/delete checks are being replayed after fixing
-  a private harness-only async count error. Test bot writers remain stopped.
-- **Current expanded automated baseline:** 16,829 statements, 52.03% line
-  coverage and 48.47% combined statement/branch coverage before the final added
-  ownership failure-path tests. Root operator modules were requested but not
-  imported, so the next whole-tree measurement must include them explicitly.
+- Both supplied sessions authenticated with wzgram 3.1.5. Existing `pyrogram`
+  imports resolve to the same module. Both dependency manifests request `wzgram`
+  without a stale version pin. See [image checks](final-preflight.json).
+- All eleven roadmap features passed enabled/disabled regressions and real
+  command/callback flows: saved searches/alerts, favorites/collections, advanced
+  filters, feedback, reports, autocomplete, grouping, requests, recent files,
+  recommendations and dashboard. Feature source defaults remain off.
+- The final-source UI sweep rendered **62 settings details over eight pages**.
+  Invalid integers were rejected, valid edits saved, cancellation cleared the
+  captured session, and **13 repeated boolean updates** returned success.
+  [UI evidence](live-ui-summary.json) excludes credentials and callback IDs.
+- Admin/user permissions, actual ban/unban of only the supplied normal actor,
+  subscription/quota paths, channel routing and `/verify` handler alignment
+  passed. `/verify`'s 100/100 score describes handler checks, not code coverage.
+- Real Redis/local MongoDB contracts cover split operational state, safe
+  serialization, generation races, TTLs, saturation, quota day boundaries,
+  reservations/refunds, durable job leases/restart and backend failures.
+  Harmless owner-shell short/file output passed; unrelated bot work remained
+  responsive and owned process/file cleanup passed timeout/cancellation tests.
+- Temporary-installation updater backup/restore/CLI tests and bounded metadata
+  migration dry-run/apply/concurrent-edit/resource-cleanup tests passed. No
+  updater or restart command was executed against the original server services.
 
-- **Passed QA:** distributed batch delivery lookups now return a complete,
-  unambiguous mapping or raise `SearchBackendUnavailableError`; they no longer
-  convert source failures into partial `None` results or cache partial rows.
-  Registry mode resolves authoritative owners even when a positive cache entry
-  exists. Three behavioral regressions reproduced before remediation; 82 focused
-  batch/ownership/search cases pass. Duplicate-input and genuine-missing-file
-  behavior remains covered.
+## Confirmed fixes committed separately
 
-- **Updater recovery passed:** two pre-fix regressions reproduced overwriting
-  same-second backup directories and continuing after a failed backup copy.
-  Recovery points now have unique names; incomplete backups abort before clone
-  or application. Operator scripts participate in backup/apply/restore. Thirty-
-  three tests use temporary installations, including real file restoration;
-  no updater was run against this server installation.
+The continuation fixed failed-pool/topology recovery; callback alert formatting
+and acknowledgment; matched no-op CRUD; exact premium expiry; strict settings
+parsing; URI/name pairing; complete-or-error batch reads and unsent quota
+settlement; unique complete updater backups; bounded optimistic metadata
+migration; broad/deep distributed sorts; all-source readiness; exact token
+backfill snapshots; and asynchronous owner-shell process/file ownership.
 
-- **Legacy metadata migration passed:** twelve pre-fix failures reproduced
-  invalid bounds, naive timestamps and overwriting/counting stale concurrent
-  edits. The migration now validates bounds, writes explicit UTC, uses optimistic
-  source/metadata selectors and reports actual modifications. All thirteen new
-  tests pass on disposable local MongoDB, including dry-run and global multi-DB
-  limits. The canonical quality migration remains a distinct contract.
+Additional final-source findings are **BUG-053–058** in the
+[bug register](../../../BUG_AUDIT.md): persisted settings success despite optional
+message deletion failure, captured-session cancellation fencing/awaited cleanup,
+60-second exact expiry, unique stable references for empty wzgram references,
+canonical/alias conflict classification, unsupported activation rejection and
+idempotent settings callback rendering. Each behavioral fix has its own commit
+and regression evidence; the final suite includes operator entry-point tests.
 
-- **Source pairing passed:** two regressions reproduced URI-only deduplication
-  dropping a distinct database on the same deployment and assigning the wrong
-  name after a repeated primary. Bot and metadata-tool topology now normalize
-  pairs together, preserve fallback names and reject excess names. Sixty-two
-  focused configuration/migration/recovery/ownership cases pass.
-- **Remote search acceptance passed:** backfilled all 96,908 cloned media
-  documents with no truncation. Five queries, five repetitions per strategy,
-  returned identical complete ID sets. Indexed median times were 59–137ms versus
-  3.35–5.32s legacy; all five EXPLAIN plans used `media_search_terms_v1` and
-  completed successfully. These are remote QA medians/maxima, not production p95.
-- **Remote ownership acceptance passed:** 100 simultaneous creators produced
-  exactly one document; restart lookup, owner-outage fail-closed, owner update and
-  deletion passed across all three disposable remote sources. Synthetic data was
-  removed; immutable reservations remain by design.
-- **Live multi-source passed so far:** manually switching to each secondary,
-  indexing distinct harmless private uploads, generating links and normal-user
-  delivery succeeded. All eleven optional feature flows were replayed; favorites,
-  collections and dashboard now read across the activated topology. `/verify`
-  again reported 100/100. This score measures manager alignment, not code coverage.
+The obsolete `POTENTIAL_ISSUES.md` candidate list was removed after its useful
+lifecycle findings were fixed and covered. Bug/cache ID registers, historical
+reports and operational recovery instructions remain useful and are retained.
+Current tracker rows/runbooks distinguish QA passed from merge/rollout status.
 
-- **Batch outage UX passed:** two pre-fix handler failures reproduced an
-  unhandled backend error. Deep-link batches now edit the progress response to
-  a safe retry message and refund all definitely unsent quota; favorites/recent
-  lists report temporary unavailability instead of missing content. Focused
-  quota, feature and multi-source delivery suites pass.
-- **Live dedicated channel passed:** because the supplied shared channel also
-  has the DELETE_CHANNEL role, a temporary isolated channel was created for
-  automatic indexing. Its distinct document was persisted, found and delivered
-  to the normal account. The real Send All callback delivered all three test
-  documents across the secondary sources. Temporary chat cleanup is tracked.
+## Still open
 
-- **Distributed sort-memory correction passed locally:** live remote `540p`
-  search failed with MongoDB code 292 (32 MB blocking-sort limit). Reproduced
-  under a restored 64 KB limit on disposable localhost MongoDB with disk spill
-  disabled. Per-source `limit(skip + limit)` now bounds server top-K sorting;
-  51 multi-source/ownership/batch cases pass, including exact deep-page results.
-  Remote first/next/previous-page replay is in progress.
+1. **Whole-bot 100% line/branch coverage.** The committed coverage summary names
+   the largest remaining gaps; passing live smoke tests does not prove all error,
+   cancellation, platform or alternate-configuration branches.
+2. Representative sustained and multi-replica production load, middle-page
+   costs, latency tails and agreed SLO/capacity limits. The coordinator must hold
+   permanent identity metadata for every source, including deleted files.
+3. Cloud/Atlas backup restoration, retention/access review and measured RPO/RTO.
+   Local isolated restore tests do not establish cloud recovery readiness.
+4. Genuine upstream Telegram FloodWait under real traffic, client-internal retry
+   behavior and multi-replica cooldown acceptance. Injected FloodWait tests passed;
+   they are not labeled a real Telegram rate-limit incident.
+5. Production state migration/cutover, mixed-version exposure checks, optional
+   feature/index/registry rollout, remote CI at the final commit and enforced
+   branch protections. The operator will review/merge separately.
 
-- **Deep-sort implementation:** last-page QA still exceeded server memory after
-  the shallow top-K fix. The optional indexed-search flag now also creates a
-  stable `indexed_at/_id` index and uses it for pages reaching offset+limit 1,000.
-  Remote EXPLAIN at offsets 0/10/1,000/36,550 used no blocking SORT; the deepest
-  measured source read took 0.500s. Both single/distributed paths and small-memory
-  deep-page equivalence are regression-tested. Live last-page replay is pending.
+PH-004 retains the earlier explicit network-isolation decision. Multilingual
+search, automatic owner transfer and multi-source keyword bulk deletion remain
+outside the implemented contract. No cloud recovery or production gate is
+marked passed based only on mocked tests or disposable QA.
 
-- **Multi-source readiness passed:** `/ready` previously checked only the
-  primary application pool and could report healthy with an unavailable media
-  source. It now pings all configured media pools concurrently under the existing
-  timeout, including inactive/missing/empty-topology checks. Liveness remains
-  independent. Five pre-fix failures and 22 passing focused cases are recorded.
+## Cleanup
 
-- **Deep-page network work correction passed locally:** the index eliminated
-  sort-memory failure but live last-page callbacks could still expire while
-  fetching earlier 64-row buffers. Complete per-source counts now identify only
-  prefixes mathematically guaranteed to lie before the global page, skip them
-  on MongoDB, and reduce the residual merge offset. Reference ordering is
-  unchanged across skewed/balanced/empty/exhausted distributions. Fifty-seven
-  focused cases pass; uncached live timing is being replayed.
+The nine recorded live media fixtures were removed (one was already absent).
+Permanent registry reservations remain as designed. The one QA-created channel
+was unregistered and deleted; supplied test channels/groups were retained. An
+independent namespace check found no remaining network-fault rules, and no
+shell-output temporary files remained. Isolated QA containers were stopped and
+removed after saving coverage; the two original server containers kept running.
+Raw logs, sessions, credentials and database dumps stay outside Git in the
+private QA directories. The final QA image is retained locally.

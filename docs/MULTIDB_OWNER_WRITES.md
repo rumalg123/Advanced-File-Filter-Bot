@@ -1,6 +1,6 @@
 # PH-025: Locate exactly one owning MongoDB before an update
 
-**Status:** Code and tests on the existing hardening branch, Draft PR #4. CI passed at SHA `6b7e64bf`; staging pending. **Production still uses one MongoDB database. Do not enable multi-database mode.**
+**Status:** Owner-probe and registry contracts passed disposable MongoDB QA; three-source remote concurrency/restart/update/delete checks passed. Production rollout remains pending review. See the [current QA report](qa/coverage-expansion/STATUS.md).
 
 ## Root cause
 
@@ -31,12 +31,13 @@ PH-027 must still handle comprehensive multi-DB read/count failures and caching.
 ## Verification checklist
 
 - [x] Full Python regression, disposable MongoDB/dual Redis, compile/lint and Docker/Compose preflight passed at SHA `6b7e64bf` ([run 40822577874](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40822577874), attempt 2). Docker Hub returned HTTP 500 resolving the existing Python base image on attempt 1; the failed job was retried successfully without changing code or Dockerfile.
-- [ ] On two isolated databases, match only DB B: only B updated; DB A untouched. A matched no-op still succeeds.
-- [ ] Deliberate duplicate owner in A and B raises before *either* update.
-- [ ] Multi-DB upsert for unknown ID fails without creating records. Single-DB upsert behaves as before; multi-DB upsert for existing owner updates only that owner.
-- [ ] Unavailable DB, circuit breaker and lookup errors fail closed without writes to a partially observed cluster.
-- [ ] Load test owner scans and concurrent creation/failover races on an isolated staging clone; define global identity/ownership PH-028 before enabling the second DB.
-- [ ] Review any legitimate callers relying on scatter-update behavior before rollout.
+- [x] On two isolated databases, match only DB B: only B updated; DB A untouched. A matched no-op still succeeds.
+- [x] Deliberate duplicate owner in A and B raises before *either* update.
+- [x] Multi-DB upsert for unknown ID fails without creating records. Single-DB upsert behaves as before; multi-DB upsert for existing owner updates only that owner.
+- [x] Unavailable DB, circuit breaker and lookup errors fail closed without writes to a partially observed cluster.
+- [x] PH-028 registry: 100 concurrent writers across three disposable remote sources produced one physical record; restart, owner outage, update/delete and real indexing/delivery passed.
+- [ ] Representative sustained owner/coordinator load and production capacity acceptance.
+- [x] Review any legitimate callers relying on scatter-update behavior before rollout.
 
 **Rollback:** revert approved image without DB migration. This reinstates unsafe scatter updates if multi-DB is enabled, so keep multi-DB disabled. No production deployment, no PR merge, no DB/index changes.
 
@@ -48,3 +49,10 @@ four-argument API retains its defensive owner-probe behavior for compatibility.
 An activated topology cannot fall back to uncoordinated media writes merely by
 disabling the flag. See the current PH-028 runbook for activation/recovery and
 its limits; historical production topology statements above are not a rollout.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked operational/load/rollout gates remain pending.
+
+**Activated topology rollback:** the historical pre-registry rollback statements
+above do not authorize an older writer against a bound source. Follow the
+[PH-028 offline rollback procedure](MULTIDB_GLOBAL_IDENTITY.md) after activation;
+keep the full topology and compatible ownership protocol until that migration.
