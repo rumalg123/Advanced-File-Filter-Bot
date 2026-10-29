@@ -533,7 +533,7 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(f"📤 Sending {len(files_data)} files...", show_alert=False)
         except BaseException:
             if needs_quota and reserved_count:
-                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
+                await settle_delivery_quota(self.bot.user_repo, user_id, reserved_count, 0)
             raise
 
         # Send status message to PM
@@ -549,7 +549,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
         except UserIsBlocked:
             if needs_quota and reserved_count:
-                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
+                await settle_delivery_quota(self.bot.user_repo, user_id, reserved_count, 0)
             await query.answer(
                 ErrorMessageFormatter.format_error(
                     "Please start the bot first!",
@@ -561,7 +561,7 @@ class FileCallbackHandler(BaseCommandHandler):
             return
         except BaseException:
             if needs_quota and reserved_count:
-                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_count))
+                await settle_delivery_quota(self.bot.user_repo, user_id, reserved_count, 0)
             raise
 
         success_count = 0
@@ -634,12 +634,10 @@ class FileCallbackHandler(BaseCommandHandler):
                 await asyncio.sleep(1)
 
             except asyncio.CancelledError:
-                if needs_quota and reserved_count > success_count:
-                    await asyncio.shield(
-                        self.bot.user_repo.release_quota(
-                            user_id,
-                            reserved_count - success_count
-                        )
+                if needs_quota and reserved_count:
+                    await settle_delivery_quota(
+                        self.bot.user_repo, user_id, reserved_count, success_count,
+                        uncertain=True
                     )
                 raise
             except Exception as e:
@@ -649,12 +647,11 @@ class FileCallbackHandler(BaseCommandHandler):
         # Release unused quota if some files failed (quota was reserved upfront)
         # The quota was already reserved at the start, so we only need to release
         # the difference between reserved and actually sent files
-        if needs_quota and reserved_count > 0:
-            unused_quota = reserved_count - success_count
-            if unused_quota > 0:
-                await asyncio.shield(
-                    self.bot.user_repo.release_quota(user_id, unused_quota)
-                )
+        if needs_quota and reserved_count:
+            await settle_delivery_quota(
+                self.bot.user_repo, user_id, reserved_count, success_count,
+                uncertain=failed_count > 0
+            )
 
         # Final status
         final_text = (
