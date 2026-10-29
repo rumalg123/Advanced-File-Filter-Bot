@@ -106,3 +106,20 @@ def test_real_mongo_explain_preserves_exact_filename_search_semantics():
             assert sorted(db.media_files.index_information()) == before_indexes
         finally:
             client.drop_database(name)
+
+
+def test_concise_plan_marks_partial_timeout_instead_of_valid_empty_result():
+    report=concise_plan({
+        'executionStats': {'executionSuccess':False, 'errorCode':50,
+            'errorMessage':'execution exceeded time limit for private query',
+            'nReturned':0, 'totalDocsExamined':62009, 'executionTimeMillis':3007},
+        'queryPlanner': {'winningPlan':{'stage':'COLLSCAN'}},
+    })
+    assert report['executionSuccess'] is False
+    assert report['errorCode']==50
+    assert 'private query' not in json.dumps(report)
+
+
+def test_concise_plan_preserves_success_and_unknown_execution_status():
+    assert concise_plan({'executionStats':{'executionSuccess':True}})['executionSuccess'] is True
+    assert concise_plan({})['executionSuccess'] is None

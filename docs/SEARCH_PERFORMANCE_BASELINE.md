@@ -56,6 +56,13 @@ python scripts/profile_media_search.py \
 
 Reported fields: estimated document count, existing index names, optional `$indexStats` access counters, and `nReturned`, `totalDocsExamined`, `totalKeysExamined`, `executionTimeMillis`, query plan stages and index names per hashed query ID.
 
+Every plan also reports `executionSuccess` and `errorCode`. MongoDB may return
+an incomplete explain with `executionSuccess=false` and error code `50` when
+the time budget expires. Its counts are partial work, and `nReturned=0` is not
+evidence of zero matching files. A missing status is `null`, never assumed
+successful. Raw server error messages are omitted because they may contain
+queries or document values.
+
 ## Runtime metrics
 
 `metrics.media_search` includes:

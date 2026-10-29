@@ -69,6 +69,11 @@ def concise_plan(explanation: dict) -> dict:
 
     visit(planner.get("winningPlan", {}))
     return {
+        # MongoDB can return an explain document with executionSuccess=false
+        # instead of raising ExecutionTimeout. Its counters describe partial
+        # work, so nReturned=0 must not be interpreted as a completed search.
+        "executionSuccess": execution.get("executionSuccess"),
+        "errorCode": execution.get("errorCode"),
         "nReturned": execution.get("nReturned"),
         "totalDocsExamined": execution.get("totalDocsExamined"),
         "totalKeysExamined": execution.get("totalKeysExamined"),
