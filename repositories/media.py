@@ -20,6 +20,11 @@ from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+class SearchGenerationChanged(RuntimeError):
+    """A concurrent media mutation invalidated this search attempt."""
+
+
+
 # Import batch optimizations
 try:
     from .optimizations.batch_operations import BatchOptimizations
@@ -478,6 +483,43 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             use_caption: bool = True,
             advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[MediaFile], int, int]:
+        """Bounded retry if a concurrent write changes search generation.
+
+        Each search attempt takes a fresh generation, including after a
+        cache hit. Never return a known-stale cached/DB result. Continuous
+        writes cause a retryable error instead of unbounded spinning.
+        """
+        for attempt in range(3):
+            try:
+                return await self._search_files_once(
+                    query, file_type, offset, limit, use_caption,
+                    advanced_filters
+                )
+            except SearchGenerationChanged:
+                logger.debug(
+                    "Search generation changed during attempt %s/3", attempt + 1
+                )
+        raise SearchBackendUnavailableError(
+            "Search index changed repeatedly while reading; please retry"
+        )
+
+    async def _read_search_generation(self) -> int:
+        try:
+            return await self.cache_invalidator.get_search_cache_version()
+        except (RuntimeError, ValueError, TypeError) as exc:
+            raise SearchBackendUnavailableError(
+                "Search cache generation unavailable"
+            ) from exc
+
+    async def _search_files_once(
+            self,
+            query: str,
+            file_type: Optional[FileType] = None,
+            offset: int = 0,
+            limit: int = 10,
+            use_caption: bool = True,
+            advanced_filters: Optional[Dict[str, Any]] = None
+    ) -> Tuple[List[MediaFile], int, int]:
         """
         Search for files across all databases
         Returns: (files, next_offset, total_count)
@@ -527,6 +569,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     cached['next_offset'],
                     cached['total']
                 )
+                # A mutation may occur while fetching the cached page.
+                # Recheck on both single and split Redis deployments.
+                current_version = await self._read_search_generation()
+                if current_version != cache_version:
+                    raise SearchGenerationChanged()
                 elapsed_ms = (time.perf_counter() - search_started) * 1000
                 search_telemetry.observe("cache_hit", elapsed_ms)
                 search_telemetry.observe("search", elapsed_ms)
@@ -586,6 +633,12 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 "Unable to complete the MongoDB media search"
             ) from exc
 
+        # DB count/page reads span multiple awaits. When indexing,
+        # deletion or import changes the generation mid-read, discard this
+        # attempt instead of showing/cache-writing a known-stale page.
+        if await self._read_search_generation() != cache_version:
+            raise SearchGenerationChanged()
+
         # Calculate next offset
         next_offset = offset + limit if offset + limit < total else 0
 
@@ -603,6 +656,10 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             if total == 0 else self.ttl.SEARCH_RESULTS
         )
         await self.cache.set(cache_key, cache_data, expire=ttl)
+        # Even if an invalidation races the cache SET, the stale entry stays
+        # under its old generation. Retry rather than serve the old result.
+        if await self._read_search_generation() != cache_version:
+            raise SearchGenerationChanged()
         search_telemetry.observe("search", (time.perf_counter() - search_started) * 1000)
         return files, next_offset, total
 
