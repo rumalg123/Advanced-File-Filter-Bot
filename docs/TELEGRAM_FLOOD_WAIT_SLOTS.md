@@ -1,6 +1,6 @@
 # PH-024: Telegram retry delays must not hold concurrency slots
 
-**Status:** Code and tests committed to existing hardening branch / Draft PR #4, CI and staging pending. No production changes.
+**Status:** Code CI passed ([run 40820968179](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820968179)) on SHA `89fadb57`, staging pending. Existing hardening branch / Draft PR #4. No production changes.
 
 ## Failure
 
@@ -26,7 +26,7 @@ References: https://docs.pyrogram.org/start/errors and https://docs.pyrogram.org
 
 ## Acceptance and rollback
 
-- [ ] CI: full Python regression, MongoDB/dual Redis integration, compile/lint and Docker preflight on exact code SHA.
+- [x] Full Python regression with MongoDB/dual Redis integration, compile/lint and Docker preflight passed at code SHA `89fadb57` ([CI run 40820968179](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40820968179)). Initial test used fractional FloodWait seconds that Wzgram normalized to zero; fixed to use integer seconds with genuine waiting.
 - [ ] Inject long FloodWait from one chat with `telegram_send` limit=1. Another chat succeeds while the first is sleeping and active-slot count remains zero.
 - [ ] Concurrent same-chat calls honor shared deadline before re-entering; no retry stampede.
 - [ ] Test cancellation during delay, 5xx delay, genuine FloodWait on max retries, dynamic limits, bounded 2048 scopes and unmodified 4xx behavior.
