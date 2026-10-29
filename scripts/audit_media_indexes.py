@@ -51,7 +51,9 @@ def audit_media_indexes(collection, *, include_usage=False, max_time_ms=3000):
     by_name = {spec["name"]: dict(spec) for spec in observed}
     if len(by_name) != len(observed):
         raise ValueError("Duplicate index names reported")
-    manifest = media_index_manifest()
+    manifest = media_index_manifest(include_search_tokens=any(
+        item.get("name") == "media_search_terms_v1" for item in observed
+    ))
     declared_names = {spec["name"] for spec in manifest}
     report = {
         "collection": "media_files",

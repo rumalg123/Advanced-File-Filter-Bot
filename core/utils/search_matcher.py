@@ -13,6 +13,7 @@ import re
 from typing import Any, Dict, Optional
 
 from core.utils.helpers import build_typo_tolerant_pattern, parse_search_query
+from core.utils.search_tokens import indexed_title_candidates
 
 
 def _text_pattern(text: str) -> str:
@@ -146,6 +147,7 @@ def build_media_search_filter(
     file_type: Optional[Any] = None,
     use_caption: bool = True,
     advanced_filters: Optional[Dict[str, Any]] = None,
+    *, indexed_tokens: bool = False,
 ) -> Dict[str, Any]:
     """Compile user search and explicit advanced filters into Mongo predicates.
 
@@ -155,6 +157,10 @@ def build_media_search_filter(
     """
     title, season, episode, resolution = parse_search_query(query)
     clauses = []
+    if indexed_tokens and title:
+        candidate = indexed_title_candidates(title)
+        if candidate is not None:
+            clauses.append(candidate)
 
     # Do not reinsert the whole query when parsing consumes every token:
     # "S01E03 540p" is a legitimate metadata-only search.

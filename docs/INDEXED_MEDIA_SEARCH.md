@@ -1,0 +1,59 @@
+# Indexed media search (PH-006)
+
+`FEATURE_INDEXED_MEDIA_SEARCH` defaults to `false`. When enabled, an indexed
+necessary-word candidate predicate narrows documents before the existing regex
+matcher checks every title, metadata and caption constraint. Unsupported words,
+missing/invalidated metadata and unknown versions retain the legacy path.
+Internal metadata is stripped on reads regardless of the flag. Text edits remove
+it atomically, including after the flag is disabled; backfill can refresh it.
+
+## Activation
+
+Use an explicitly selected disposable/staging database first. Set `DATABASE_URI`
+and `DATABASE_NAME` privately in the process environment; do not put secrets in
+command arguments. Run from the repository root:
+
+```sh
+python -m scripts.backfill_search_tokens --allow-remote
+python -m scripts.backfill_search_tokens --allow-remote --apply
+```
+
+The default scan is capped at 100,000 documents, batches at 200. `truncated=true`
+means the inventory is incomplete; increase `--limit` (maximum 1,000,000) before
+claiming a complete backfill. Optimistic writes skip concurrent text changes;
+repeat until `needs_update=0`. No index is dropped or renamed. Enable the flag
+and restart to create the optional `media_search_terms_v1` index, then compare:
+
+```sh
+python -m scripts.profile_media_search --allow-remote --include-counts
+python -m scripts.profile_media_search --allow-remote --include-counts --indexed-tokens
+```
+
+Check complete result identity sets, plans and repeated timings on representative
+queries. Metadata-only queries have no title candidate and keep the old plan.
+Partial backfill remains correct but may reduce the performance benefit.
+
+## Rollback
+
+Disable the flag and restart: this version continues reading tagged documents.
+Before deploying an older image that does not strip internal fields, stop writers
+and remove the two fields with the same bounded tool:
+
+```sh
+python -m scripts.backfill_search_tokens --allow-remote --rollback
+python -m scripts.backfill_search_tokens --allow-remote --rollback --apply
+```
+
+Repeat the inventory and confirm `needs_update=0` and `truncated=false`. The
+optional index can remain; removing it is a separate operator decision.
+
+## QA evidence, 2026-10-29
+
+A disposable 96,913-record fixture (96,908 cloned media projections plus five
+array/cross-field/multiline edge records) returned identical complete ID sets
+for eight legacy/indexed queries. Spring of Youth: 4.353s → 0.046s; Dae Jo Yeong:
+2.841s → 0.017s; no-match: 2.807s → 0.001s; youth spring: 2.752s → 0.021s;
+the doctor x: 4.427s → 0.039s. These are individual local full-match timings,
+not production p95 or a Telegram latency claim. Real-Mongo regression cases
+also cover typo aliases, Unicode case variants, arrays, captions, missing/future
+versions, optimistic edit conflicts, bounded backfill and metadata rollback.

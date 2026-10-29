@@ -4,6 +4,7 @@ Provides compound indexes for frequent query patterns
 """
 
 from typing import Dict
+from config.settings import settings
 
 from core.database.media_indexes import media_index_manifest, compare_index_definition
 from core.utils.logger import get_logger
@@ -47,6 +48,7 @@ class IndexOptimizer:
         A separate auditor provides read-only inventory before changes.
         """
         collection = await self.db_pool.get_collection("media_files")
+        manifest = media_index_manifest(include_search_tokens=settings.features.feature_indexed_media_search)
         results: Dict[str, bool] = {}
         try:
             existing_list = await self.db_pool.execute_with_retry(
@@ -54,10 +56,10 @@ class IndexOptimizer:
             )
         except Exception:
             logger.error("Media index inventory unavailable; refusing blind index DDL")
-            return {f"media_{spec['name']}": False for spec in media_index_manifest()}
+            return {f"media_{spec['name']}": False for spec in manifest}
 
         existing = {doc["name"]: dict(doc) for doc in existing_list}
-        for spec in media_index_manifest():
+        for spec in manifest:
             name = spec["name"]
             key = f"media_{name}"
             current = existing.get(name)

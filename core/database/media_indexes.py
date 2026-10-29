@@ -40,12 +40,17 @@ MATERIAL_INDEX_OPTIONS = (
 )
 
 
-def media_index_manifest() -> list[dict[str, Any]]:
+def media_index_manifest(*, include_search_tokens: bool = False) -> list[dict[str, Any]]:
     """Return defensive copies; callers cannot mutate the manifest."""
-    return [
+    manifest = [
         {"name": name, "keys": list(keys), "options": dict(options)}
         for name, keys, options in _MEDIA_INDEXES
     ]
+    if include_search_tokens:
+        from core.utils.search_tokens import SEARCH_TOKEN_INDEX
+        manifest.append({"name": SEARCH_TOKEN_INDEX['name'],
+                         "keys": list(SEARCH_TOKEN_INDEX['keys']), "options": {}})
+    return manifest
 
 
 def index_definition(index: dict[str, Any]) -> dict[str, Any]:

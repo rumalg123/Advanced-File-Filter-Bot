@@ -166,16 +166,20 @@ class BaseRepository(ABC, Generic[T]):
             self,
             id: Any,
             update_data: Dict[str, Any],
-            upsert: bool = False
+            upsert: bool = False,
+            *, unset_fields: Optional[List[str]] = None,
     ) -> bool:
         """Update entity"""
         try:
             collection = await self.collection()
 
+            operation = {"$set": update_data}
+            if unset_fields:
+                operation["$unset"] = {key: "" for key in unset_fields}
             result = await self.db_pool.execute_with_retry(
                 collection.update_one,
                 {"_id": id},
-                {"$set": update_data},
+                operation,
                 upsert=upsert
             )
 

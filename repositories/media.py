@@ -17,6 +17,8 @@ from core.utils.validators import normalize_query
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.search_observability import search_telemetry
 from core.utils.media_metadata import effective_quality
+from core.utils.search_tokens import (media_search_tokens, SEARCH_TOKEN_FIELD,
+    SEARCH_TOKEN_VERSION_FIELD, SEARCH_TOKEN_VERSION)
 from config.settings import settings
 from core.utils.logger import get_logger
 
@@ -126,6 +128,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             if (not settings.features.feature_canonical_media_metadata
                     or data[field] is None):
                 del data[field]
+        if settings.features.feature_indexed_media_search:
+            data[SEARCH_TOKEN_FIELD] = media_search_tokens(media.file_name, media.caption)
+            data[SEARCH_TOKEN_VERSION_FIELD] = SEARCH_TOKEN_VERSION
         data['indexed_at'] = data['indexed_at'].isoformat()
         if data.get('updated_at'):
             data['updated_at'] = data['updated_at'].isoformat()
@@ -135,6 +140,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """Convert dictionary to MediaFile entity"""
         if isinstance(data, MediaFile):
             return data  # Already the correct type
+
+        data.pop(SEARCH_TOKEN_FIELD, None)
+        data.pop(SEARCH_TOKEN_VERSION_FIELD, None)
 
         # Handle _id to file_id conversion safely
         if '_id' in data:
@@ -734,16 +742,30 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Build a backward-compatible MongoDB search predicate."""
-        return build_media_search_filter(query, file_type, use_caption, advanced_filters)
+        return build_media_search_filter(
+            query, file_type, use_caption, advanced_filters,
+            indexed_tokens=settings.features.feature_indexed_media_search,
+        )
 
     async def update(self, id: Any, update_data: Dict[str, Any], upsert: bool = False) -> bool:
         """Update entity and invalidate cache properly"""
+        update_data = dict(update_data)
+        unset_fields = None
+        if {'file_name', 'caption'} & update_data.keys():
+            # Invalidate the candidate metadata atomically with any text edit,
+            # even after flag-off rollback. Backfill can refresh it later.
+            unset_fields = [SEARCH_TOKEN_FIELD, SEARCH_TOKEN_VERSION_FIELD]
+            for key in unset_fields:
+                update_data.pop(key, None)
+        operation = {"$set": update_data}
+        if unset_fields:
+            operation["$unset"] = {key: "" for key in unset_fields}
         old_file = await self.find_file(id)
         if self.is_multi_db:
             success = await self.multi_db_manager.update_one_across_databases(
                 self.collection_name,
                 {"_id": id},
-                {"$set": update_data},
+                operation,
                 upsert=upsert
             )
             if success:
@@ -755,7 +777,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 await self.cache_invalidator.invalidate_all_search_results()
             return success
 
-        success = await super().update(id, update_data, upsert)
+        success = await super().update(id, update_data, upsert, unset_fields=unset_fields)
 
         if success:
             if old_file:

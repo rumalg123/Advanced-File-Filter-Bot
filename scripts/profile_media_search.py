@@ -94,6 +94,7 @@ def profile(
     include_index_stats: bool = False,
     offsets: tuple[int, ...] = (0,),
     compare_legacy_sort: bool = False,
+    indexed_tokens: bool = False,
 ) -> dict:
     """Perform bounded, explain-only reads for stable and legacy page plans."""
     if (not offsets or len(set(offsets)) > MAX_PROFILE_OFFSETS
@@ -114,6 +115,7 @@ def profile(
         "offsets": list(offsets),
         "sort": {"indexed_at": -1, "_id": -1},
         "max_time_ms": max_time_ms,
+        "indexed_tokens": indexed_tokens,
         "queries": [],
     }
     if include_index_stats:
@@ -133,7 +135,8 @@ def profile(
     for query in queries:
         normalized = normalize_query(query)
         # Exactly the same filter compiler used by the Telegram media search.
-        predicate = build_media_search_filter(normalized, use_caption=use_caption)
+        predicate = build_media_search_filter(normalized, use_caption=use_caption,
+                                             indexed_tokens=indexed_tokens)
         row = {
             "query_id": hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12],
             "token_count": len(normalized.split()),
@@ -210,6 +213,8 @@ def main() -> None:
                         help="Read index usage counters without modifying indexes")
     parser.add_argument("--allow-remote", action="store_true",
                         help="Explicit acknowledgement to profile a remote MongoDB")
+    parser.add_argument("--indexed-tokens", action="store_true",
+                        help="Profile the optional versioned candidate prefilter")
     args = parser.parse_args()
 
     offsets = tuple(args.offset or (0,))
@@ -244,6 +249,7 @@ def main() -> None:
             include_counts=args.include_counts,
             include_index_stats=args.index_stats,
             offsets=offsets, compare_legacy_sort=args.compare_legacy_sort,
+            indexed_tokens=args.indexed_tokens,
         )
         print(json.dumps(report, indent=2, sort_keys=True))
 

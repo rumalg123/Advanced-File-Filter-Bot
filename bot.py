@@ -98,6 +98,7 @@ class BotConfig:
         'FEATURE_RECENT_FILES': ('features', 'feature_recent_files'),
         'FEATURE_RECOMMENDATION_EXPLANATIONS': ('features', 'feature_recommendation_explanations'),
         'FEATURE_CONTENT_DASHBOARD': ('features', 'feature_content_dashboard'),
+        'FEATURE_INDEXED_MEDIA_SEARCH': ('features', 'feature_indexed_media_search'),
         'PREMIUM_DURATION_DAYS': ('features', 'premium_duration_days'),
         'NON_PREMIUM_DAILY_LIMIT': ('features', 'non_premium_daily_limit'),
         'PREMIUM_PRICE': ('features', 'premium_price'),
@@ -192,6 +193,7 @@ class BotConfig:
         self.FEATURE_RECENT_FILES = self._settings.features.feature_recent_files
         self.FEATURE_RECOMMENDATION_EXPLANATIONS = self._settings.features.feature_recommendation_explanations
         self.FEATURE_CONTENT_DASHBOARD = self._settings.features.feature_content_dashboard
+        self.FEATURE_INDEXED_MEDIA_SEARCH = self._settings.features.feature_indexed_media_search
 
         # Limits
         self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days

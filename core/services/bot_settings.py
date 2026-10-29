@@ -76,6 +76,11 @@ class BotSettingsService:
             'type': 'bool', 'default': False,
             'description': 'Show recommendation reasons', 'category': 'features'
         },
+        'FEATURE_INDEXED_MEDIA_SEARCH': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable indexed word candidates after search-token backfill',
+            'category': 'features'
+        },
         'FEATURE_CONTENT_DASHBOARD': {
             'type': 'bool', 'default': False,
             'description': 'Enable the admin content dashboard', 'category': 'features'

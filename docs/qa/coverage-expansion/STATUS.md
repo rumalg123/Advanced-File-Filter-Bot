@@ -61,3 +61,13 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
 - **Live passed:** all 61 settings details across eight pages rendered through
   the real bot after callback-ack remediation. Edit/cancel and mutations are
   being exercised separately using actual current keyboard buttons.
+
+- **PH-006 candidate implementation passed local QA:** optional, default-off
+  versioned word candidates preserve the existing final matcher. Eight complete
+  result-set comparisons on 96,913 records matched, with representative title
+  queries improving from 2.7–4.4s to 1–46ms. Metadata-only paths retain legacy
+  performance. Bounded backfill, edit invalidation and older-image rollback are
+  documented in `docs/INDEXED_MEDIA_SEARCH.md`. Remote p95 remains unmeasured.
+- **Live settings edit passed:** invalid integer rejected without persistence,
+  valid edit saved, cancel cleared the pending edit; all eleven pre-existing
+  optional feature flags were enabled through real current keyboard buttons.
