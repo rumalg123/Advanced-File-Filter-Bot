@@ -225,7 +225,7 @@ class HandlerManager:
             # Step 2: Cancel background tasks
             background_tasks = list(self.background_tasks)
             for task in background_tasks:
-                if not task.done():
+                if not task.done() and not task.cancelling():
                     task.cancel()
                     self.stats['tasks_cancelled'] += 1
 

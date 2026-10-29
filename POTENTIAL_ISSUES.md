@@ -17,6 +17,9 @@
   periodic refresh and ignored removal after re-registration. Channel refreshes
   now remove through the manager, and re-adding clears old removal markers.
   Five refresh cycles and the empty-channel transition retain accurate tracking.
+- Shutdown QA also exposed double-counted cancellations for named tasks that
+  were visited again as background tasks. Already-cancelling tasks are now
+  skipped in the second pass; a one-worker regression requires one cancellation.
 - Rollback: revert the lifecycle-fix commit; no data/schema changes are involved.
 
 ## 1. Missing `# noqa` comments for `create_background_task`

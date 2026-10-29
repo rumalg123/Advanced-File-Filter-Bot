@@ -89,3 +89,13 @@ async def test_standalone_service_owns_and_closes_tasks():
     assert task in service.pending
     await service.close()
     assert task.cancelled() and not service.pending
+
+
+@pytest.mark.asyncio
+async def test_shutdown_counts_a_named_background_task_cancel_only_once():
+    manager=HandlerManager(SimpleNamespace())
+    task=manager.create_background_task(asyncio.sleep(3600),name='named-worker')
+    await asyncio.sleep(0)
+    await manager.cleanup()
+    assert task.cancelled()
+    assert manager.stats['tasks_cancelled']==1
