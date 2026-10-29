@@ -28,7 +28,7 @@ The following options remain subject to a separate approved architecture design,
 
 ## Verification gates
 
-- [ ] Full Python + disposable MongoDB/dual Redis and Docker/Compose CI on the code SHA.
+- [x] Full Python regression, disposable MongoDB/dual Redis and Docker/Compose preflight **passed** on code SHA `01be21f3` ([CI run 40823704857](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40823704857)). Global ownership design remains incomplete despite passing tests.
 - [ ] Two local-only MongoDB databases with identical `_id`, `file_unique_id` and `file_ref` values produce collision counts, with no index/document changes; no raw identifiers appear in report.
 - [ ] Cap exceeded, unavailable DB, and duplicate owner always fail visibly. No misleading clean scan or default-off production changes.
 - [ ] Two-DB `save_media` path refuses creation **before selecting a write pool or inserting**; one-DB path continues to create media normally.
