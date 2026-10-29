@@ -109,3 +109,38 @@ async def test_handler_manager_preserves_dispatcher_group_during_cleanup():
     assert bot.removed == [(handler, 10)]
     assert manager.handlers == []
     assert manager.handler_groups == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('filters_disabled', [True,False])
+async def test_initialized_handler_aliases_refer_to_managed_instances(monkeypatch, filters_disabled):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock,Mock
+    from bot import MediaSearchBot
+
+    bot=object.__new__(MediaSearchBot)
+    bot.config=SimpleNamespace(DISABLE_FILTER=filters_disabled)
+    bot.handler_manager=SimpleNamespace(handler_instances={})
+    bot.indexing_service=object();bot.index_request_service=object()
+    bot.channel_repo=object();bot.connection_service=object()
+    bot._initialize_broadcast_recovery=AsyncMock()
+    paths={
+        'delete':'handlers.delete.DeleteHandler',
+        'command':'handlers.commands.CommandHandler',
+        'filestore':'handlers.filestore.FileStoreHandler',
+        'indexing':'handlers.indexing.IndexingHandler',
+        'channel':'handlers.channel.ChannelHandler',
+        'request':'bot.RequestHandler',
+        'features':'handlers.features.FeatureHandler',
+        'search':'handlers.search.SearchHandler',
+        'database':'handlers.commands_handlers.database.DatabaseCommandHandler',
+        'connection':'handlers.connection.ConnectionHandler',
+        'filter':'handlers.filter.FilterHandler',
+    }
+    instances={name:object() for name in paths}
+    for name,path in paths.items():monkeypatch.setattr(path,Mock(return_value=instances[name]))
+    await bot._initialize_handlers()
+    expected=set(paths)-({'connection','filter'} if filters_disabled else set())
+    assert set(bot.handler_manager.handler_instances)==expected
+    for name in expected:
+        assert getattr(bot,name+'_handler',None) is instances[name]

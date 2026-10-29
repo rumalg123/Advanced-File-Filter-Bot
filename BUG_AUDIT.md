@@ -51,6 +51,12 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 ## Verification log
 
+- 2026-10-29 live QA: `/add_channel` raised `AttributeError` because managed
+  startup never populated the bot's public handler references. All configured
+  handler aliases now point to the same instances owned by `HandlerManager`.
+  Added startup regressions with filter support enabled and disabled. No data
+  changes; rollback is a code revert.
+
 - 2026-10-29: Operator requested latest published `wzgram` rather than the
   historical Git pin. Both dependency manifests now use `wzgram`. The rebuilt
   Python 3.13 image resolved version 3.1.5; all 456 tests passed with real

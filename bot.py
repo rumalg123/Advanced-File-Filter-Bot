@@ -478,6 +478,7 @@ class MediaSearchBot(Client):
             # Register all handlers through manager
             for name, handler in handlers_config:
                 self.handler_manager.handler_instances[name] = handler
+                setattr(self, f"{name}_handler", handler)
                 logger.info(f"Registered handler: {name}")
 
             # Add filter handlers if enabled
@@ -492,6 +493,7 @@ class MediaSearchBot(Client):
 
                 for name, handler in filter_handlers:
                     self.handler_manager.handler_instances[name] = handler
+                    setattr(self, f"{name}_handler", handler)
                     logger.info(f"Registered filter handler: {name}")
 
             logger.info(f"Total handlers initialized: {len(self.handler_manager.handler_instances)}")
