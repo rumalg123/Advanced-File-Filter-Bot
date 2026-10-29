@@ -1152,7 +1152,9 @@ class MultiDatabaseManager:
                 )
                 
                 # Update database info
-                db_info.size_gb = stats.get('dataSize', 0) / (1024 ** 3)  # Convert to GB
+                # Logical capacity includes indexes, including the coordinator
+                # registry's indexes; compressed physical allocation differs.
+                db_info.size_gb = (stats.get('dataSize', 0) + stats.get('indexSize', 0)) / (1024 ** 3)
                 db_info.files_count = files_count
                 
                 # If database was inactive due to circuit breaker, mark as active
