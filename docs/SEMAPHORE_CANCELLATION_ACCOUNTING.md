@@ -1,7 +1,6 @@
 # PH-019: Cancellation-safe semaphore accounting
 
-**Status:** Code and tests committed to the existing hardening branch; staging
-validation required before Verified. Draft PR #4 remains unmerged.
+**Status:** Full code CI passed ([run 40815817623](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40815817623)); staging validation required before Verified. Draft PR #4 remains unmerged.
 
 ## Root cause
 
@@ -73,8 +72,9 @@ configuration or stored document changes. The semaphore admission API
 and per-domain limits remain unchanged, so the fix is deployable without
 database migration.
 
-- [ ] Full Python regression suite, compile/lint, real disposable MongoDB/
-      dual Redis and Docker/Compose preflight pass on the code SHA.
+- [x] Full Python regression suite, compile/lint, real disposable MongoDB/
+      dual Redis and Docker/Compose preflight passed at code SHA `cb333907`
+      ([CI run 40815817623](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40815817623)).
 - [ ] Inject cancellation and timeouts in isolated staging under high
       Telegram/database load; observe `current_active >= 0`,
       `queue_length >= 0`, `peak_concurrent <= configured limit`
