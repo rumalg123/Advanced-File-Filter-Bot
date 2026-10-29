@@ -23,7 +23,7 @@ async def test_flood_wait_releases_slot_and_other_chat_can_send(monkeypatch):
         attempts += 1
         if attempts == 1:
             initial.set()
-            raise FloodWait(value=0.3)
+            raise FloodWait(value=1)
         return "delivered"
 
     async def send_message():
@@ -63,7 +63,7 @@ async def test_shared_chat_cooldown_stops_retry_stampede_without_using_slots(mon
         attempted.append(marker)
         if marker == "first" and attempted.count("first") == 1:
             first_flooded.set()
-            raise FloodWait(value=0.2)
+            raise FloodWait(value=1)
         return marker
 
     first = asyncio.create_task(wrapper.call_api(send_message, "first", chat_id=44))
