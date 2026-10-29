@@ -1,5 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple
 import os
+import math
+import re
 
 from core.cache.redis_cache import CacheManager
 from repositories.bot_settings import BotSettingsRepository
@@ -14,12 +16,15 @@ class BotSettingsService:
     # Define all configurable settings with their metadata
     SETTINGS_METADATA = {
         'PORT': {
+            'min': 1,
+            'max': 65535,
             'type': 'int',
             'default': 8000,
             'description': 'Web server port',
             'category': 'server'
         },
         'CACHE_TIME': {
+            'min': 1,
             'type': 'int',
             'default': 300,
             'description': 'Search-result cache expiration in seconds (restart required)',
@@ -118,6 +123,7 @@ class BotSettingsService:
             'category': 'channels'
         },
         'MAX_BTN_SIZE': {
+            'min': 1,
             'type': 'int',
             'default': 12,
             'description': 'Maximum buttons per page',
@@ -142,6 +148,7 @@ class BotSettingsService:
             'category': 'database'
         },
         'DATABASE_SIZE_LIMIT_GB': {
+            'min': 1e-09,
             'type': 'float',
             'default': 0.5,
             'description': 'Database size limit in GB for auto-switching',
@@ -238,6 +245,7 @@ class BotSettingsService:
             'category': 'customization'
         },
         'WORKERS': {
+            'min': 1,
             'type': 'int',
             'default': 50,
             'description': 'Number of worker threads',
@@ -264,6 +272,7 @@ class BotSettingsService:
             'max': 36500,
         },
         'NON_PREMIUM_DAILY_LIMIT': {
+            'min': 0,
             'type': 'int',
             'default': 10,
             'description': 'Daily file limit for non-premium users',
@@ -276,6 +285,7 @@ class BotSettingsService:
             'category': 'premium'
         },
         'MESSAGE_DELETE_SECONDS': {
+            'min': 0,
             'type': 'int',
             'default': 300,
             'description': 'Auto-delete messages after seconds',
@@ -409,10 +419,11 @@ class BotSettingsService:
             if key in db_settings:
                 stored_value = db_settings[key].value
                 try:
+                    stored_value = self._parse_value(stored_value, metadata['type'], strict=True)
                     stored_value = self._validate_value_bounds(
                         key, stored_value, metadata
                     )
-                except ValueError as error:
+                except (ValueError, TypeError) as error:
                     logger.warning(
                         f"Ignoring invalid stored setting {key}: {error}"
                     )
@@ -456,7 +467,7 @@ class BotSettingsService:
         metadata = self.SETTINGS_METADATA[key]
 
         # Validate and parse value
-        parsed_value = self._parse_value(value, metadata['type'])
+        parsed_value = self._parse_value(value, metadata['type'], strict=True)
         parsed_value = self._validate_value_bounds(key, parsed_value, metadata)
 
         return await self.settings_repo.set_setting(
@@ -495,8 +506,31 @@ class BotSettingsService:
             description=metadata['description']
         )
 
-    def _parse_value(self, value: Any, value_type: str) -> Any:
+    def _parse_value(self, value: Any, value_type: str, *, strict: bool = False) -> Any:
         """Parse value based on type"""
+        if strict:
+            if value_type == 'int':
+                if isinstance(value, bool) or not isinstance(value, (str, int)):
+                    raise ValueError("Expected an integer")
+                if isinstance(value, str) and not re.fullmatch(r"[+-]?[0-9]+", value.strip()):
+                    raise ValueError("Expected an integer")
+            elif value_type == 'float':
+                try:
+                    parsed = float(value)
+                except (ValueError, TypeError, OverflowError) as error:
+                    raise ValueError("Expected a finite number") from error
+                if isinstance(value, bool) or not math.isfinite(parsed):
+                    raise ValueError("Expected a finite number")
+                return parsed
+            elif value_type == 'bool':
+                if isinstance(value, bool):
+                    return value
+                text = str(value).strip().lower()
+                if text in {'true', 'yes', '1', 'enable', 'enabled', 'y', 'on'}:
+                    return True
+                if text in {'false', 'no', '0', 'disable', 'disabled', 'n', 'off'}:
+                    return False
+                raise ValueError("Expected true or false")
         if value_type == 'int':
             if not value:
                 return 0
@@ -566,8 +600,10 @@ class BotSettingsService:
         for key, data in settings.items():
             if key in self.SETTINGS_METADATA:
                 try:
-                    await self.update_setting(key, data.get('value'))
-                    success_count += 1
+                    if await self.update_setting(key, data.get('value')):
+                        success_count += 1
+                    else:
+                        failed_count += 1
                 except Exception as e:
                     logger.error(f"Failed to import setting {key}: {e}")
                     failed_count += 1

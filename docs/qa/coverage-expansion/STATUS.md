@@ -52,3 +52,12 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   consistent with zero remaining days and the documented future-expiry policy.
   Validation/permissions/premium/access boundary suites pass; 49 new validation
   cases cover public inputs and remote permission outcomes.
+
+- **Passed QA:** settings writes now reject malformed integers/booleans,
+  non-finite floats and unsafe numeric bounds instead of silently persisting
+  zero/false. Legacy invalid stored values fall back without rewriting records;
+  imports count only acknowledged writes. Nineteen new pre-fix failures were
+  reproduced; 60 focused settings/config/access cases pass.
+- **Live passed:** all 61 settings details across eight pages rendered through
+  the real bot after callback-ack remediation. Edit/cancel and mutations are
+  being exercised separately using actual current keyboard buttons.
