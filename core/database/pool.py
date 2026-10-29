@@ -64,10 +64,19 @@ class DatabaseConnectionPool:
                     waitQueueTimeoutMS=10000 if 'uvloop' in sys.modules else 5000,
                     waitQueueMultiple=4 if 'uvloop' in sys.modules else 2,
                 )
-                self._database = self._client[database_name]
-
-                # Test connection
-                await self._test_connection()
+                try:
+                    self._database = self._client[database_name]
+                    await self._test_connection()
+                except BaseException:
+                    # A failed/cancelled ping must not turn the next startup
+                    # into a successful no-op against an unusable client.
+                    client, self._client = self._client, None
+                    self._database = None
+                    try:
+                        client.close()
+                    except Exception:
+                        logger.exception("Failed to close incomplete MongoDB client")
+                    raise
                 if 'uvloop' in sys.modules:
                     logger.info(f"Database pool initialized with uvloop optimizations (pool size: {self._pool_size})")
                 else:
@@ -101,21 +110,16 @@ class DatabaseConnectionPool:
 
     async def close(self) -> None:
         """Close the connection pool properly"""
-        if self._client:
-            try:
-                # Close all connections in the pool
-                self._client.close()
-
-                # Wait for pending operations to complete
-                await asyncio.sleep(0.1)
-
-                self._client = None
-                self._database = None
-                logger.info("Database connection pool closed")
-            except Exception as e:
-                logger.error(f"Error closing database pool: {e}")
-                self._client = None
-                self._database = None
+        async with self._lock:
+            client, self._client = self._client, None
+            self._database = None
+            if client is not None:
+                try:
+                    client.close()
+                    await asyncio.sleep(0.1)
+                    logger.info("Database connection pool closed")
+                except Exception as e:
+                    logger.error(f"Error closing database pool: {e}")
 
     async def get_collection(self, name: str):
         """Get a collection from the database"""

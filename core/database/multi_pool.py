@@ -128,25 +128,33 @@ class MultiDatabaseManager:
             if len(uris) != len(names):
                 raise ValueError("Number of URIs and names must match")
 
-            # Initialize database connections
-            for i, (uri, name) in enumerate(zip(uris, names)):
-                pool = DatabaseConnectionPool.create_isolated()
-                
-                await pool.initialize(uri, name)
-                
-                db_info = DatabaseInfo(
-                    uri=uri,
-                    name=name,
-                    pool=pool,
-                    is_active=True
+            # Publish the topology only after every configured pool is ready.
+            # A retry must never accept a leftover primary as a complete setup.
+            opened_pools = []
+            topology = []
+            try:
+                for i, (uri, name) in enumerate(zip(uris, names)):
+                    pool = DatabaseConnectionPool.create_isolated()
+                    opened_pools.append(pool)
+                    await pool.initialize(uri, name)
+                    topology.append(DatabaseInfo(
+                        uri=uri, name=name, pool=pool, is_active=True,
+                    ))
+                    logger.info(
+                        f"Initialized database {i+1}: {name} "
+                        f"({'Primary' if i == 0 else 'Secondary'})"
+                    )
+                self.databases = topology
+                await self._update_database_stats_with_circuit_breaker()
+            except BaseException:
+                self.databases = []
+                self.current_write_db_index = 0
+                await asyncio.gather(
+                    *(pool.close() for pool in opened_pools),
+                    return_exceptions=True,
                 )
-                
-                self.databases.append(db_info)
-                logger.info(f"Initialized database {i+1}: {name} ({'Primary' if i == 0 else 'Secondary'})")
+                raise
 
-            # Update database statistics with circuit breaker protection
-            await self._update_database_stats_with_circuit_breaker()
-            
             logger.info(f"Multi-database manager initialized with {len(self.databases)} databases")
 
     def apply_runtime_settings(
