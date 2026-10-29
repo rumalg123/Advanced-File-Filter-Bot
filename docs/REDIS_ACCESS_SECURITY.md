@@ -137,7 +137,7 @@ authentication fails. Prefer fixing credentials/reachability instead.
 - [x] Distinct cache/state credentials; no passwords/ACL files committed
 - [x] Optional Docker Compose secret mounts; no Redis ports published
 - [x] Unit tests and real authenticated-Redis smoke test added in CI
-- [ ] **Full CI passed** for final PH-010 branch state
+- [x] **Full CI passed** on [run 40800650194](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40800650194): pytest/MongoDB/dual Redis, Redis ACL smoke, Compose validation and production Docker build
 - [ ] Real staging authenticated cutover and restart/rollback completed
 - [ ] Host ingress/networks verified by operator, credential rotation planned
 - [ ] PH-003 protected Redis migration interaction tested if enabled
