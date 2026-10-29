@@ -9,6 +9,7 @@ from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from core.utils.quota_delivery import settle_delivery_quota, bulk_delivery_quota
+from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 from repositories.user import UserStatus
@@ -332,7 +333,11 @@ class DeepLinkHandler(BaseCommandHandler):
 
             # Batch fetch all files in one query instead of N individual queries
             file_unique_ids = [f['file_unique_id'] for f in files_data]
-            files_map = await self.bot.media_repo.find_files_batch(file_unique_ids)
+            try:
+                files_map = await self.bot.media_repo.find_files_batch(file_unique_ids)
+            except SearchBackendUnavailableError:
+                await sending_file_msg.edit_text(FILE_LOOKUP_RETRY_MESSAGE)
+                return
 
             success_count = 0
             for file_data in files_data:

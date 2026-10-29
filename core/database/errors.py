@@ -2,6 +2,7 @@
 
 
 SEARCH_RETRY_MESSAGE = "Search temporarily unavailable. Please try again shortly."
+FILE_LOOKUP_RETRY_MESSAGE = "Files temporarily unavailable. Please try again shortly."
 
 
 class SearchBackendUnavailableError(RuntimeError):

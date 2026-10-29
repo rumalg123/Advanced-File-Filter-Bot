@@ -128,3 +128,14 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   delivery succeeded. All eleven optional feature flows were replayed; favorites,
   collections and dashboard now read across the activated topology. `/verify`
   again reported 100/100. This score measures manager alignment, not code coverage.
+
+- **Batch outage UX passed:** two pre-fix handler failures reproduced an
+  unhandled backend error. Deep-link batches now edit the progress response to
+  a safe retry message and refund all definitely unsent quota; favorites/recent
+  lists report temporary unavailability instead of missing content. Focused
+  quota, feature and multi-source delivery suites pass.
+- **Live dedicated channel passed:** because the supplied shared channel also
+  has the DELETE_CHANNEL role, a temporary isolated channel was created for
+  automatic indexing. Its distinct document was persisted, found and delivered
+  to the normal account. The real Send All callback delivered all three test
+  documents across the secondary sources. Temporary chat cleanup is tracked.

@@ -55,6 +55,31 @@ async def test_missing_media_is_definitely_unsent_not_uncertain(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_batch_backend_outage_edits_status_and_refunds_unsent_quota():
+    from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE
+    handler,repo,reservation,message=fixture()
+    progress=SimpleNamespace(edit_text=AsyncMock())
+    message.reply_text.return_value=progress
+    handler.bot.media_repo.find_files_batch.side_effect=SearchBackendUnavailableError('private backend details')
+    await handler._send_all_from_search(SimpleNamespace(),message,'owned-search')
+    progress.edit_text.assert_awaited_once_with(FILE_LOOKUP_RETRY_MESSAGE)
+    repo.settle_quota_delivery.assert_awaited_once_with(42,reservation,0,uncertain=False)
+
+
+@pytest.mark.asyncio
+async def test_feature_file_list_outage_does_not_claim_files_are_missing():
+    from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE
+    from handlers.features import FeatureHandler
+    handler=object.__new__(FeatureHandler)
+    handler.bot=SimpleNamespace(media_repo=SimpleNamespace(find_files_batch=AsyncMock(
+        side_effect=SearchBackendUnavailableError('private backend details'))))
+    handler._reply_with_cleanup=AsyncMock()
+    message=SimpleNamespace()
+    await handler._send_file_list(message,'Favorites',['one'])
+    handler._reply_with_cleanup.assert_awaited_once_with(message,FILE_LOOKUP_RETRY_MESSAGE)
+
+
+@pytest.mark.asyncio
 async def test_batch_cancel_before_send_refunds_reservation():
     handler, repo, reservation, message = fixture()
     with pytest.raises(asyncio.CancelledError):

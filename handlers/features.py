@@ -3,6 +3,8 @@
 import html
 import shlex
 
+from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE
+
 from pyrogram import Client, filters
 from pyrogram.errors import InputUserDeactivated, PeerIdInvalid, UserIsBlocked
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
@@ -188,7 +190,11 @@ class FeatureHandler(BaseHandler):
         collection_name: str | None = None,
         removal_action: str | None = None
     ) -> None:
-        files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
+        try:
+            files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
+        except SearchBackendUnavailableError:
+            await self._reply_with_cleanup(message, FILE_LOOKUP_RETRY_MESSAGE)
+            return
         files = [
             files_by_id[file_id]
             for file_id in file_ids[:20]
