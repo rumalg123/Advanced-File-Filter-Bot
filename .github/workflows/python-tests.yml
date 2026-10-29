@@ -128,7 +128,9 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/generate_redis_acl.py
-          trap 'docker rm -f ph010-ci-redis >/dev/null 2>&1 || true; rm -rf .secrets' EXIT
+          # The earlier Compose-preflight step removes its temporary .env.
+          printf 'API_ID=1\nAPI_HASH=ci-placeholder\nBOT_TOKEN=123456:ci-placeholder\nDATABASE_URI=mongodb://127.0.0.1:27017/ci\n' > .env
+          trap 'docker rm -f ph010-ci-redis >/dev/null 2>&1 || true; rm -rf .secrets; rm -f .env' EXIT
           docker compose -f docker-compose.yml -f docker-compose.redis-auth.yml \
             --profile protected-state config --quiet
           docker run -d --name ph010-ci-redis \
