@@ -1,6 +1,6 @@
 # PH-025: Locate exactly one owning MongoDB before an update
 
-**Status:** Code and tests on the existing hardening branch, Draft PR #4. CI/staging pending. **Production still uses one MongoDB database. Do not enable multi-database mode.**
+**Status:** Code and tests on the existing hardening branch, Draft PR #4. CI passed at SHA `6b7e64bf`; staging pending. **Production still uses one MongoDB database. Do not enable multi-database mode.**
 
 ## Root cause
 
@@ -30,7 +30,7 @@ PH-027 must still handle comprehensive multi-DB read/count failures and caching.
 
 ## Verification checklist
 
-- [ ] Full Python + disposable MongoDB/Redis CI and Docker/Compose preflight pass on tested SHA.
+- [x] Full Python regression, disposable MongoDB/dual Redis, compile/lint and Docker/Compose preflight passed at SHA `6b7e64bf` ([run 40822577874](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40822577874), attempt 2). Docker Hub returned HTTP 500 resolving the existing Python base image on attempt 1; the failed job was retried successfully without changing code or Dockerfile.
 - [ ] On two isolated databases, match only DB B: only B updated; DB A untouched. A matched no-op still succeeds.
 - [ ] Deliberate duplicate owner in A and B raises before *either* update.
 - [ ] Multi-DB upsert for unknown ID fails without creating records. Single-DB upsert behaves as before; multi-DB upsert for existing owner updates only that owner.
