@@ -9,7 +9,7 @@ runbook; production has not been stopped or changed.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The final-source QA passed 774 tests and real-account workflows. Whole-tree
+The final-source QA passed 776 tests and real-account workflows. Whole-tree
 coverage is 67.30% lines / 52.92% branches. Sustained production load, cloud
 restore and production-specific configuration/index checks remain release
 gates; 100% coverage is not the sole definition of production readiness.
@@ -26,10 +26,14 @@ Recommended initial scope:
   headroom, validate backfill/plans during maintenance before enabling it.
 - Release a validated application image and dependency set, retaining an archive
   outside Docker for rollback. The earlier QA image is no longer on this QA
-  host. The rebuilt `file-filter-bot:cutover-candidate-20261029` passed 774 tests. Its
+  host. The rebuilt `file-filter-bot:cutover-candidate-v2-20261029` passed 776 tests. Its
   [identity and checks](qa/coverage-expansion/cutover-candidate-checks.json) and
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
+
+For the exact two-service stack supplied by the operator, use the
+[production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including
+private Atlas credentials, native build and rollback commands.
 
 ## Before stopping production
 
@@ -256,11 +260,11 @@ implicit image pull:
 ```yaml
 services:
   file-filter-bot:
-    image: file-filter-bot:cutover-candidate-20261029
+    image: file-filter-bot:cutover-candidate-v2-20261029
     pull_policy: never
 ```
 
-Load it with `sudo docker image load --input file-filter-bot-cutover-20261029.tar.gz`
+Load it with `sudo docker image load --input file-filter-bot-cutover-v2-20261029.tar.gz`
 from the directory holding the transferred archive. Use the updated, reviewed
 production checkout and its non-secret Redis configs; Compose bind mounts those
 configs from the host. Include the release override when starting services and
@@ -272,7 +276,7 @@ sudo docker compose -f docker-compose.yml -f /secure/releases/compose.release.ym
 sudo docker compose -f docker-compose.yml -f /secure/releases/compose.release.yml --profile protected-state up -d --no-build file-filter-bot
 ```
 
-Apply the production environment settings below before starting. These examples
+Apply the production environment settings above before starting. These examples
 assume the repository's base Compose deployment; adapt the reviewed file/project
 selection to the actual deployment and include the ACL overlay if selected.
 

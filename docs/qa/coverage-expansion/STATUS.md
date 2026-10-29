@@ -1,13 +1,13 @@
 # Final-source QA and remaining coverage
 
-QA date: 2026-10-29. Application source: `325e458` (documentation follows).
+QA date: 2026-10-29. Application source: `850bc31` (documentation follows).
 The operator authorized all supplied MongoDB copies, extra commented sources,
 two user sessions and declared QA chats. Original server containers were left
 running. No push, merge or production deployment was performed.
 
 ## Result
 
-**774 tests passed, zero failed/skipped**, using disposable MongoDB and two
+**776 tests passed, zero failed/skipped**, using disposable MongoDB and two
 separate Redis instances on the rebuilt wzgram 3.1.5 runtime. The warning audit
 identified 22 Redis `setex` deprecation/aiohttp app-key notices; no resource-leak
 warning was observed. Compile, undefined-name Ruff, dependency consistency,
@@ -181,7 +181,7 @@ pre-fix failures and five post-fix capacity cases include real MongoDB. Both
 fixes are separate commits.
 
 The new image's Python and deployment files match the tested source; all runtime
-dependencies match the 774-test runner. Its identity, checks and archive checksum
+dependencies match the 776-test runner. Its identity, checks and archive checksum
 are in [candidate evidence](cutover-candidate-checks.json). Earlier QA image
 availability statements describe their original checkpoint; that image was no
 longer available when this follow-up started. The new candidate was rebuilt and
@@ -190,3 +190,22 @@ archived independently of Docker. No image was pushed or production deployed.
 Current coverage is conservatively source-matched: older live execution of the
 changed multi-database module is discarded. Its percentage can therefore decrease
 after a fix despite more passing tests. No uncovered file was excluded.
+
+## Supplied production Compose and startup follow-up
+
+The operator supplied the actual two-service production Compose and confirmed
+Atlas Free is external. The [exact operator commands](../../PRODUCTION_FROM_EXISTING_COMPOSE.md)
+preserve project/data volumes, save the old image/configuration and Atlas dump,
+select the hardening branch, reset only the verified Redis volume and perform
+health/readiness/smoke checks. These commands were prepared, not run on production.
+
+BUG-061 reproduced two Docker setup failures: attempted package changes with a
+successful installer and startup failure when the installer is unavailable.
+Docker startup now uses the image dependencies. Both regressions passed, the
+full suite passed 776 tests, and the new image passed offline setup plus a default
+entrypoint smoke with a stub bot. No Telegram/Atlas activity occurred in that
+stub smoke. MongoDB Tools JSON/YAML credentials and isolated dump/restore were
+validated on local disposable data using the host UID for private-file access.
+The V2 candidate supersedes the earlier candidate and has a separately verified
+archive; the earlier artifact is historical. A native production build remains
+the default in the exact command guide, avoiding architecture assumptions.

@@ -43,7 +43,7 @@
   ],
   "combined_percent": 63.71856699965553,
   "policy": "Only files with identical start/end/current SHA256 are accepted.",
-  "application_commit": "325e458f3c000c94d71d7b5d5a6f8a51e3f8a3be",
+  "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",
   "all_tracked_application_files_retained": true,
   "empty_execution_files_retained": true,
   "source_sha256": {

@@ -10,9 +10,9 @@
   "nonroot": true,
   "env_file_absent": true,
   "runtime_distributions_sha256": "638322aaf6edeb6a0e04be860270550e76ab815985ba53eef9151d7ed650005b",
-  "image": "file-filter-bot:cutover-candidate-20261029",
-  "image_id": "sha256:96d059c5eeea23bc28c5a30beb015a58bd130c5ac2ad903477f4b4c9e3dbf9f0",
-  "application_commit": "325e458f3c000c94d71d7b5d5a6f8a51e3f8a3be",
+  "image": "file-filter-bot:cutover-candidate-v2-20261029",
+  "image_id": "sha256:9b9f45a4d61adebde47c08c7a4eb95e772f984fa9f3e94ba689d760ef0cb17d0",
+  "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",
   "application_files": 118,
   "image_matches_tested_source": true,
   "runtime_dependencies_match_suite_runner": true,
@@ -21,12 +21,12 @@
     "redis-state.conf": "de083fbe185f750c2b98ea58b55dc0bdb7f405e137a85f70f72c731b9b85f8ac",
     "Dockerfile": "52c6739abb474fd2415de965514461107073cc3d38775f7d965e1f1cc69390cc",
     "requirements.txt": "150ec332e056bcbd658cd5656011792e44801bfcdf4bdec7b6eabbf5d1491faa",
-    "start.sh": "bf8fda8bc1c8c8557c9ad87eb524b3b6ca1ac9a8c88249a83123fd4ae115b163",
+    "start.sh": "f1f1814648886f1ed30efc0ad6c9668be983155814726a9407cd3d9c3b886559",
     "docker-compose.yml": "5d690c8ca2d4ab5e0f40b7e6bdae720e618685dac91f7bcb279eb72bbee4365e",
     "scripts/test_redis_compose_network.sh": "487f9598a9a7c44f25f8c854b2ceb1e7b6e0f6b661946158c5f7e68d94386395"
   },
   "tests": {
-    "passed": 774,
+    "passed": 776,
     "failed": 0,
     "skipped": 0,
     "warnings": 22
@@ -36,7 +36,12 @@
   "ruff_undefined_names": true,
   "compose_configuration": true,
   "redis_separate_container_default_and_acl": true,
-  "archive_sha256": "60ddca3e0c34da6fb6cc262091c04e932e6173badd3700276527fd216f8e2dfd",
+  "archive_sha256": "028088701ccc536670d356b63c8bab1b220daf9c703c3535d21a6535d6932782",
   "archive_reload_verified": true,
-  "release_compose_override_validated": true
+  "release_compose_override_validated": true,
+  "platform": "linux/arm64",
+  "archive_file": "file-filter-bot-cutover-v2-20261029.tar.gz",
+  "offline_startup_setup": true,
+  "offline_default_entrypoint_with_stub_bot": true,
+  "startup_preserves_image_dependencies": true
 }

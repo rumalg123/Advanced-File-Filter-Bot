@@ -74,7 +74,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 ## Current QA, 2026-10-29
 
-The final full suite passed **774 tests with zero failures or skips** on the
+The final full suite passed **776 tests with zero failures or skips** on the
 rebuilt wzgram 3.1.5 runtime. Real-account feature/settings, three-source media
 indexing/delivery, deep pagination and partition/recovery evidence is recorded
 in the [current QA report](docs/qa/coverage-expansion/STATUS.md). Whole-bot 100%
