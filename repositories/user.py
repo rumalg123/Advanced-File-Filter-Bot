@@ -14,6 +14,7 @@ from core.database.base import BaseRepository, AggregationMixin
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import normalize_expiry_date, is_premium_valid, get_days_remaining, is_admin
+from core.utils.quota_calendar import QuotaReservation, quota_day_utc
 
 logger = get_logger(__name__)
 
@@ -491,123 +492,52 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             logger.error(f"Batch premium expiration failed: {e}")
 
     async def increment_retrieval_count(self, user_id: int) -> int:
-        """Increment daily retrieval count using atomic operation to prevent race conditions"""
-        today = date.today()
-        today_str = today.isoformat()
-
-        # First check if we need to reset the count (new day)
-        user = await self.get_user(user_id)
-        if not user:
-            # Create the user if they don't exist
-            await self.create_user(user_id, "User")
-            user = await self.get_user(user_id)
-            if not user:
-                logger.error(f"Failed to create user {user_id}")
-                return 0
-
-        # If it's a new day, reset the count first
-        if user.last_retrieval_date != today:
-            # Reset count for new day
-            collection = await self.collection()
-            await self.db_pool.execute_with_retry(
-                collection.update_one,
-                {'_id': user_id},
-                {
-                    '$set': {
-                        'daily_retrieval_count': 1,
-                        'last_retrieval_date': today_str,
-                        'updated_at': datetime.now(UTC)
-                    }
-                }
-            )
-            await self.cache_invalidator.invalidate_user_data(user_id)
-            await self.cache_invalidator.invalidate_user_stats()
-            return 1
-
-        # Use atomic increment for same day to prevent race conditions
-        collection = await self.collection()
-        result = await self.db_pool.execute_with_retry(
-            collection.find_one_and_update,
-            {'_id': user_id},
-            {
-                '$inc': {'daily_retrieval_count': 1},
-                '$set': {
-                    'last_retrieval_date': today_str,
-                    'updated_at': datetime.now(UTC)
-                }
-            },
-            return_document=True
-        )
-
-        await self.cache_invalidator.invalidate_user_data(user_id)
-        await self.cache_invalidator.invalidate_user_stats()
-
-        if result:
-            return result.get('daily_retrieval_count', 0)
-        else:
-            logger.error(f"Failed to increment count for user {user_id}")
-        return 0
+        """Increment with atomic UTC-day rollover (legacy unbounded counter API)."""
+        return await self.increment_retrieval_count_batch(user_id, 1)
 
     async def increment_retrieval_count_batch(self, user_id: int, count: int) -> int:
-        """Increment daily retrieval count by specific amount (for batch operations)"""
-        if count <= 0:
+        """Atomically reset on UTC-day change and add a batch count.
+
+        The old read-then-reset path could lose concurrent increments after
+        midnight. A single MongoDB aggregation pipeline uses document state
+        inside one find_one_and_update, like reserve_quota_atomic.
+        """
+        if type(count) is not int or count <= 0:
             return 0
 
-        today = date.today()
-        today_str = today.isoformat()
-
-        # First check if we need to reset the count (new day)
+        today_str = quota_day_utc().isoformat()
         user = await self.get_user(user_id)
         if not user:
-            # Create the user if they don't exist
             await self.create_user(user_id, "User")
-            user = await self.get_user(user_id)
-            if not user:
-                logger.error(f"Failed to create user {user_id}")
+            if not await self.get_user(user_id):
+                logger.error("Failed to create user %s for daily retrieval tracking", user_id)
                 return 0
 
-        # If it's a new day, reset the count first
-        if user.last_retrieval_date != today:
-            # Reset count for new day and add the batch count
-            collection = await self.collection()
-            await self.db_pool.execute_with_retry(
-                collection.update_one,
-                {'_id': user_id},
-                {
-                    '$set': {
-                        'daily_retrieval_count': count,
-                        'last_retrieval_date': today_str,
-                        'updated_at': datetime.now(UTC)
-                    }
-                }
-            )
-            await self.cache_invalidator.invalidate_user_data(user_id)
-            await self.cache_invalidator.invalidate_user_stats()
-            return count
-
-        # Use atomic increment for same day with batch count
-        collection = await self.collection()
+        collection = await self.get_collection()
         result = await self.db_pool.execute_with_retry(
             collection.find_one_and_update,
             {'_id': user_id},
-            {
-                '$inc': {'daily_retrieval_count': count},
+            [{
                 '$set': {
+                    'daily_retrieval_count': {
+                        '$cond': [
+                            {'$eq': ['$last_retrieval_date', today_str]},
+                            {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, count]},
+                            count
+                        ]
+                    },
                     'last_retrieval_date': today_str,
                     'updated_at': datetime.now(UTC)
                 }
-            },
+            }],
             return_document=True
         )
-
+        if not result:
+            logger.error("Could not increment retrieval counter for user %s", user_id)
+            return 0
         await self.cache_invalidator.invalidate_user_data(user_id)
         await self.cache_invalidator.invalidate_user_stats()
-
-        if result:
-            return result.get('daily_retrieval_count', 0)
-        else:
-            logger.error(f"Failed to batch increment count for user {user_id}")
-        return 0
+        return result.get('daily_retrieval_count', 0)
 
     async def reserve_quota_atomic(self, user_id: int, requested_count: int, daily_limit: int) -> Tuple[bool, int, str]:
         """
@@ -624,7 +554,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if requested_count > daily_limit:
             return False, 0, f"Requested {requested_count} exceeds daily limit of {daily_limit}"
 
-        today_str = date.today().isoformat()
+        today_str = quota_day_utc().isoformat()
 
         # Get user to check current state
         user = await self.get_user(user_id)
@@ -673,7 +603,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             await self.cache_invalidator.invalidate_user_data(user_id)
             await self.cache_invalidator.invalidate_user_stats()
             logger.info(f"Reserved {requested_count} quota for user {user_id}, new total: {new_count}")
-            return True, requested_count, f"Reserved {requested_count} quota"
+            return True, QuotaReservation(requested_count, today_str), f"Reserved {requested_count} quota"
 
         # The guard failed because another caller consumed the remaining quota.
         fresh_user = await self.find_by_id(user_id, use_cache=False)
@@ -684,30 +614,37 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         return False, 0, f"Can only retrieve {remaining} more files today"
 
     async def release_quota(self, user_id: int, count: int) -> bool:
-        """
-        Release previously reserved quota (e.g., when files fail to send).
-        This decrements the count to give back unused quota.
+        """Refund only the UTC day on which quota was actually reserved.
+
+        QuotaReservation amounts retain their day even after subtraction in
+        bulk callback/deep-link handlers. Plain legacy ints refund only the
+        *current* UTC day. A previous-day refund never subtracts today's
+        newly reset allowance. Guard against negative counters atomically.
         """
         if count <= 0:
             return True
-
+        reserved_day = getattr(count, 'quota_day', None)
+        day_key = reserved_day or quota_day_utc().isoformat()
         collection = await self.get_collection()
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
             {
                 '_id': user_id,
-                'last_retrieval_date': date.today().isoformat(),
-                'daily_retrieval_count': {'$gte': count}
+                'last_retrieval_date': day_key,
+                'daily_retrieval_count': {'$gte': int(count)}
             },
-            {'$inc': {'daily_retrieval_count': -count}}
+            {'$inc': {'daily_retrieval_count': -int(count)}}
         )
 
         if result.modified_count > 0:
             await self.cache_invalidator.invalidate_user_data(user_id)
-            logger.info(f"Released {count} quota for user {user_id}")
+            await self.cache_invalidator.invalidate_user_stats()
+            logger.info("Released %s quota for user %s on day %s",
+                        count, user_id, day_key)
             return True
 
-        logger.warning(f"Failed to release {count} quota for user {user_id}")
+        logger.warning("Could not refund %s quota for user %s on %s (day changed or amount unavailable)",
+                       count, user_id, day_key)
         return False
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
@@ -741,7 +678,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return True, premium_msg
 
         # Check daily limit for non-premium users
-        today = date.today()
+        today = quota_day_utc()
         if user.last_retrieval_date != today:
             # New day, reset count
             return True, f"Daily limit: 0/{self.daily_limit}"
@@ -798,7 +735,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 ],
                 "active_today": [
                     {"$match": {
-                        "last_retrieval_date": date.today().isoformat()
+                        "last_retrieval_date": quota_day_utc().isoformat()
                     }},
                     {"$count": "count"}
                 ]
@@ -901,7 +838,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_PER_DAY = _feature_config.request_per_day
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
-        today = date.today()
+        today = quota_day_utc()
         today_str = today.isoformat()
 
         # Use validator utility for premium check
@@ -1052,7 +989,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_PER_DAY = _feature_config.request_per_day
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
-        today = date.today()
+        today = quota_day_utc()
         daily_count = user.daily_request_count if user.last_request_date == today else 0
 
         # Calculate warning reset time
