@@ -1,8 +1,8 @@
-"""
-Centralized Telegram API wrapper with robust flood handling and rate limiting
-"""
+"""Telegram API retries with per-attempt concurrency and bounded flood cooldowns."""
 import asyncio
+import math
 import random
+import time
 from typing import Any, Callable, Optional
 
 from pyrogram.errors import FloodWait, RPCError
@@ -14,11 +14,67 @@ logger = get_logger(__name__)
 
 
 class TelegramAPIWrapper:
-    """Wrapper for Telegram API calls with flood control and rate limiting"""
+    """Respect FloodWait while releasing send slots before retry delays.
+
+    Cooldowns are shared among callers of this wrapper in one process. This
+    is NOT a distributed Telegram account limiter across independent replicas.
+    """
+
+    MAX_COOLDOWN_SCOPES = 2048
 
     def __init__(self, max_retries: int = 3, base_delay: float = 1.0):
         self.max_retries = max_retries
         self.base_delay = base_delay
+        self._cooldowns: dict[tuple[str, int | None], float] = {}
+        self._flood_wait_events = 0
+        self._cooldown_scope_overflows = 0
+
+    def _domain(self, api_func: Callable) -> str:
+        name = getattr(api_func, '__name__', 'unknown').lower()
+        if any(word in name for word in ('send', 'copy', 'forward')):
+            return 'telegram_send'
+        if 'get' in name or 'fetch' in name:
+            return 'telegram_fetch'
+        return 'telegram_general'
+
+    def _scope(self, domain: str, chat_id: Optional[int]) -> tuple[str, int | None]:
+        # Telegram slow mode may be chat-specific. Isolate chat sends where an
+        # explicit destination is known; unknown destinations share a domain
+        # cooldown. Telegram may also issue account-wide waits, so staging
+        # must verify domain scope and official retry-after behavior.
+        return domain, chat_id if domain == 'telegram_send' and chat_id is not None else None
+
+    def _remaining_delay(self, scope: tuple[str, int | None]) -> float:
+        now = time.monotonic()
+        # Overflow fallback and unknown-chat flood waits use a domain-wide key.
+        shared = (scope[0], None)
+        deadline = max(
+            self._cooldowns.get(scope, 0),
+            self._cooldowns.get(shared, 0),
+        )
+        return max(0.0, deadline - now)
+
+    def _record_flood(self, scope: tuple[str, int | None], duration: float) -> None:
+        now = time.monotonic()
+        deadline = now + duration
+        if scope not in self._cooldowns and len(self._cooldowns) >= self.MAX_COOLDOWN_SCOPES:
+            # Remove only expired entries; do not discard a live cooldown in
+            # order to admit a retry stampede from different chat identities.
+            expired = [key for key, value in self._cooldowns.items() if value <= now]
+            for key in expired:
+                self._cooldowns.pop(key, None)
+            if len(self._cooldowns) >= self.MAX_COOLDOWN_SCOPES:
+                self._cooldown_scope_overflows += 1
+                scope = (scope[0], None)
+        self._cooldowns[scope] = max(self._cooldowns.get(scope, 0), deadline)
+        self._flood_wait_events += 1
+
+    def flood_metrics(self) -> dict:
+        return {
+            "flood_wait_events": self._flood_wait_events,
+            "cooldown_scopes": len(self._cooldowns),
+            "cooldown_scope_overflows": self._cooldown_scope_overflows,
+        }
 
     async def call_api(
         self,
@@ -27,88 +83,80 @@ class TelegramAPIWrapper:
         chat_id: Optional[int] = None,
         **kwargs
     ) -> Any:
-        """
-        Execute API call with flood protection and rate limiting
+        """Execute one Telegram attempt per semaphore admission.
 
-        Args:
-            api_func: The API function to call
-            chat_id: Optional chat ID for per-chat rate limiting
-            *args, **kwargs: Arguments passed to the API function
+        No FloodWait or 5xx backoff sleep occurs inside the Telegram
+        semaphore. Only active network attempts consume the global budget.
         """
-        # Determine operation domain for concurrency control
-        func_name = getattr(api_func, '__name__', 'unknown')
-        func_name_lower = func_name.lower()
-        if any(keyword in func_name_lower for keyword in ('send', 'copy', 'forward')):
-            domain = 'telegram_send'
-        elif 'get' in func_name_lower or 'fetch' in func_name_lower:
-            domain = 'telegram_fetch'
-        else:
-            domain = 'telegram_general'
+        domain = self._domain(api_func)
+        return await self._execute_with_retry(
+            api_func, *args, _domain=domain, _chat_id=chat_id, **kwargs
+        )
 
-        async with semaphore_manager.acquire(domain, f"{func_name}_{chat_id or 'global'}"):
-            return await self._execute_with_retry(api_func, *args, **kwargs)
-    
-    async def _execute_with_retry(self, api_func: Callable, *args, **kwargs) -> Any:
-        """Execute API call with retry logic"""
+    async def _execute_with_retry(
+        self, api_func: Callable, *args,
+        _domain: Optional[str] = None, _chat_id: Optional[int] = None,
+        **kwargs
+    ) -> Any:
+        """Retry network attempts, parking without holding a semaphore slot."""
+        domain = _domain or self._domain(api_func)
+        scope = self._scope(domain, _chat_id)
         retries = 0
-        
         while retries < self.max_retries:
+            delay = self._remaining_delay(scope)
+            if delay > 0:
+                await asyncio.sleep(delay)
+
             try:
-                result = await api_func(*args, **kwargs)
-                
-                # Log successful API call for monitoring
-                logger.debug(f"API call successful: {api_func.__name__}")
+                async with semaphore_manager.acquire(domain):
+                    # Re-check after queueing: another operation may have
+                    # entered FloodWait while this task waited for admission.
+                    # We never sleep under a permit. A new cooldown is
+                    # rechecked by the next loop iteration instead.
+                    if self._remaining_delay(scope) > 0:
+                        postpone = True
+                    else:
+                        postpone = False
+                        result = await api_func(*args, **kwargs)
+                if postpone:
+                    continue
+                logger.debug("Telegram API call successful: %s",
+                             getattr(api_func, '__name__', 'unknown'))
                 return result
-                
-            except FloodWait as e:
-                # Honor Telegram's retry_after with jitter
-                retry_after = e.value
-                jitter = random.uniform(0.1, 0.5)  # Add small random delay
-                wait_time = retry_after + jitter
-                
-                logger.warning(
-                    f"FloodWait received for {api_func.__name__}: "
-                    f"waiting {wait_time:.2f}s (retry {retries + 1}/{self.max_retries})"
-                )
-                
-                # Structured logging for monitoring
-                logger.info(f"FloodWait handling", extra={
-                    "event": "flood_wait",
-                    "api_function": api_func.__name__,
-                    "retry_after": retry_after,
-                    "wait_time": wait_time,
-                    "retry_count": retries + 1
-                })
-                
-                await asyncio.sleep(wait_time)
+
+            except FloodWait as error:
                 retries += 1
-                
-            except RPCError as e:
-                # Log RPC errors but don't retry for client errors (4xx)
-                # e.CODE contains the numeric code (e.g., 400), e.ID is the error name
-                error_code = getattr(e, 'CODE', 0) or 0
-                if 400 <= error_code < 500:
-                    logger.debug(f"Client error in {api_func.__name__}: {e}")
-                    raise e
+                retry_after = max(0.0, float(error.value))
+                wait = retry_after + random.uniform(0.1, 0.5)
+                self._record_flood(scope, wait)
+                logger.warning(
+                    "Telegram FloodWait action=%s wait=%.2f attempt=%d/%d",
+                    getattr(api_func, '__name__', 'unknown'),
+                    wait, retries, self.max_retries
+                )
+                if retries >= self.max_retries:
+                    # Preserve Telegram's original retry-after rather than
+                    # raising an invented 60-second exception.
+                    raise
 
-                # Retry for server errors (5xx) with exponential backoff
-                if retries < self.max_retries - 1:
-                    delay = self.base_delay * (2 ** retries) + random.uniform(0.1, 0.5)
-                    logger.warning(f"Server error in {api_func.__name__}: {e}, retrying in {delay:.2f}s")
-                    await asyncio.sleep(delay)
-                    retries += 1
-                else:
-                    logger.error(f"Max retries exceeded for {api_func.__name__}: {e}")
-                    raise e
-                    
-            except Exception as e:
-                logger.error(f"Unexpected error in {api_func.__name__}: {e}")
-                raise e
-        
-        # If we get here, all retries were flood waits
-        logger.error(f"All retries exhausted due to flood waits for {api_func.__name__}")
-        raise FloodWait(value=60)  # Give up with a 60-second flood wait
+            except RPCError as error:
+                code = getattr(error, 'CODE', 0) or 0
+                if 400 <= code < 500:
+                    raise
+                retries += 1
+                if retries >= self.max_retries:
+                    raise
+                # The backoff is intentionally outside the semaphore.
+                await asyncio.sleep(
+                    self.base_delay * (2 ** (retries - 1))
+                    + random.uniform(0.1, 0.5)
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                raise
 
+        raise RuntimeError("Telegram retry budget exhausted")
+    
 
-# Global instance
 telegram_api = TelegramAPIWrapper()
