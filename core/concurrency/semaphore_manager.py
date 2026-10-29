@@ -129,7 +129,7 @@ class SemaphoreManager:
         """Get semaphore for domain, create if doesn't exist"""
         if domain not in self._semaphores:
             limit = self.limits.get(domain, 10)  # Default limit
-            self._semaphores[domain] = asyncio.Semaphore(limit)
+            self._semaphores[domain] = ResizableSemaphore(limit)
             self._metrics[domain] = ConcurrencyMetrics(
                 domain=domain,
                 max_concurrent=limit
