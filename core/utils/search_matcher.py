@@ -125,12 +125,20 @@ def _season_episode_match(
 
 def _resolution_match(resolution: str, use_caption: bool) -> Dict[str, Any]:
     value = str(resolution).lower()
-    return _sources_match(
+    matched = _sources_match(
         "resolution",
         {"$regex": rf"^{re.escape(value)}$", "$options": "i"},
         _word_pattern(value),
         use_caption,
     )
+    # PH-015: newly indexed media may carry an explicit quality field,
+    # while older documents retain label/dimension variants in resolution.
+    # Never infer a 540p label merely from 960x540 pixel dimensions.
+    if re.fullmatch(r"\\d{3,4}p", value):
+        matched["$or"].insert(
+            0, {"quality": {"$regex": rf"^{re.escape(value)}$", "$options": "i"}}
+        )
+    return matched
 
 
 def build_media_search_filter(
