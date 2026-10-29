@@ -1,6 +1,6 @@
 # PH-021: UTC daily quota and original-day refunds
 
-**Status:** implementation in existing Draft PR #4; CI and isolated staging acceptance pending. No production deployment or database migration.
+**Status:** Code CI passed ([run 40817870542](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40817870542)) at SHA `7c5c0ed5`; isolated staging acceptance pending. Existing Draft PR #4; no production deployment or database migration.
 
 ## Policy and boundary
 
@@ -27,7 +27,7 @@ The stored values `last_retrieval_date` and `last_request_date` remain ISO `YYYY
 
 ## Tests and acceptance
 
-- [ ] Full Python suite with cancellation, quota and MongoDB integration tests plus dual-Redis and Docker preflight passes on the exact code SHA.
+- [x] Full Python suite with cancellation, quota, disposable MongoDB and dual-Redis integration tests plus Docker/Compose preflight **passed** at code SHA `7c5c0ed5` ([CI run 40817870542](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40817870542)).
 - [ ] Timezone offsets: UTC 23:59:59 / 00:00:00, Sri Lanka UTC+05:30 midnight, negative UTC offsets, naive timestamp rejection and legacy string date decoding.
 - [ ] Real local-only MongoDB: 25 concurrent first-day reservations, exactly 10 accepted, no over-limit writes, correct reset at midnight and partial refunds. No new indexes or schema fields.
 - [ ] Refund after UTC rollover never decrements the new day's counter; double-refund is explicitly deferred to PH-022. Verify single-file, send-all, deep-link and batch paths with real Telegram failure/cancellation injection on an isolated bot.
