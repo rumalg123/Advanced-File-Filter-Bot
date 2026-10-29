@@ -121,3 +121,14 @@ It does not provide safe reversible updates for the new contract.
       before the first enabled canonical metadata write.
 
 **PH-015 is In review until staging and rollout acceptance.**
+
+## Legacy metadata migration QA, 2026-10-29
+
+The legacy season/episode/resolution tool now rejects non-integer/unsafe batch
+sizes (allowed 1..1000) and global limits (1..1,000,000). Dry runs report proposed
+updates; applied runs count acknowledged modifications. Optimistic selectors
+include the original source text and metadata, so concurrent edits are skipped
+rather than overwritten. New migration timestamps explicitly include UTC.
+Thirteen real-disposable-Mongo/boundary cases pass, including multi-source limits,
+dry-run preservation and failures. This does not migrate canonical quality or
+pixel dimensions and does not imply a production migration was run.

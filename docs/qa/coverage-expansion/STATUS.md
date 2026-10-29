@@ -101,3 +101,10 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   or application. Operator scripts participate in backup/apply/restore. Thirty-
   three tests use temporary installations, including real file restoration;
   no updater was run against this server installation.
+
+- **Legacy metadata migration passed:** twelve pre-fix failures reproduced
+  invalid bounds, naive timestamps and overwriting/counting stale concurrent
+  edits. The migration now validates bounds, writes explicit UTC, uses optimistic
+  source/metadata selectors and reports actual modifications. All thirteen new
+  tests pass on disposable local MongoDB, including dry-run and global multi-DB
+  limits. The canonical quality migration remains a distinct contract.

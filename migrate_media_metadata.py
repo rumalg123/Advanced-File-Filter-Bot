@@ -22,7 +22,7 @@ import asyncio
 import argparse
 import sys
 from typing import Dict, Any, Optional, List, Union
-from datetime import datetime
+from datetime import datetime, UTC
 
 # Add project root to path
 sys.path.insert(0, '.')
@@ -44,6 +44,8 @@ class MediaMetadataMigration:
             batch_size: int = 1000,
             collection_name: str = 'media_files'
     ):
+        if type(batch_size) is not int or not 1 <= batch_size <= 1000:
+            raise ValueError('batch_size must be an integer from 1 to 1000')
         self.db_pools = db_pools if isinstance(db_pools, list) else [db_pools]
         self.batch_size = batch_size
         self.collection_name = collection_name
@@ -57,6 +59,8 @@ class MediaMetadataMigration:
     
     async def run(self, dry_run: bool = False, limit: Optional[int] = None):
         """Run the migration"""
+        if limit is not None and (type(limit) is not int or not 1 <= limit <= 1000000):
+            raise ValueError('limit must be an integer from 1 to 1000000')
         logger.info("=" * 60)
         logger.info("Media Metadata Migration Script")
         logger.info("=" * 60)
@@ -208,7 +212,7 @@ class MediaMetadataMigration:
                         update_data['resolution'] = resolution
                     
                     if update_data:
-                        update_data['updated_at'] = datetime.utcnow().isoformat()
+                        update_data['updated_at'] = datetime.now(UTC).isoformat()
                         
                         if dry_run:
                             logger.debug(
@@ -219,7 +223,10 @@ class MediaMetadataMigration:
                         else:
                             # Prepare update operation
                             updates.append({
-                                'filter': {'_id': doc['_id']},
+                                'filter': {'_id': doc['_id'], **{
+                                    field: doc.get(field) for field in
+                                    ('file_name', 'caption', 'season', 'episode', 'resolution')
+                                }},
                                 'update': {'$set': update_data}
                             })
                             batch_updated += 1
@@ -243,6 +250,7 @@ class MediaMetadataMigration:
                     result = await db_pool.execute_with_retry(
                         collection.bulk_write, operations
                     )
+                    batch_updated = result.modified_count
                     logger.debug(
                         f"Batch update: {result.modified_count} documents updated"
                     )
