@@ -123,6 +123,40 @@ jobs:
           trap 'rm -f .env' EXIT
           docker compose --profile protected-state config --quiet
 
+      - name: PH-012 isolated staging configuration and offline identity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f .env.staging .ph012-production.env' EXIT
+          cat > .ph012-production.env <<'EOF'
+          ENVIRONMENT=production
+          BOT_TOKEN=100000:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          DATABASE_URI=mongodb://127.0.0.1:27017/
+          DATABASE_NAME=PIRO
+          LOG_CHANNEL=-1001111222233
+          CHANNELS=-1001111222234
+          EOF
+          cat > .env.staging <<'EOF'
+          ENVIRONMENT=staging
+          STAGING_OPERATOR_ACK=I_HAVE_VERIFIED_ISOLATION
+          BOT_TOKEN=200000:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+          API_ID=123456
+          API_HASH=test-api-hash-not-a-real-secret
+          SESSION=filefilter_staging
+          DATABASE_URI=mongodb://127.0.0.2:27017/
+          DATABASE_NAME=staging_filefilter
+          LOG_CHANNEL=-1009999888877
+          CHANNELS=-1009999888878
+          AUTO_UPDATE=false
+          UPDATE_ON_START=false
+          PUBLIC_FILE_STORE=false
+          EOF
+          python scripts/staging_preflight.py \
+            --production-env .ph012-production.env --staging-env .env.staging
+          docker compose -f docker-compose.staging.yml config --quiet
+          docker compose -f docker-compose.staging.yml config --format json \
+            | python scripts/validate_staging_compose.py
+
       - name: Validate opt-in Redis ACL overlay against local Redis
         shell: bash
         run: |
