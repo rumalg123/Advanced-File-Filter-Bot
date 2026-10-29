@@ -51,6 +51,11 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 ## Verification log
 
+- 2026-10-29 live timer QA: a four-second search timer was described as
+  "0 minutes". Search captions now display exact minutes/seconds and singular
+  units; zero continues to suppress the notice. Duration regressions cover
+  sub-minute, minute and mixed intervals. No storage changes.
+
 - 2026-10-29 live QA: a private indexing link produced both its indexing
   confirmation and a false file-search no-results response. Indexing input now
   raises `StopPropagation` after its own response; valid and inaccessible-channel
