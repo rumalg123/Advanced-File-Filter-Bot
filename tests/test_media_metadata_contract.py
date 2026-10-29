@@ -14,6 +14,7 @@ from core.utils.media_metadata import (
     normalize_quality_label,
 )
 from core.utils.search_matcher import build_media_search_filter
+from config.settings import settings
 from repositories.media import FileType, MediaRepository
 from scripts.profile_media_search import is_local
 
@@ -63,7 +64,8 @@ def _make_media(name, *, width=None, height=None):
     return MediaFileFactory.from_pyrogram_media(media, message, FileType.VIDEO)
 
 
-def test_factory_keeps_legacy_resolution_and_new_canonical_fields():
+def test_factory_keeps_legacy_resolution_and_new_canonical_fields(monkeypatch):
+    monkeypatch.setattr(settings.features, "feature_canonical_media_metadata", True)
     entity = _make_media("Doctor.X.S01E03.540p.mkv", width=960, height=540)
     assert (entity.resolution, entity.width, entity.height, entity.quality) == (
         "960x540", 960, 540, "540p"
@@ -77,7 +79,8 @@ def test_factory_keeps_legacy_resolution_and_new_canonical_fields():
     assert repository._dict_to_entity(dict(data)).display_quality == "540p"
 
 
-def test_document_without_dimensions_has_quality_but_no_guessed_width_or_height():
+def test_document_without_dimensions_has_quality_but_no_guessed_width_or_height(monkeypatch):
+    monkeypatch.setattr(settings.features, "feature_canonical_media_metadata", True)
     entity = _make_media("Show.S01E02.540p.mkv")
     assert entity.resolution == "540p"
     assert entity.quality == "540p"
@@ -86,7 +89,8 @@ def test_document_without_dimensions_has_quality_but_no_guessed_width_or_height(
     assert "width" not in data and "height" not in data
 
 
-def test_dimensions_alone_never_claim_a_quality_tag():
+def test_dimensions_alone_never_claim_a_quality_tag(monkeypatch):
+    monkeypatch.setattr(settings.features, "feature_canonical_media_metadata", True)
     entity = _make_media("Show.S01E02.mkv", width=960, height=540)
     assert entity.resolution == "960x540"
     assert entity.quality is None and entity.display_quality is None
@@ -94,7 +98,8 @@ def test_dimensions_alone_never_claim_a_quality_tag():
     assert "quality" not in data
 
 
-def test_legacy_docs_read_without_migration_and_leave_original_shape_unchanged():
+def test_legacy_docs_read_without_migration_and_leave_original_shape_unchanged(monkeypatch):
+    monkeypatch.setattr(settings.features, "feature_canonical_media_metadata", True)
     entity = _make_media("Show.540p.mkv")
     repository = object.__new__(MediaRepository)
     original = repository._entity_to_dict(entity)
@@ -108,6 +113,17 @@ def test_legacy_docs_read_without_migration_and_leave_original_shape_unchanged()
 
     legacy_dimensions = dict(original, file_name="NoQuality.mkv", resolution="960x540")
     assert repository._dict_to_entity(dict(legacy_dimensions)).display_quality is None
+
+
+def test_new_metadata_writes_are_disabled_by_default_even_for_qualified_media(monkeypatch):
+    monkeypatch.setattr(settings.features, "feature_canonical_media_metadata", False)
+    entity = _make_media("Show.S01E01.1080p.mkv", width=1920, height=1080)
+    # The application may display new information in memory without changing
+    # storage schemas while the opt-in rollout flag remains disabled.
+    assert (entity.width, entity.height, entity.quality) == (1920, 1080, "1080p")
+    persisted = object.__new__(MediaRepository)._entity_to_dict(entity)
+    assert persisted["resolution"] == "1920x1080"
+    assert all(field not in persisted for field in ("width", "height", "quality"))
 
 
 def test_explicit_quality_fallback_does_not_infer_from_pixel_height():
