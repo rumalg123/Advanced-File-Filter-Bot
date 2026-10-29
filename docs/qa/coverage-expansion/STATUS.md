@@ -37,3 +37,8 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   plain-text callback alerts. Four regressions reproduced literal HTML before
   the fix; 31 authorization/formatting tests pass. Database callbacks were
   already correctly admin-protected; the added tests preserve that behavior.
+
+- **Passed automated QA:** settings View/Edit/Back/Close callbacks acknowledge
+  Telegram before performing slow work. Four pre-fix failures reproduced the
+  missing answers; eight focused navigation/formatting tests pass. Live sweep
+  also observed the View callback timeout before this fix.

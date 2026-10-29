@@ -189,6 +189,7 @@ class BotSettingsHandler(BaseHandler):
         data = query.data
 
         if data == "bset_close":
+            await query.answer()
             await query.message.delete()
             # Clear any active edit session
             if self.session_manager:
@@ -204,6 +205,7 @@ class BotSettingsHandler(BaseHandler):
             await query.answer(f"Page {page + 1}")
 
         elif data.startswith("bset_view_"):
+            await query.answer()
             # Extract key and page number from callback data
             parts = data.replace("bset_view_", "").rsplit("_", 1)
             if len(parts) == 2 and parts[1].isdigit():
@@ -215,6 +217,7 @@ class BotSettingsHandler(BaseHandler):
             await self.show_setting_details(query.message, key)
 
         elif data.startswith("bset_edit_"):
+            await query.answer()
             key = data.replace("bset_edit_", "")
             await self.start_edit_session(query.message, key, user_id)
 
@@ -229,6 +232,7 @@ class BotSettingsHandler(BaseHandler):
             await self.update_boolean_setting(query, key, value)
 
         elif data == "bset_back":
+            await query.answer()
             # Go back to the correct page
             page = getattr(self, 'current_page', 0)
             await self.show_settings_menu(query.message, page)
