@@ -48,6 +48,7 @@ async def test_callback_records_sent_or_uncertain_outcome(monkeypatch, send_succ
     bot, repo, reserved = bot_fixture()
     handler = FileCallbackHandler(bot)
     handler._auto_delete_message = AsyncMock()
+    monkeypatch.setattr("handlers.callbacks_handlers.file.is_private_chat", lambda _q: True)
     handler._feature_file_markup = lambda _file: None
     handler._broken_file_report_markup = lambda _file: None
     query = SimpleNamespace(
