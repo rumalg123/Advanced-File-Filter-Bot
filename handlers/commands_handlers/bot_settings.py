@@ -2,6 +2,7 @@ import asyncio
 
 from pyrogram import Client
 from pyrogram import StopPropagation
+from pyrogram.errors import MessageNotModified
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -314,7 +315,11 @@ class BotSettingsHandler(BaseHandler):
             ButtonBuilder.action_button("❌ Close", callback_data="bset_close")
         ])
 
-        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            # A retried callback may save the value already displayed.
+            pass
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting using unified session manager"""
