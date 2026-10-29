@@ -549,8 +549,35 @@ class FeatureRepository:
         return bool(result.deleted_count)
 
     async def get_active_saved_searches(self, limit: int = 500) -> list[dict[str, Any]]:
+        """Legacy bounded list API, retained for existing external callers."""
         collection = await self._collection("saved_searches")
         cursor = collection.find({'active': True}).sort('updated_at', -1).limit(limit)
+        return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
+
+    async def get_active_saved_search_page(
+        self, *, after_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """PH-017: bounded keyset page across *all* active subscriptions.
+
+        Saved-search identifiers are generated as UUID hex strings. Ordering by
+        immutable _id avoids updated_at reordering while processing alerts.
+        The projection keeps only the data needed to notify a subscriber.
+        A database exception must propagate; an empty page means completion.
+        """
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("Saved-search page limit must be between 1 and 100")
+        if after_id is not None and (
+            not isinstance(after_id, str) or not after_id
+        ):
+            raise ValueError("Saved-search cursor must be a nonempty string")
+        selector: dict[str, Any] = {'active': True}
+        if after_id is not None:
+            selector['_id'] = {'$gt': after_id}
+        collection = await self._collection("saved_searches")
+        cursor = collection.find(
+            selector,
+            {'_id': 1, 'user_id': 1, 'query': 1, 'normalized_query': 1},
+        ).sort('_id', 1).limit(limit)
         return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
 
     async def claim_saved_search_notification(self, search_id: str, file_unique_id: str) -> bool:
