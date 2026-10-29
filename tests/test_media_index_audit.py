@@ -70,7 +70,7 @@ class AuditCollection:
         self.drop_index = AsyncMock()
 
     def list_indexes(self, **kwargs):
-        assert kwargs == {"maxTimeMS": 3000}
+        assert kwargs == {}
         self.list_calls += 1
         return Cursor(self.docs)
 
