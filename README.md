@@ -141,7 +141,7 @@ The project dependency is pinned to a specific `wzgram` Git commit in `pyproject
 ## Requirements
 
 - Python 3.13 or newer.
-- Git, because `wzgram` is installed directly from a pinned Git revision.
+- `wzgram` is installed from PyPI using the latest published release.
 - A Telegram API ID and API hash from `my.telegram.org`.
 - A bot token from BotFather.
 - MongoDB, either local or hosted.

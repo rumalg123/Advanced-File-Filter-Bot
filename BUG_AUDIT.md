@@ -13,7 +13,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-003 | High | Fixed | Quotas | Single-file access checks and quota increments are separate, so concurrent requests can exceed the limit; failed sends remain charged. | Single-file quota reservation is conditional and atomic, and every unsuccessful delivery releases its reservation. |
 | BUG-004 | High | Fixed | Quotas | Bulk-send quota is leaked when callback/status setup fails or the coroutine is cancelled before normal refund logic. | All unsent reservations are released through exception-safe cleanup. |
 | BUG-005 | High | Fixed | Premium batches | Premium batch access trusts the raw `is_premium` flag without checking the expiry date. | Premium batch access uses the repository's validated premium status. |
-| BUG-006 | High | Fixed | Packaging | `pyproject.toml` installs Pyrofork while `requirements.txt` installs unpinned Wzgram Git HEAD; platform markers also disagree. | Both manifests install the same pinned Wzgram revision and use consistent platform markers. |
+| BUG-006 | High | Fixed | Packaging | `pyproject.toml` installs Pyrofork while `requirements.txt` installs unpinned Wzgram Git HEAD; platform markers also disagree. | Both manifests install `wzgram` from PyPI using consistent platform markers; latest published releases are requested by the operator (2026-10-29). |
 | BUG-007 | Medium | Fixed | Requests | Request and warning counters use read-modify-write updates and lose concurrent increments. | Request allowance and warning changes use guarded atomic database operations. |
 | BUG-008 | Medium | Fixed | Indexing | `/setskip` is reset to zero when indexing begins. | A configured skip value reaches `iter_messages` and is reset only after the run starts/finishes as intended. |
 | BUG-009 | Medium | Fixed | Indexing | Cancelling indexing processes the pending message batch twice. | A pending batch is processed no more than once during cancellation. |
@@ -50,6 +50,12 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-040 | Medium | Fixed | Transient command messages | Core user responses such as `/start`, `/help`, and `/stats`, plus several user feature-command confirmations, bypass `MESSAGE_DELETE_SECONDS` and leave stale menus in private chats. | User-facing informational responses and feature confirmations use one task-managed cleanup path, respect the current configured delay, and remain persistent when the delay is `0`; admin diagnostics and deep-link subscription gates are not shortened. |
 
 ## Verification log
+
+- 2026-10-29: Operator requested latest published `wzgram` rather than the
+  historical Git pin. Both dependency manifests now use `wzgram`. The rebuilt
+  Python 3.13 image resolved version 3.1.5; all 456 tests passed with real
+  isolated MongoDB/dual Redis, and both supplied newer-format user sessions
+  authenticated inside that image. `pip check` and undefined-name lint passed.
 
 - 2026-10-29 QA: real normal-user `/help`, `/stats`, and search failed with
   `PEER_ID_INVALID` / `BUTTON_URL_INVALID` when `AUTH_CHANNEL=0` was loaded

@@ -13,15 +13,15 @@ def test_negative_channel_ids_are_preserved():
     assert config.get_channel_list() == [-1001234567890, 123]
 
 
-def test_dependency_manifests_use_same_pinned_wzgram_commit():
-    expected_commit = "1b3dd187c448d6d9daca0a2d3b131ad1323fcb8e"
+def test_dependency_manifests_use_latest_published_wzgram():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = project["project"]["dependencies"]
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 
-    assert any("wzgram" in dependency and expected_commit in dependency for dependency in dependencies)
+    assert "wzgram" in dependencies
     assert not any(dependency.lower() == "pyrofork" for dependency in dependencies)
-    assert expected_commit in requirements
+    assert "wzgram" in requirements.splitlines()
+    assert "git+https://github.com/rjriajul/wzgram" not in requirements
 
 
 def test_published_filter_commands_have_registered_aliases():
