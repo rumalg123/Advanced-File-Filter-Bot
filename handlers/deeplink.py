@@ -8,6 +8,7 @@ from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
+from core.utils.quota_delivery import settle_delivery_quota
 from handlers.commands_handlers.base import BaseCommandHandler
 from handlers.decorators import require_subscription
 from repositories.user import UserStatus
@@ -132,6 +133,7 @@ class DeepLinkHandler(BaseCommandHandler):
         # Send file directly using file_id. Quota is reserved before delivery and
         # returned if Telegram rejects the send.
         delivery_succeeded = False
+        delivery_attempted = False
         try:
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
             delete_minutes = delete_time // 60
@@ -148,6 +150,7 @@ class DeepLinkHandler(BaseCommandHandler):
             logger.info(f"Sending file - ID: {file.file_id}, Name: {file.file_name}")
 
             # Use telegram_api for concurrency control
+            delivery_attempted = True
             sent_msg = await telegram_api.call_api(
                 client.send_cached_media,
                 user_id,
@@ -176,8 +179,12 @@ class DeepLinkHandler(BaseCommandHandler):
             logger.error(f"Error sending file to user {user_id}: {e}", exc_info=True)
             await message.reply_text(ErrorMessageFormatter.format_failed("Please try again", action="to send file"))
         finally:
-            if reserved_quota and not delivery_succeeded:
-                await asyncio.shield(self.bot.user_repo.release_quota(user_id, reserved_quota))
+            if reserved_quota:
+                await settle_delivery_quota(
+                    self.bot.user_repo, user_id, reserved_quota,
+                    int(delivery_succeeded),
+                    uncertain=delivery_attempted and not delivery_succeeded
+                )
 
     async def _send_dstore_files(self, client: Client, message: Message, encoded: str):
         """Send files directly from channel"""
