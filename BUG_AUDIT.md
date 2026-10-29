@@ -51,6 +51,13 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 ## Verification log
 
+- 2026-10-29 QA: real normal-user `/help`, `/stats`, and search failed with
+  `PEER_ID_INVALID` / `BUTTON_URL_INVALID` when `AUTH_CHANNEL=0` was loaded
+  from stored settings. Database sync bypassed startup normalization and
+  re-enabled subscription checks for the string `"0"`. Applied the same parser
+  after sync; added zero/empty/None/numeric/username regressions. Repeated live
+  commands and search succeeded. Rollback is a code revert, with no schema changes.
+
 - 2026-07-18: Baseline `compileall` passed.
 - 2026-07-18: Baseline import sweep loaded 41 application modules.
 - 2026-07-18: Baseline `pip check` reported no broken installed dependencies.

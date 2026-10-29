@@ -84,3 +84,17 @@ def test_handlers_use_application_rate_limiter_namespace():
     assert "self.bot.rate_limiter" not in admin_source
     assert "self.bot.app_rate_limiter" in search_source
     assert "self.bot.app_rate_limiter" in admin_source
+
+
+def test_database_sync_preserves_disabled_and_numeric_auth_channel():
+    from bot import BotConfig
+    from config.settings import settings
+    import copy
+
+    config=object.__new__(BotConfig)
+    config._settings=copy.deepcopy(settings)
+    config.AUTH_CHANNEL=None
+    for raw, expected in [('0',None), ('',None), (None,None),
+                          ('-1001234567890',-1001234567890), ('@qa_channel','@qa_channel')]:
+        config.sync_settings_from_db({'AUTH_CHANNEL':{'value':raw}})
+        assert config.AUTH_CHANNEL==expected

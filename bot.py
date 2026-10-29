@@ -331,6 +331,11 @@ class BotConfig:
                     except Exception as e:
                         logger.warning(f"Failed to sync setting {key} to {settings_obj_name}.{attr_name}: {e}")
 
+        # Stored settings use strings for AUTH_CHANNEL. Apply the same parsing
+        # as environment startup: '0' disables the gate and numeric IDs must
+        # stay integers when passed to Telegram.
+        self.AUTH_CHANNEL = self._parse_auth_channel()
+
         logger.info(f"Synced {len(db_settings)} settings from database to config objects")
 
 
