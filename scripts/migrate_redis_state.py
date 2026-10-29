@@ -15,6 +15,7 @@ import redis
 from redis.exceptions import ResponseError
 
 from core.cache.routed_cache import STATE_PREFIXES, _server_identity
+from core.cache.auth import redis_auth_kwargs
 
 
 def is_state_key(key: bytes) -> bool:
@@ -99,9 +100,19 @@ def main() -> None:
     if _server_identity(source_uri) == _server_identity(destination_uri):
         parser.error("State must be on a separate Redis server, not just another DB number")
 
-    source = redis.Redis.from_url(source_uri, socket_connect_timeout=5, socket_timeout=10)
+    source = redis.Redis.from_url(
+        source_uri, socket_connect_timeout=5, socket_timeout=10,
+        **redis_auth_kwargs(
+            source_uri, username=os.getenv("REDIS_USERNAME", ""),
+            password_file=os.getenv("REDIS_PASSWORD_FILE", ""),
+        )
+    )
     destination = redis.Redis.from_url(
-        destination_uri, socket_connect_timeout=5, socket_timeout=10
+        destination_uri, socket_connect_timeout=5, socket_timeout=10,
+        **redis_auth_kwargs(
+            destination_uri, username=os.getenv("REDIS_STATE_USERNAME", ""),
+            password_file=os.getenv("REDIS_STATE_PASSWORD_FILE", ""),
+        )
     )
     try:
         source.ping()
