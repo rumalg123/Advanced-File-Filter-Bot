@@ -741,9 +741,7 @@ class MediaSearchBot(Client):
                 continue
 
             try:
-                media_repo = MediaRepository(db_info.pool, self.cache)
-                await media_repo.create_indexes()
-
+                # PH-016: single media index owner; no duplicate repository pass.
                 index_optimizer = IndexOptimizer(db_info.pool)
                 index_results = await index_optimizer.create_media_indexes()
                 successful_indexes = sum(1 for success in index_results.values() if success)
@@ -838,8 +836,7 @@ class MediaSearchBot(Client):
             self.feature_repo = FeatureRepository(self.db_pool)
 
 
-            # Create basic indexes (existing)
-            await self.media_repo.create_indexes()
+            # PH-016: IndexOptimizer owns media indexes in one pass below.
             await self.channel_repo.create_index([('enabled', 1)])  # Add index for channels
             await self.user_repo.create_index([('status', 1)])
             
