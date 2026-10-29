@@ -94,3 +94,10 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   exists. Three behavioral regressions reproduced before remediation; 82 focused
   batch/ownership/search cases pass. Duplicate-input and genuine-missing-file
   behavior remains covered.
+
+- **Updater recovery passed:** two pre-fix regressions reproduced overwriting
+  same-second backup directories and continuing after a failed backup copy.
+  Recovery points now have unique names; incomplete backups abort before clone
+  or application. Operator scripts participate in backup/apply/restore. Thirty-
+  three tests use temporary installations, including real file restoration;
+  no updater was run against this server installation.

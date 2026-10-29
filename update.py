@@ -143,15 +143,15 @@ class SecureUpdater:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        backup_path = self.backup_dir / f"backup_{timestamp}"
-        backup_path.mkdir(parents=True, exist_ok=True)
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_path = Path(tempfile.mkdtemp(prefix=f"backup_{timestamp}_", dir=self.backup_dir))
         
         logger.info(f"Creating backup at: {backup_path}")
         
         # Files to backup (exclude temp files, logs, etc.)
         important_files = [
             "*.py", "requirements.txt", "Dockerfile", "docker-compose.yml",
-            "redis.conf", "start.sh", "config/", "core/", "handlers/", "repositories/",
+            "redis.conf", "start.sh", "config/", "core/", "handlers/", "repositories/", "scripts/",
             "README.md", "CLAUDE.md", ".env.example", "sample.env"
         ]
         
@@ -177,7 +177,7 @@ class SecureUpdater:
                             shutil.copytree(file_path, dest_path, dirs_exist_ok=True)
                             
             except Exception as e:
-                logger.warning(f"Failed to backup {pattern}: {e}")
+                raise RuntimeError(f"Backup incomplete for {pattern}; update aborted") from e
                 
         logger.info("Backup completed successfully")
         return backup_path
@@ -255,7 +255,7 @@ class SecureUpdater:
         update_items = [
             "bot.py", "requirements.txt", "Dockerfile", "docker-compose.yml",
             "redis.conf", "start.sh", "update.py",
-            "config/", "core/", "handlers/", "repositories/"
+            "config/", "core/", "handlers/", "repositories/", "scripts/"
         ]
         
         # Add Docker-specific handling
