@@ -126,6 +126,8 @@ PH-006 search diagnostics: [read-only MongoDB EXPLAIN profiler and latency basel
 
 PH-008 release safety: the [CI/CD release gates and required branch checks guide](docs/CI_CD_RELEASE_GATES.md) documents the full Python/MongoDB/Redis suite, Docker build preflight, SHA-pinned GitHub Actions, and staging-only deployment approval. The PR checklist is at [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
 
+PH-010 Redis security: [optional file-backed Redis ACL authentication and staging cutover guide](docs/REDIS_ACCESS_SECURITY.md). This uses an opt-in [Compose overlay](docker-compose.redis-auth.yml) and independent secret files for cache/state Redis; the existing unauthenticated Redis default is unchanged.
+
 ### Wzgram compatibility note
 
 The project dependency is pinned to a specific `wzgram` Git commit in `pyproject.toml` and `requirements.txt`. Wzgram exposes a Pyrogram-compatible import namespace, so source imports such as `from pyrogram import Client` are expected; they do not mean the project still installs the unmaintained upstream Pyrogram distribution.
