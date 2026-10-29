@@ -165,6 +165,8 @@ def extract_file_ref(file_id: str) -> str:
     """
     try:
         decoded = FileId.decode(file_id)
+        if not decoded.file_reference:
+            raise ValueError("No file reference bytes")
         file_ref = base64.urlsafe_b64encode(
             decoded.file_reference
         ).decode().rstrip("=")

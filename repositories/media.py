@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from datetime import datetime, UTC
 from enum import Enum
 import json
@@ -15,6 +15,7 @@ from core.database.base import BaseRepository, AggregationMixin
 from core.database.errors import SearchBackendUnavailableError
 from core.services.bulk_media_deletion import MediaBulkDeletion
 from core.utils.validators import normalize_query
+from core.utils.helpers import extract_file_ref
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.search_observability import search_telemetry
 from core.utils.media_metadata import effective_quality
@@ -370,6 +371,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """
         try:
             if self.is_multi_db and getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                media = self._prepare_insert_reference(media)
                 pool = await self.multi_db_manager.get_optimal_write_database()
                 from core.database.media_owners import source_key
                 proposed = next(source_key(db.uri, db.name)
@@ -404,6 +406,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                         "identity and ownership are implemented (PH-028)"
                     )
                     return False, 2, None
+                media = self._prepare_insert_reference(media)
                 # Use smart database selection for optimal write performance
                 write_db_pool = await self.multi_db_manager.get_optimal_write_database()
                 collection = await write_db_pool.get_collection(self.collection_name)
@@ -425,6 +428,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     return False, 2, None
             else:
                 # Single database mode - use existing create method
+                media = self._prepare_insert_reference(media)
                 success = await self.create(media)
                 if success:
                     await self.cache_invalidator.invalidate_all_search_results()
@@ -447,6 +451,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         except Exception as e:
             logger.error(f"Error saving media: {e}")
             return False, 2, None
+
+    @staticmethod
+    def _prepare_insert_reference(media: MediaFile) -> MediaFile:
+        """Normalize new writes without inventing aliases on legacy reads."""
+        if not media.file_ref:
+            return replace(media, file_ref=extract_file_ref(media.file_id))
+        return media
 
     async def batch_check_duplicates(
         self,
