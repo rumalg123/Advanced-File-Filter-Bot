@@ -1,6 +1,7 @@
 """Consistent user-facing premium and quota status formatting."""
 
 from datetime import date
+from core.utils.quota_calendar import quota_day_utc
 
 from core.utils.validators import normalize_expiry_date
 
@@ -33,7 +34,7 @@ def format_user_plan_status(
     else:
         text += "📊 <b>Your Status:</b> Free Plan\n"
 
-    today = current_date or date.today()
+    today = current_date or quota_day_utc()
     daily_count = (
         max(0, int(getattr(user, 'daily_retrieval_count', 0) or 0))
         if getattr(user, 'last_retrieval_date', None) == today else 0
