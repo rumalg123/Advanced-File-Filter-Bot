@@ -13,6 +13,7 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from core.utils.premium import format_user_plan_status
+from core.services.maintenance import MaintenanceService
 from core.utils.quota_calendar import QuotaReservation, quota_day_utc
 from repositories.user import User, UserRepository
 from scripts.profile_media_search import is_local
@@ -197,3 +198,52 @@ async def test_disposable_mongo_concurrent_midnight_reservations_and_refund(monk
     finally:
         await client.drop_database(name)
         client.close()
+
+
+
+@pytest.mark.asyncio
+async def test_maintenance_only_updates_utc_day_marker_not_active_user_quota(monkeypatch):
+    monkeypatch.setattr("core.services.maintenance.quota_day_utc",
+                        lambda: date(2026, 10, 29))
+    repo = SimpleNamespace(
+        cleanup_expired_premium=AsyncMock(return_value={"expired_count": 0}),
+        reset_daily_counters=AsyncMock(),
+    )
+    cache = SimpleNamespace(set=AsyncMock())
+    service = MaintenanceService(repo, SimpleNamespace(), cache)
+    service._get_last_counter_reset_date = AsyncMock(return_value=date(2026, 10, 28))
+    service._store_counter_reset_date = AsyncMock()
+    result = await service.run_daily_maintenance()
+    assert result["quota_day_recorded"] is True
+    assert result["counters_reset"] is False
+    assert result["reset_count"] == 0
+    repo.reset_daily_counters.assert_not_awaited()
+    service._store_counter_reset_date.assert_awaited_once_with(date(2026, 10, 29))
+
+    service._get_last_counter_reset_date = AsyncMock(return_value=date(2026, 10, 29))
+    result = await service.run_daily_maintenance()
+    assert result["quota_day_recorded"] is False
+    repo.reset_daily_counters.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_deprecated_bulk_reset_never_updates_users():
+    repo = UserRepository(
+        SimpleNamespace(get_collection=AsyncMock()),
+        SimpleNamespace()
+    )
+    assert await repo.reset_daily_counters() == 0
+    repo.db_pool.get_collection.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_request_quota_guard_uses_same_utc_day_as_retrieval(monkeypatch):
+    monkeypatch.setattr("repositories.user.quota_day_utc", lambda *a: date(2026, 10, 29))
+    pool = Pool({"daily_request_count": 1, "warning_count": 0})
+    repo = stub_repo(pool)
+    # The request-tracking feature's default config allows non-premium users.
+    allowed, _message, _ban, _log = await repo.track_request(42)
+    assert allowed
+    _fn, args, _kwargs = pool.calls[0]
+    assert args[0]["$or"][0] == {"last_request_date": {"$ne": "2026-10-29"}}
+    assert args[1][0]["$set"]["last_request_date"] == "2026-10-29"
