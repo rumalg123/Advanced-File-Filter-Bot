@@ -13,6 +13,7 @@ from core.utils.logger import get_logger
 from core.utils.messages import MessageHelper
 from core.utils.pagination import resolve_search_query_reference
 from core.utils.telegram_api import telegram_api
+from core.utils.quota_delivery import settle_delivery_quota
 from core.utils.validators import (
     is_original_requester, is_private_chat, skip_subscription_check,
     is_admin, extract_user_id, is_premium_valid
@@ -269,6 +270,8 @@ class FileCallbackHandler(BaseCommandHandler):
         # Send file to PM. The access service has atomically reserved one quota
         # slot when needed; return it unless Telegram confirms delivery.
         delivery_succeeded = False
+        delivery_attempted = False
+        known_non_delivery = False
         try:
             delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
             delete_minutes = delete_time // 60
@@ -284,6 +287,7 @@ class FileCallbackHandler(BaseCommandHandler):
             )
 
             # Use telegram_api for concurrency control
+            delivery_attempted = True
             sent_msg = await telegram_api.call_api(
                 client.send_cached_media,
                 callback_user_id,  # positional arg for send_cached_media
@@ -326,6 +330,7 @@ class FileCallbackHandler(BaseCommandHandler):
 
 
         except UserIsBlocked:
+            known_non_delivery = True
 
             logger.error(f"User {callback_user_id} has blocked the bot")
 
@@ -379,9 +384,12 @@ class FileCallbackHandler(BaseCommandHandler):
                 logger.error(f"Could not send error message to user {callback_user_id}: {msg_error}")
 
         finally:
-            if reserved_quota and not delivery_succeeded:
-                await asyncio.shield(
-                    self.bot.user_repo.release_quota(callback_user_id, reserved_quota)
+            if reserved_quota:
+                await settle_delivery_quota(
+                    self.bot.user_repo, callback_user_id, reserved_quota,
+                    int(delivery_succeeded),
+                    uncertain=(delivery_attempted and not delivery_succeeded
+                               and not known_non_delivery)
                 )
 
     @check_ban()
