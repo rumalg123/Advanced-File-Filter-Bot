@@ -217,6 +217,7 @@ class FeatureConfig(BaseSettings):
     feature_recommendation_explanations: bool = Field(default=False, description="Show recommendation reasons")
     feature_content_dashboard: bool = Field(default=False, description="Enable the admin content dashboard")
     feature_canonical_media_metadata: bool = Field(default=False, description="PH-015: opt in to persisting quality, width and height on new media; disable until rollback compatibility approved")
+    feature_quota_delivery_ledger: bool = Field(default=False, description="PH-022: opt in to per-user durable quota reservation and delivery accounting")
 
     # Premium system
     premium_duration_days: int = Field(
