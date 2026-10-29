@@ -3,6 +3,7 @@ Multi-database pool manager for handling multiple MongoDB connections
 """
 
 import asyncio
+import hashlib
 import heapq
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -504,6 +505,66 @@ class MultiDatabaseManager:
         return await self._execute_with_circuit_breaker(
             db_info, "find_many", do_find
         )
+
+    async def audit_media_identity_uniqueness(
+        self, collection_name: str, *, max_docs_per_db: int = 50000
+    ) -> Dict[str, Any]:
+        """PH-028 read-only bounded cross-DB identity audit.
+
+        Exhaustion and unavailable sources fail visibly. The aggregate
+        result is not proof of uniqueness under concurrent writers.
+        """
+        if type(max_docs_per_db) is not int or not 1 <= max_docs_per_db <= 100000:
+            raise ValueError("Audit cap must be between 1 and 100000 per database")
+        self._require_all_databases("identity_audit")
+        fields = ("_id", "file_unique_id", "file_ref")
+        seen = {field: {} for field in fields}
+        duplicates = {field: 0 for field in fields}
+        inspected = {}
+        for db_index, info in enumerate(self.databases):
+            cursor = None
+            count = 0
+            try:
+                collection = await info.pool.get_collection(collection_name)
+                cursor = collection.find(
+                    {}, {"_id": 1, "file_unique_id": 1, "file_ref": 1}
+                ).batch_size(200)
+                while count <= max_docs_per_db:
+                    batch = await cursor.to_list(
+                        length=min(200, max_docs_per_db + 1 - count)
+                    )
+                    if not batch:
+                        break
+                    count += len(batch)
+                    if count > max_docs_per_db:
+                        raise RuntimeError("Identity audit capacity exceeded")
+                    for doc in batch:
+                        for field in fields:
+                            value = doc.get(field)
+                            if value is None or value == "":
+                                continue
+                            digest = hashlib.sha256(
+                                (type(value).__name__ + ":" + str(value)).encode()
+                            ).digest()
+                            previous = seen[field].setdefault(digest, db_index)
+                            if previous != db_index:
+                                duplicates[field] += 1
+                inspected[info.name] = count
+            except Exception as exc:
+                raise MultiDatabaseReadError(
+                    "identity_audit", info.name, exc
+                ) from exc
+            finally:
+                if cursor is not None:
+                    await cursor.close()
+        return {
+            "complete": True,
+            "databases_checked": len(self.databases),
+            "documents_scanned": inspected,
+            "cross_database_duplicates": duplicates,
+            "global_uniqueness_proven": False,
+            "status": "requires_authoritative_ownership",
+        }
 
     async def update_one_across_databases(
         self,
