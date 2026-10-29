@@ -252,36 +252,12 @@ class BotConfig:
     
     def _parse_database_uris(self) -> List[str]:
         """Parse multiple database URIs from settings"""
-        uris = []
-        
-        # Always include primary DATABASE_URI first
-        if self.DATABASE_URI:
-            uris.append(self.DATABASE_URI)
-        
-        # Add additional URIs from settings
-        additional_uris = self._settings.database.get_additional_uris()
-        for uri in additional_uris:
-            if uri and uri not in uris:  # Avoid duplicates
-                uris.append(uri)
-        
-        return uris
-    
-    def _parse_database_names(self) -> List[str]:
-        """Parse multiple database names from settings"""
-        names = [self.DATABASE_NAME]
-        
-        # Always include primary DATABASE_NAME first
+        return [uri for uri, _ in self._settings.database.get_sources()]
 
-        # Add additional names from settings
-        additional_names = self._settings.database.get_additional_names()
-        names.extend(additional_names)
-        
-        # If no additional names specified, use same name for all databases
-        while len(names) < len(self.DATABASE_URIS):
-            names.append(self.DATABASE_NAME)
-        
-        return names[:len(self.DATABASE_URIS)]  # Trim to match URI count
-    
+    def _parse_database_names(self) -> List[str]:
+        """Parse names using the same normalized pairs as the URI list."""
+        return [name for _, name in self._settings.database.get_sources()]
+
     @property
     def is_multi_database_enabled(self) -> bool:
         """Check if multi-database mode is enabled"""

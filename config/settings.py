@@ -84,6 +84,11 @@ class DatabaseConfig(BaseSettings):
         """Parse additional database names"""
         return [name.strip() for name in self.names.split(',') if name.strip()]
 
+    def get_sources(self) -> list[tuple[str, str]]:
+        from core.database.topology import paired_database_sources
+        return paired_database_sources(self.uri, self.name, self.get_additional_uris(),
+                                       self.get_additional_names())
+
 
 class RedisConfig(BaseSettings):
     """Redis configuration"""

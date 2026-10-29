@@ -102,3 +102,11 @@ and real operator inventory/apply/status commands. No raw URI or media identity
 appears in operator reports. The earlier defensive audit and flag-off interlock
 remain regression-tested. Current remote results are recorded in
 [the active QA log](qa/coverage-expansion/STATUS.md).
+
+## Source configuration pairing
+
+Bot startup and the legacy metadata tool normalize URI/name pairs together.
+Repeating the primary pair no longer shifts the next source's name; two distinct
+databases on the same URI remain distinct sources. Missing additional names
+retain the primary-name fallback. Excess names are rejected instead of silently
+truncated. Eight configuration contracts and related ownership/recovery tests pass.

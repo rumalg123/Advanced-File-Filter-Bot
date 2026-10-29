@@ -293,19 +293,10 @@ async def main():
     try:
         from config.settings import settings
 
-        uris = [settings.database.uri]
-        for uri in settings.database.get_additional_uris():
-            if uri and uri not in uris:
-                uris.append(uri)
-
-        names = [settings.database.name]
-        names.extend(settings.database.get_additional_names())
-        while len(names) < len(uris):
-            names.append(settings.database.name)
-        names = names[:len(uris)]
+        sources = settings.database.get_sources()
 
         db_pools = []
-        for db_index, (uri, name) in enumerate(zip(uris, names)):
+        for db_index, (uri, name) in enumerate(sources):
             db_pool = DatabaseConnectionPool() if db_index == 0 else DatabaseConnectionPool.create_isolated()
             await db_pool.initialize(uri, name)
             db_pools.append(db_pool)

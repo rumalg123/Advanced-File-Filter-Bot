@@ -108,3 +108,23 @@ that are still needed are not treated as obsolete merely because a bug is fixed.
   source/metadata selectors and reports actual modifications. All thirteen new
   tests pass on disposable local MongoDB, including dry-run and global multi-DB
   limits. The canonical quality migration remains a distinct contract.
+
+- **Source pairing passed:** two regressions reproduced URI-only deduplication
+  dropping a distinct database on the same deployment and assigning the wrong
+  name after a repeated primary. Bot and metadata-tool topology now normalize
+  pairs together, preserve fallback names and reject excess names. Sixty-two
+  focused configuration/migration/recovery/ownership cases pass.
+- **Remote search acceptance passed:** backfilled all 96,908 cloned media
+  documents with no truncation. Five queries, five repetitions per strategy,
+  returned identical complete ID sets. Indexed median times were 59–137ms versus
+  3.35–5.32s legacy; all five EXPLAIN plans used `media_search_terms_v1` and
+  completed successfully. These are remote QA medians/maxima, not production p95.
+- **Remote ownership acceptance passed:** 100 simultaneous creators produced
+  exactly one document; restart lookup, owner-outage fail-closed, owner update and
+  deletion passed across all three disposable remote sources. Synthetic data was
+  removed; immutable reservations remain by design.
+- **Live multi-source passed so far:** manually switching to each secondary,
+  indexing distinct harmless private uploads, generating links and normal-user
+  delivery succeeded. All eleven optional feature flows were replayed; favorites,
+  collections and dashboard now read across the activated topology. `/verify`
+  again reported 100/100. This score measures manager alignment, not code coverage.
