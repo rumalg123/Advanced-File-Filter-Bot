@@ -1,4 +1,5 @@
 """Persistence outcome and Telegram cleanup are separate edit-session contracts."""
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -121,3 +122,36 @@ async def test_cancel_of_old_edit_does_not_cancel_newer_owner_session(monkeypatc
     with pytest.raises(StopPropagation):await handler.handle_cancel(client,message)
     latest=await manager.get_edit_session(1)
     assert latest is not None and latest.session_id==created[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('phase',['input_lock','input_delete','confirmation'])
+async def test_cancelled_edit_closes_its_session_at_every_processing_phase(monkeypatch,phase):
+    handler,message,client=fixture(monkeypatch)
+    target={'input_lock':handler.bot.cache.set,'input_delete':message.delete,
+            'confirmation':client.send_message}[phase]
+    target.side_effect=asyncio.CancelledError()
+    with pytest.raises(asyncio.CancelledError):await handler.handle_edit_input(client,message)
+    handler.session_manager.cancel_edit_session.assert_awaited_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_task_cancellation_waits_for_owned_edit_cleanup(monkeypatch):
+    handler,message,client=fixture(monkeypatch)
+    confirming=asyncio.Event();cleaning=asyncio.Event();finish=asyncio.Event();completed=asyncio.Event()
+    async def send(*args):
+        confirming.set();await asyncio.sleep(60)
+    async def cancel(*args,**kwargs):
+        cleaning.set();await finish.wait();completed.set()
+    client.send_message.side_effect=send
+    handler.session_manager.cancel_edit_session.side_effect=cancel
+    task=asyncio.create_task(handler.handle_edit_input(client,message))
+    try:
+        await asyncio.wait_for(confirming.wait(),.5)
+        task.cancel()
+        await asyncio.wait_for(cleaning.wait(),.5)
+        assert not task.done()
+    finally:
+        finish.set()
+        with pytest.raises(asyncio.CancelledError):await task
+    assert completed.is_set()

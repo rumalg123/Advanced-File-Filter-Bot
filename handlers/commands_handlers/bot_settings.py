@@ -494,6 +494,20 @@ class BotSettingsHandler(BaseHandler):
         # This handler should ONLY process messages when user is actively in edit session
         logger.info(f"[EDIT_SESSION] Processing input for user {user_id}: {message.text}")
         
+        try:
+            return await self._process_edit_session_input(client, message, session)
+        except asyncio.CancelledError:
+            # Finish cancellation before shutdown closes the operational Redis
+            # connection. Fence cleanup to the session this input captured.
+            cleanup = asyncio.create_task(self._cancel_captured_edit(user_id, session))
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                await cleanup
+            raise
+
+    async def _process_edit_session_input(self, client, message, session):
+        user_id = message.from_user.id
         # Set a temporary flag to prevent search processing of this message
         await self.bot.cache.set(
             CacheKeyGenerator.recent_settings_edit(user_id),
