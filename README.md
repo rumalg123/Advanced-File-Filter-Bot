@@ -132,6 +132,8 @@ PH-011 search-cache consistency: [atomic Redis generations, bounded search retry
 
 PH-012 staging and recovery: [isolated staging deployment and Atlas/Redis backup-restore rehearsal](docs/STAGING_AND_RECOVERY.md), [evidence template](docs/RECOVERY_EVIDENCE_TEMPLATE.md), and a [separate staging Compose project](docker-compose.staging.yml) that requires dedicated Telegram, MongoDB and Redis resources. The host preflight is offline; no production environment was accessed.
 
+PH-013 health checks: [cheap liveness, bounded dependency readiness and on-demand diagnostic behavior](docs/HEALTH_PROBES.md). Docker liveness stays at `/health` and cannot trigger restarts from MongoDB/Redis outages; `/ready` reports dependency status separately.
+
 ### Wzgram compatibility note
 
 The project dependency is pinned to a specific `wzgram` Git commit in `pyproject.toml` and `requirements.txt`. Wzgram exposes a Pyrogram-compatible import namespace, so source imports such as `from pyrogram import Client` are expected; they do not mean the project still installs the unmaintained upstream Pyrogram distribution.
@@ -237,7 +239,9 @@ Compose overrides the bot's `REDIS_URI` with `redis://redis:6379/0`, waits for R
 ### Check health
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/health  # cheap process liveness
+curl http://localhost:8000/ready   # bounded MongoDB and Redis readiness
+curl http://localhost:8000/health/details  # explicit detailed legacy report
 curl http://localhost:8000/metrics
 ```
 
@@ -353,7 +357,7 @@ Never commit `.env`. The repository `.gitignore` is intended to keep secrets out
 | Variable | Default | Purpose |
 |---|---:|---|
 | `SESSION` | `Media_search` | Local wzgram session name. Use a stable value per deployment. |
-| `PORT` | `8000` | aiohttp port serving `/`, `/health`, `/metrics`, and `/performance`. |
+| `PORT` | `8000` | aiohttp port serving liveness (`/`, `/health`, `/live`), readiness (`/ready`), details (`/health/details`) and existing metrics endpoints. |
 | `WORKERS` | `50` | Wzgram update worker count configured when the client is constructed. |
 | `ENVIRONMENT` | `production` | Marks `dev`/`development`; other values are treated as production. |
 | `IN_DOCKER` | unset | Explicit Docker detection hint; Docker is also detected through `/.dockerenv`. |
@@ -771,12 +775,14 @@ Important defaults from `core/cache/config.py`:
 
 | Endpoint | Purpose | Status behavior |
 |---|---|---|
-| `GET /` | Alias of health. | `200` for healthy/degraded, otherwise `503`. |
-| `GET /health` | Bot identity plus Mongo/Redis/system health data. | `200` or `503`. |
+| `GET /`, `GET /health`, `GET /live` | Cheap HTTP liveness (no database/statistics work). | `200` while the HTTP server responds. |
+| `GET /ready` | Bounded, cached MongoDB/Redis pings; also protected Redis if configured. | `200` when dependencies respond, otherwise `503`. |
+| `GET /health/details` | Explicit on-demand legacy user/file/storage diagnostics. | `200` healthy/degraded, otherwise `503`. |
+| `GET /health?details=1` | Compatibility alias for detailed legacy report. | Same as `/health/details`. |
 | `GET /metrics` | Process/system performance metrics. | `200`, or `500` on collection error. |
 | `GET /performance` | Alias of metrics. | Same as `/metrics`. |
 
-These endpoints currently allow broad CORS and have no authentication. Expose them only through a trusted network, firewall, or authenticated reverse proxy if the metric details are sensitive.
+These endpoints currently allow broad CORS and have no authentication (PH-004 was operator-deferred). Keep them on a trusted network. Existing dashboards relying on the old `/health` JSON `stats` / `meta` fields should use `/health/details` or `/health?details=1`. `/health` is a liveness check, not proof that MongoDB or Redis is available.
 
 ### Logging
 
