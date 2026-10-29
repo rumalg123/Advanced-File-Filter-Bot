@@ -1,4 +1,4 @@
-"""Regression coverage for POTENTIAL_ISSUES task ownership and shutdown."""
+"""Regression coverage for task ownership and shutdown."""
 import asyncio
 import ast
 from pathlib import Path
@@ -55,7 +55,9 @@ async def test_cleanup_cancels_scheduled_deletions_and_rejects_new_work():
 def test_delivery_paths_do_not_spawn_unmanaged_deletion_tasks():
     root = Path(__file__).resolve().parents[1]
     offenders = []
-    for name in ["handlers/deeplink.py", "handlers/commands_handlers/bot_settings.py",
+    # Settings uses an awaited cancellation-cleanup task, which is not a
+    # background deletion. Its real deletion ownership is exercised below.
+    for name in ["handlers/deeplink.py",
                  "core/services/filestore.py", "core/services/search_results.py"]:
         for node in ast.walk(ast.parse((root / name).read_text())):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
@@ -64,6 +66,22 @@ def test_delivery_paths_do_not_spawn_unmanaged_deletion_tasks():
                     and node.func.attr == "create_task"):
                 offenders.append(f"{name}:{node.lineno}")
     assert offenders == []
+
+
+@pytest.mark.asyncio
+async def test_settings_deletion_is_owned_and_cancelled_by_shared_shutdown():
+    from handlers.commands_handlers.bot_settings import BotSettingsHandler
+    bot = SimpleNamespace(bot_settings_service=None, session_manager=None)
+    bot.handler_manager = HandlerManager(bot)
+    handler = BotSettingsHandler(bot)
+    message = SimpleNamespace(delete=AsyncMock())
+    task = handler._schedule_auto_delete(message, 3600)
+    assert task in bot.handler_manager.auto_delete_tasks
+    await asyncio.sleep(0)
+    await bot.handler_manager.cleanup()
+    assert task.cancelled()
+    message.delete.assert_not_awaited()
+    assert handler._schedule_auto_delete(message, 1) is None
 
 
 @pytest.mark.asyncio
