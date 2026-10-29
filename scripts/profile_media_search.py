@@ -21,6 +21,9 @@ from pymongo import MongoClient
 from core.utils.search_matcher import build_media_search_filter
 from core.utils.validators import normalize_query
 
+MAX_PROFILE_OFFSETS = 6
+MAX_PROFILE_OPERATIONS = 24
+
 DEFAULT_QUERIES = (
     "doctor x mafia",
     "doctor x mafia s01e03 540p",
@@ -84,8 +87,18 @@ def profile(
     use_caption: bool = True,
     include_counts: bool = False,
     include_index_stats: bool = False,
+    offsets: tuple[int, ...] = (0,),
+    compare_legacy_sort: bool = False,
 ) -> dict:
-    """Perform explain-only read operations, returning aggregate statistics."""
+    """Perform bounded, explain-only reads for stable and legacy page plans."""
+    if (not offsets or len(set(offsets)) > MAX_PROFILE_OFFSETS
+            or any(type(offset) is not int or not 0 <= offset <= 1_000_000
+                   for offset in offsets)):
+        raise ValueError("Offsets must be 0..1000000, with at most 6 distinct values")
+    offsets = tuple(dict.fromkeys(offsets))
+    operations = len(queries) * len(offsets) * (2 if compare_legacy_sort else 1)
+    if operations > MAX_PROFILE_OPERATIONS:
+        raise ValueError("Too many page explain operations; maximum is 24")
     output = {
         "collection": "media_files",
         "document_count": database.media_files.estimated_document_count(
@@ -93,6 +106,8 @@ def profile(
         ),
         "indexes": sorted(database.media_files.index_information()),
         "limit": limit,
+        "offsets": list(offsets),
+        "sort": {"indexed_at": -1, "_id": -1},
         "max_time_ms": max_time_ms,
         "queries": [],
     }
@@ -114,21 +129,40 @@ def profile(
         normalized = normalize_query(query)
         # Exactly the same filter compiler used by the Telegram media search.
         predicate = build_media_search_filter(normalized, use_caption=use_caption)
-        find_command = {
-            "find": "media_files",
-            "filter": predicate,
-            "sort": {"indexed_at": -1},
-            "limit": limit,
-            "maxTimeMS": max_time_ms,
-        }
         row = {
             "query_id": hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12],
             "token_count": len(normalized.split()),
+            "pages": [],
         }
-        explanation = database.command(
-            "explain", find_command, verbosity="executionStats", maxTimeMS=max_time_ms
-        )
-        row["page"] = concise_plan(explanation)
+        if compare_legacy_sort:
+            row["legacy_pages"] = []
+        for offset in offsets:
+            find_command = {
+                "find": "media_files",
+                "filter": predicate,
+                "sort": {"indexed_at": -1, "_id": -1},
+                "skip": offset,
+                "limit": limit,
+                "maxTimeMS": max_time_ms,
+            }
+            explanation = database.command(
+                "explain", find_command, verbosity="executionStats",
+                maxTimeMS=max_time_ms,
+            )
+            page = {"offset": offset, **concise_plan(explanation)}
+            row["pages"].append(page)
+            # Preserve the PH-006 output contract for the default offset 0.
+            if offset == 0:
+                row["page"] = concise_plan(explanation)
+            if compare_legacy_sort:
+                legacy_command = dict(find_command, sort={"indexed_at": -1})
+                legacy_explanation = database.command(
+                    "explain", legacy_command, verbosity="executionStats",
+                    maxTimeMS=max_time_ms,
+                )
+                row["legacy_pages"].append({
+                    "offset": offset, **concise_plan(legacy_explanation),
+                })
 
         if include_counts:
             count_command = {
@@ -163,12 +197,23 @@ def main() -> None:
     parser.add_argument("--no-caption", action="store_true")
     parser.add_argument("--include-counts", action="store_true",
                         help="Explain the potentially expensive exact match count")
+    parser.add_argument("--offset", type=int, action="append", default=None,
+                        help="Repeatable offset (0..1000000, up to 6); default 0")
+    parser.add_argument("--compare-legacy-sort", action="store_true",
+                        help="Also explain the previous indexed_at-only ordering")
     parser.add_argument("--index-stats", action="store_true",
                         help="Read index usage counters without modifying indexes")
     parser.add_argument("--allow-remote", action="store_true",
                         help="Explicit acknowledgement to profile a remote MongoDB")
     args = parser.parse_args()
 
+    offsets = tuple(args.offset or (0,))
+    if (len(set(offsets)) > MAX_PROFILE_OFFSETS
+            or any(offset < 0 or offset > 1_000_000 for offset in offsets)):
+        parser.error("--offset must be 0..1000000, with at most 6 distinct offsets")
+    query_count = len(args.queries or DEFAULT_QUERIES)
+    if query_count * len(set(offsets)) * (2 if args.compare_legacy_sort else 1) > MAX_PROFILE_OPERATIONS:
+        parser.error("Too many explain operations; reduce queries or offsets (max 24)")
     if not 1 <= args.limit <= 100:
         parser.error("--limit must be between 1 and 100")
     if not 100 <= args.max_time_ms <= 10000:
@@ -182,7 +227,7 @@ def main() -> None:
         parser.error("Remote MongoDB requires explicit --allow-remote")
 
     with MongoClient(
-        uri, appname="PH006-ReadOnlySearchProfiler",
+        uri, appname="PH006-PH014-ReadOnlySearchProfiler",
         serverSelectionTimeoutMS=5000, socketTimeoutMS=args.max_time_ms + 3000,
     ) as client:
         # Client is read-only by contract: all methods in profile() are read
@@ -193,6 +238,7 @@ def main() -> None:
             use_caption=not args.no_caption,
             include_counts=args.include_counts,
             include_index_stats=args.index_stats,
+            offsets=offsets, compare_legacy_sort=args.compare_legacy_sort,
         )
         print(json.dumps(report, indent=2, sort_keys=True))
 
