@@ -201,8 +201,8 @@ class BotSettingsHandler(BaseHandler):
 
         elif data.startswith("bset_page_"):
             page = int(data.split("_")[2])
+            await query.answer(f"Loading page {page + 1}")
             await self.show_settings_menu(query.message, page)
-            await query.answer(f"Page {page + 1}")
 
         elif data.startswith("bset_view_"):
             await query.answer()

@@ -6,7 +6,7 @@ from handlers.commands_handlers.bot_settings import BotSettingsHandler
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('data',['bset_view_CACHE_TIME_0','bset_edit_CACHE_TIME','bset_back','bset_close'])
+@pytest.mark.parametrize('data',['bset_view_CACHE_TIME_0','bset_edit_CACHE_TIME','bset_back','bset_close','bset_page_1'])
 async def test_settings_navigation_acknowledges_callback_before_slow_work(data):
     handler=object.__new__(BotSettingsHandler)
     handler.bot=SimpleNamespace(config=SimpleNamespace(ADMINS=[1]))
