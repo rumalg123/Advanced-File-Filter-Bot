@@ -20,6 +20,10 @@ from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# PH-014: unique _id makes equal-timestamp offset pages deterministic.
+# Do not change the multi-database merge path before PH-025..PH-028.
+SINGLE_DB_SEARCH_SORT = [("indexed_at", -1), ("_id", -1)]
+
 class SearchGenerationChanged(RuntimeError):
     """A concurrent media mutation invalidated this search attempt."""
 
@@ -550,6 +554,10 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             )
         # PH-003: a split-state cutover must not accidentally reuse an older
         # ":v1" search page produced with the legacy counter on cache Redis.
+        # A new cache namespace avoids mixing pre-PH-014 pages with pages
+        # ordered by the unique _id tie-breaker after a rolling deployment.
+        if not self.is_multi_db:
+            cache_query += "|sort:indexed-at-id-desc-v1"
         if getattr(self.cache, "protected_state_enabled", False):
             cache_query += "|state:split-v1"
         cache_key = CacheKeyGenerator.search_results_versioned(
@@ -620,7 +628,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     search_filter,
                     limit=limit,
                     skip=offset,
-                    sort=[('indexed_at', -1)],
+                    sort=SINGLE_DB_SEARCH_SORT,
                     raise_on_error=True
                 )
                 search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
