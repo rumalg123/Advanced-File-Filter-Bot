@@ -67,6 +67,7 @@ FEAT-012 extends the existing configured force-subscription behavior.
 | CACHE-022 | Low | Fixed | Channel projection | Indexed-count updates invalidate the entity key but not the cached active-channel projection, so callers can see old channel metadata. Invalidate the projection after a successful count update. |
 | CACHE-023 | Medium | Fixed | Session identity | Default session IDs use one-second timestamps, allowing two same-user/same-type creations in one second to reuse a cache identity. Generate collision-resistant IDs so ownership checks remain meaningful. |
 | CACHE-024 | High | Fixed | Monitoring | Serialization analysis scans mixed Redis data types through scalar `GET`; recommendation and search-history sorted sets therefore emit a `WRONGTYPE` error per key, and the scan can traverse the entire database while looking for a small number of serializable samples. Inspect `TYPE` first, read only strings, use `DUMP` for type-agnostic size fallback, and bound examined keys without deleting or rewriting live data. |
+| CACHE-025 | High | Fixed | Premium entitlement | A cached decision can conflict with the current flag/expiry after TTL rounding or an invalidation race; malformed values violate the status tuple contract. Validate shape and current entitlement before returning a hit. See BUG-103 and the bounded premium QA record. |
 
 ## Remediation order
 

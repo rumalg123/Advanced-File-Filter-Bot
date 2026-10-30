@@ -484,6 +484,23 @@ def cache_premium_status(ttl: int = 600) -> Callable:
             try:
                 if hasattr(self, 'cache') and self.cache:
                     cached_result = await self.cache.get(cache_key)
+                    if (
+                        isinstance(cached_result, (tuple, list))
+                        and len(cached_result) == 2
+                        and type(cached_result[0]) is bool
+                        and (cached_result[1] is None or isinstance(cached_result[1], str))
+                    ):
+                        # TTLs are rounded to seconds and an old writer may
+                        # race invalidation. Current flag/expiry always wins
+                        # over either a stale positive or negative decision.
+                        from core.utils.validators import is_premium_valid
+                        state_matches = not hasattr(user, 'is_premium') or cached_result[0] == is_premium_valid(
+                            user.is_premium, getattr(user, 'premium_expiry_date', None)
+                        )
+                        if not state_matches:
+                            cached_result = None
+                    else:
+                        cached_result = None
                     if cached_result is not None:
                         # MessagePack represents tuples as arrays. Restore the
                         # decorated method's tuple contract on cache hits.
