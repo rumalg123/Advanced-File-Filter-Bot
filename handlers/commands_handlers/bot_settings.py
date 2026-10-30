@@ -1,4 +1,5 @@
 import asyncio
+import html
 from pathlib import Path
 
 from pyrogram import Client
@@ -286,12 +287,16 @@ class BotSettingsHandler(BaseHandler):
             current_display = str(current_value)
             default_display = str(default_value)
 
+        current_display = html.escape(current_display)
+        default_display = html.escape(default_display)
+        description = html.escape(str(description))
+
         protection_status = ""
         editable = key not in self.PROTECTED_SETTINGS and setting.get('editable', True)
         if key in self.PROTECTED_SETTINGS:
             protection_status = "\n🔒 <b>Protected:</b> This setting cannot be changed via bot"
         if setting.get('edit_note'):
-            protection_status += f"\n{'ℹ️' if editable else '🔒'} {setting['edit_note']}"
+            protection_status += f"\n{'ℹ️' if editable else '🔒'} {html.escape(setting['edit_note'])}"
 
         text = (
             f"⚙️ <b>Setting: {self._get_display_name(key)}</b>\n\n"
@@ -367,6 +372,7 @@ class BotSettingsHandler(BaseHandler):
 
         setting_type = setting['type']
         current_value = setting['value']
+        current_display = html.escape(str(current_value))
 
         # Session is now managed by unified session manager
 
@@ -374,7 +380,7 @@ class BotSettingsHandler(BaseHandler):
         if key == 'AUTO_DELETE_MESSAGE':
             text = (
                 f"✏️ <b>Editing: Auto Delete Message</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"<b>Available placeholders:</b>\n"
                 f"• `{{content_type}}` - Type of content (file, message, etc.)\n"
                 f"• `{{minutes}}` - Minutes until deletion\n\n"
@@ -422,7 +428,7 @@ class BotSettingsHandler(BaseHandler):
 
             text = (
                 f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
                 f"Send /cancel to cancel."
@@ -433,7 +439,7 @@ class BotSettingsHandler(BaseHandler):
 
             text = (
                 f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
                 f"Send /cancel to cancel."
@@ -444,7 +450,7 @@ class BotSettingsHandler(BaseHandler):
 
             text = (
                 f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
                 f"Send /cancel to cancel."
