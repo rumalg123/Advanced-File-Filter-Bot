@@ -11,6 +11,8 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
+from config.settings import settings
+
 from core.utils.service_tasks import ServiceTasks
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
@@ -233,74 +235,33 @@ class FileStoreService:
             protect: bool = False
     ) -> Optional[str]:
         """Create batch link for multiple files"""
-        # Parse message links
-        import re
-
-        # Updated regex pattern to handle both numeric IDs and usernames
-        link_pattern = re.compile(
-            r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
-            r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
-        )
-
-        # Parse first link
-        match = link_pattern.match(first_msg_link.strip())
-        if not match:
-            logger.error(f"First link doesn't match pattern: {first_msg_link}")
+        first = TelegramLinkParser.parse_link(first_msg_link)
+        last = TelegramLinkParser.parse_link(last_msg_link)
+        if not first or not last or not TelegramLinkParser.is_valid_batch_range(
+            first.message_id, last.message_id, settings.processing.max_batch_messages
+        ):
+            logger.warning("Invalid batch message range")
             return None
 
-        f_chat_id = match.group(1)
-        f_msg_id = int(match.group(2))
-
-        # Handle channel IDs (numeric IDs from /c/ links need -100 prefix)
-        if f_chat_id.isdigit():
-            if '/c/' in first_msg_link:
-                f_chat_id = int("-100" + f_chat_id)
-            else:
-                # Regular numeric ID (might already have -100 prefix)
-                f_chat_id = int(f_chat_id)
-        else:
-            # It's a username, try to get channel info
-            try:
-                chat = await telegram_api.call_api(
-                    client.get_chat,
-                    f_chat_id,
-                    chat_id=None  # Username, not numeric ID
-                )
-                f_chat_id = chat.id
-            except Exception as e:
-                logger.error(f"Error resolving chat {f_chat_id}: {e}")
-                return None
-
-        # Parse last link
-        match = link_pattern.match(last_msg_link.strip())
-        if not match:
-            logger.error(f"Last link doesn't match pattern: {last_msg_link}")
+        # Resolve both formats before comparing, preserving mixed username/ID links.
+        chat_ids = []
+        for parsed in (first, last):
+            chat_id = parsed.chat_id
+            if chat_id is None:
+                try:
+                    chat = await telegram_api.call_api(
+                        client.get_chat, parsed.chat_identifier, chat_id=None
+                    )
+                    chat_id = chat.id
+                except Exception:
+                    logger.warning("Unable to resolve batch source", exc_info=True)
+                    return None
+            chat_ids.append(chat_id)
+        if chat_ids[0] != chat_ids[1]:
+            logger.warning("Batch links belong to different chats")
             return None
-
-        l_chat_id = match.group(1)
-        l_msg_id = int(match.group(2))
-
-        # Handle channel IDs
-        if l_chat_id.isdigit():
-            if '/c/' in last_msg_link:
-                l_chat_id = int("-100" + l_chat_id)
-            else:
-                l_chat_id = int(l_chat_id)
-        else:
-            try:
-                chat = await telegram_api.call_api(
-                    client.get_chat,
-                    l_chat_id,
-                    chat_id=None  # Username, not numeric ID
-                )
-                l_chat_id = chat.id
-            except Exception as e:
-                logger.error(f"Error resolving chat {l_chat_id}: {e}")
-                return None
-
-        if f_chat_id != l_chat_id:
-            logger.error(f"Chat IDs don't match: {f_chat_id} != {l_chat_id}")
-            return None
+        f_chat_id = chat_ids[0]
+        f_msg_id, l_msg_id = first.message_id, last.message_id
 
         # Create batch data
         string = f"{f_msg_id}_{l_msg_id}_{f_chat_id}_{'pbatch' if protect else 'batch'}"

@@ -4,6 +4,9 @@ import base64
 from pyrogram import Client
 from pyrogram.types import Message
 
+from config.settings import settings
+from core.utils.link_parser import TelegramLinkParser
+
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
@@ -191,16 +194,26 @@ class DeepLinkHandler(BaseCommandHandler):
 
         # Decode DSTORE data
         try:
-            decoded = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)).decode("ascii")
-            parts = decoded.split("_", 3)
+            decoded = base64.b64decode(
+                encoded + "=" * (-len(encoded) % 4), altchars=b"-_", validate=True
+            ).decode("ascii")
+            parts = decoded.split("_")
 
-            if len(parts) < 3:
+            if len(parts) not in (3, 4):
                 raise ValueError("Invalid format")
 
             f_msg_id = int(parts[0])
             l_msg_id = int(parts[1])
             chat_id = int(parts[2])
             protect = parts[3] == "pbatch" if len(parts) > 3 else False
+            if (
+                not chat_id
+                or (len(parts) == 4 and parts[3] not in ("batch", "pbatch"))
+                or not TelegramLinkParser.is_valid_batch_range(
+                    f_msg_id, l_msg_id, settings.processing.max_batch_messages
+                )
+            ):
+                raise ValueError("Invalid batch range or mode")
 
         except Exception as e:
             logger.error(f"Failed to decode identifier: {encoded} Error: {e}")
