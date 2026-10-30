@@ -14,7 +14,7 @@ from core.utils.logger import get_logger
 from core.utils.messages import MessageHelper
 from core.utils.pagination import resolve_search_query_reference
 from core.utils.telegram_api import telegram_api
-from core.utils.quota_delivery import settle_delivery_quota
+from core.utils.quota_delivery import settle_delivery_quota, bulk_delivery_quota
 from core.utils.validators import (
     is_original_requester, is_private_chat, skip_subscription_check,
     is_admin, extract_user_id, is_premium_valid
@@ -535,161 +535,134 @@ class FileCallbackHandler(BaseCommandHandler):
                 )
                 return
 
-        # Start sending files to PM. If setup fails, no file was delivered and
-        # the entire reservation must be returned.
-        try:
+        async with bulk_delivery_quota(self.bot.user_repo, user_id, reserved_count) as delivery:
             await query.answer(f"📤 Sending {len(files_data)} files...", show_alert=False)
-        except BaseException:
-            if needs_quota and reserved_count:
-                await settle_delivery_quota(self.bot.user_repo, user_id, reserved_count, 0)
-            raise
 
-        # Send status message to PM
-        try:
-            status_msg = await telegram_api.call_api(
-                client.send_message,
-                user_id,  # positional arg for send_message
-                f"📤 <b>Sending Files</b>\n"
-                f"Query: {search_query}\n"
-                f"Total Files: {len(files_data)}\n"
-                f"Progress: 0/{len(files_data)}",
-                chat_id=user_id  # for call_api rate limiting
-            )
-        except UserIsBlocked:
-            if needs_quota and reserved_count:
-                await settle_delivery_quota(self.bot.user_repo, user_id, reserved_count, 0)
-            await query.answer(
-                ErrorMessageFormatter.format_error(
-                    "Please start the bot first!",
-                    plain_text=True
-                ) + "\n"
-                f"Click here: @{self.bot.bot_username}",
-                show_alert=True
-            )
-            return
-        except BaseException:
-            if needs_quota and reserved_count:
-                await settle_delivery_quota(self.bot.user_repo, user_id, reserved_count, 0)
-            raise
-
-        success_count = 0
-        failed_count = 0
-        sent_messages = []  # Track sent messages for auto-deletion
-
-        # Initialize these variables outside the loop to avoid uninitialized variable warnings
-        delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
-        delete_minutes = delete_time // 60
-        file = None
-
-        for idx, file_data in enumerate(files_data):
+            # Send status message to PM
             try:
-                file_unique_id = file_data['file_unique_id']
-
-                # Get full file details from database
-                file = await self.bot.media_repo.find_file(file_unique_id)
-
-                if not file:
-                    failed_count += 1
-                    continue
-
-                caption = CaptionFormatter.format_file_caption(
-                    file=file,
-                    custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
-                    batch_caption=self.bot.config.BATCH_FILE_CAPTION,
-                    keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
-                    is_batch=False,  # These are individual files from search, not batch
-                    auto_delete_minutes=delete_minutes if delete_time > 0 else None,
-                    auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
-                )
-
-                # telegram_api.call_api already uses semaphore_manager internally
-                sent_msg = await telegram_api.call_api(
-                    client.send_cached_media,
-                    user_id,  # positional arg for send_cached_media
-                    file.file_id,
-                    caption=caption,
-                    parse_mode=CaptionFormatter.get_parse_mode(),
-                    reply_markup=self._feature_file_markup(file),
+                status_msg = await telegram_api.call_api(
+                    client.send_message,
+                    user_id,  # positional arg for send_message
+                    f"📤 <b>Sending Files</b>\n"
+                    f"Query: {search_query}\n"
+                    f"Total Files: {len(files_data)}\n"
+                    f"Progress: 0/{len(files_data)}",
                     chat_id=user_id  # for call_api rate limiting
                 )
-
-                sent_messages.append(sent_msg)
-                success_count += 1
-
-                feature_service = getattr(self.bot, 'feature_service', None)
-                if feature_service:
-                    await feature_service.record_recent_file(
-                        user_id, file.file_unique_id
-                    )
-
-                # Note: We'll increment all at once after the loop to avoid race conditions
-
-                # Update progress every 5 files
-                if (idx + 1) % 5 == 0 or (idx + 1) == len(files_data):
-                    try:
-                        await status_msg.edit_text(
-                            f"📤 <b>Sending Files</b>\n"
-                            f"Query: {search_query}\n"
-                            f"Total Files: {len(files_data)}\n"
-                            f"Progress: {idx + 1}/{len(files_data)}\n"
-                            f"{ErrorMessageFormatter.format_success('Success', include_prefix=False)}: {success_count}\n"
-                            f"{ErrorMessageFormatter.format_error('Failed', include_prefix=False)}: {failed_count}"
-                        )
-                    except Exception:
-                        pass  # Status message update is non-critical
-
-                # Small delay to avoid flooding
-                await asyncio.sleep(1)
-
-            except asyncio.CancelledError:
-                if needs_quota and reserved_count:
-                    await settle_delivery_quota(
-                        self.bot.user_repo, user_id, reserved_count, success_count,
-                        uncertain=True
-                    )
-                raise
-            except Exception as e:
-                logger.error(f"Error sending file: {e}")
-                failed_count += 1
-
-        # Release unused quota if some files failed (quota was reserved upfront)
-        # The quota was already reserved at the start, so we only need to release
-        # the difference between reserved and actually sent files
-        if needs_quota and reserved_count:
-            await settle_delivery_quota(
-                self.bot.user_repo, user_id, reserved_count, success_count,
-                uncertain=failed_count > 0
-            )
-
-        # Final status
-        final_text = (
-            ErrorMessageFormatter.format_success("Transfer Complete!", title="Transfer Complete") + "\n"
-            f"Query: {search_query}\n"
-            f"Total Files: {len(files_data)}\n"
-            f"✅ Sent: {success_count}\n"
-        )
-
-        if failed_count > 0:
-            final_text += ErrorMessageFormatter.format_error(f"Failed: {failed_count}", include_prefix=False) + "\n"
-
-        # Add auto-delete notice if enabled
-        if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
-            delete_minutes = self.bot.config.MESSAGE_DELETE_SECONDS // 60
-            final_text += f"\n⏱ Files will be auto-deleted after {delete_minutes} minutes"
-
-        await status_msg.edit_text(final_text)
-
-        # Schedule auto-deletion for all sent messages and status message with task tracking
-        if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
-            # Auto-delete status message (Transfer Complete)
-            self._track_task(
-                self._auto_delete_message(status_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
-            )
-            # Auto-delete all sent file messages
-            for sent_msg in sent_messages:
-                self._track_task(
-                    self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+            except UserIsBlocked:
+                await query.answer(
+                    ErrorMessageFormatter.format_error(
+                        "Please start the bot first!",
+                        plain_text=True
+                    ) + "\n"
+                    f"Click here: @{self.bot.bot_username}",
+                    show_alert=True
                 )
+                return
+
+            success_count = 0
+            failed_count = 0
+            sent_messages = []  # Track sent messages for auto-deletion
+
+            # Initialize these variables outside the loop to avoid uninitialized variable warnings
+            delete_time = self.bot.config.MESSAGE_DELETE_SECONDS
+            delete_minutes = delete_time // 60
+            file = None
+
+            for idx, file_data in enumerate(files_data):
+                try:
+                    file_unique_id = file_data['file_unique_id']
+
+                    # Get full file details from database
+                    file = await self.bot.media_repo.find_file(file_unique_id)
+
+                    if not file:
+                        failed_count += 1
+                        continue
+
+                    caption = CaptionFormatter.format_file_caption(
+                        file=file,
+                        custom_caption=self.bot.config.CUSTOM_FILE_CAPTION,
+                        batch_caption=self.bot.config.BATCH_FILE_CAPTION,
+                        keep_original=self.bot.config.KEEP_ORIGINAL_CAPTION,
+                        is_batch=False,  # These are individual files from search, not batch
+                        auto_delete_minutes=delete_minutes if delete_time > 0 else None,
+                        auto_delete_message=self.bot.config.AUTO_DELETE_MESSAGE
+                    )
+
+                    # telegram_api.call_api already uses semaphore_manager internally
+                    delivery.attempted += 1
+                    sent_msg = await telegram_api.call_api(
+                        client.send_cached_media,
+                        user_id,  # positional arg for send_cached_media
+                        file.file_id,
+                        caption=caption,
+                        parse_mode=CaptionFormatter.get_parse_mode(),
+                        reply_markup=self._feature_file_markup(file),
+                        chat_id=user_id  # for call_api rate limiting
+                    )
+
+                    delivery.confirmed += 1
+                    sent_messages.append(sent_msg)
+                    success_count += 1
+
+                    feature_service = getattr(self.bot, 'feature_service', None)
+                    if feature_service:
+                        try:
+                            await feature_service.record_recent_file(user_id, file.file_unique_id)
+                        except Exception:
+                            logger.warning("Unable to record recent bulk-delivered file", exc_info=True)
+
+                    # Update progress every 5 files
+                    if (idx + 1) % 5 == 0 or (idx + 1) == len(files_data):
+                        try:
+                            await status_msg.edit_text(
+                                f"📤 <b>Sending Files</b>\n"
+                                f"Query: {search_query}\n"
+                                f"Total Files: {len(files_data)}\n"
+                                f"Progress: {idx + 1}/{len(files_data)}\n"
+                                f"{ErrorMessageFormatter.format_success('Success', include_prefix=False)}: {success_count}\n"
+                                f"{ErrorMessageFormatter.format_error('Failed', include_prefix=False)}: {failed_count}"
+                            )
+                        except Exception:
+                            pass  # Status message update is non-critical
+
+                    # Small delay to avoid flooding
+                    await asyncio.sleep(1)
+
+                except Exception as e:
+                    logger.error(f"Error sending file: {e}")
+                    failed_count += 1
+
+            # Final status
+            final_text = (
+                ErrorMessageFormatter.format_success("Transfer Complete!", title="Transfer Complete") + "\n"
+                f"Query: {search_query}\n"
+                f"Total Files: {len(files_data)}\n"
+                f"✅ Sent: {success_count}\n"
+            )
+
+            if failed_count > 0:
+                final_text += ErrorMessageFormatter.format_error(f"Failed: {failed_count}", include_prefix=False) + "\n"
+
+            # Add auto-delete notice if enabled
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+                delete_minutes = self.bot.config.MESSAGE_DELETE_SECONDS // 60
+                final_text += f"\n⏱ Files will be auto-deleted after {delete_minutes} minutes"
+
+            await status_msg.edit_text(final_text)
+
+            # Schedule auto-deletion for all sent messages and status message with task tracking
+            if self.bot.config.MESSAGE_DELETE_SECONDS > 0:
+                # Auto-delete status message (Transfer Complete)
+                self._track_task(
+                    self._auto_delete_message(status_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                )
+                # Auto-delete all sent file messages
+                for sent_msg in sent_messages:
+                    self._track_task(
+                        self._auto_delete_message(sent_msg, self.bot.config.MESSAGE_DELETE_SECONDS)
+                    )
 
     async def _send_subscription_message(self, client: Client, query: CallbackQuery, file_identifier: str):
         """Send subscription required message for file callback"""
