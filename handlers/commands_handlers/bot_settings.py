@@ -787,6 +787,7 @@ class BotSettingsHandler(BaseHandler):
             'FEATURE_SAVED_SEARCH_ALERTS': 'Saved Alerts',
             'FEATURE_FAVORITES': 'Favorites',
             'FEATURE_ADVANCED_SEARCH': 'Advanced Search',
+            'FEATURE_INDEXED_MEDIA_SEARCH': 'Indexed Search',
             'FEATURE_RECOMMENDATION_FEEDBACK': 'Rec Feedback',
             'FEATURE_FILE_REPORTS': 'File Reports',
             'FEATURE_SEARCH_AUTOCOMPLETE': 'Autocomplete',
