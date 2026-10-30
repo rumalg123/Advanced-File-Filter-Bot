@@ -205,10 +205,19 @@ class BotSettingsHandler(BaseHandler):
 
         if data == "bset_close":
             await query.answer()
-            await query.message.delete()
-            # Clear any active edit session
+            session = None
             if self.session_manager:
-                await self.session_manager.cancel_edit_session(user_id)
+                candidate = await self.session_manager.get_edit_session(user_id)
+                if candidate and (
+                    candidate.data.get('message_id') == query.message.id
+                    and candidate.data.get('chat_id') == query.message.chat.id
+                ):
+                    session = candidate
+            try:
+                await query.message.delete()
+            finally:
+                if session:
+                    await self._cancel_captured_edit(user_id, session)
             return
 
         elif data == "bset_noop":
@@ -368,7 +377,7 @@ class BotSettingsHandler(BaseHandler):
         }
         
         # Create session using unified session manager
-        await self.session_manager.create_edit_session(user_id, session_data)
+        session_id = await self.session_manager.create_edit_session(user_id, session_data)
 
         setting_type = setting['type']
         current_value = setting['value']
@@ -456,7 +465,17 @@ class BotSettingsHandler(BaseHandler):
                 f"Send /cancel to cancel."
             )
 
-        await message.edit_text(text)
+        try:
+            await message.edit_text(text)
+        except MessageNotModified:
+            pass
+        except (Exception, asyncio.CancelledError):
+            # Do not capture the owner's next text if the prompt never appeared.
+            # A newer dialog opened during the failed send must remain intact.
+            await asyncio.shield(self.session_manager.cancel_edit_session(
+                user_id, session_id=session_id
+            ))
+            raise
 
         # Timeout is now handled automatically by unified session manager
 

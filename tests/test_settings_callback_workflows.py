@@ -11,7 +11,8 @@ from handlers.commands_handlers.bot_settings import BotSettingsHandler
 async def test_settings_navigation_acknowledges_callback_before_slow_work(data):
     handler=object.__new__(BotSettingsHandler)
     handler.bot=SimpleNamespace(config=SimpleNamespace(ADMINS=[1]))
-    handler.session_manager=SimpleNamespace(cancel_edit_session=AsyncMock())
+    handler.session_manager=SimpleNamespace(cancel_edit_session=AsyncMock(),
+        get_edit_session=AsyncMock(return_value=None))
     query=SimpleNamespace(from_user=SimpleNamespace(id=1),data=data,
         answer=AsyncMock(),message=SimpleNamespace(delete=AsyncMock()))
     async def display(*args):
