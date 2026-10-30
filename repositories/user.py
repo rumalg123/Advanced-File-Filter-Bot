@@ -133,6 +133,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if data.get('last_warning_date'):
             if isinstance(data['last_warning_date'], str):
                 data['last_warning_date'] = datetime.fromisoformat(data['last_warning_date'])
+            # BSON defaults to naive UTC; legacy ISO dates can be naive too.
+            # Both request escalation and warning stats compare against UTC now.
+            data['last_warning_date'] = normalize_expiry_date(data['last_warning_date'])
 
         if data.get('created_at'):
             if isinstance(data['created_at'], str):
