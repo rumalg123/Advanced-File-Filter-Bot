@@ -1322,12 +1322,16 @@ class FeatureHandler(BaseHandler):
         if not report:
             return await message.reply_text("Open report not found.")
 
-        file = await self.bot.media_repo.find_file(report['file_unique_id'])
-        file_name = (
-            report.get('file_name')
-            or getattr(file, 'file_name', None)
-            or "Unavailable file"
-        )
+        # Resolution is already committed. Optional display metadata must not
+        # prevent notifying reporters or make the operation appear unfinished.
+        file_name = report.get('file_name')
+        if not file_name:
+            try:
+                file = await self.bot.media_repo.find_file(report['file_unique_id'])
+                file_name = getattr(file, 'file_name', None)
+            except Exception:
+                logger.warning("Could not load resolved report filename", exc_info=True)
+        file_name = file_name or "Unavailable file"
         notification_results = await self._notify_reporters(
             client, report, file_name
         )
