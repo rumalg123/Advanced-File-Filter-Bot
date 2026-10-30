@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from bson.int64 import Int64
 
 from bot import BotConfig
 from config.settings import ChannelConfig, settings
@@ -14,6 +15,8 @@ from core.utils.subscription_config import parse_subscription_targets
     (None, []), ('', []), ('0', []), (0, []), (-1001, [-1001]),
     ('-1001', [-1001]), ('-1001, -1002', [-1001, -1002]),
     ([-1001, '-1002'], [-1001, -1002]),
+    (Int64(-1001234567890), [-1001234567890]),
+    ([Int64(-1001234567890), Int64(-1009876543210)], [-1001234567890, -1009876543210]),
     ('0, -1001, -1001, @QA_Chan, qa_chan', [-1001, '@qa_chan']),
 ])
 def test_force_sub_target_formats_remain_compatible(raw, expected):

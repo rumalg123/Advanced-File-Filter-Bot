@@ -7,7 +7,7 @@ def parse_subscription_targets(value) -> list[int | str]:
         return []
     if isinstance(value, str):
         items = [part for part in re.split(r'[,\s]+', value.strip()) if part]
-    elif type(value) is int:
+    elif isinstance(value, int) and not isinstance(value, bool):
         items = [value]
     elif isinstance(value, (list, tuple)):
         items = value
@@ -16,8 +16,9 @@ def parse_subscription_targets(value) -> list[int | str]:
 
     result = []
     for item in items:
-        if type(item) is int:
-            target = item
+        if isinstance(item, int) and not isinstance(item, bool):
+            # MongoDB decodes large Telegram IDs as bson.int64.Int64.
+            target = int(item)
         elif isinstance(item, str):
             item = item.strip()
             if re.fullmatch(r'-?[0-9]+', item):
