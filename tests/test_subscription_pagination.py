@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from pyrogram import enums
 
 from ban_support import Cache
 from core.utils.subscription import SubscriptionManager
@@ -19,6 +20,19 @@ async def test_old_page_button_rechecks_membership_before_reading_search_cache(m
     owner.bot.subscription_manager.is_subscribed.assert_awaited_once()
     cache.get.assert_not_awaited()
     prompt.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_group_preview_pagination_preserves_the_existing_subscription_exemption(monkeypatch):
+    owner, query, cache = fixture('search#page#@qa#1#50#42', subscribed=False)
+    query.message.chat.type = enums.ChatType.SUPERGROUP
+    cache.get = AsyncMock(return_value=None)
+    prompt = AsyncMock()
+    monkeypatch.setattr(SubscriptionRequired, '_send_subscription_message', prompt)
+    await PaginationCallbackHandler(owner.bot).handle_search_pagination(None, query)
+    cache.get.assert_awaited_once()
+    owner.bot.subscription_manager.is_subscribed.assert_not_awaited()
+    prompt.assert_not_awaited()
 
 
 @pytest.mark.asyncio

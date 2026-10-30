@@ -30,9 +30,18 @@ class PaginationCallbackHandler(BaseCommandHandler):
     PAGE_READ_TIMEOUT_SECONDS = 8.0
 
     @check_ban()
-    @require_subscription()
     async def handle_search_pagination(self, client: Client, query: CallbackQuery):
         """Handle search pagination callbacks"""
+        if is_private_chat(query):
+            return await self._paginate_with_subscription(client, query)
+        # Group search intentionally permits previews before subscription.
+        return await self._paginate(client, query)
+
+    @require_subscription()
+    async def _paginate_with_subscription(self, client: Client, query: CallbackQuery):
+        return await self._paginate(client, query)
+
+    async def _paginate(self, client: Client, query: CallbackQuery):
         callback_user_id = query.from_user.id
 
         # Parse callback data using helper
