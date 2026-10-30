@@ -1,10 +1,10 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded settings QA round](#bounded-qa-round-6--bot-settings-2026-10-30),
-**1,050 tests passed**, **69.53% lines / 56.40% branches / 66.26% combined**.
-Configured admin/owner bypasses and the operator's logging changes are preserved.
-Whole-bot 100% remains open. This round is complete; wait for the operator's
-next `continue` before starting another feature.
+Latest continuation: [bounded force-subscription QA round](#bounded-qa-round-7--force-subscription-2026-10-30),
+**1,108 tests passed**, **70.24% lines / 57.14% branches / 66.98% combined**.
+Configured admin/owner bypasses, public group previews and operator logging are
+preserved. Whole-bot 100% remains open. This round is complete; wait for the
+operator's next `continue` before starting another feature.
 
 Historical baseline: QA date 2026-10-29, application source `850bc31`.
 The operator authorized all supplied MongoDB copies, extra commented sources,
@@ -785,3 +785,100 @@ containers, volumes and networks were removed. The two original server services
 remain running. No production server, remote Atlas database, deployment `.env`
 or production limit was changed. No new product features or schema migrations
 were added. Stop here until the next `continue`.
+
+
+## Bounded QA round 7 — force subscription (2026-10-30)
+
+**Passed and complete for this round.** Final source `815ea27`. Six issues
+were fixed with individual commits and pagination follow-ups. Configured
+admin/owner and authorized-user subscription exemptions remain intact. Authorized
+ordinary users still face ban checks; a privileged account cannot consume
+another user's retry. Public group previews and their pagination remain open;
+private search/pages, inline search and file retrieval enforce membership.
+All 407 prior operator logger lines are preserved.
+
+| Issue | Commit | Result |
+|---|---|---|
+| BUG-094 | `e24147a` | Required chats must prove membership; unknown/error states deny access. Restricted members use `is_member`. |
+| BUG-095 | `a638e10` | Validate retry namespace/owner/payload; failed checks and foreign clicks preserve the saved action. |
+| BUG-096 | `7c78213` | Replay callbacks with their real type and original actor/message so private-chat and subscription checks work. |
+| BUG-097 | `026c177` | Omit unavailable join URLs instead of creating invalid `Chat ID: ...` URL buttons; keep retry usable. |
+| BUG-098 | `9abca15`, `dddbbb9`, `fd04956` | Guard private pagination, preserve public group pages, route all pagination actions, and store oversized retries under short owned keys. Unavailable action storage falls back to a general check. |
+| BUG-099 | `a1dfc1e` | `/start subscribe` from inline mode leads to the welcome screen after joining, rather than file decoding. |
+
+**Automated:** **1,108 passed, zero failures/errors/skips**, with 22 existing
+warnings and 58 new cases. The initial 45 focused cases showed 21 failures and
+24 passes; eight supplementary page/inline cases all failed before their fixes.
+Five later cases expanded pagination action and public-preview boundaries.
+The matrix covers channel/group member states, unverifiable chats, malformed or
+expired state, foreign owners, repeated pre-join retries, replay types, missing
+join URLs, oversized controls and unavailable operational-state writes. Four
+older pagination regressions now explicitly model an active actor, real callback
+shape and configured subscription state. The variant-page and protected-state
+checks assert that search/rendering actually ran, removing their earlier ability
+to pass at an unrelated authorization denial. A separate shell test exposed a
+partial PID-file read; `815ea27` publishes its fixture PID atomically. A new group
+fixture was also corrected to use a valid cached query reference (`23e2037`).
+The complete suite was rerun after those test corrections. Compilation, Ruff
+F821/F822/F823, local Markdown links/anchors and whitespace checks pass.
+
+**20 live Telegram checks passed** with both accounts, two tiny indexed documents,
+one declared QA channel and one declared QA supergroup. Both memberships were
+initially MEMBER, and the QA bot was an administrator in both. Baseline private,
+group and inline searches worked. A private harness sentinel made an attempted
+membership lookup for the configured admin fail; admin search/delivery still
+worked because the bypass avoided that lookup. Owner chat privileges were not
+removed.
+
+Leaving the required channel blocked old private file, Send All and page
+buttons, fresh private search and inline results. Public group search and page
+previews remained available. Two pre-join clicks preserved the deep-link retry
+session. Clicking the normal user's group retry from the admin account returned
+an ownership denial and left its state intact. Rejoining the channel resumed
+file delivery, Send All, the original page action, Help and both private/group
+deep links. Successful deep-link replay consumed its session. The inline Join
+switch and its retry opened the welcome screen; fresh inline results returned.
+
+Leaving only the required group still denied private/inline access despite
+valid channel membership. Rejoining restored delivery. A temporary group
+restriction left the normal user as RESTRICTED with `is_member=true`; private
+and inline search remained available. The individual restriction was then
+fully lifted. Deleting one owned retry key simulated expiry; the callback showed
+a safe expiry response, and reissuing the original file link after joining
+recovered delivery. See the [sanitized evidence](round7-subscription.json).
+
+The first harness expectation was corrected when live behavior confirmed the
+intentional public group preview policy. A later cleanup check showed that
+copying group defaults did not remove an individual restriction; the harness
+was corrected to lift all individual restrictions, and an independent read-back
+confirmed MEMBER before the final replay. The final run verifies both original
+memberships and no individual restriction. Two real, expiring bot invite links
+were reused within the private fixture and revoked at shutdown; two admin
+restore links were also revoked. Attempt-owned chat messages, membership service
+messages and infrastructure were cleaned. The final bot log contains an expected
+handled FloodWait and no error/traceback. No production invite-cache or load
+behavior is claimed from that fixture.
+
+Coverage includes **17,851 statements, 5,914 branches and all 121 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 60.58% | 47.65% | 57.37% |
+| Source-matched automated + live | 70.24% | 57.14% | 66.98% |
+
+Both new shards match start/end/current source hashes; historical evidence is
+accepted only for unchanged files. **Whole-bot 100% remains open.** Live expiry
+used deletion of one owned key rather than waiting for wall-clock TTL. Chat
+outages, malformed state and unavailable storage use injected failures. Premium
+mode, join-request-only chats, every legacy deep-link variant, concurrent valid
+callback exactly-once behavior, crash-after-consumption recovery, long FloodWait
+interactions and representative production load remain outside this bounded
+live round. No durable replay/idempotency feature was introduced.
+
+All QA memberships/permissions are restored, temporary invite links revoked,
+recorded messages deleted and owned containers, volumes and networks removed.
+The two original server services remain running. No production server, remote
+Atlas database, deployment `.env` or production limits were changed. No new
+product features or MongoDB schema/index migrations were added. Stop here until
+the next `continue`.

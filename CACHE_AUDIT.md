@@ -12,11 +12,11 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,050 tests with zero failures or skips** and
-**18 live settings checks** on wzgram 3.1.5, including primary/secondary admin
-permissions and a bot recreation with empty Redis and retained MongoDB. Four
-settings fixes passed; admin/owner ban bypasses and operator logging are preserved.
-Source-matched coverage is **69.53% lines, 56.40% branches, 66.26% combined**.
+The latest bounded round passed **1,108 tests with zero failures or skips** and
+**20 live force-subscription checks** on wzgram 3.1.5. Channel/group leave, join,
+restricted-member access, retry replay and state expiry passed. Admin/owner
+bypasses, public group previews and operator logging are preserved. Source-matched
+coverage is **70.24% lines, 57.14% branches, 66.98% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
 scope, configuration, cleanup and earlier feature/multidatabase evidence.
 Whole-bot 100% coverage and production operational gates remain open. Earlier

@@ -182,6 +182,18 @@ sequenceDiagram
 
 No-result private searches query the same search history for fuzzy “Did you mean?” suggestions. Group searches deliberately avoid no-result noise.
 
+Private search, private pagination, inline search and file delivery require all
+configured memberships unless the actor has an existing admin/owner/authorized
+exemption. Group search previews and pagination remain public. Unverifiable
+memberships deny access; restricted group members use their `is_member` flag.
+
+Subscription retries carry the original actor and action. Long actions use an
+owner-bound operational Redis session. Foreign clicks and failed membership
+checks leave that session intact; a verified owner consumes it before replay.
+Replayed callbacks retain the CallbackQuery type and enter the normal guarded
+handler. An expired session cannot deliver content. See the
+[bounded subscription QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-7--force-subscription-2026-10-30).
+
 ## 5. File delivery and atomic quota reservation
 
 ```mermaid

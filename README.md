@@ -440,6 +440,25 @@ Only media operations use the optional multi-database manager. Users, settings, 
 
 The bot must be a member and usually an administrator in each configured channel/group. Use full Telegram IDs, including the `-100` prefix for channels and supergroups.
 
+Force subscription applies to private search and pagination, inline search,
+protected user menus and file delivery. Group search previews and their pages
+remain public; file buttons lead to the private delivery gate. Configured bot
+admins, the primary owner and `AUTH_USERS` retain their subscription exemptions.
+The ordinary-user ban policy still applies to authorized non-admin users.
+
+Every required membership must be verifiable. An inaccessible chat or failed
+membership lookup denies ordinary-user access until verification works again.
+A restricted user who is still a member satisfies the membership requirement;
+Telegram exposes this separately through the
+[`is_member` field](https://core.telegram.org/bots/api#chatmemberrestricted).
+
+Try Again controls belong to the requesting user. Failed membership checks and
+other users' clicks preserve the saved action; after joining, the owner can
+resume the original file, bulk delivery, menu or private page. Expired sessions
+require the original command/link again. Long retry actions use short keys in
+operational Redis. If that action cannot be stored, a general membership check
+remains available and the user repeats the original action after joining.
+
 ### Established feature and access settings
 
 | Variable | Default | Purpose |
@@ -906,7 +925,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,050 tests** with zero failures or skips, plus **18 live settings checks**, including owner/secondary-admin permissions and restart with empty Redis and retained MongoDB. Source-matched coverage is **69.53% lines and 56.40% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,108 tests** with zero failures or skips, plus **20 live force-subscription checks**, including channel/group leave/join, restricted members and retry recovery. Source-matched coverage is **70.24% lines and 57.14% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 
