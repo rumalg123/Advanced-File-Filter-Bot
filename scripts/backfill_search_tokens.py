@@ -13,8 +13,8 @@ from core.utils.search_tokens import (media_search_tokens, SEARCH_TOKEN_FIELD,
 from scripts.profile_media_search import is_local
 
 
-def backfill(collection, *, apply=False, rollback=False, batch_size=200, limit=100000):
-    if not 1 <= batch_size <= 1000 or not 1 <= limit <= 1000000:
+def backfill(collection, *, apply=False, rollback=False, batch_size=200, limit=1000000):
+    if not 1 <= batch_size <= 1000 or not 1 <= limit <= 10000000:
         raise ValueError('Invalid backfill bounds')
     stats = {'scanned': 0, 'needs_update': 0, 'matched': 0, 'modified': 0, 'truncated': False}
     operations = []
@@ -65,7 +65,7 @@ def main():
     parser.add_argument('--rollback', action='store_true')
     parser.add_argument('--allow-remote', action='store_true')
     parser.add_argument('--batch-size', type=int, default=200)
-    parser.add_argument('--limit', type=int, default=100000)
+    parser.add_argument('--limit', type=int, default=1000000)
     args = parser.parse_args()
     uri, name = os.environ.get('DATABASE_URI'), os.environ.get('DATABASE_NAME')
     if not uri or not name:
