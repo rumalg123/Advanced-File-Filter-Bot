@@ -21,6 +21,24 @@ class RecommendationService:
     def _as_text(value) -> str:
         return value.decode('utf-8') if isinstance(value, bytes) else str(value)
 
+    @staticmethod
+    def _valid_cached_ranking(data, limit, explanations_enabled):
+        if not isinstance(data, dict):
+            return False
+        for key in ('similar_queries', 'trending_files', 'based_on_history'):
+            values = data.get(key)
+            if not isinstance(values, list) or len(values) > limit or any(
+                not isinstance(value, str) for value in values
+            ):
+                return False
+        if not explanations_enabled:
+            return 'reasons' not in data
+        reasons = data.get('reasons')
+        return isinstance(reasons, dict) and all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in reasons.items()
+        )
+
     async def invalidate_user_recommendations(self, user_id: int) -> None:
         """Force the next recommendation read to recompute the user's ranking."""
         try:
@@ -293,11 +311,23 @@ class RecommendationService:
             }
         """
         try:
+            if type(limit) is not int or limit <= 0:
+                return {'similar_queries': [], 'trending_files': [], 'based_on_history': []}
+            feature_service = getattr(self, 'feature_service', None)
+            feedback_enabled = bool(feature_service and feature_service.enabled('FEATURE_RECOMMENDATION_FEEDBACK'))
+            explanations_enabled = bool(feature_service and feature_service.enabled('FEATURE_RECOMMENDATION_EXPLANATIONS'))
+            cache_options = {
+                'version': 1, 'limit': limit,
+                'feedback': feedback_enabled, 'explanations': explanations_enabled,
+            }
             # Check cache first
             cache_key = CacheKeyGenerator.user_recommendations_cache(user_id)
             cached = await self.cache.get(cache_key)
-            if isinstance(cached, dict):
-                return cached
+            if (
+                isinstance(cached, dict) and cached.get('options') == cache_options
+                and self._valid_cached_ranking(cached.get('data'), limit, explanations_enabled)
+            ):
+                return cached['data']
             if cached is not None:
                 await self.cache.delete(cache_key)
             
@@ -309,11 +339,7 @@ class RecommendationService:
             recommendation_reasons = {}
 
             feedback = {'more': [], 'less': []}
-            feature_service = getattr(self, 'feature_service', None)
-            if (
-                feature_service
-                and feature_service.enabled('FEATURE_RECOMMENDATION_FEEDBACK')
-            ):
+            if feedback_enabled:
                 try:
                     feedback = await feature_service.repository.get_recommendation_feedback(
                         user_id
@@ -403,10 +429,7 @@ class RecommendationService:
                 if file_id not in interacted_file_set and file_id not in negative_file_set
             ][:limit]
 
-            if (
-                feature_service
-                and feature_service.enabled('FEATURE_RECOMMENDATION_EXPLANATIONS')
-            ):
+            if explanations_enabled:
                 returned_file_ids = set(
                     recommendations['trending_files']
                     + recommendations['based_on_history']
@@ -418,7 +441,9 @@ class RecommendationService:
                 }
             
             # Cache recommendations
-            await self.cache.set(cache_key, recommendations, expire=self.ttl.USER_RECOMMENDATIONS)
+            await self.cache.set(cache_key, {
+                'options': cache_options, 'data': recommendations,
+            }, expire=self.ttl.USER_RECOMMENDATIONS)
             
             return recommendations
             
