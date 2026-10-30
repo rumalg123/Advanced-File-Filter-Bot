@@ -953,7 +953,8 @@ class MediaSearchBot(Client):
             )
             self.subscription_manager = SubscriptionManager(
                 auth_channel=self.config.AUTH_CHANNEL,
-                auth_groups=self.config.AUTH_GROUPS  # Now uses database values!
+                auth_groups=self.config.AUTH_GROUPS,
+                cache_manager=self.cache,
             )
             self.background_tasks = []
             # Start Pyrogram client

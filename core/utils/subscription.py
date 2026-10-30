@@ -1,10 +1,12 @@
 from typing import Optional, Dict, Any, List
+from uuid import uuid4
 
 from pyrogram import Client, enums
 from pyrogram.errors import UserNotParticipant, ChatAdminRequired
 from pyrogram.types import InlineKeyboardButton
 
 from core.utils.button_builder import ButtonBuilder
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 
@@ -14,9 +16,11 @@ logger = get_logger(__name__)
 class SubscriptionManager:
     """Manages force subscription functionality"""
 
-    def __init__(self, auth_channel: Optional[int] = None, auth_groups: Optional[list] = None):
+    def __init__(self, auth_channel: Optional[int] = None, auth_groups: Optional[list] = None,
+                 cache_manager=None):
         self.auth_channel = auth_channel
         self.auth_groups = auth_groups or []
+        self.cache = cache_manager
 
     @staticmethod
     def _is_current_member(member) -> bool:
@@ -231,6 +235,25 @@ class SubscriptionManager:
             callback_data = f"checksub#{user_id}#search"
         else:
             callback_data = f"checksub#{user_id}#general"
+
+        if len(callback_data.encode('utf-8')) > 64:
+            original = callback_data.split('#', 2)
+            stored = False
+            if self.cache and len(original) == 3 and original[:2] == ['checksub', str(user_id)]:
+                key = CacheKeyGenerator.subscription_session(uuid4().hex[:16])
+                try:
+                    stored = await self.cache.set(
+                        key, {'user_id': user_id, 'deeplink': original[2]},
+                        expire=CacheTTLConfig.USER_DATA
+                    )
+                except Exception:
+                    logger.warning("Could not store subscription retry action", exc_info=True)
+                if stored:
+                    callback_data = f"checksub#dl#{key}"
+            if not stored:
+                # Membership can still be checked; repeat the original action
+                # after joining when operational state cannot be stored.
+                callback_data = f"checksub#{user_id}#general"
 
         buttons.append([
             ButtonBuilder.action_button("🔄 Try Again", callback_data=callback_data)
