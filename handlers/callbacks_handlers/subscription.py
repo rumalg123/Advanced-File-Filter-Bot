@@ -11,7 +11,7 @@ from handlers.commands_handlers.base import BaseCommandHandler
 logger = get_logger(__name__)
 
 
-class _CallbackQueryProxy:
+class _CallbackQueryProxy(CallbackQuery):
     """Minimal callback query proxy that replays the original callback data."""
 
     def __init__(self, query: CallbackQuery, data: str):
