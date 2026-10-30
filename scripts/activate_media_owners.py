@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from motor.motor_asyncio import AsyncIOMotorClient
 from core.database.media_owners import GlobalMediaOwners
 from core.database.maintenance_limits import MAX_MEDIA_SCAN_DOCUMENTS
+from core.utils.operator_errors import operator_error_summary
 from scripts.profile_media_search import is_local
 
 
@@ -83,8 +84,10 @@ def main():
         print(json.dumps(result, sort_keys=True))
         if result.get('eligible') is False:
             raise SystemExit(2)
-    except Exception as e:
-        parser.exit(1, f'Ownership operation failed; activation remains locked if incomplete. Inspect network, inventory conflicts and configuration without logging secrets {e}.\n')
+    except Exception as error:
+        parser.exit(1, f'Ownership operation failed ({operator_error_summary(error)}); '
+                    'activation remains locked if incomplete. Inspect network, inventory '
+                    'conflicts and configuration without logging secrets.\n')
 
 
 if __name__ == '__main__':

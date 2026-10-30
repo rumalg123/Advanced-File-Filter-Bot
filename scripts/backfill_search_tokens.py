@@ -9,6 +9,7 @@ import json
 import os
 from pymongo import MongoClient, UpdateOne
 from core.database.maintenance_limits import MAX_MEDIA_SCAN_DOCUMENTS
+from core.utils.operator_errors import operator_error_summary
 from core.utils.search_tokens import (media_search_tokens, SEARCH_TOKEN_FIELD,
     SEARCH_TOKEN_VERSION_FIELD, SEARCH_TOKEN_VERSION)
 from scripts.profile_media_search import is_local
@@ -85,8 +86,9 @@ def main():
             result = backfill(client[name].media_files, apply=args.apply,
                 rollback=args.rollback, batch_size=args.batch_size, limit=args.limit)
         print(json.dumps(result, sort_keys=True))
-    except Exception as e:
-        parser.exit(1, f'Search-token operation failed; inspect network/permissions without logging credentials {e}.\n')
+    except Exception as error:
+        parser.exit(1, f'Search-token operation failed ({operator_error_summary(error)}); '
+                    'inspect network/permissions without logging credentials.\n')
 
 
 if __name__ == '__main__':

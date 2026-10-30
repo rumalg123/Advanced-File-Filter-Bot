@@ -92,8 +92,10 @@ recreation; it does not itself activate ownership.
    ```
 
    The CLI and library default to a maximum of 10,000,000 records per source
-   (`--limit` can reduce it),
-   with bounded batches. Activation binds every source to its coordinator,
+   (`--limit` can reduce it), with bounded batches. Read-only inventory keeps
+   identity/alias maps in memory; the larger accepted cap is not a guarantee
+   that a ten-million-record inventory fits the operator machine's RAM.
+   Activation binds every source to its coordinator,
    creates the registry and required uniqueness indexes, and adopts existing
    records. Existing compatible unique indexes are reused. Incompatible indexes
    block activation; nothing is dropped, renamed or made less restrictive.
@@ -106,6 +108,11 @@ recreation; it does not itself activate ownership.
 6. Test indexing, duplicate indexing, delivery via all aliases, owner updates,
    deletion, pagination, restart and outage behavior before admitting writers.
    Multi-database keyword bulk deletion remains explicitly unsupported.
+
+Operator failures report the exception category and a numeric MongoDB error
+code when available. Arbitrary exception messages/details are omitted because
+driver errors can contain credentials, URI hosts and media identifiers. The same
+diagnostic contract applies to the search-token backfill command.
 
 ## Interrupted activation, recovery and rollback
 

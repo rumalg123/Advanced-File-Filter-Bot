@@ -29,6 +29,9 @@ python -m scripts.profile_media_search --allow-remote --include-counts
 python -m scripts.profile_media_search --allow-remote --include-counts --indexed-tokens
 ```
 
+Operator errors retain the exception type and numeric MongoDB code without
+rendering arbitrary driver messages, connection strings or document values.
+
 Check complete result identity sets, plans and repeated timings on representative
 queries. Metadata-only queries have no title candidate and keep the old plan.
 Partial backfill remains correct but may reduce the performance benefit.
