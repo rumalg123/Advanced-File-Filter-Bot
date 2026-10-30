@@ -15,6 +15,7 @@ def fixture():
     reservation = QuotaReservation(2, date(2026, 10, 29), 'bulk-token')
     repo = SimpleNamespace(
         can_retrieve_file=AsyncMock(return_value=(True, 'allowed')),
+        can_receive_content=AsyncMock(return_value=True),
         get_user=AsyncMock(return_value=User(id=42, name='QA')),
         reserve_quota_atomic=AsyncMock(return_value=(True, reservation, 'reserved')),
         settle_quota_delivery=AsyncMock(return_value=True),

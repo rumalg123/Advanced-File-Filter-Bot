@@ -572,6 +572,8 @@ class FileCallbackHandler(BaseCommandHandler):
             file = None
 
             for idx, file_data in enumerate(files_data):
+                if not await self.bot.user_repo.can_receive_content(user_id):
+                    break
                 try:
                     file_unique_id = file_data['file_unique_id']
 

@@ -574,6 +574,7 @@ class FileStoreService:
             batch_data: List[Dict[str, Any]],
             caption_func=None,
             delivery_progress=None,
+            access_check=None,
     ) -> Tuple[int, int]:
         """
         Send batch files to user
@@ -582,6 +583,8 @@ class FileStoreService:
         success_count = 0
 
         for file_data in batch_data:
+            if access_check is not None and not await access_check():
+                break
             # Initialize variables outside try block to avoid uninitialized variable warnings
             file_id_to_send = file_data.get("file_id", file_data.get("file_identifier"))
             caption = ""  # Default value
@@ -667,6 +670,7 @@ class FileStoreService:
             last_msg_id: int,
             protect: bool = False,
             delivery_progress=None,
+            access_check=None,
     ) -> Tuple[int, int, int]:
         """
         Send files directly from channel (DSTORE method)
@@ -682,6 +686,8 @@ class FileStoreService:
             async for message in bot.iter_messages(
                     chat_id, last_msg_id, first_msg_id
             ):
+                if access_check is not None and not await access_check():
+                    return success_count, last_msg_id - first_msg_id + 1, media_success_count
                 total_count += 1
 
                 if message.media:

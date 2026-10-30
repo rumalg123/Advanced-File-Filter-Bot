@@ -265,7 +265,8 @@ class DeepLinkHandler(BaseCommandHandler):
                 f_msg_id,
                 l_msg_id,
                 protect=protect,
-                delivery_progress=delivery
+                delivery_progress=delivery,
+                access_check=lambda: self.bot.user_repo.can_receive_content(user_id),
             )
 
 
@@ -355,6 +356,8 @@ class DeepLinkHandler(BaseCommandHandler):
 
             success_count = 0
             for file_data in files_data:
+                if not await self.bot.user_repo.can_receive_content(user_id):
+                    break
                 try:
                     file_unique_id = file_data['file_unique_id']
                     file = files_map.get(file_unique_id)
@@ -461,7 +464,8 @@ class DeepLinkHandler(BaseCommandHandler):
                 client,
                 user_id,
                 batch_data,
-                delivery_progress=delivery
+                delivery_progress=delivery,
+                access_check=lambda: self.bot.user_repo.can_receive_content(user_id),
             )
 
 
@@ -547,6 +551,8 @@ class DeepLinkHandler(BaseCommandHandler):
 
             success_count = 0
             for file in files:
+                if not await self.bot.user_repo.can_receive_content(user_id):
+                    break
                 try:
                     caption = CaptionFormatter.format_file_caption(
                         file=file,
@@ -643,7 +649,8 @@ class DeepLinkHandler(BaseCommandHandler):
             batch_link.source_chat_id,
             batch_link.from_msg_id,
             batch_link.to_msg_id,
-            protect=batch_link.protected
+            protect=batch_link.protected,
+            access_check=lambda: self.bot.user_repo.can_receive_content(user_id),
         )
 
         await sts.delete()
