@@ -396,6 +396,12 @@ class ChannelHandler:
                                 # Media has already been saved and indexing job
                                 # acknowledged; surface the cross-write gap.
                                 logger.exception("Indexed file but durable alert enqueue failed")
+                        # Admin summaries are independent of saved-search alerts.
+                        # Notify only for a newly saved, acknowledged job: replayed
+                        # duplicates and workers that lost their lease stay quiet.
+                        await self._send_index_summary(
+                            {'indexed': 1, 'duplicate': 0, 'errors': 0}, 1
+                        )
                     await asyncio.sleep(self.processing_config.inter_message_delay)
 
                 except asyncio.CancelledError:
@@ -448,25 +454,31 @@ class ChannelHandler:
                 logger.error(f"Error processing message: {e}")
                 stats['errors'] += 1
 
-        # Log batch results if significant
-        if stats['indexed'] > 0 and self.bot.config.LOG_CHANNEL:
-            try:
-                summary = (
-                    f"📊 <b>Auto-Index Batch Summary</b>\n"
-                    f"✅ Indexed: {stats['indexed']}\n"
-                    f"🔄 Duplicates: {stats['duplicate']}\n"
-                    f"❌ Errors: {stats['errors']}\n"
-                    f"📦 Total Processed: {len(batch)}"
-                )
+        await self._send_index_summary(stats, len(batch))
 
-                await telegram_api.call_api(
-                    self.bot.send_message,
-                    self.bot.config.LOG_CHANNEL,
-                    summary,
-                    chat_id=self.bot.config.LOG_CHANNEL
-                )
-            except Exception:
-                pass
+    async def _send_index_summary(self, stats: Dict[str, int], total_processed: int):
+        """Best-effort admin notification, shared by memory and durable workers."""
+        log_channel = getattr(getattr(self.bot, 'config', None), 'LOG_CHANNEL', 0)
+        if stats['indexed'] <= 0 or not log_channel:
+            return
+        summary = (
+            f"📊 <b>Auto-Index Batch Summary</b>\n"
+            f"✅ Indexed: {stats['indexed']}\n"
+            f"🔄 Duplicates: {stats['duplicate']}\n"
+            f"❌ Errors: {stats['errors']}\n"
+            f"📦 Total Processed: {total_processed}"
+        )
+        try:
+            await telegram_api.call_api(
+                self.bot.send_message,
+                log_channel,
+                summary,
+                chat_id=log_channel,
+            )
+        except Exception:
+            # The file/job is already saved. A logging failure must never put
+            # indexed media back into the work queue or repeat user alerts.
+            logger.warning('Failed to send auto-index summary to LOG_CHANNEL', exc_info=True)
 
     async def _process_single_message(self, message: Message) -> str:
         """Process a single message"""

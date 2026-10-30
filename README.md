@@ -459,7 +459,7 @@ Defaults are `false`, with the activation-aware registry recommendation below.
 | `FEATURE_INDEXED_MEDIA_SEARCH` | Indexed word candidates followed by the legacy matcher; complete token backfill and verify optional indexes before rollout. |
 | `FEATURE_CANONICAL_MEDIA_METADATA` | Persist optional width, height and quality on new media; older-image rollback needs compatibility review. |
 | `FEATURE_QUOTA_DELIVERY_LEDGER` | Durable quota reservations and one-time settlements; uncertain deliveries need operator reconciliation. |
-| `PROCESSING_DURABLE_INDEXING` | MongoDB-backed channel indexing jobs with retries and restart recovery. |
+| `PROCESSING_DURABLE_INDEXING` | MongoDB-backed channel indexing jobs with retries, restart recovery and a best-effort log-channel summary for each newly indexed, acknowledged job. |
 | `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` | MongoDB-backed alert jobs and bounded workers; also requires Saved Alerts enabled. |
 | `DATABASE_GLOBAL_OWNER_REGISTRY` | Coordinated permanent file ownership across multiple database sources; requires explicit ownership activation. |
 

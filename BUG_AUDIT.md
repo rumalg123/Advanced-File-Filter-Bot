@@ -72,6 +72,19 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-060 | High | Fixed | Database capacity | Write-source selection counts document bytes but ignores index bytes, so it can keep selecting a source whose logical storage budget is exhausted. | Include MongoDB `indexSize` with `dataSize`; exact-limit, index-only and real-Mongo index-growth regressions switch to the available source. Provider/cluster headroom still needs monitoring. |
 | BUG-061 | High | Fixed | Docker startup | Every startup upgrades packages despite disabled auto-update, changing tested dependencies or failing without package-index access. | Use Dockerfile-installed packages during Docker setup; successful/unavailable installer regressions and an offline image setup check prevent runtime installation. Explicit code-update flows remain separately controlled. |
 | BUG-062 | High | Fixed | Update and restart | `/restart` runs Git in an image without a valid checkout, failing with exit 128. The initial fix also incorrectly removed the command's code-update behavior. | Restore update-before-restart using the validated backup/temporary-clone updater and the configured upstream branch. Preserve secrets and mutable data, install changed requirements, record the applied revision, cancel restart on failure, and gracefully stop through wzgram so Compose restarts the updated container. Real Git branch/update/failure tests and real wzgram shutdown cover this contract. Commit `ffd9d63` is superseded. |
+| BUG-063 | Medium | Fixed | Durable indexing notifications | Durable channel indexing completes jobs but bypasses the memory worker's `LOG_CHANNEL` summary. | Share the summary sender and notify after acknowledging a newly indexed durable job. Duplicate replays and lost leases stay quiet. Notification failure is logged and never requeues indexed media or repeats saved-search fan-out. Summaries are best-effort; completed historical jobs are not replayed. |
+
+## Notification follow-up, 2026-10-30
+
+BUG-063 has 13 passing new regressions, including two real-Mongo job-completion
+cases. All 33 notification/indexing/saved-alert tests pass in the full run.
+The full branch run reports **842 passed, 2 failed**, with 22 existing warnings.
+The two failures concern the recent operator-script changes, outside this fix:
+the backfill bounds test retains its old one-million limit, and the ownership
+CLI emits raw exception text that its privacy regression rejects. Those changes
+are preserved for a separate follow-up. The raised ownership CLI default also
+exceeds the existing library's one-million inventory/activation bound and needs
+alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-29
 

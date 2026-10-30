@@ -1,6 +1,9 @@
 # Recoverable channel auto-indexing (PH-005)
 
-**Status:** in review, disabled by default. No production deployment.
+**Status:** opt-in, disabled by default. The operator reports durable indexing
+enabled in production. Local queue tests pass; remaining operational acceptance
+checks are listed below. The log-channel notification regression is fixed in
+source on 2026-10-30; production deployment is performed by the operator.
 
 
 `PROCESSING_DURABLE_INDEXING` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
@@ -23,12 +26,26 @@ Opt-in durable mode stores the media metadata snapshot before returning from the
 | Worker loses lease | Stale worker token cannot acknowledge a newer claim |
 | Failed enqueue to MongoDB | Explicit exception/log, **not** silently accepted |
 | Successfully finished job | Retained for 30 days, then TTL-expired |
+| Newly indexed, acknowledged file | Send an Auto-Index Batch Summary to configured `LOG_CHANNEL`; one summary per new durable job |
+| Duplicate/replayed file or lost acknowledgement lease | Do not send a new success summary |
+| Log-channel send fails | Log a warning; keep indexed media and its completed job, without requeueing or repeating saved-search alerts |
 
 This is **at-least-once**, not exactly-once. A crash after media save but before acknowledgment may replay the job; the existing media unique identity prevents duplicate files. Counts and notification side effects may need separate reconciliation (PH-018).
+
+The durable and memory workers share the summary sender. Memory indexing keeps
+one summary per processed batch. Durable indexing sends after a successful job
+acknowledgement and attempts the summary even if a channel-counter update or
+saved-search enqueue fails. Log delivery is best-effort: a process stop after
+acknowledgement can still interrupt the send. Existing completed jobs are not
+replayed to backfill old log messages. `LOG_CHANNEL=0` disables the summaries.
 
 ## MongoDB footprint
 
 Only new `channel_index_jobs` gets these fields: `_id`, `chat_id`, `message_id`, `media` snapshot, `status`, `attempts`, `created_at`, `next_attempt_at`, lease and optional failure/completion timestamps.
+
+`created_at` and `next_attempt_at` are initially the same UTC instant: a new job
+is immediately eligible. Actual processing is recorded by `started_at`,
+`attempts` and `finished_at`; matching enqueue timestamps do not prove completion.
 
 Three indexes on this **new collection only**:
 
