@@ -73,7 +73,8 @@ class BotSettingsHandler(BaseHandler):
         all_keys = list(settings.keys())
         total_settings = len(all_keys)
         settings_per_page = 8
-        total_pages = (total_settings + settings_per_page - 1) // settings_per_page
+        total_pages = max(1, (total_settings + settings_per_page - 1) // settings_per_page)
+        page = min(max(0, page), total_pages - 1)
 
         # Get settings for current page
         start = page * settings_per_page
@@ -213,7 +214,11 @@ class BotSettingsHandler(BaseHandler):
             await query.answer()
 
         elif data.startswith("bset_page_"):
-            page = int(data.split("_")[2])
+            try:
+                page = int(data.removeprefix("bset_page_"))
+            except ValueError:
+                await query.answer("Invalid settings page. Open /bsetting again.", show_alert=True)
+                return
             await query.answer(f"Loading page {page + 1}")
             await self.show_settings_menu(query.message, page)
 
@@ -239,9 +244,15 @@ class BotSettingsHandler(BaseHandler):
             await self.reset_to_default(query, key)
 
         elif data.startswith("bset_bool_"):
-            parts = data.split("_")
-            key = "_".join(parts[2:-1])  # Handle keys with underscores
-            value = parts[-1] == "true"
+            key, _, raw_value = data.removeprefix("bset_bool_").rpartition("_")
+            if raw_value not in {'true', 'false'}:
+                await query.answer("Invalid settings value. Open /bsetting again.", show_alert=True)
+                return
+            setting = (await self.settings_service.get_all_settings()).get(key)
+            if not setting or setting['type'] != 'bool':
+                await query.answer("This control is not available for this setting.", show_alert=True)
+                return
+            value = raw_value == "true"
             await self.update_boolean_setting(query, key, value)
 
         elif data == "bset_back":
@@ -331,12 +342,16 @@ class BotSettingsHandler(BaseHandler):
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting using unified session manager"""
-        if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
-            # Also reject a forged Edit callback when this boolean is locked.
-            setting = (await self.settings_service.get_all_settings()).get(key, {})
-            if not setting.get('editable', False):
-                await message.reply_text(setting.get('edit_note', 'This setting is locked.'))
-                return
+        if key in self.PROTECTED_SETTINGS:
+            await message.reply_text("This setting is protected and cannot be changed via bot.")
+            return
+        setting = (await self.settings_service.get_all_settings()).get(key)
+        if not setting:
+            await message.reply_text("This setting is no longer available. Open /bsetting again.")
+            return
+        if not setting.get('editable', True):
+            await message.reply_text(setting.get('edit_note', 'This setting is locked.'))
+            return
         if not self.session_manager:
             await message.reply(ErrorMessageFormatter.format_error("Session management not available"))
             return
@@ -349,12 +364,6 @@ class BotSettingsHandler(BaseHandler):
         
         # Create session using unified session manager
         await self.session_manager.create_edit_session(user_id, session_data)
-
-        settings = await self.settings_service.get_all_settings()
-        setting = settings.get(key)
-
-        if not setting:
-            return
 
         setting_type = setting['type']
         current_value = setting['value']
@@ -649,6 +658,9 @@ class BotSettingsHandler(BaseHandler):
     async def update_boolean_setting(self, query: CallbackQuery, key: str, value: bool):
 
         """Update a boolean setting"""
+        if key in self.PROTECTED_SETTINGS:
+            await query.answer("This setting is protected and cannot be changed via bot.", show_alert=True)
+            return
         try:
             success = await self.settings_service.update_setting(key, value)
 
@@ -678,6 +690,9 @@ class BotSettingsHandler(BaseHandler):
 
     async def reset_to_default(self, query: CallbackQuery, key: str):
         """Reset a setting to default value"""
+        if key in self.PROTECTED_SETTINGS:
+            await query.answer("This setting is protected and cannot be changed via bot.", show_alert=True)
+            return
         try:
             success = await self.settings_service.reset_to_default(key)
 
