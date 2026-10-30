@@ -2,12 +2,13 @@
 
 import re
 from collections import OrderedDict
+from decimal import Decimal, localcontext
 
 from repositories.media import MediaFile
 
 ADVANCED_FILTER_PATTERN = re.compile(
     r"(?<!\S)(type|year|lang|language|quality|season|episode|minsize|maxsize):"
-    r"(\"[^\"]+\"|'[^']+'|\S+)",
+    r"(\"[^\"]*\"|'[^']*'|[^\s\"']*)",
     re.IGNORECASE
 )
 
@@ -20,7 +21,6 @@ def _parse_size(value: str) -> int:
     match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(b|kb|mb|gb|tb)?", value.lower())
     if not match:
         raise ValueError(f"Invalid size '{value}'. Use values such as 700MB or 2GB.")
-    amount = float(match.group(1))
     unit = match.group(2) or "b"
     multipliers = {
         "b": 1,
@@ -29,7 +29,14 @@ def _parse_size(value: str) -> int:
         "gb": 1024 ** 3,
         "tb": 1024 ** 4,
     }
-    return int(amount * multipliers[unit])
+    # Floats round otherwise valid large byte limits and may overflow before
+    # callers can report a validation error. MongoDB integers are signed 64-bit.
+    with localcontext() as context:
+        context.prec = max(28, len(match.group(1)) + 16)
+        amount = Decimal(match.group(1)) * multipliers[unit]
+        if amount > 9223372036854775807:
+            raise ValueError("Size must not exceed 9223372036854775807 bytes.")
+        return int(amount)
 
 
 def parse_advanced_search_query(query: str) -> tuple[str, dict[str, object]]:
@@ -41,6 +48,8 @@ def parse_advanced_search_query(query: str) -> tuple[str, dict[str, object]]:
         value = match.group(2).strip("\"'").strip()
         if not value:
             raise ValueError(f"Filter '{key}' requires a value.")
+        if match.end() < len(query) and not query[match.end()].isspace():
+            raise ValueError(f"Filter '{key}' must end at whitespace after its value.")
 
         if key == "type":
             normalized_type = value.lower()
