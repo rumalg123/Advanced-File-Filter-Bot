@@ -320,14 +320,18 @@ class UserRepository(BaseRepository[User], AggregationMixin):
     ) -> Tuple[bool, str, Optional[User]]:
         """Update premium status, optionally overriding the configured duration."""
         # Check if user exists
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, ErrorMessageFormatter.format_not_found("User") + " in database.", None
 
-        # Check if already has the same premium status
-        if user.is_premium == is_premium:
+        # A stale raw flag does not make an expired grant active. Never use
+        # a cached profile to decide whether a grant/removal is a no-op.
+        if (is_premium and is_premium_valid(user.is_premium, user.premium_expiry_date)) or (
+            not is_premium and not user.is_premium
+        ):
             # Clear decisions cached by an older process/deployment even when
             # the database already has the requested value.
+            await self.cache_invalidator.invalidate_user_data(user_id)
             await self.cache_invalidator.invalidate_premium_status(user_id)
             status_text = "premium" if is_premium else "non-premium"
             return False, ErrorMessageFormatter.format_error(f"User is already {status_text}!"), user
@@ -363,17 +367,40 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if not is_premium:
             update_data['daily_retrieval_count'] = 0
-        success = await self.update(user_id, update_data)
+        selector: Dict[str, Any] = {'_id': user_id}
+        if is_premium:
+            # Recheck at the write: concurrent grants must have one winner,
+            # and must not shorten/overwrite an already active subscription.
+            selector['$or'] = [
+                {'is_premium': {'$ne': True}},
+                {'$expr': {'$lte': [{'$convert': {
+                    'input': '$premium_expiry_date', 'to': 'date',
+                    'onError': None, 'onNull': None,
+                }}, '$$NOW']}},
+            ]
+        else:
+            selector['is_premium'] = True
+        collection = await self.get_collection()
+        try:
+            result = await self.db_pool.execute_with_retry(
+                collection.find_one_and_update, selector, {'$set': update_data},
+                return_document=True,
+            )
+        except Exception:
+            logger.error("Premium mutation failed for user %s", user_id, exc_info=True)
+            result = None
+        success = result is not None
+        # Also evict after a guarded no-op: another writer may have changed
+        # the state while this process still holds an older cached profile.
+        await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_premium_status(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
         if success:
-            # Update user object
-            user.is_premium = is_premium
-            user.premium_activation_date = activation_date
-            user.updated_at = datetime.now(UTC)
-            user.premium_expiry_date = expiry_date
-            if not is_premium:
-                user.daily_retrieval_count = 0
-            await self.cache_invalidator.invalidate_user_data(user_id)
-            await self.cache_invalidator.invalidate_premium_status(user_id)
+            # Return the actual persisted values, including MongoDB's date
+            # precision and any concurrent changes to unrelated user fields.
+            user = self._dict_to_entity(result)
+            user.premium_activation_date = normalize_expiry_date(user.premium_activation_date)
+            user.premium_expiry_date = normalize_expiry_date(user.premium_expiry_date)
 
         action = "added" if is_premium else "removed"
         return success, ErrorMessageFormatter.format_success(f"Premium status {action} successfully!") if success else ErrorMessageFormatter.format_failed(f"to {action.replace('ed', '')} premium status"), user
