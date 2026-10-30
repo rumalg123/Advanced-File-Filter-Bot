@@ -66,3 +66,26 @@ async def test_nonpositive_or_noninteger_limit_returns_empty(limit):
     assert await service.get_recommendations_for_user(42, limit) == {
         'similar_queries': [], 'based_on_history': [], 'trending_files': [],
     }
+
+
+@pytest.mark.asyncio
+async def test_valid_matching_cache_hit_avoids_feedback_read():
+    service, _, _, _ = recommender()
+    first = await service.get_recommendations_for_user(42)
+    service.feature_service.repository.get_recommendation_feedback.reset_mock()
+    assert await service.get_recommendations_for_user(42) == first
+    service.feature_service.repository.get_recommendation_feedback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('data', [None,
+    {'similar_queries': [], 'based_on_history': [12], 'trending_files': [], 'reasons': {}},
+    {'similar_queries': [], 'based_on_history': [], 'trending_files': [], 'reasons': {'id': 12}},
+    {'similar_queries': ['query']*11, 'based_on_history': [], 'trending_files': [], 'reasons': {}},
+])
+async def test_versioned_cache_with_invalid_data_is_recomputed(data):
+    service, cache, _, _ = recommender()
+    cache.values[CacheKeyGenerator.user_recommendations_cache(42)] = {
+        'options': {'version': 1, 'limit': 10, 'feedback': True, 'explanations': True}, 'data': data,
+    }
+    assert (await service.get_recommendations_for_user(42))['based_on_history'] == ['first', 'second']
