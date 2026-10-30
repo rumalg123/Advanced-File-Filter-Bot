@@ -478,6 +478,13 @@ class FileCallbackHandler(BaseCommandHandler):
             await query.answer(ErrorMessageFormatter.format_error("Search results expired. Please search again.", plain_text=True), show_alert=True)
             return
 
+        cached_owner_id = cached_data.get('user_id')
+        if cached_owner_id and cached_owner_id != user_id:
+            await query.answer(ErrorMessageFormatter.format_access_denied(
+                "These search results belong to another user.", plain_text=True
+            ), show_alert=True)
+            return
+
         files_data = cached_data.get('files', [])
         search_query = cached_data.get('query', '')
 
