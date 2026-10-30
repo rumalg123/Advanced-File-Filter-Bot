@@ -463,13 +463,18 @@ class FeatureRepository:
 
         # Keep only the newest 50 records per user without touching other users.
         cursor = collection.find(
-            {'user_id': user_id}, {'_id': 1}
+            {'user_id': user_id}, {'_id': 1, 'last_accessed_at': 1}
         ).sort('last_accessed_at', -1).skip(50).limit(100)
         stale = await self.db_pool.execute_with_retry(cursor.to_list, length=100)
         if stale:
+            # A concurrent download may refresh a row after this snapshot.
+            # Delete only unchanged rows so the refreshed entry survives.
             await self.db_pool.execute_with_retry(
                 collection.delete_many,
-                {'_id': {'$in': [item['_id'] for item in stale]}}
+                {'user_id': user_id, '$or': [
+                    {'_id': item['_id'], 'last_accessed_at': item.get('last_accessed_at')}
+                    for item in stale
+                ]}
             )
 
     async def get_recent_files(self, user_id: int, limit: int = 20) -> list[str]:

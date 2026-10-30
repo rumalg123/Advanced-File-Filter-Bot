@@ -84,6 +84,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-072 | Low | Fixed | Settings labels | Indexed media search has no display-name mapping, so `/bsetting` shows the uppercase environment key. | Display `Indexed Search` in the settings menu and detail view, consistently with the other feature controls; the stored key and behavior stay unchanged. |
 | BUG-073 | Medium | Fixed | Favorites cleanup | `/unfavorite` refuses to remove stored membership after the catalogue file has been deleted, leaving stale favorites behind. | Remove by the supplied unique ID when media is absent, for both typed commands and replies. Adding unavailable media still fails. Three focused cases pass. |
 | BUG-074 | Medium | Fixed | Favorite Remove controls | Favorites menus embed full collection names in callback data; long or multibyte names exceed Telegram limits, and stale menus break after renaming. | Render compact owner-scoped collection tokens, preserve legacy callbacks, and persist tokens when reading old collections. Remove remains available within 64 bytes and old menus survive renames. |
+| BUG-075 | Medium | Fixed | Recent-history concurrency | Pruning selects old IDs and later deletes them unconditionally, so a concurrent download can refresh a selected row and still lose its history. | Delete only owner-scoped rows whose timestamp matches the trim snapshot. A real-Mongo interleaving preserves the refreshed row, subsequent writes restore the 50-entry bound, and other users are untouched. |
 
 ## Group search follow-up, 2026-10-30
 
