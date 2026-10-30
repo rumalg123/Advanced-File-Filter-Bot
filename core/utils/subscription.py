@@ -18,6 +18,16 @@ class SubscriptionManager:
         self.auth_channel = auth_channel
         self.auth_groups = auth_groups or []
 
+    @staticmethod
+    def _is_current_member(member) -> bool:
+        if member.status == enums.ChatMemberStatus.RESTRICTED:
+            return getattr(member, 'is_member', None) is True
+        return member.status in {
+            enums.ChatMemberStatus.OWNER,
+            enums.ChatMemberStatus.ADMINISTRATOR,
+            enums.ChatMemberStatus.MEMBER,
+        }
+
     async def is_subscribed(
             self,
             client: Client,
@@ -47,23 +57,17 @@ class SubscriptionManager:
                         user_id,
                         chat_id=self.auth_channel
                     )
-                    if member.status == enums.ChatMemberStatus.BANNED:
-                        return False
-                    # If user is left/kicked, they're not subscribed
-                    if member.status in [
-                        enums.ChatMemberStatus.LEFT,
-                        enums.ChatMemberStatus.RESTRICTED
-                    ]:
+                    if not self._is_current_member(member):
                         return False
                 except UserNotParticipant:
                     return False
                 except Exception as e:
                     error_msg = str(e).lower()
                     if "channel_private" in error_msg or "chat not found" in error_msg:
-                        # If bot can't access channel, log error but don't block user
+                        # An inaccessible required chat cannot prove membership.
                         logger.error(f"Bot cannot access AUTH_CHANNEL {self.auth_channel}: {e}")
                         # You might want to notify admins here
-                        return True  # Allow access if bot can't verify
+                        return False
                     else:
                         logger.error(f"Error checking channel subscription: {e}")
                         return False
@@ -78,11 +82,7 @@ class SubscriptionManager:
                             user_id,
                             chat_id=group_id
                         )
-                        if member.status in [
-                            enums.ChatMemberStatus.BANNED,
-                            enums.ChatMemberStatus.LEFT,
-                            enums.ChatMemberStatus.RESTRICTED
-                        ]:
+                        if not self._is_current_member(member):
                             return False
                     except UserNotParticipant:
                         return False
@@ -90,7 +90,7 @@ class SubscriptionManager:
                         error_msg = str(e).lower()
                         if "channel_private" in error_msg or "chat not found" in error_msg:
                             logger.error(f"Bot cannot access AUTH_GROUP {group_id}: {e}")
-                            continue  # Skip this group if bot can't access
+                            return False
                         else:
                             logger.error(f"Error checking group {group_id} subscription: {e}")
                             return False
