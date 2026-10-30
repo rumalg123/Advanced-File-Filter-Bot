@@ -292,7 +292,9 @@ selection to the actual deployment and include the ACL overlay if selected.
    not replace the functional checks or prove production data compatibility.
 3. With controlled admin/normal accounts, verify an old permanent file link,
    search, next/back/deep page, one delivery, Send All, subscription enforcement,
-   banned/premium/quota access and existing enabled features.
+   banned/premium/quota access and existing enabled features. Configured bot
+   admins and the explicit owner retain their bypass; test ordinary-user bans
+   separately, including with premium disabled, then unban and verify recovery.
 4. Verify one controlled new-file ingestion, duplicate behavior and the bounded
    channel-history catch-up. Do not broadcast tests to production users.
 5. Observe MongoDB latency, index errors, RAM, Redis evictions/state OOM and

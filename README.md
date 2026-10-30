@@ -55,6 +55,19 @@ The bot can index media from Telegram channels, search it with typo-tolerant mat
 - Supports additional authorized users, bans, request limits, warnings, and auto-ban behavior.
 - Restricts sensitive operations to configured administrators; `/bsetting` and `/shell` are primary-admin-only.
 
+Configured bot admins and the explicit owner retain their ban, subscription and
+quota exemptions. Ordinary-user ban checks read MongoDB directly, so an old
+Redis profile cannot override a ban or prevent recovery after unban. A failed
+authorization read returns a retry response. Bans still apply when premium is
+disabled or the ordinary user has premium access. Unbanning resets request-abuse
+counters while preserving premium grants and consumed download quota.
+
+Content alerts and broadcasts skip banned ordinary users. Bulk deliveries check
+status before each remaining file and refund definitely unsent reserved quota.
+Files already delivered, already issued inline results and Telegram requests
+already in flight cannot be retroactively revoked. Fresh normal-user inline
+queries use zero result-cache time so they can check current status.
+
 ### Filters and group connections
 
 - Lets group admins create text/media auto-filters.
@@ -883,7 +896,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **945 tests** with zero failures or skips, plus live saved-search alerts and file-report checks. Source-matched coverage is **69.84% lines and 56.49% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,016 tests** with zero failures or skips, plus **19 live ban/unban checks**, including restart with empty Redis and retained MongoDB. Configured admin/owner exemptions and the operator's logging edits are preserved. Source-matched coverage is **69.37% lines and 56.00% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

@@ -1,7 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded alerts/reports QA round](#bounded-qa-round-4--saved-search-alerts-and-file-reports-2026-10-30),
-**945 tests passed**, **69.84% lines / 56.49% branches / 66.51% combined**.
+Latest continuation: [bounded ban/unban QA round](#bounded-qa-round-5--ban-and-unban-2026-10-30),
+**1,016 tests passed**, **69.37% lines / 56.00% branches / 66.05% combined**.
+Configured admin/owner bypasses and the operator's logging changes are preserved.
 Whole-bot 100% remains open. This round is complete; wait for the operator's
 next `continue` before starting another feature.
 
@@ -615,3 +616,96 @@ and networks were removed. The normal account was unblocked; both original
 server services remain running. No production server or remote Atlas database
 was accessed. No product features or schema migrations were added. Stop here
 until the next `continue`.
+
+
+## Bounded QA round 5 — ban and unban (2026-10-30)
+
+**Passed and complete for this round.** Final application source `d734c04`.
+The operator explicitly required configured bot admins and owners to retain
+their bypass. That policy supersedes the earlier PH-001 administrator-denial
+policy; ordinary premium users and premium-disabled mode remain subject to bans.
+All **407 existing logger lines across 26 operator-edited files** are preserved.
+
+Eleven fixes are committed individually:
+
+| Issue | Commit | Result |
+|---|---|---|
+| BUG-079 | `06a2d79` | Preserve added diagnostics and initialize two missing module loggers. |
+| BUG-080 | `a33150d` | Read ordinary-user moderation state from MongoDB, bypass stale Redis, and deny unavailable authorization safely; retain admin/owner exemptions. |
+| BUG-081 | `493d683` | Guard user menus, subscription retries, public file-store, filters/connections and request shortcuts. |
+| BUG-082 | `9fd677c` | Recheck saved-alert and broadcast recipients before content delivery; keep privileged exemptions. |
+| BUG-083 | `87f5149` | Atomically fence ordinary-user quota reservation against a concurrent ban. |
+| BUG-084 | `eaa6697` | Reject delayed abuse decisions after unban or manual ban; require the current warning threshold. |
+| BUG-085 | `828793c` | Escape names/reasons in formatted notices and bound callback denials. |
+| BUG-086 | `4d6b735` | Stop remaining Send All/search/JSON/channel-batch deliveries after a ban and settle confirmed/unsent quota. |
+| BUG-087 | `45ed05c` | Disable Telegram result caching for ordinary-user inline queries; retain privileged caching. |
+| BUG-088 | `c2be86d` | Gate pagination before cached-session or backend work. |
+| BUG-089 | `d734c04` | Normalize BSON and legacy warning dates before UTC calculations; prevent request escalation/stats crashes. |
+
+**Automated verification:** **1,016 passed, zero failures/errors/skips**, with
+22 existing warnings. This is 71 more cases than round 4. The route matrix
+covers 27 user entry points. Real-Mongo tests exercise stale profiles, moderation
+mutations, quota fences, delayed abuse decisions, and warning escalation with
+BSON, naive ISO and offset ISO timestamps, including 30-day expiry. The six
+warning-date cases all failed before BUG-089 and pass after it. Other injected
+checks cover unavailable authorization, safe response text, lost/background
+access, explicit admin/owner bypasses and interruption of five bulk paths.
+Compilation, Ruff F821/F822/F823, local Markdown links and whitespace checks pass.
+
+**19 live checks passed** using both supplied QA accounts, four distinct tiny
+indexed documents and the declared QA group/log channel. They cover invalid and
+unknown moderation targets; unauthorized ban attempts; active private/group and
+inline search; ordinary premium users denied in free mode; old file, Send All,
+pagination, favorite and group buttons; public file-store routes; literal ban
+reasons; repeat ban/unban; and stale active/banned Redis profiles.
+
+A configured admin was deliberately marked banned and still used private/inline
+search, file delivery, saved alerts and broadcast management. The banned normal
+account received neither the new-file content alert nor the broadcast; no saved
+alert sent claim was created. Unban reset request-abuse counters while preserving
+premium, downloads and lifetime request totals.
+
+The QA bot was then recreated with **both owned Redis databases empty and the
+same disposable MongoDB**; the normal user's ban still applied. A two-file Send
+All was interrupted after the first confirmed file: the second file was not
+sent, one quota slot was refunded, and the ledger settled at confirmed=1,
+refund=1. Unban restored delivery without resetting consumed quota. Three group
+requests using temporary allowance=1 and warning limit=2 produced a real
+automatic ban; further requests were denied. Unban restored the request allowance.
+The warning-date crash was found here, reproduced separately, fixed, and both
+live phases and the full suite rerun against the final source. See the
+[sanitized evidence](round5-ban-unban.json).
+
+The private harness was corrected to enable the selected public file-store
+route, wait for asynchronous quota settlement, and reseed consumed quota after
+the existing premium-removal operation reset it. Attempt-owned messages and
+infrastructure were cleaned after each attempt. These harness corrections did
+not change product behavior. Production limits and `.env` were not modified.
+
+The run also exercised Telegram FloodWait retries. Opening `/bsetting` logged a
+handled `MESSAGE_ID_INVALID` when it tried to edit the incoming command; its
+fallback reply displayed the menu, the setting persisted and restart applied it.
+That existing menu fallback is recorded for the next settings QA round; this
+round does not claim a clean log or complete settings-menu coverage.
+
+Coverage includes **17,776 statements, 5,880 branches and all 121 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 59.02% | 45.65% | 55.70% |
+| Source-matched automated + live | 69.37% | 56.00% | 66.05% |
+
+All three new shards match start/end/current source hashes. Historical evidence
+contributes only for unchanged files; the operator's diagnostic additions and
+other source edits invalidate old coverage for affected files. **Whole-bot 100%
+remains open.** Fresh access checks cannot revoke media already delivered,
+previously issued inline results or Telegram calls already in flight.
+Representative production load, multi-replica moderation timing and large
+subscriber fan-out remain outside this bounded round. Authoritative moderation
+checks add MongoDB reads; production latency and capacity still need observation.
+
+All recorded QA messages and owned containers, volumes and networks were removed.
+The two original server services remain running. No production server or remote
+Atlas database was accessed. No product features or schema migrations were added.
+Stop here until the next `continue`.

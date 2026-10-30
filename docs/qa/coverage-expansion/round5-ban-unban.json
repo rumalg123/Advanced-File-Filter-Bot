@@ -1,0 +1,268 @@
+{
+  "date": "2026-10-30",
+  "round": 5,
+  "scope": [
+    "ban-unban",
+    "request-abuse-enforcement",
+    "privileged-bypass"
+  ],
+  "application_commit": "d734c04265551a41f01cbb9fc0ecbf36d6732d72",
+  "source_manifest_sha256": "e2b397547d769783a078b9d1a343e4d3ac9345fe247d20cea97e5b619692418c",
+  "fixes": {
+    "BUG-079": "06a2d79",
+    "BUG-080": "a33150d",
+    "BUG-081": "493d683",
+    "BUG-082": "9fd677c",
+    "BUG-083": "87f5149",
+    "BUG-084": "eaa6697",
+    "BUG-085": "828793c",
+    "BUG-086": "4d6b735",
+    "BUG-087": "45ed05c",
+    "BUG-088": "c2be86d",
+    "BUG-089": "d734c04"
+  },
+  "tests": {
+    "passed": 1016,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "net_increase_from_previous_round": 71,
+    "warning_timestamp_regressions": {
+      "before_failed": 6,
+      "after_passed": 6
+    },
+    "ordinary_user_route_matrix": 27
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10492,
+    "num_statements": 17776,
+    "percent_covered": 55.69834291511667,
+    "percent_covered_display": "56",
+    "missing_lines": 7284,
+    "excluded_lines": 41,
+    "percent_statements_covered": 59.02340234023402,
+    "percent_statements_covered_display": "59",
+    "num_branches": 5880,
+    "num_partial_branches": 884,
+    "covered_branches": 2684,
+    "missing_branches": 3196,
+    "percent_branches_covered": 45.64625850340136,
+    "percent_branches_covered_display": "46"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12331,
+    "num_statements": 17776,
+    "percent_covered": 66.04666892120392,
+    "percent_covered_display": "66",
+    "missing_lines": 5445,
+    "excluded_lines": 41,
+    "percent_statements_covered": 69.36881188118812,
+    "percent_statements_covered_display": "69",
+    "num_branches": 5880,
+    "num_partial_branches": 1073,
+    "covered_branches": 3293,
+    "missing_branches": 2587,
+    "percent_branches_covered": 56.00340136054422,
+    "percent_branches_covered_display": "56"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 46
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 61,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 69,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 71,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 69,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 62,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 71,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 58,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 81,
+        "changed_files_discarded": 40
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 81,
+        "changed_files_discarded": 40
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 84,
+        "changed_files_discarded": 37
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 84,
+        "changed_files_discarded": 37
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 66.04666892120392,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "new_shards_match_start_end_current_source": true,
+  "user_logging_preserved": {
+    "files": 26,
+    "logger_lines": 407,
+    "missing": 0
+  },
+  "policy": {
+    "configured_bot_admin_bypass": true,
+    "explicit_owner_bypass": true,
+    "ordinary_user_authorization": "authoritative MongoDB, independent of Redis, failure denies work with retry",
+    "ordinary_premium_and_free_mode_do_not_bypass_bans": true,
+    "unban_preserves": [
+      "premium grant",
+      "consumed download quota",
+      "lifetime requests"
+    ],
+    "unban_resets": [
+      "request warning count",
+      "warning date",
+      "daily request count",
+      "request date"
+    ]
+  },
+  "live": {
+    "scope": "ban-unban",
+    "checks": {
+      "normal_user_cannot_issue_ban": true,
+      "invalid_and_unknown_targets_do_not_mutate_accounts": true,
+      "active_user_search_group_inline_and_delivery_baseline": true,
+      "configured_admin_owner_keeps_ban_bypass": true,
+      "manual_ban_notifies_and_preserves_literal_reason": true,
+      "banned_premium_user_denied_in_free_mode_commands_and_filestore": true,
+      "old_file_sendall_page_feature_and_group_callbacks_denied": true,
+      "fresh_inline_queries_recheck_ban_status": true,
+      "stale_active_profile_cannot_override_mongo_ban": true,
+      "saved_alerts_skip_banned_normal_user_but_keep_admin_exemption": true,
+      "broadcast_skips_banned_normal_user_and_includes_banned_admin": true,
+      "unban_resets_request_abuse_but_preserves_premium_and_downloads": true,
+      "stale_banned_profile_does_not_block_unban_recovery": true,
+      "ban_survives_container_recreation_and_empty_redis": true,
+      "mid_sendall_ban_stops_remaining_file_and_refunds_unsent_quota": true,
+      "unban_restores_delivery_without_resetting_consumed_quota": true,
+      "request_warning_threshold_triggers_real_auto_ban": true,
+      "auto_banned_user_cannot_use_request_shortcuts": true,
+      "unban_after_abuse_restores_request_allowance": true
+    },
+    "fixture_documents": 4,
+    "passed": true,
+    "configuration": {
+      "free_mode_before_restart": true,
+      "premium_mode_after_restart": true,
+      "public_filestore": true,
+      "request_tracking": true,
+      "temporary_request_per_day": 1,
+      "temporary_request_warning_limit": 2,
+      "non_premium_daily_limit": 20,
+      "quota_delivery_ledger": true,
+      "saved_search_alerts": true,
+      "durable_saved_search_alerts": true,
+      "indexed_media_search": true,
+      "duplicate_grouping": true,
+      "auto_delete_seconds": 0,
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis",
+      "delivery_targets": "two supplied QA accounts and declared QA group/log channel"
+    }
+  },
+  "cleanup": {
+    "successful_run_messages": {
+      "admin": 62,
+      "normal": 44,
+      "qa_group": 14,
+      "qa_log_channel": 20
+    },
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true,
+    "production_untouched": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check",
+    "Markdown local file links"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Fresh queries and remaining bulk sends are guarded; already delivered media, issued inline results and in-flight Telegram calls cannot be recalled",
+    "Live checks use two accounts and four tiny fixture documents on one local MongoDB; independent production replicas and large load are not covered",
+    "Authoritative moderation reads add database work; representative production latency and load gates remain open",
+    "Skipped saved alerts do not create sent claims or replay completed jobs after unban; subscriptions remain active for future files",
+    "Moderation and report-status notifications are distinct from content delivery and can still reach banned users",
+    "Three early harness attempts corrected public-route configuration, settlement timing and the preexisting premium-removal quota reset; all attempt-owned posts and infrastructure were cleaned",
+    "The live warning timestamp failure was reproduced by six real-Mongo tests before the fix; final regression and both live phases were rerun against the final source",
+    "No production server or remote Atlas database was accessed",
+    "Opening /bsetting logged a handled MESSAGE_ID_INVALID while editing the incoming command; fallback displayed the menu and saved the setting. Settings-menu fallback cleanup remains for a later bounded round."
+  ],
+  "next_round": "Stop after this bounded round; wait for operator continue."
+}

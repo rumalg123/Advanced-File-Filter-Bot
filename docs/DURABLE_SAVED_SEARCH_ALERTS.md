@@ -13,6 +13,11 @@ poisons a durable file job; the account was unblocked and access restored.
 The [current QA record](qa/coverage-expansion/STATUS.md) distinguishes this
 acceptance from outstanding load, lease-duration and crash-reconciliation gates.
 
+The subsequent [ban/unban round](qa/coverage-expansion/STATUS.md#bounded-qa-round-5--ban-and-unban-2026-10-30)
+passed **1,016 tests** and verified live that a banned ordinary subscriber gets
+no content alert or sent claim while a configured admin retains their exemption.
+Both legacy and durable authorization failures are covered with injected tests.
+
 ## Original failure
 
 The previous `FeatureService.schedule_new_media` spawned a new asyncio
@@ -93,6 +98,16 @@ operator review. `retry_dead(job_id)` is an explicit replay operation,
 not a background automatic reset.
 
 ### Per-recipient claim
+
+Before claiming a matching alert, both durable and legacy delivery paths read
+ordinary-user ban status from MongoDB. A banned recipient is skipped without a
+notification claim; their saved search stays active. Configured bot admins and
+the explicit owner retain the application bypass. An unavailable status read
+raises a retryable failure instead of allowing content delivery. After unban,
+the subscription can receive future matching files; completed jobs do not
+automatically replay alerts skipped during the ban. Moderation and report-status
+notifications remain separate from content alerts.
+
 For each matching subscriber, the worker either:
 1. Creates a new `sending` recipient claim with a short delivery lease.
 2. Recognizes `sent` or an old-format claim as completed, avoiding a

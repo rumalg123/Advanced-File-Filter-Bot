@@ -1,14 +1,15 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-30):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **945 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
-> alerts/reports round passed live subscriptions, duplicate suppression,
-> real blocked-recipient handling, report resolution and QA log notifications.
-> BUG-076–078 are fixed in separate commits. Source-matched coverage:
-> **69.84% lines, 56.49% branches, 66.51% combined**. Earlier feature and
-> multidatabase evidence remains dated in the report. Whole-bot 100% and
-> production acceptance remain open; `In review` still applies to rollout
-> gates. No production deployment occurred.
+> **1,016 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
+> ban/unban round passed **19 live checks**, including restart with empty Redis,
+> background delivery exclusion, interrupted Send All quota settlement and
+> automatic request-abuse ban/unban. Configured admin/owner bypasses and the
+> operator's logging edits are preserved. BUG-079–089 are fixed in separate
+> commits. Source-matched coverage: **69.37% lines, 56.00% branches,
+> 66.05% combined**. Earlier evidence remains dated in the report. Whole-bot
+> 100% and production acceptance remain open; `In review` still applies to
+> review/merge and rollout gates. No production deployment occurred.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The
@@ -87,7 +88,7 @@ All items are initially **Open** unless marked Deferred. "Evidence" is a source 
 
 | ID | Priority | Status | Evidence | Finding and impact | Definition of done |
 |---|---|---|---|---|---|
-| PH-001 | **P0** | In review | Code-confirmed, conditional: [`repositories/user.py`](repositories/user.py) `can_retrieve_file`, [`handlers/callbacks_handlers/file.py`](handlers/callbacks_handlers/file.py) `handle_sendall_callback` | Ban checks now precede premium/admin/quota bypasses. Single-file, send-all, batch and direct-link negative regressions passed; real QA ban/unban preserved the supplied normal account. | Retain negative access tests and review before merge; the earlier missing-send-all-decorator allegation was incorrect. |
+| PH-001 | **P0** | In review | [`repositories/user.py`](repositories/user.py), [`handlers/decorators.py`](handlers/decorators.py), [ban/unban QA](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-5--ban-and-unban-2026-10-30) | Ordinary-user bans use authoritative MongoDB reads before premium/free-mode shortcuts, menu work and remaining bulk sends. Configured admins and explicit owners retain their bypass per the operator's current instruction. Stale Redis profiles cannot override moderation. BUG-080–089 cover enforcement, notifications, quota fencing, abuse races and warning dates. | Review/merge remains open. Retain ordinary-user negative tests and privileged exemption tests. Files/results already issued and Telegram calls already in flight cannot be revoked. |
 | PH-002 | **P1** | In review | Code-confirmed: [`core/database/base.py`](core/database/base.py) `find_many`/`count`; [`repositories/media.py`](repositories/media.py) `search_files` | Strict media searches and distributed batches distinguish backend failures from empty/missing results. Real secondary partitions returned retry UX without partial cache entries. | Review exception and recovery contracts; general legacy repository methods retain their compatibility behavior. |
 | PH-003 | **P1** | In review | Conditional: [`redis.conf`](redis.conf), [`core/cache/invalidation.py`](core/cache/invalidation.py) | Current single-Redis `allkeys-lru` can evict operational state. An opt-in dedicated `noeviction` Redis and explicit migration/rollback tooling are committed but **not activated**. | Inventory keys by durability; separate disposable vs operational state or implement equivalent protection; test memory-pressure behavior and failure handling. |
 | PH-004 | **P1 if network exposure changes** | Deferred | Operator decision (2026-10-28): bot runs in a secure, network-restricted environment; application-level health/metrics endpoint hardening is not required for the current deployment. External reachability not independently verified. Source: [`bot.py`](bot.py) `_start_web_server`, [`docker-compose.yml`](docker-compose.yml) | Accept existing unauthenticated `/health`, `/metrics` and `/performance` endpoints under the stated network-isolation assumption. No HTTP endpoint code changes requested. | Reopen only if exposure, hosting, trust boundaries or monitoring requirements change; PH-013 remains separate for health-check performance. |
@@ -119,6 +120,12 @@ All items are initially **Open** unless marked Deferred. "Evidence" is a source 
 ### PH-001 implementation record (2026-10-28)
 
 **Branch:** `docs/production-hardening-source-of-truth-20261028`; **PR:** [#4](https://github.com/rumalg123/Advanced-File-Filter-Bot/pull/4).
+
+**Historical policy below is superseded by the operator's 2026-10-30 instruction:**
+configured bot admins and explicit owners must retain their bypass. The current
+implementation restores that exemption while enforcing ordinary-user bans from
+MongoDB, including free mode, premium users, callbacks and background content.
+See the [bounded ban/unban QA record](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-5--ban-and-unban-2026-10-30).
 
 - Moved the ban decision and user-existence check to the start of `UserRepository.can_retrieve_file()` before premium-disabled, administrator/owner or premium/quota shortcuts.
 - The access policy now **fails closed when no user record is available**, including when premium is disabled. This intentionally changes prior permissive behavior: users must run `/start` and have a readable user record before retrieving media.
@@ -443,7 +450,7 @@ These are design divergences, **not** independent production incidents. Any reme
 
 ### Phase 1: correctness/security before scaling
 
-- [x] PH-001: central banned/unknown-user gate added and unit regression tests committed on this branch. **Verification:** full pytest and compilation passed in [GitHub Actions run 40704480842](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40704480842); staging, real Telegram workflows, and runtime configuration combinations remain pending; status remains In review.
+- [x] PH-001: authoritative ordinary-user ban gates and configured admin/owner exemptions implemented on this branch. **Verification:** bounded automated and real Telegram ban/unban checks are recorded in the [current QA report](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-5--ban-and-unban-2026-10-30). Production/load acceptance and review/merge remain open; status remains In review. The earlier CI record is historical.
 - [x] PH-002 code and error-injection regression tests committed for **single-database media search**. **Verification pending**: CI result, staging MongoDB failure/recovery drill and real Telegram callbacks. Multi-DB mode remains deferred as PH-027.
 - [x] PH-004: **Deferred by operator**, based on secure network isolation. No endpoint hardening; revisit if deployment exposure changes.
 - [x] PH-010 opt-in code committed: file-backed Redis ACL credentials, independent state/cache secrets, generated non-overwriting ACL files, optional Compose overlay, no Redis port publication, auth unit tests and ephemeral real-Redis CI smoke. **Default deployment remains unchanged; CI passed ([run 40800650194](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40800650194)), staging cutover/network/rotation checks pending.**
