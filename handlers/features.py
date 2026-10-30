@@ -695,13 +695,15 @@ class FeatureHandler(BaseHandler):
             )
 
         file = await self.bot.media_repo.find_file(file_id)
-        if not file:
+        if not file and not remove:
             return await self._reply_with_cleanup(
                 message, "That file is no longer available."
             )
+        identifier = file.file_unique_id if file else file_id
+        display_name = file.file_name if file else file_id
         if remove:
             success = await self.repository.remove_from_collection(
-                message.from_user.id, file.file_unique_id, collection_name
+                message.from_user.id, identifier, collection_name
             )
             action = "removed from"
         else:
@@ -712,7 +714,7 @@ class FeatureHandler(BaseHandler):
         if success:
             await self._reply_with_cleanup(
                 message,
-                f"⭐ <code>{html.escape(file.file_name)}</code> {action} "
+                f"⭐ <code>{html.escape(display_name)}</code> {action} "
                 f"<b>{html.escape(collection_name)}</b>."
             )
         else:
