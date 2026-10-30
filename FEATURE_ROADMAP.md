@@ -6,24 +6,30 @@ This document is the source of truth for the additive feature program started on
 2026-07-18. Code, tests, rollout decisions, and status changes must reference a
 feature ID below. Multilingual search is explicitly out of scope.
 
-Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
-`Blocked`.
+Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (configured)`,
+`Enabled`, `Blocked`.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,108 tests with zero failures or skips** and
-**20 live force-subscription checks** on wzgram 3.1.5. Channel/group leave, join,
-restricted-member access, retry replay and state expiry passed. Admin/owner
-bypasses, public group previews and operator logging are preserved. Source-matched
-coverage is **70.24% lines, 57.14% branches, 66.98% combined**.
-The [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
-scope, configuration, cleanup and earlier feature/multidatabase evidence.
-Whole-bot 100% coverage and production operational gates remain open. Earlier
-dated counts remain historical; feature source defaults remain off.
+The latest bounded round passed **1,163 tests with zero failures or skips** and
+**18 live multiple-channel/invite checks** on wzgram 3.1.6. Multiple channels,
+pre-save permission validation, limited invites, restart persistence, real
+wall-clock expiry and retry recovery passed. FEAT-012 is implemented and QA
+passed; BUG-100 fixes BSON chat IDs after settings writes. Admin/owner bypasses
+and operator diagnostics are preserved. Source-matched coverage is **70.37%
+lines, 57.32% branches, 67.12% combined**.
+The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
+configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
+100% coverage and production operational gates remain open. Earlier dated
+counts remain historical. Optional feature flags retain their source defaults;
+FEAT-012 extends the existing configured force-subscription behavior.
 
 ## Live-safety contract
 
-1. New behavior is guarded by a dedicated feature flag that defaults to `false`.
+1. New optional feature modules are guarded by dedicated flags that default to
+   `false`. FEAT-012 is an explicitly requested extension of existing force
+   subscription: it uses `AUTH_CHANNEL` / `AUTH_GROUPS`, remains inactive when
+   both are empty, and has no additional feature flag.
 2. Existing commands, callback payloads, cache keys, and MongoDB documents remain
    backward compatible.
 3. New persistence is additive. Existing collections are not rewritten in place;
@@ -36,8 +42,10 @@ dated counts remain historical; feature source defaults remain off.
    before it may be marked `Implemented (off)`.
 8. A feature may be marked `Enabled` only after its flag is deliberately enabled
    in deployment and a live smoke test succeeds.
-9. Rollback is performed by disabling the flag; no destructive data migration is
-   required.
+9. Optional modules can be disabled through their flags. FEAT-012 targets can
+   be cleared through existing settings. Before rolling back to code with only
+   one channel, prepare a scalar channel setting compatible with that version.
+   No destructive data migration is required.
 
 ## Feature register
 
@@ -54,7 +62,7 @@ dated counts remain historical; feature source defaults remain off.
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
 | FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. |
 | FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view currently unresolved zero-result searches, popular searches, report counts, request demand, and index/file-health summaries; successful/later-indexed matches self-heal through bounded current-search validation. |
-| FEAT-012 | In progress | Multiple force-subscription channels and limited invites | Existing `AUTH_CHANNEL` / `AUTH_GROUPS` configuration | Accept comma-separated channels with legacy single-value compatibility; validate bot admin/Invite Users rights before settings writes; generate expiring, member-limited links for missing memberships and refresh them on retry. Defaults: 15 minutes and one member, editable through `/bsetting`. |
+| FEAT-012 | Implemented (configured) | Multiple force-subscription channels and limited invites | Existing `AUTH_CHANNEL` / `AUTH_GROUPS` configuration | Accept comma-separated channels with legacy single-value compatibility; validate bot admin/Invite Users rights before settings writes; generate expiring, member-limited links for missing memberships and refresh them on retry. Defaults: 15 minutes and one member, editable through `/bsetting`. QA passed: 55 new automated cases and 18 live checks; see [round 8](docs/qa/coverage-expansion/STATUS.md#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30). |
 
 ## Delivery order
 

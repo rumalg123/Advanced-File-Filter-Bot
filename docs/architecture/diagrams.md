@@ -187,12 +187,19 @@ configured memberships unless the actor has an existing admin/owner/authorized
 exemption. Group search previews and pagination remain public. Unverifiable
 memberships deny access; restricted group members use their `is_member` flag.
 
+`AUTH_CHANNEL` and `AUTH_GROUPS` normalize to lists, including legacy scalar
+channel settings. Initial `/start` also checks ordinary users. Join buttons
+cover only missing memberships and create expiring invites with the configured
+member limit (defaults: 15 minutes and one member). Failed membership retries
+refresh those links without consuming the owned action.
+
 Subscription retries carry the original actor and action. Long actions use an
 owner-bound operational Redis session. Foreign clicks and failed membership
 checks leave that session intact; a verified owner consumes it before replay.
 Replayed callbacks retain the CallbackQuery type and enter the normal guarded
 handler. An expired session cannot deliver content. See the
-[bounded subscription QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-7--force-subscription-2026-10-30).
+[subscription QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-7--force-subscription-2026-10-30)
+and [multiple-channel/invite QA](../qa/coverage-expansion/STATUS.md#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30).
 
 ## 5. File delivery and atomic quota reservation
 
@@ -441,6 +448,14 @@ cannot cancel a newer dialog. If delivery of an edit prompt fails, its session i
 removed so the next owner message is not captured invisibly. Clearing Redis
 discards unfinished dialogs; saved Mongo-backed settings survive and are loaded
 on restart. See the [bounded settings QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-6--bot-settings-2026-10-30).
+
+There are now 69 managed settings. Interactive force-subscription target edits
+resolve every channel/group and verify the bot's administrator status and
+Invite Users permission before any write. Successful edits store canonical IDs;
+invalid targets leave MongoDB unchanged. Validation creates no invite links.
+Environment bootstrap runs before Telegram connects; startup diagnostics report
+access/permission problems for those initial targets. Invite expiry and member
+limit are managed through the same settings/restart flow.
 
 ## 11. Multi-database routing and circuit breaker
 

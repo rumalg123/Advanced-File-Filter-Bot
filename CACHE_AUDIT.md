@@ -12,15 +12,18 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,108 tests with zero failures or skips** and
-**20 live force-subscription checks** on wzgram 3.1.5. Channel/group leave, join,
-restricted-member access, retry replay and state expiry passed. Admin/owner
-bypasses, public group previews and operator logging are preserved. Source-matched
-coverage is **70.24% lines, 57.14% branches, 66.98% combined**.
-The [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
-scope, configuration, cleanup and earlier feature/multidatabase evidence.
-Whole-bot 100% coverage and production operational gates remain open. Earlier
-dated counts remain historical; feature source defaults remain off.
+The latest bounded round passed **1,163 tests with zero failures or skips** and
+**18 live multiple-channel/invite checks** on wzgram 3.1.6. Multiple channels,
+pre-save permission validation, limited invites, restart persistence, real
+wall-clock expiry and retry recovery passed. FEAT-012 is implemented and QA
+passed; BUG-100 fixes BSON chat IDs after settings writes. Admin/owner bypasses
+and operator diagnostics are preserved. Source-matched coverage is **70.37%
+lines, 57.32% branches, 67.12% combined**.
+The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
+configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
+100% coverage and production operational gates remain open. Earlier dated
+counts remain historical. Optional feature flags retain their source defaults;
+FEAT-012 extends the existing configured force-subscription behavior.
 
 ## Live-safety contract
 

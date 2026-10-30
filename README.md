@@ -432,15 +432,29 @@ Only media operations use the optional multi-database manager. Users, settings, 
 | `DELETE_CHANNEL` | unset | Optional channel involved in file-deletion workflows. |
 | `REQ_CHANNEL` | `0` | Destination for content requests. Set it explicitly; `0` leaves the destination unset. |
 | `SUPPORT_GROUP_ID` | unset | Group where messages beginning with `#request ` are handled. |
-| `AUTH_CHANNEL` | unset | Force-subscription channel ID or username. |
-| `AUTH_GROUPS` | empty | Comma-separated force-subscription group IDs. |
+| `AUTH_CHANNEL` | unset | Comma-separated force-subscription channel IDs or `@usernames`; a legacy single value still works. |
+| `AUTH_GROUPS` | empty | Comma-separated force-subscription group IDs or `@usernames`. |
+| `FORCE_SUB_INVITE_EXPIRE_MINUTES` | `15` | Lifetime of newly generated join links, in minutes; range 1–525600. |
+| `FORCE_SUB_INVITE_MEMBER_LIMIT` | `1` | Telegram member limit for each new join link; range 1–99999. |
 | `AUTH_USERS` | empty | Comma-separated users allowed by authorization checks; admins are appended automatically. |
 | `CHANNELS` | `0` | Comma-separated numeric source-channel IDs for auto-indexing. `0` is discarded. Channels can also be managed with admin commands. |
 | `PICS` | empty | Comma-separated image URLs used randomly by the start command. |
 
-The bot must be a member and usually an administrator in each configured channel/group. Use full Telegram IDs, including the `-100` prefix for channels and supergroups.
+For force subscription, the bot must be an administrator with **Invite Users**
+permission in every required channel/group. Use full Telegram IDs, including
+the `-100` prefix for channels and supergroups. In `/bsetting`, **Force Sub
+Channels** and **Force Sub Groups** accept comma-separated values. Before saving
+a nonempty edit, the bot resolves every target, checks its type and permissions,
+and stores canonical IDs. A failed check returns an actionable error without
+changing the saved setting or requesting a restart.
 
-Force subscription applies to private search and pagination, inline search,
+**Invite Expiry (min)** and **Invite Member Limit** are also editable through
+`/bsetting`. Restart to apply saved changes. Existing MongoDB settings override
+environment initialization; new keys are seeded automatically, and no manual
+MongoDB migration is needed. Startup checks report inaccessible targets and
+missing invite permissions for settings supplied through the environment.
+
+Force subscription applies to an ordinary user's initial `/start`, private search and pagination, inline search,
 protected user menus and file delivery. Group search previews and their pages
 remain public; file buttons lead to the private delivery gate. Configured bot
 admins, the primary owner and `AUTH_USERS` retain their subscription exemptions.
@@ -451,6 +465,14 @@ membership lookup denies ordinary-user access until verification works again.
 A restricted user who is still a member satisfies the membership requirement;
 Telegram exposes this separately through the
 [`is_member` field](https://core.telegram.org/bots/api#chatmemberrestricted).
+
+Join prompts include only missing memberships. Each button uses a newly created,
+expiring, member-limited invite, including for public chats. **Try Again** checks
+membership and refreshes links while the user still needs to join. Changed
+settings apply to newly generated links after restart; previously issued links
+retain their original expiry. Telegram's member limit caps simultaneous members
+who joined through that link; it does not bind a link to one user or count all
+lifetime joins. See the [Telegram invite-link definition](https://core.telegram.org/bots/api#chatinvitelink).
 
 Try Again controls belong to the requesting user. Failed membership checks and
 other users' clicks preserve the saved action; after joining, the owner can
@@ -925,7 +947,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,108 tests** with zero failures or skips, plus **20 live force-subscription checks**, including channel/group leave/join, restricted members and retry recovery. Source-matched coverage is **70.24% lines and 57.14% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,163 tests** with zero failures or skips, plus **18 live multiple-channel/invite checks** on wzgram 3.1.6, including settings validation, restart persistence, real invite expiry and retry recovery. Source-matched coverage is **70.37% lines and 57.32% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 
@@ -999,7 +1021,10 @@ Confirm the bot can read the source channel, the channel is present/enabled in `
 
 ### Force subscription always denies users
 
-The bot must be able to inspect membership in `AUTH_CHANNEL` and every `AUTH_GROUPS` entry. Add it with the required permissions and verify the configured IDs/usernames.
+The bot must be able to inspect membership in every `AUTH_CHANNEL` and
+`AUTH_GROUPS` entry, and must be an administrator with Invite Users permission
+to generate join buttons. Verify all configured IDs/usernames. Use Try Again to
+refresh expired links; use `/bsetting` to correct saved targets, then restart.
 
 ### Search buttons expire
 

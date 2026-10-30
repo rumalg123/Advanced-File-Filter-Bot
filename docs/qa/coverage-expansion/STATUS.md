@@ -1,7 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded force-subscription QA round](#bounded-qa-round-7--force-subscription-2026-10-30),
-**1,108 tests passed**, **70.24% lines / 57.14% branches / 66.98% combined**.
+Latest continuation: [multiple force-subscription channels and limited invites](#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30),
+**1,163 tests passed**, **70.37% lines / 57.32% branches / 67.12% combined**.
+Next bounded round: premium grants, removal, expiry and daily quotas.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -882,3 +883,118 @@ The two original server services remain running. No production server, remote
 Atlas database, deployment `.env` or production limits were changed. No new
 product features or MongoDB schema/index migrations were added. Stop here until
 the next `continue`.
+
+## Feature round 8 — multiple force-sub channels and limited invites (2026-10-30)
+
+**Implemented and QA passed for this bounded round.** The operator explicitly
+requested this extension before premium QA, superseding the earlier pause on
+new features for this scope. FEAT-012 is `b2dea82`; the separately committed
+live-discovered BUG-100 fix is `b2fcb38`. No production server or remote Atlas
+database was accessed. All database testing used disposable local MongoDB and
+two separate Redis instances; Telegram used the provided QA accounts/chats.
+
+`AUTH_CHANNEL` now accepts multiple comma-separated channel IDs or usernames,
+with legacy single-value reads preserved. Groups accept IDs/usernames too.
+`/bsetting` exposes **Force Sub Channels**, **Force Sub Groups**, **Invite
+Expiry (min)** and **Invite Member Limit**. The latter two default to **15
+minutes** and **one member**, with valid ranges 1–525600 and 1–99999 respectively.
+There are 69 managed settings. Before saving an interactive nonempty target
+edit, every chat must resolve to the correct type and the bot must be an
+administrator with Invite Users permission. The saved list contains canonical
+IDs. Rejection leaves the prior MongoDB value intact and sends no restart
+notice; validation creates no probe invites. Environment bootstrap precedes
+Telegram connection, so initial environment targets use startup diagnostics.
+
+The initial ordinary-user `/start` now presents the subscription gate before
+welcome. Join prompts contain only missing memberships and generate expiring,
+member-limited links, including for public chats. A failed Try Again refreshes
+links and preserves the owned action. Admin/owner and authorized-user
+subscription exemptions remain intact. Saved changes apply after restart;
+existing issued links keep their original expiry. No schema/index migration or
+bulk data rewrite is required. The example environment file has one declaration
+per force-subscription key.
+
+**BUG-100:** a valid large Telegram ID round-trips through MongoDB as BSON
+`Int64`. The original exact built-in-integer check rejected those saved IDs,
+breaking settings reload/menu/startup. The parser now accepts integer subclasses,
+converts them to plain integers and continues rejecting booleans. Four focused
+cases failed before the fix (27 passed); all 31 passed afterward, including
+real MongoDB channel/group writes, cache clearing and reloads. The fix did not
+change production limits or existing logging policy. Of the operator's 407
+prior diagnostic lines, 405 remain exact and two now identify the actual
+channel in the multiple-channel loop; none were removed.
+
+**Automated:** **1,163 passed, zero failures/errors/skips**, including **55 new
+cases**, with 22 existing warnings. Parser and compatibility cases cover scalar,
+list, zero/empty, duplicate, username, BSON and malformed inputs. Permission
+cases cover missing access, wrong chat type, non-admin roles, missing Invite
+Users, all-target validation before storage, aliases resolving to the same ID,
+clearing requirements, missing validation clients and actionable UI rejection.
+Invite cases cover defaults, changed limits, missing memberships, public-chat
+limited URLs, API failures and retry refresh/action preservation. Full Python
+compilation, Ruff F821/F822/F823, dependency consistency, Markdown links/anchors,
+JSON/privacy checks and whitespace checks pass.
+The final logs include expected exception diagnostics for inaccessible chats,
+missing permissions and the deliberately invalid expiry; these are handled
+rejections with user feedback, rather than an unhandled runtime failure.
+
+**18 live checks passed across three bot phases.** Phase one read a legacy
+scalar setting, rejected an inaccessible channel, then rejected an administrator
+without Invite Users before saving. Granting the exact missing right allowed
+two channels and one group to be stored through `/bsetting`, without creating
+validation invites. The bot was recreated with owned Redis empty and the same
+MongoDB. A first-time normal-user `/start` produced a real 15-minute/one-member
+link only for the missing channel; the already joined channel/group had no
+extra join buttons. Pre-join retry refreshed the link, and joining opened
+welcome. Leaving a channel and group together produced one working limited
+link per missing target; joining both recovered access.
+
+Expiry zero was rejected without changing saved defaults. Expiry one minute
+and member limit two were then saved through `/bsetting`. A second empty-Redis
+restart retained those values. Telegram returned both requested values on new
+links. After waiting until the actual expiry plus two seconds, a real join
+failed with `InviteHashExpired`; Try Again generated a fresh link, and joining
+restored welcome. The configured primary admin/owner retained bypass and
+settings access throughout. See the [sanitized evidence](round8-multisub.json).
+
+The earlier local image disappeared during a server-state change. The
+repository Dockerfile was rebuilt as `file-filter-bot:qa-multisub-20261030`,
+image `8ea67dde9ec1`. The complete accepted suite and all three live phases
+ran on **Python 3.13.7 / wzgram 3.1.6**, not the old runtime. Other current
+versions are recorded in the evidence. No requirements pin or production
+container was changed. Original server services were left untouched.
+An offline image inspection also matched all 122 application files against
+the tested/current source and confirmed the recorded dependency versions.
+
+Coverage includes **17,914 statements, 5,942 branches and all 122 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 60.89% | 48.06% | 57.70% |
+| Source-matched automated + live | 70.37% | 57.32% | 67.12% |
+
+All four new shards match the application at process start, process end and
+final source. Historical execution is accepted only for unchanged files, with
+no line-number remapping. Earlier shards used their recorded dependency
+versions; this is accumulated source-matched evidence, not a claim that all
+historical live scenarios reran on wzgram 3.1.6. **Whole-bot 100% remains open.**
+
+Limits: Telegram's member limit is a simultaneous per-link membership cap,
+not a user binding or lifetime join counter. The live fixture verified actual
+server metadata and successful joins; it did not use a second independent
+recipient to demonstrate cap rejection because the other available account
+owns these chats. Public-chat link selection, non-admin group roles and
+synthetic malformed/API failures have automated coverage. Large channel lists,
+join-request-only policies, FloodWait bursts, concurrent link consumption,
+every legacy retry variant and representative production load were not live
+acceptance claims for this round. Premium was disabled here; **premium grants,
+removal, expiry and daily quotas are the next bounded QA scope**.
+
+The six bot-created links and two admin recovery links were revoked. Recorded
+messages/service messages were removed, both provided memberships restored,
+and the one attempt-owned temporary channel deleted. Owned containers and
+networks were removed; the two original server services remain running. The
+private evidence retains credentials/links locally and the committed record
+contains neither. Deployment `.env`, remote MongoDB data and production limits
+were unchanged. Stop here until the next `continue`.

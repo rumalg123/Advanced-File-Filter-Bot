@@ -2,15 +2,17 @@
 
 Decision recorded 2026-10-29: the operator accepts up to 24 hours of downtime,
 stopping the whole bot and recreating Redis empty while retaining production
-MongoDB. The current workspace/server is QA, not production. Production has
-one MongoDB and the operator plans a second later as capacity fills. This is a
-runbook; production has not been stopped or changed.
+MongoDB. The current workspace/server is QA, not production. The initial
+decision used one MongoDB; the operator subsequently reported adding one
+secondary. Verify the actual topology when using this runbook. No production
+server was accessed or changed from QA.
 
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The final-source QA passed 776 tests and real-account workflows. Whole-tree
-coverage is 67.30% lines / 52.92% branches. Sustained production load, cloud
+The latest bounded QA passed 1,163 tests and 18 real-account multiple-channel
+and invite checks on wzgram 3.1.6. Whole-tree source-matched coverage is 70.37%
+lines / 57.32% branches. Sustained production load, cloud
 restore and production-specific configuration/index checks remain release
 gates; 100% coverage is not the sole definition of production readiness.
 See [the QA evidence](qa/coverage-expansion/STATUS.md).
@@ -26,10 +28,17 @@ Recommended initial scope:
   headroom, validate backfill/plans during maintenance before enabling it.
 - Release a validated application image and dependency set, retaining an archive
   outside Docker for rollback. The earlier QA image is no longer on this QA
-  host. The rebuilt `file-filter-bot:cutover-candidate-v2-20261029` passed 776 tests. Its
+  host. The earlier `file-filter-bot:cutover-candidate-v2-20261029` passed 776 tests. Its
   [identity and checks](qa/coverage-expansion/cutover-candidate-checks.json) and
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
+
+The latest QA build is `file-filter-bot:qa-multisub-20261030`, image
+`8ea67dde9ec1`, application source `b2fcb38`. It was rebuilt after the earlier
+local image disappeared, and its complete suite and live checks passed on
+wzgram 3.1.6. Historical candidate checks/archive identify their original
+source and dependencies; they do not certify this newer application. See the
+[current round evidence](qa/coverage-expansion/round8-multisub.json).
 
 For the exact two-service stack supplied by the operator, use the
 [production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including
@@ -60,6 +69,16 @@ private Atlas credentials, native build and rollback commands.
    replaced. Check the actual cloud restore procedure before changing data.
 
 ## MongoDB changes
+
+Force-subscription changes need no manual MongoDB migration. Existing single
+`AUTH_CHANNEL` values remain readable; missing invite settings seed defaults
+of 15 minutes and one member. `/bsetting` now accepts multiple channels/groups
+and validates bot administrator/Invite Users rights before saving interactive
+target edits. Restart to apply settings. Existing issued links retain their
+original expiry; changing settings does not revoke them. Review all required
+targets and bot permissions before enabling ordinary-user access. If rolling
+back to code that only supports one channel, first save a compatible scalar
+channel configuration for that version. See the [configuration guide](../README.md#channels-groups-and-authorization).
 
 ### Single database, indexed search off
 
