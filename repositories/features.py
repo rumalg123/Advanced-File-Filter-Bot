@@ -537,7 +537,7 @@ class FeatureRepository:
             )
             return existing, False
 
-    async def list_saved_searches(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    async def list_saved_searches(self, user_id: int, limit: int = 25) -> list[dict[str, Any]]:
         collection = await self._collection("saved_searches")
         cursor = collection.find({'user_id': user_id}).sort('updated_at', -1).limit(limit)
         return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
