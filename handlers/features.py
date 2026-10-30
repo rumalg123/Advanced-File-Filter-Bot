@@ -387,17 +387,14 @@ class FeatureHandler(BaseHandler):
         if not rows:
             return False
 
-        labels = {
-            'fav': '⭐ Favorite',
-            'more': '👍 More like this',
-            'less': '👎 Not interested',
-        }
-        if selected_action == 'fav':
-            labels['fav'] = '✅ Favorited'
-        elif selected_action == 'more':
-            labels['more'] = '✅ More like this'
-        elif selected_action == 'less':
-            labels['less'] = '✅ Not interested'
+        # These are independent preferences. Updating feedback must not
+        # erase a favorite marker, or vice versa.
+        labels = {}
+        if selected_action in {'fav', 'unfav'}:
+            labels['fav'] = '✅ Favorited' if selected_action == 'fav' else '⭐ Favorite'
+        elif selected_action in {'more', 'less', 'rec_reset'}:
+            labels['more'] = '✅ More like this' if selected_action == 'more' else '👍 More like this'
+            labels['less'] = '✅ Not interested' if selected_action == 'less' else '👎 Not interested'
 
         changed = False
         updated_rows = []
