@@ -72,7 +72,7 @@ async def test_concurrent_shell_output_files_are_distinct_and_removed(tmp_path,m
 @pytest.mark.asyncio
 @pytest.mark.parametrize('cancel',[False,True])
 async def test_shell_timeout_or_cancellation_terminates_child_process_group(tmp_path,monkeypatch,cancel):
-    code='import os,time,pathlib; pathlib.Path("child.pid").write_text(str(os.getpid())); print("started",flush=True); time.sleep(30)'
+    code='import os,time,pathlib; ready=pathlib.Path("child.pid.tmp"); ready.write_text(str(os.getpid())); ready.replace("child.pid"); print("started",flush=True); time.sleep(30)'
     handler,message,status=fixture(code,tmp_path,monkeypatch)
     monkeypatch.setattr(handler,'SHELL_TIMEOUT_SECONDS',5 if cancel else .2)
     task=asyncio.create_task(handler.shell_command(None,message))
