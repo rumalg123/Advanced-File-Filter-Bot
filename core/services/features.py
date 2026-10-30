@@ -8,6 +8,7 @@ from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from config.settings import settings
+from core.database.errors import SearchBackendUnavailableError
 from repositories.saved_search_alert_jobs import SavedSearchAlertJobRepository
 from repositories.media import FileType
 from core.utils.button_builder import ButtonBuilder
@@ -265,6 +266,8 @@ class FeatureService:
     async def autocomplete(self, user_id: int, query: str, limit: int = 8) -> list[str]:
         if not self.enabled('FEATURE_SEARCH_AUTOCOMPLETE'):
             return []
+        if type(limit) is not int or limit <= 0:
+            return []
         normalized = normalize_feature_text(query)
         if not normalized:
             return []
@@ -273,23 +276,70 @@ class FeatureService:
             self.search_history_service.get_most_searched_keywords(user_id, limit=50),
             self.search_history_service.get_global_top_searches(limit=100),
         )
-        candidates = list(dict.fromkeys(user_keywords + global_keywords))
+        # Normalize before both prefix and fuzzy matching. Exact queries and
+        # differently spaced/cased duplicates must not re-enter through fuzzy.
+        unique_candidates = {}
+        for candidate in user_keywords + global_keywords:
+            if not isinstance(candidate, str):
+                continue
+            key = normalize_feature_text(candidate)
+            if key and key != normalized:
+                unique_candidates.setdefault(key, candidate)
+        candidates = list(unique_candidates.values())
         prefix_matches = [
             candidate for candidate in candidates
             if normalize_feature_text(candidate).startswith(normalized)
             and normalize_feature_text(candidate) != normalized
         ]
-        if len(prefix_matches) >= limit:
-            return prefix_matches[:limit]
-
         fuzzy = find_similar_queries(
             normalized,
             candidates,
             threshold=55.0,
-            max_results=limit
+            max_results=limit * 3
         )
         combined = prefix_matches + [candidate for candidate, _ in fuzzy]
-        return list(dict.fromkeys(combined))[:limit]
+        if not combined:
+            return []
+        # Search history can outlive media, or have been collected while
+        # advanced filters were disabled. Validate against current search rules.
+        checker = getattr(self.media_repo, 'has_matching_file', None)
+        if not callable(checker):
+            raise SearchBackendUnavailableError('Autocomplete media lookup unavailable')
+        validation_slots = asyncio.Semaphore(5)
+
+        async def valid_candidate(candidate):
+            search_query = candidate
+            advanced_filters = None
+            file_type = None
+            if self.enabled('FEATURE_ADVANCED_SEARCH'):
+                from core.utils.feature_search import parse_advanced_search_query
+                from core.utils.file_type import get_file_type_from_string
+                try:
+                    search_query, advanced_filters = parse_advanced_search_query(candidate)
+                except (TypeError, ValueError):
+                    return False
+                if advanced_filters.get('file_type'):
+                    file_type = get_file_type_from_string(str(advanced_filters['file_type']))
+            async with validation_slots:
+                try:
+                    return bool(await checker(
+                        search_query, file_type=file_type,
+                        use_caption=getattr(self.config, 'USE_CAPTION_FILTER', True),
+                        advanced_filters=advanced_filters,
+                    ))
+                except Exception as error:
+                    logger.warning('Autocomplete media validation unavailable', exc_info=True)
+                    raise SearchBackendUnavailableError('Autocomplete lookup failed') from error
+
+        candidates = list(dict.fromkeys(combined))[:limit * 3]
+        matches = await asyncio.gather(
+            *(valid_candidate(candidate) for candidate in candidates),
+            return_exceptions=True,
+        )
+        for match in matches:
+            if isinstance(match, BaseException):
+                raise match
+        return [candidate for candidate, match in zip(candidates, matches) if match][:limit]
 
     def schedule_new_media(self, media: MediaFile) -> None:
         """Schedule alert matching without delaying or failing the indexing path."""

@@ -3,7 +3,8 @@
 import html
 import shlex
 
-from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE
+from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE, SEARCH_RETRY_MESSAGE
+from core.cache.errors import OperationalStateUnavailableError
 
 from pyrogram import Client, filters
 from pyrogram.errors import InputUserDeactivated, PeerIdInvalid, UserIsBlocked
@@ -906,24 +907,30 @@ class FeatureHandler(BaseHandler):
             return await self._reply_with_cleanup(
                 message, "Usage: <code>/suggest partial title</code>"
             )
-        suggestions = await self.service.autocomplete(message.from_user.id, query)
+        try:
+            suggestions = await self.service.autocomplete(message.from_user.id, query)
+        except SearchBackendUnavailableError:
+            return await self._reply_with_cleanup(message, SEARCH_RETRY_MESSAGE)
         if not suggestions:
             return await self._reply_with_cleanup(
                 message, "No valid suggestions were found."
             )
         buttons = []
-        for suggestion in suggestions:
-            reference = await create_search_query_reference(
-                self.bot.cache, suggestion, message.from_user.id
-            )
-            buttons.append([
-                ButtonBuilder.action_button(
-                    f"🔍 {suggestion[:45]}",
-                    callback_data=(
-                        f"search#page#{reference}#0#0#{message.from_user.id}"
-                    )
+        try:
+            for suggestion in suggestions:
+                reference = await create_search_query_reference(
+                    self.bot.cache, suggestion, message.from_user.id
                 )
-            ])
+                buttons.append([
+                    ButtonBuilder.action_button(
+                        f"🔍 {suggestion[:45]}",
+                        callback_data=(
+                            f"search#page#{reference}#0#0#{message.from_user.id}"
+                        )
+                    )
+                ])
+        except OperationalStateUnavailableError:
+            return await self._reply_with_cleanup(message, SEARCH_RETRY_MESSAGE)
         await self._reply_with_cleanup(
             message,
             "💡 <b>Search suggestions</b>",

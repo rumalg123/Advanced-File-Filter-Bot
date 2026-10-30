@@ -299,7 +299,7 @@ async def test_autocomplete_uses_only_non_exact_successful_candidates():
     )
     service = FeatureService(
         SimpleNamespace(),
-        SimpleNamespace(),
+        SimpleNamespace(has_matching_file=AsyncMock(return_value=True)),
         history,
         feature_config('FEATURE_SEARCH_AUTOCOMPLETE')
     )
