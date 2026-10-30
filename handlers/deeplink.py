@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html
 
 from pyrogram import Client
 from pyrogram.types import Message
@@ -126,7 +127,7 @@ class DeepLinkHandler(BaseCommandHandler):
 
         if not can_access:
             logger.warning(f"Access denied for user {user_id}: {reason}")
-            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(html.escape(reason)))
             return
 
         if not file:
@@ -225,7 +226,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(html.escape(reason)))
             return
 
         user = await self.bot.user_repo.get_user(user_id)
@@ -317,7 +318,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(html.escape(reason)))
             return
 
         user = await self.bot.user_repo.get_user(user_id)
@@ -433,7 +434,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(html.escape(reason)))
             return
 
         user = await self.bot.user_repo.get_user(user_id)
@@ -491,7 +492,7 @@ class DeepLinkHandler(BaseCommandHandler):
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
-            await message.reply_text(ErrorMessageFormatter.format_access_denied(reason))
+            await message.reply_text(ErrorMessageFormatter.format_access_denied(html.escape(reason)))
             return
 
         # Validate file type if specified
@@ -613,9 +614,9 @@ class DeepLinkHandler(BaseCommandHandler):
 
         # PH-001: Premium batch links use a dedicated premium policy, but an
         # account ban must still be enforced before any premium/link exemptions.
-        if user.status == UserStatus.BANNED:
+        if user.status == UserStatus.BANNED and user_id not in getattr(self.bot.config, 'ADMINS', []):
             await message.reply_text(
-                ErrorMessageFormatter.format_access_denied(user.ban_reason or "User banned")
+                ErrorMessageFormatter.format_access_denied(html.escape(user.ban_reason or "User banned"))
             )
             return
 

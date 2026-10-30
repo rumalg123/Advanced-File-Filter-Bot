@@ -1,3 +1,4 @@
+import html
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, date, timedelta, UTC
 from dataclasses import dataclass, asdict
@@ -226,8 +227,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, (
                 ErrorMessageFormatter.format_error("User is already banned!", title="Already Banned") + "\n\n"
                 f"<b>User ID:</b> <code>{user_id}</code>\n"
-                f"<b>Name:</b> {user.name}\n"
-                f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
+                f"<b>Name:</b> {html.escape(str(user.name))}\n"
+                f"<b>Reason:</b> {html.escape(str(user.ban_reason or 'No reason provided'))}\n"
                 f"<b>Banned on:</b> {ban_date}"
             ), user
         update_data = {
@@ -1024,7 +1025,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return (
                 False,
                 ErrorMessageFormatter.format_access_denied(
-                    user.ban_reason or "You have been banned from using this bot."
+                    html.escape(user.ban_reason or "You have been banned from using this bot.")
                 ),
                 False,
                 False

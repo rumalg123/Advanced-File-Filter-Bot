@@ -1,3 +1,4 @@
+import html
 from functools import wraps
 from typing import Union, Optional, Callable
 
@@ -161,6 +162,9 @@ class BanCheck:
         if isinstance(message, CallbackQuery) or (
             hasattr(message, 'answer') and hasattr(message, 'data')
         ):
+            encoded = plain_text.encode('utf-8')
+            if len(encoded) > 200:
+                plain_text = encoded[:197].decode('utf-8', errors='ignore') + '…'
             await message.answer(plain_text, show_alert=True)
         elif hasattr(message, 'reply_text'):
             await message.reply_text(html_text)
@@ -188,7 +192,7 @@ class BanCheck:
                     await BanCheck._deny(
                         message,
                         ErrorMessageFormatter.format_access_denied("You are banned from using this bot") + "\n"
-                        f"<b>Reason:</b> {reason}\n<b>Banned on:</b> {ban_date}\n"
+                        f"<b>Reason:</b> {html.escape(str(reason))}\n<b>Banned on:</b> {ban_date}\n"
                         "Contact the bot admin if you think this is a mistake.",
                         ErrorMessageFormatter.format_access_denied("You are banned from using this bot", plain_text=True) + "\n"
                         f"Reason: {reason}\nBanned on: {ban_date}\n"

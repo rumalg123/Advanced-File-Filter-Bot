@@ -571,7 +571,7 @@ class AdminCommandHandler(BaseCommandHandler):
             # Notify the banned user
             ban_notification = (
                 ErrorMessageFormatter.format_access_denied("You have been banned from using this bot") + "\n"
-                f"<b>Reason:</b> {reason}\n"
+                f"<b>Reason:</b> {html.escape(reason)}\n"
                 f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 "If you believe this is a mistake, please contact the bot administrator."
             )
@@ -583,8 +583,8 @@ class AdminCommandHandler(BaseCommandHandler):
                 try:
                     log_text = (
                         f"#UserBanned\n\n"
-                        f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
-                        f"<b>Reason:</b> {reason}\n"
+                        f"<b>User:</b> <code>{target_user_id}</code> ({html.escape(str(user_data.name))})\n"
+                        f"<b>Reason:</b> {html.escape(reason)}\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -638,7 +638,7 @@ class AdminCommandHandler(BaseCommandHandler):
                 try:
                     log_text = (
                         f"#UserUnbanned\n\n"
-                        f"<b>User:</b> <code>{target_user_id}</code> ({user_data.name})\n"
+                        f"<b>User:</b> <code>{target_user_id}</code> ({html.escape(str(user_data.name))})\n"
                         f"<b>Admin:</b> {message.from_user.mention}\n"
                         f"<b>Notification:</b> {ErrorMessageFormatter.format_success('Sent', include_prefix=False) if notification_sent else ErrorMessageFormatter.format_failed('Failed', include_prefix=False)}\n"
                         f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"

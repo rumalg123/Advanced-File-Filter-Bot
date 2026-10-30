@@ -154,7 +154,7 @@ class RequestHandler(BaseHandler):
                 if self.bot.config.LOG_CHANNEL:
                     log_text = (
                         f"#AutoBan #RequestAbuse\n"
-                        f"<b>User:</b> <code>{user_id}</code> ({banned_user.name if banned_user else 'Unknown'})\n"
+                        f"<b>User:</b> <code>{user_id}</code> ({html.escape(banned_user.name) if banned_user else 'Unknown'})\n"
                         f"<b>Reason:</b> Over request warning limit\n"
                         f"<b>Total Requests:</b> {banned_user.total_requests if banned_user else 'N/A'}\n"
                         f"<b>Warnings:</b> {banned_user.warning_count if banned_user else 'N/A'}\n"
