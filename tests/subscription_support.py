@@ -25,7 +25,8 @@ def fixture(data='checksub#42#general', *, uid=42, subscribed=True):
     message.reply_text = AsyncMock()
     message.edit_text = AsyncMock()
     message.delete = AsyncMock()
-    query = CallbackQuery(id='qa-query', from_user=User(id=uid, first_name='QA', is_bot=False),
+    query = CallbackQuery(id='qa-query', from_user=User(id=uid, first_name='QA', is_bot=False,
+        client=SimpleNamespace(parse_mode=enums.ParseMode.HTML)),
         message=message, chat_instance='qa', data=data)
     query.answer = AsyncMock()
     return SubscriptionCallbackHandler(bot), query, cache

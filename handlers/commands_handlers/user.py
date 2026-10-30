@@ -78,16 +78,16 @@ class UserCommandHandler(BaseCommandHandler):
                 if not is_subscribed:
                     # Send subscription message with the deeplink parameter
                     await self._send_subscription_message_for_deeplink(
-                        client, message, message.command[1]
+                        client, message, 'start' if message.command[1] == 'subscribe' else message.command[1]
                     )
                     return
 
-            # User is subscribed or doesn't need subscription, handle deeplink
-            from handlers.deeplink import DeepLinkHandler
-            deeplink_handler = DeepLinkHandler(self.bot)
-            # Remove the decorator from handle_deep_link since we're checking here
-            await deeplink_handler.handle_deep_link_internal(client, message, message.command[1])
-            return
+            # The inline switch-to-PM entry is a membership gate, not a file ID.
+            if message.command[1] != 'subscribe':
+                from handlers.deeplink import DeepLinkHandler
+                deeplink_handler = DeepLinkHandler(self.bot)
+                await deeplink_handler.handle_deep_link_internal(client, message, message.command[1])
+                return
 
         # Send welcome message (rest of the original code remains the same)
         buttons = [
