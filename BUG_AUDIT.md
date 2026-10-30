@@ -76,6 +76,16 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-064 | High | Fixed | Maintenance scan limits | The ownership CLI accepts/defaults to ten million records while its library rejects values above one million; the backfill regression still treats an intentionally supported limit as invalid. | Share the ten-million maximum between CLI/library/backfill, align ownership defaults, retain the one-million backfill default, validate integer bounds and update boundary regressions. Real-Mongo CLI activation/inventory pass with the new default. |
 | BUG-065 | Medium | Fixed | Operator diagnostics | Ownership and backfill CLI errors interpolate raw exception text that may expose connection strings, credentials or media values. | Keep exception type and numeric MongoDB code; omit arbitrary message/detail payloads. Authentication, connection and duplicate-key regressions confirm diagnostic categories without credentials. |
 | BUG-066 | Medium | Fixed | Inline search | Access-check failures escape before the search error handler, and slow checks/searches can outlive the inline response window. An expired error reply can also escape dispatch. | Bound the entire inline operation to eight seconds, cancel slow work and attempt a safe retry answer; contain expired/error answers. Existing access gates, personal results and page offsets remain covered. |
+| BUG-067 | Medium | Fixed | Search captions | User queries are interpolated directly into HTML captions, interpreting valid tags or rejecting unsupported tags instead of displaying the query literally. | Escape query text in the shared initial/pagination caption formatter. Private and group captions preserve literal markup and ampersands; group ownership, sessions, error paths and cleanup remain covered. |
+
+## Group search follow-up, 2026-10-30
+
+BUG-067 escapes user text in the shared search caption formatter. **Eight
+focused cases pass**, including private/group literal-query captions, group
+scope and original-user ownership, empty/denied/unavailable paths, custom-filter
+fallback, callback size limits, session ownership and result-only auto-deletion.
+This changes presentation only; search matching still receives the original
+sanitized query.
 
 ## Inline search follow-up, 2026-10-30
 

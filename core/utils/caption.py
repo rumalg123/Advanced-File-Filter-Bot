@@ -1,5 +1,6 @@
 # core/utils/caption.py
 
+import html
 from typing import Optional
 from pyrogram import enums
 
@@ -170,7 +171,7 @@ class CaptionFormatter:
             Formatted search results caption with HTML
         """
         caption = (
-            f"🔍 <b>Search Results for:</b> {query}\n"
+            f"🔍 <b>Search Results for:</b> {html.escape(query)}\n"
             f"📁 Found {total} files\n"
             f"📊 Page {pagination.current_page} of {pagination.total_pages}"
         )
