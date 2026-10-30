@@ -332,9 +332,12 @@ class RecommendationService:
             interacted_file_set = set(interacted_file_ids)
             interacted_file_set.update(feedback.get('more', []))
             negative_file_set = set(feedback.get('less', []))
-            profile_sources = list(dict.fromkeys(
+            # Explicit negative feedback overrides implicit download history.
+            # Hiding only the selected (already downloaded) file would leave
+            # its neighbors promoted by the same unwanted profile seed.
+            profile_sources = [file_id for file_id in dict.fromkeys(
                 feedback.get('more', []) + interacted_file_ids
-            ))
+            ) if file_id not in negative_file_set]
 
             for file_id in profile_sources:
                 related_values = await self.cache.zrevrange(
