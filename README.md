@@ -753,6 +753,20 @@ configured value as the default and shows an active user's stored UTC expiry
 and rounded-up remaining days. See the
 [premium consistency rules](docs/features/premium_duration_consistency.md).
 
+Active grants are not overwritten by repeated `/addpremium` calls; an expired
+raw premium flag can receive a new grant without waiting for cleanup. Grants
+and removals use current MongoDB state, and concurrent grants have one winner.
+Notification failure does not undo a saved change; the configured log channel
+records whether notification succeeded.
+
+Automatic expiry rechecks the stored expiry before clearing premium, so an
+older cleanup candidate cannot revoke a fresh grant. It preserves consumed
+download quota. Explicit `/removepremium` retains the existing behavior of
+resetting the free download count to zero. Free quotas use UTC calendar days;
+atomic reservations prevent concurrent downloads from exceeding the limit,
+and known unsent files refund unused slots. Configured admin/owner bypasses
+remain intact. No manual MongoDB migration is needed for these fixes.
+
 Primary-admin-only commands:
 
 - `/bsetting` opens the Mongo-backed settings editor.
@@ -947,7 +961,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,163 tests** with zero failures or skips, plus **18 live multiple-channel/invite checks** on wzgram 3.1.6, including settings validation, restart persistence, real invite expiry and retry recovery. Source-matched coverage is **70.37% lines and 57.32% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,199 tests** with zero failures or skips, plus **17 live premium/quota checks** on wzgram 3.1.6, including grants, removal, notifications, actual expiry, quota enforcement and restart persistence. Source-matched coverage is **70.80% lines and 58.02% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

@@ -1,12 +1,12 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-30):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **1,163 tests passed, zero failed/skipped** on wzgram 3.1.6. The multiple-channel
-> force-subscription round passed **18 live checks**, including permission
-> rejection before storage, restart persistence, limited links, real expiry and
-> refreshed retries. FEAT-012 is implemented; BUG-100 is fixed separately.
+> **1,199 tests passed, zero failed/skipped** on wzgram 3.1.6. The bounded
+> premium/quota round passed **17 live checks**, including grant/removal
+> notifications, actual expiry, quota enforcement and empty-Redis restarts.
+> BUG-101–103 are fixed in separate commits; CACHE-025 records the cache guard.
 > Admin/owner bypasses and operator diagnostics are preserved.
-> Source-matched coverage: **70.37% lines, 57.32% branches, 67.12% combined**.
+> Source-matched coverage: **70.80% lines, 58.02% branches, 67.62% combined**.
 > Earlier evidence remains dated in the report. Whole-bot 100% and production
 > acceptance remain open; `In review` still applies to review/merge and rollout
 > gates. No production deployment occurred.

@@ -239,6 +239,17 @@ sequenceDiagram
 
 Quota is reserved before bulk delivery and unused capacity is released afterward, preventing concurrent callbacks from exceeding a free-user limit.
 
+Premium mutations read MongoDB directly and guard the write against current
+entitlement. Repeated grants cannot overwrite an active subscription; expired
+raw flags can receive a new grant. Both batch expiration paths and on-access
+expiration recheck normalized expiry at the write, so old cleanup candidates
+cannot revoke a fresh grant. Automatic expiry preserves consumed quota;
+explicit administrator removal retains its existing free-count reset.
+Decision-cache hits must have a valid tuple shape and agree with the passed
+user's flag/expiry. UTC-day rollover and known-unsent refunds remain guarded.
+Configured admin/owner bypasses are unchanged. See the
+[premium/quota QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-9--premium-grants-removal-expiry-and-quotas-2026-10-30).
+
 ## 6. Channel and manual indexing pipeline
 
 ```mermaid

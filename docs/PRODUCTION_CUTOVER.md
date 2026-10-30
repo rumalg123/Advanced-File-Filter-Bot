@@ -10,9 +10,9 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed 1,163 tests and 18 real-account multiple-channel
-and invite checks on wzgram 3.1.6. Whole-tree source-matched coverage is 70.37%
-lines / 57.32% branches. Sustained production load, cloud
+The latest bounded QA passed 1,199 tests and 17 real-account premium/quota
+checks on wzgram 3.1.6. Whole-tree source-matched coverage is 70.80%
+lines / 58.02% branches. Sustained production load, cloud
 restore and production-specific configuration/index checks remain release
 gates; 100% coverage is not the sole definition of production readiness.
 See [the QA evidence](qa/coverage-expansion/STATUS.md).
@@ -33,12 +33,14 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The latest QA build is `file-filter-bot:qa-multisub-20261030`, image
-`8ea67dde9ec1`, application source `b2fcb38`. It was rebuilt after the earlier
-local image disappeared, and its complete suite and live checks passed on
-wzgram 3.1.6. Historical candidate checks/archive identify their original
-source and dependencies; they do not certify this newer application. See the
-[current round evidence](qa/coverage-expansion/round8-multisub.json).
+The current QA application source is `9b45806`. Its complete suite and all
+three live phases used the wzgram 3.1.6 runtime from
+`file-filter-bot:qa-multisub-20261030` with the tested source snapshot mounted
+into the container. That image's bundled code remains the earlier `b2fcb38`;
+it is a runtime fixture for this round, not an updated deployment image.
+Build the new branch source for deployment and retain a validated rollback
+artifact. Historical image/archive checks certify their original source and
+dependencies. See the [current round evidence](qa/coverage-expansion/round9-premium.json).
 
 For the exact two-service stack supplied by the operator, use the
 [production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including
@@ -79,6 +81,12 @@ original expiry; changing settings does not revoke them. Review all required
 targets and bot permissions before enabling ordinary-user access. If rolling
 back to code that only supports one channel, first save a compatible scalar
 channel configuration for that version. See the [configuration guide](../README.md#channels-groups-and-authorization).
+
+Premium corrections need no manual data migration. Mutations now recheck
+current stored state, automatic expiry preserves consumed quota, and cleanup
+cannot revoke a fresh future grant. Explicit `/removepremium` keeps its prior
+free-count reset behavior. No premium settings, quota-ledger defaults or
+production limits were changed by QA.
 
 ### Single database, indexed search off
 

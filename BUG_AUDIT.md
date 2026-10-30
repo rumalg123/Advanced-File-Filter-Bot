@@ -157,18 +157,17 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,163 tests with zero failures or skips** and
-**18 live multiple-channel/invite checks** on wzgram 3.1.6. Multiple channels,
-pre-save permission validation, limited invites, restart persistence, real
-wall-clock expiry and retry recovery passed. FEAT-012 is implemented and QA
-passed; BUG-100 fixes BSON chat IDs after settings writes. Admin/owner bypasses
-and operator diagnostics are preserved. Source-matched coverage is **70.37%
-lines, 57.32% branches, 67.12% combined**.
+The latest bounded round passed **1,199 tests with zero failures or skips** and
+**17 live premium/quota checks** on wzgram 3.1.6. BUG-101–103 fix stale/concurrent
+premium mutations, unsafe automatic expiration and stale/malformed premium
+cache decisions (CACHE-025). Default/override grants, notifications, actual
+expiry, exhausted quota and empty-Redis restarts passed. Admin/owner bypasses
+and operator diagnostics are preserved. Source-matched coverage is **70.80%
+lines, 58.02% branches, 67.62% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
-counts remain historical. Optional feature flags retain their source defaults;
-FEAT-012 extends the existing configured force-subscription behavior.
+counts remain historical; no feature defaults or production limits changed.
 
 ## Verification log
 

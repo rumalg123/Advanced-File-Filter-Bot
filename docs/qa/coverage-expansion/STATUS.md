@@ -1,8 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [multiple force-subscription channels and limited invites](#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30),
-**1,163 tests passed**, **70.37% lines / 57.32% branches / 67.12% combined**.
-Next bounded round: premium grants, removal, expiry and daily quotas.
+Latest continuation: [premium grants, removal, expiry and quotas](#bounded-qa-round-9--premium-grants-removal-expiry-and-quotas-2026-10-30),
+**1,199 tests passed**, **70.80% lines / 58.02% branches / 67.62% combined**.
+Next bounded round: recommendations and recommendation feedback.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -998,3 +998,108 @@ networks were removed; the two original server services remain running. The
 private evidence retains credentials/links locally and the committed record
 contains neither. Deployment `.env`, remote MongoDB data and production limits
 were unchanged. Stop here until the next `continue`.
+
+## Bounded QA round 9 — premium grants, removal, expiry and quotas (2026-10-30)
+
+**Passed and complete for this round.** Application/test source `9b45806`.
+No new product feature, flag, deployment setting, MongoDB migration or production
+limit was introduced. Admin/owner access and quota bypasses are preserved.
+The operator's diagnostics remain present: 405 exact logger lines and two
+multiple-channel context adjustments from round 8, with none removed.
+
+| Issue | Commit | Result |
+|---|---|---|
+| BUG-101 | `6382ba1` | Premium mutations read current MongoDB state, allow a new grant for an expired raw flag, preserve active grants and use a guarded write so concurrent grants have one winner. Return persisted dates; contain write failures and invalidate caches. |
+| BUG-102 | `98cf8f3` | Automatic expiration rechecks normalized expiry at the write in optimized, fallback and single-user paths. A stale cleanup candidate cannot revoke a new grant; automatic expiry preserves consumed quota. Malformed legacy dates cannot abort all subscribers' cleanup. |
+| BUG-103 / CACHE-025 | `6b21eec` | Reject malformed cache values and decisions that contradict the current passed user's premium flag/expiry. Recompute stale positive/negative decisions while preserving the status tuple contract. |
+
+**Automated:** **1,199 passed, zero failures/errors/skips**, with 22 existing
+warnings and **36 new cases**. The initial six mutation cases all failed before
+their fix; the expanded mutation set now has 12 passing cases, including
+invalid durations and injected write failure. Expiration initially had six
+failures/two passes and now has eight passes. All eight stale/malformed decision
+cache cases failed before their fix and now pass. Eight additional real-Mongo
+acceptance cases (`9b45806`) exercise both ledger modes: 16 concurrent
+reservations at limits zero/three, known partial-send refunds and controlled
+UTC-day rollover with an old-day refund that cannot reduce the new day's count.
+The real-Mongo cases use only guarded disposable localhost databases.
+Full Python compilation, Ruff F821/F822/F823, `pip check`, Markdown links/anchors,
+JSON/privacy and whitespace checks pass.
+
+**17 live checks passed across three bot phases**, with both supplied QA
+accounts, one unique tiny indexed document and the declared log channel.
+MongoDB and dual Redis were local/disposable; force subscription, durable
+workers and auto-deletion were disabled for this focused fixture. The local
+premium default was seven days, the free limit three files and the delivery
+ledger enabled. These values did not alter production configuration.
+
+Ordinary-user self-grant and removal attempts left state unchanged. Malformed
+commands, invalid durations and a missing target were rejected. Three free
+file deliveries consumed exactly three slots; another attempt was denied and
+`/plans` showed 3/3 with zero remaining. A default grant stored exactly seven
+days, notified the user and posted the correct duration in the log channel.
+A repeated one-day grant left that active expiry unchanged. Two actual premium
+deliveries succeeded despite the exhausted free limit without extra charge.
+Manual removal notified both destinations and preserved its existing policy
+of resetting the free count; a repeated removal made no change.
+
+A new free delivery consumed one slot, and a two-day override left the
+seven-day default unchanged. The local fixture's expiry was then shortened to
+12 seconds and owned cache cleared. `/plans` first showed active status; after
+real wall-clock expiry it showed Free Plan, cleared the premium flag and kept
+the consumed 1/3 quota. A separately seeded expired raw flag accepted a fresh
+grant without waiting for cleanup. The normal account then temporarily blocked
+the bot: a grant still persisted successfully, and the log channel reported the
+failed notification. The account was unblocked and normal interaction restored.
+
+After another grant with three already consumed free slots, the bot was
+recreated with both owned Redis instances empty. Stored premium expiry, quota,
+default duration, daily limit and ledger setting survived. A premium download
+still succeeded without charge. The configured admin/owner downloaded at its
+own seeded free limit without premium and without additional charge. A second
+empty-Redis restart with a free, exhausted account retained 3/3 and continued
+denying delivery. This run delivered **ten confirmed free files, three premium
+files and one admin-bypass file** from the same tiny QA document. See the
+[sanitized evidence](round9-premium.json).
+
+All accepted execution used Python 3.13.7 / wzgram 3.1.6 from the retained QA
+runtime image, with the tested application snapshot mounted into the container.
+The image's bundled application remains the round-8 source; this round does
+not claim a newly rebuilt deployment image. Deployment must build the new
+branch source. No production server or remote Atlas database was accessed.
+
+Coverage includes **17,941 statements, 5,950 branches and all 122 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 61.33% | 48.79% | 58.21% |
+| Source-matched automated + live | 70.80% | 58.02% | 67.62% |
+
+All four new process shards match application SHA256 at start, end and final
+source. A private harness naming mistake reused round-8 phase output names;
+the new shards were renamed correctly. The intact earlier combined artifact
+was independently regenerated against its recorded `b2fcb38` source: its source
+manifest matches the committed record, and every file's execution plus all
+totals exactly match the original report. That explicitly labelled historical
+aggregate contributes only files unchanged in the current application. No lost
+raw process shard was fabricated and no line/arc remapping was used. The
+provenance distinguishes this aggregate from new process execution.
+
+**Whole-bot 100% remains open.** Concurrent grants/cleanup, malformed legacy
+records, write outages, partial-send refunds and UTC rollover use deterministic
+local integration/unit scenarios. Live expiry used a shortened local grant;
+full default-duration waiting, the hourly scheduler interval, real midnight,
+concurrent Telegram flood/load, ambiguous-send recovery and every premium-only
+batch/deep-link variant were not rerun here. Earlier bulk acceptance remains
+historical. Manual removal's zero-count policy is intentionally unchanged;
+automatic expiry is now consistent about preserving quota.
+
+The normal account was restored to unblocked state. All 113 recorded QA
+messages, including 14 log posts, were removed; there were no cleanup errors.
+No chat memberships/permissions were changed. Owned containers, anonymous
+volumes and networks were removed, and the two original server services remain
+running untouched. Live warnings are expected quota denials and the deliberate
+blocked-user notification; the SDK handled one 37-second FloodWait. No unhandled
+live exception/traceback was observed. Stop here until `continue`.
+**Next bounded scope: recommendations and recommendation feedback.**
