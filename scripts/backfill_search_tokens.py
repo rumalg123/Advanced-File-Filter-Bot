@@ -8,13 +8,17 @@ import argparse
 import json
 import os
 from pymongo import MongoClient, UpdateOne
+from core.database.maintenance_limits import MAX_MEDIA_SCAN_DOCUMENTS
 from core.utils.search_tokens import (media_search_tokens, SEARCH_TOKEN_FIELD,
     SEARCH_TOKEN_VERSION_FIELD, SEARCH_TOKEN_VERSION)
 from scripts.profile_media_search import is_local
 
+DEFAULT_BACKFILL_LIMIT = 1_000_000
 
-def backfill(collection, *, apply=False, rollback=False, batch_size=200, limit=1000000):
-    if not 1 <= batch_size <= 1000 or not 1 <= limit <= 10000000:
+
+def backfill(collection, *, apply=False, rollback=False, batch_size=200, limit=DEFAULT_BACKFILL_LIMIT):
+    if (type(batch_size) is not int or not 1 <= batch_size <= 1000
+            or type(limit) is not int or not 1 <= limit <= MAX_MEDIA_SCAN_DOCUMENTS):
         raise ValueError('Invalid backfill bounds')
     stats = {'scanned': 0, 'needs_update': 0, 'matched': 0, 'modified': 0, 'truncated': False}
     operations = []
@@ -65,8 +69,12 @@ def main():
     parser.add_argument('--rollback', action='store_true')
     parser.add_argument('--allow-remote', action='store_true')
     parser.add_argument('--batch-size', type=int, default=200)
-    parser.add_argument('--limit', type=int, default=1000000)
+    parser.add_argument('--limit', type=int, default=DEFAULT_BACKFILL_LIMIT)
     args = parser.parse_args()
+    if not 1 <= args.limit <= MAX_MEDIA_SCAN_DOCUMENTS:
+        parser.error(f'--limit must be 1..{MAX_MEDIA_SCAN_DOCUMENTS}')
+    if not 1 <= args.batch_size <= 1000:
+        parser.error('--batch-size must be 1..1000')
     uri, name = os.environ.get('DATABASE_URI'), os.environ.get('DATABASE_NAME')
     if not uri or not name:
         parser.error('DATABASE_URI and DATABASE_NAME must be supplied')

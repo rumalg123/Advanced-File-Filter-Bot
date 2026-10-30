@@ -14,6 +14,8 @@ from pymongo.errors import DuplicateKeyError
 from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
 
+from core.database.maintenance_limits import MAX_MEDIA_SCAN_DOCUMENTS
+
 
 class MediaOwnershipError(RuntimeError):
     """Fail closed; messages contain neither URIs nor media identifiers."""
@@ -111,7 +113,7 @@ class GlobalMediaOwners:
             return
         raise MediaOwnershipError('Media canonical uniqueness index is missing or incompatible')
 
-    async def activate(self, token: str, *, max_docs_per_source=1000000, batch_size=200):
+    async def activate(self, token: str, *, max_docs_per_source=MAX_MEDIA_SCAN_DOCUMENTS, batch_size=200):
         """Inventory stopped writers. Failed runs remain locked until token resume.
 
         No lease stealing, reassignment, deletions or automated deduplication.
@@ -119,7 +121,7 @@ class GlobalMediaOwners:
         """
         if not isinstance(token, str) or not 1 <= len(token) <= 128:
             raise ValueError('An explicit activation token (1..128 characters) is required')
-        if type(max_docs_per_source) is not int or not 1 <= max_docs_per_source <= 1000000:
+        if type(max_docs_per_source) is not int or not 1 <= max_docs_per_source <= MAX_MEDIA_SCAN_DOCUMENTS:
             raise ValueError('Invalid media inventory bound')
         if type(batch_size) is not int or not 1 <= batch_size <= 1000:
             raise ValueError('Invalid media inventory batch size')
@@ -177,9 +179,9 @@ class GlobalMediaOwners:
         await self.attach()
         return {'ready': True, 'already_active': False, 'adopted': adopted}
 
-    async def inventory(self, *, max_docs_per_source=1000000):
+    async def inventory(self, *, max_docs_per_source=MAX_MEDIA_SCAN_DOCUMENTS):
         """Read-only cross-namespace inventory, safe before activation."""
-        if type(max_docs_per_source) is not int or not 1 <= max_docs_per_source <= 1000000:
+        if type(max_docs_per_source) is not int or not 1 <= max_docs_per_source <= MAX_MEDIA_SCAN_DOCUMENTS:
             raise ValueError('Invalid media inventory bound')
         seen, canonicals = {}, set()
         scanned = conflicts = 0

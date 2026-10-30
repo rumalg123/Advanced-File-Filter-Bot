@@ -91,7 +91,8 @@ recreation; it does not itself activate ownership.
    python -m scripts.activate_media_owners --allow-remote --status
    ```
 
-   Inventory is capped at 1,000,000 records per source (`--limit` can reduce it),
+   The CLI and library default to a maximum of 10,000,000 records per source
+   (`--limit` can reduce it),
    with bounded batches. Activation binds every source to its coordinator,
    creates the registry and required uniqueness indexes, and adopts existing
    records. Existing compatible unique indexes are reused. Incompatible indexes

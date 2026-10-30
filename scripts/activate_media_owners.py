@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from core.database.media_owners import GlobalMediaOwners
+from core.database.maintenance_limits import MAX_MEDIA_SCAN_DOCUMENTS
 from scripts.profile_media_search import is_local
 
 
@@ -66,12 +67,12 @@ def main():
     mode.add_argument('--status', action='store_true')
     parser.add_argument('--allow-remote', action='store_true')
     parser.add_argument('--activation-token')
-    parser.add_argument('--limit', type=int, default=10000000)
+    parser.add_argument('--limit', type=int, default=MAX_MEDIA_SCAN_DOCUMENTS)
     args = parser.parse_args()
     if args.apply and not args.activation_token:
         parser.error('--apply requires an explicit --activation-token and stopped writers')
-    if not 1 <= args.limit <= 10000000:
-        parser.error('--limit must be 1..10000000')
+    if not 1 <= args.limit <= MAX_MEDIA_SCAN_DOCUMENTS:
+        parser.error(f'--limit must be 1..{MAX_MEDIA_SCAN_DOCUMENTS}')
     try:
         sources = source_configuration()
         if args.apply and len(sources) < 2:

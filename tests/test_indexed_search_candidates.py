@@ -95,7 +95,8 @@ def test_real_mongo_candidate_and_legacy_match_sets_are_identical(mongo_collecti
     assert col.count_documents({SEARCH_TOKEN_VERSION_FIELD:{'$exists':True}})==0
 
 
-@pytest.mark.parametrize('batch_size,limit',[(0,1),(1001,1),(1,0),(1,1000001)])
+@pytest.mark.parametrize('batch_size,limit',[(0,1),(1001,1),(1,0),(1,10000001),
+    (True,1),(1,True),(1.5,1),(1,1.5)])
 def test_backfill_rejects_invalid_bounds(batch_size,limit):
     with pytest.raises(ValueError):backfill(None,batch_size=batch_size,limit=limit)
 

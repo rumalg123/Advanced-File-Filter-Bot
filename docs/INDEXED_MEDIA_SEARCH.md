@@ -18,8 +18,8 @@ python -m scripts.backfill_search_tokens --allow-remote
 python -m scripts.backfill_search_tokens --allow-remote --apply
 ```
 
-The default scan is capped at 100,000 documents, batches at 200. `truncated=true`
-means the inventory is incomplete; increase `--limit` (maximum 1,000,000) before
+The default scan is capped at 1,000,000 documents, batches at 200. `truncated=true`
+means the inventory is incomplete; increase `--limit` (maximum 10,000,000) before
 claiming a complete backfill. Optimistic writes skip concurrent text changes;
 repeat until `needs_update=0`. No index is dropped or renamed. Enable the flag
 and restart to create the optional `media_search_terms_v1` index, then compare:

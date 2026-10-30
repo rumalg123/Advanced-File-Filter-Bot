@@ -400,7 +400,7 @@ async def test_operator_apply_status_inventory_and_nullable_alias_update(topolog
     assert (await owners.find('ref'))['file_ref'] is None
 
 
-@pytest.mark.parametrize('argv', [[], ['--apply'], ['--limit', '0'], ['--limit', '1000001'],
+@pytest.mark.parametrize('argv', [[], ['--apply'], ['--limit', '0'], ['--limit', '10000001'],
     ['--apply', '--status'], ['--status']])
 def test_operator_cli_validation_never_prints_credentials(monkeypatch, capsys, argv):
     from scripts.activate_media_owners import main
