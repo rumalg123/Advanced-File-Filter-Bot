@@ -1,7 +1,7 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded favorites/recent QA round](#bounded-qa-round-3--favorites-and-recent-files-2026-10-30),
-**936 tests passed**, **69.78% lines / 56.35% branches / 66.43% combined**.
+Latest continuation: [bounded alerts/reports QA round](#bounded-qa-round-4--saved-search-alerts-and-file-reports-2026-10-30),
+**945 tests passed**, **69.84% lines / 56.49% branches / 66.51% combined**.
 Whole-bot 100% remains open. This round is complete; wait for the operator's
 next `continue` before starting another feature.
 
@@ -542,3 +542,76 @@ and networks were removed, including cleanup after the harness correction. The
 two original server services remain running; no production server or remote
 Atlas database was accessed. No product features were added. Stop here until
 the operator requests `continue`.
+
+## Bounded QA round 4 — saved-search alerts and file reports (2026-10-30)
+
+**Passed and complete for this round.** Application source `468e18d` includes
+three fixes, each committed separately:
+
+- **BUG-076, `6b1cbb8`:** the management menu fetches all 25 permitted saved
+  searches, exposing the oldest Run/Pause/Delete controls. Owner scoping,
+  explicit smaller limits and Telegram callback bounds are preserved.
+- **BUG-077, `6521b28`:** durable alert fan-out releases a fenced claim and
+  skips recipients identified by Telegram as blocked, deactivated or invalid.
+  This neither records a false successful send nor disables their subscription.
+  Other subscribers still receive alerts and the job can complete. Release
+  lease loss prevents checkpointing; transient send failures still retry.
+- **BUG-078, `468e18d`:** report resolution uses its stored filename directly.
+  An optional legacy filename lookup failure falls back safely, allowing
+  notifications, notification-result recording and the admin response to finish
+  after the resolution has already committed.
+
+The nine new regressions initially reported **eight failures and one pass**;
+all nine now pass. Full suite: **945 passed, zero failures/errors/skips**, with
+22 existing warnings. Real-Mongo regressions cover all 25 menu entries and a
+queue that completes for a reachable subscriber after skipping a blocked one,
+without a sent claim for the blocked recipient. Invalid/deactivated recipients,
+lost release leases, transient send failure and optional metadata outages use
+injected failures. Compilation, focused Ruff, Markdown/local-link and whitespace
+checks pass.
+
+**Seventeen live Telegram checks passed** with both QA accounts, five distinct
+indexed documents and the declared QA log channel. Saved-search creation and
+resaving deduplicated correctly and displayed literal query markup. A new match
+notified both subscribers once; reindexing a copied duplicate created neither
+an extra job nor an extra notification. Pause suppressed new-file alerts while
+manual Run still worked; Resume restored alerts. Deleting one account's search
+left the other account's same query active and stopped future alerts for the
+owner who deleted it.
+
+Reporting the same file/reason twice created one issue; the second account
+subscribed to that issue. Submission and resolution messages reached the log
+channel. The admin list showed the file and both reporters; resolution notified
+both and persisted results. Repeated resolution did not resend; a new report
+reopened the same issue with resolution history retained.
+
+The normal QA account temporarily blocked the QA bot. A matching new file still
+completed its durable job and notified the reachable admin; there was no false
+sent claim for the blocked account. Resolving a reopened report notified the
+reachable reporter and recorded the blocked reporter as unreachable. Bot access
+was then restored and `/start` verified. All five alert jobs finished with no
+pending/dead work. See the [sanitized evidence](round4-alerts-reports.json).
+
+Live configuration enabled alerts, durable alert workers, file reports, indexed
+search, premium mode and the quota ledger, with a twenty-file allowance and no
+auto-deletion. MongoDB and separate cache/state Redis instances were disposable
+local services without published ports. Legacy alert behavior remained covered
+by the automated suite. Large fan-out load, long FloodWait/lease interactions,
+crash reconciliation and durable report-notification recovery remain open;
+report notifications are best-effort after resolution.
+
+Coverage includes **17,617 statements, 5,844 branches and all 121 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 57.88% | 44.40% | 54.52% |
+| Source-matched automated + live | 69.84% | 56.49% | 66.51% |
+
+Both new shards match source hashes at start/end/current; older evidence is
+accepted only for unchanged files. **Whole-bot 100% remains open.** All recorded
+QA messages, including startup/report log posts, and owned containers, volumes
+and networks were removed. The normal account was unblocked; both original
+server services remain running. No production server or remote Atlas database
+was accessed. No product features or schema migrations were added. Stop here
+until the next `continue`.

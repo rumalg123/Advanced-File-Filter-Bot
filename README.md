@@ -883,7 +883,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **936 tests** with zero failures or skips, plus live favorites, recent-history and settings-label checks. Source-matched coverage is **69.78% lines and 56.35% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **945 tests** with zero failures or skips, plus live saved-search alerts and file-report checks. Source-matched coverage is **69.84% lines and 56.49% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

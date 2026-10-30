@@ -1,0 +1,212 @@
+{
+  "date": "2026-10-30",
+  "round": 4,
+  "scope": [
+    "saved-search-alerts",
+    "file-reports"
+  ],
+  "application_commit": "468e18d7621d54c5d5532fb732db4a1f0c656321",
+  "source_manifest_sha256": "c101d7f68f9e2b91c75456a8818eb287df27c32985933bd0e6c0c0ecc67956f2",
+  "fixes": {
+    "BUG-076": "6b1cbb8",
+    "BUG-077": "6521b28",
+    "BUG-078": "468e18d"
+  },
+  "tests": {
+    "passed": 945,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 9,
+    "before_fixes": {
+      "failed": 8,
+      "passed": 1
+    }
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10197,
+    "num_statements": 17617,
+    "percent_covered": 54.524530071181964,
+    "percent_covered_display": "55",
+    "missing_lines": 7420,
+    "excluded_lines": 41,
+    "percent_statements_covered": 57.88159164443435,
+    "percent_statements_covered_display": "58",
+    "num_branches": 5844,
+    "num_partial_branches": 853,
+    "covered_branches": 2595,
+    "missing_branches": 3249,
+    "percent_branches_covered": 44.40451745379877,
+    "percent_branches_covered_display": "44"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12304,
+    "num_statements": 17617,
+    "percent_covered": 66.51464131963684,
+    "percent_covered_display": "67",
+    "missing_lines": 5313,
+    "excluded_lines": 41,
+    "percent_statements_covered": 69.84163024351479,
+    "percent_statements_covered_display": "70",
+    "num_branches": 5844,
+    "num_partial_branches": 1069,
+    "covered_branches": 3301,
+    "missing_branches": 2543,
+    "percent_branches_covered": 56.48528405201917,
+    "percent_branches_covered_display": "56"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 100,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 85,
+        "changed_files_discarded": 23
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 94,
+        "changed_files_discarded": 24
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 99,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 96,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 87,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 99,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 82,
+        "changed_files_discarded": 26
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 117,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 117,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 118,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 118,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 66.51464131963684,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "live": {
+    "scope": [
+      "saved-search-alerts",
+      "file-reports"
+    ],
+    "checks": {
+      "saved_search_creation_deduplication_and_literal_menu": true,
+      "new_matching_file_notifies_both_subscribers": true,
+      "duplicate_index_does_not_enqueue_or_notify_again": true,
+      "paused_search_can_be_run_manually": true,
+      "pause_suppresses_new_file_alerts": true,
+      "resume_restores_new_file_alerts": true,
+      "delete_is_owner_scoped_and_suppresses_future_alerts": true,
+      "reports_deduplicate_and_subscribe_both_reporters": true,
+      "report_submission_reaches_log_channel": true,
+      "admin_report_list_contains_file_and_reporter_count": true,
+      "resolution_notifies_both_and_persists_results": true,
+      "report_resolution_reaches_log_channel": true,
+      "repeated_resolution_does_not_resend": true,
+      "resolved_report_can_be_reopened": true,
+      "real_blocked_subscriber_does_not_poison_durable_job": true,
+      "blocked_reporter_does_not_prevent_other_notifications": true,
+      "qa_bot_access_restored_after_block_test": true
+    },
+    "fixture_documents": 5,
+    "passed": true,
+    "configuration": {
+      "saved_search_alerts": true,
+      "durable_saved_search_alerts": true,
+      "file_reports": true,
+      "premium_enabled": true,
+      "non_premium_daily_limit": 20,
+      "quota_delivery_ledger": true,
+      "indexed_media_search": true,
+      "auto_delete_seconds": 0,
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis",
+      "delivery_targets": "two supplied QA accounts and declared QA log channel"
+    }
+  },
+  "cleanup": {
+    "successful_run_messages": {
+      "admin": 38,
+      "normal": 18,
+      "log_channel": 9
+    },
+    "qa_bot_unblocked_and_start_verified": true,
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Live tests used five distinct indexed files and two accounts; the 25-entry menu boundary was checked with real MongoDB and renderer regression",
+    "UserIsBlocked was exercised with a real QA bot block/unblock; deactivated/invalid recipients and lost leases used injected tests",
+    "Optional metadata failure after report resolution used injected backend failures",
+    "Durable alert queue enabled live; legacy alert behavior remained covered by the regression suite",
+    "Skipped unreachable alerts have no false sent record and do not disable subscriptions; recoverable errors still retry",
+    "Report notifications remain best-effort after resolution; no durable notification queue or guaranteed crash recovery was introduced",
+    "No production server or remote database accessed"
+  ],
+  "next_round": "Stop after this bounded round and wait for the operator to say continue."
+}

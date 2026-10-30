@@ -5,6 +5,14 @@
 
 `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
 
+## Bounded QA follow-up, 2026-10-30
+
+BUG-076/077/078 passed **945 tests** and seventeen live saved-search/report
+checks. Actual QA bot blocking verified that an unreachable subscriber no longer
+poisons a durable file job; the account was unblocked and access restored.
+The [current QA record](qa/coverage-expansion/STATUS.md) distinguishes this
+acceptance from outstanding load, lease-duration and crash-reconciliation gates.
+
 ## Original failure
 
 The previous `FeatureService.schedule_new_media` spawned a new asyncio
@@ -94,8 +102,15 @@ For each matching subscriber, the worker either:
 4. Reclaims an expired lease and tries sending again.
 
 Successful Telegram API completion is followed by a token-fenced
-`sent` acknowledgement. A known failed send releases that worker's
-claim and replays the page on retry. A crash before the send
+`sent` acknowledgement. A recoverable send failure releases that worker's
+claim and replays the page on retry. Telegram `UserIsBlocked`,
+`InputUserDeactivated` and `PeerIdInvalid` errors release the fenced claim and
+skip that unreachable recipient, allowing later subscribers and the page to
+complete. No `sent` record is written for an unreachable recipient, and the
+subscription stays active for later files after access is restored. The skip
+emits a warning with recipient ID and error type. If claim release loses its
+lease, checkpointing stops and the job retries. A completed job therefore does
+not imply that every matching recipient was reachable. A crash before the send
 acknowledgement may cause a duplicate delivery after the lease expires.
 **Exactly-once Telegram sends are impossible to guarantee with this
 uncoordinated external API and Mongo state**. The narrower guarantee
