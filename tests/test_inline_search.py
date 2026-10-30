@@ -152,3 +152,12 @@ async def test_inline_request_has_a_deadline_and_cancels_slow_work(monkeypatch, 
     assert answer['results'] == [] and answer['cache_time'] == 0
     assert answer['switch_pm_text'] == SEARCH_RETRY_MESSAGE
 
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('privileged',[False,True])
+async def test_inline_cache_does_not_keep_normal_user_access_after_status_changes(privileged):
+    handler,query=inline_fixture()
+    if privileged:query.from_user.id=1
+    await handler.handle_inline_query(None,query)
+    assert query.answer.await_args.kwargs['cache_time']==(30 if privileged else 0)

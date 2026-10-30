@@ -96,6 +96,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-084 | High | Fixed | Delayed abuse bans | A delayed request-abuse decision can re-ban a user after an admin unban reset or overwrite a manual ban reason. | Require the current warning threshold and non-banned status in the same MongoDB update. Preserve manual reasons, reset recovery and configured admin exemptions. |
 | BUG-085 | Medium | Fixed | Ban text rendering | Markup in reasons/names is interpreted in moderation messages and denial replies; long Unicode reasons can exceed callback-answer limits. | Escape HTML surfaces while keeping plain alerts literal, bound callback replies to 200 UTF-8 bytes, and preserve privileged premium-batch ban exemptions. |
 | BUG-086 | High | Fixed | Mid-transfer bans | Bulk transfers authorize once and can keep sending the remaining files after the normal user is banned. | Recheck status before every remaining send across callback/search/typed/JSON/channel batches. Stop delivery and settle only confirmed files; definitely unsent quota is refunded. Already-started Telegram sends cannot be recalled. |
+| BUG-087 | High | Fixed | Inline access cache | Normal-user inline answers remain cacheable by Telegram for 30 seconds, allowing fresh lookups to avoid checking a changed ban status. | Disable result caching for normal users while preserving the privileged cache/exemption. Previously issued Telegram results and already delivered files are outside retroactive revocation. |
 
 ## Group search follow-up, 2026-10-30
 

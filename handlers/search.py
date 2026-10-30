@@ -511,7 +511,7 @@ class SearchHandler:
             try:
                 await query.answer(
                     results=results,
-                    cache_time=30,
+                    cache_time=30 if is_admin(user_id, self.bot.config.ADMINS) else 0,
                     is_personal=True,
                     next_offset=str(next_offset) if next_offset else "",
                     switch_pm_text=f"📁 Found {total} files" if total > 0 else "🔍 Search Files",
