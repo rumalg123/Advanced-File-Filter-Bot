@@ -77,8 +77,8 @@ def main():
             result = backfill(client[name].media_files, apply=args.apply,
                 rollback=args.rollback, batch_size=args.batch_size, limit=args.limit)
         print(json.dumps(result, sort_keys=True))
-    except Exception:
-        parser.exit(1, 'Search-token operation failed; inspect network/permissions without logging credentials.\n')
+    except Exception as e:
+        parser.exit(1, f'Search-token operation failed; inspect network/permissions without logging credentials{e}.\n')
 
 
 if __name__ == '__main__':
