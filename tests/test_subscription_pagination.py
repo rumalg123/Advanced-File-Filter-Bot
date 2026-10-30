@@ -22,13 +22,14 @@ async def test_old_page_button_rechecks_membership_before_reading_search_cache(m
 
 
 @pytest.mark.asyncio
-async def test_verified_subscription_retry_can_resume_pagination(monkeypatch):
-    handler, query, _ = fixture('checksub#42#cb#search#page#@qa#1#50#42')
+@pytest.mark.parametrize('action', ['page', 'first', 'last', 'next', 'prev'])
+async def test_verified_subscription_retry_can_resume_pagination(monkeypatch, action):
+    handler, query, _ = fixture(f'checksub#42#cb#search#{action}#@qa#1#50#42')
     replay = AsyncMock()
     monkeypatch.setattr(PaginationCallbackHandler, 'handle_search_pagination', replay)
     await handler.handle_checksub_callback(None, query)
     replay.assert_awaited_once()
-    assert replay.await_args.args[-1].data == 'search#page#@qa#1#50#42'
+    assert replay.await_args.args[-1].data == f'search#{action}#@qa#1#50#42'
     query.message.delete.assert_not_awaited()
 
 

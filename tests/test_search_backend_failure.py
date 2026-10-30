@@ -1,3 +1,4 @@
+from pyrogram.types import CallbackQuery
 from repositories.user import UserStatus
 """PH-002: a database outage must never masquerade as a valid empty search.
 
@@ -235,7 +236,7 @@ async def test_private_failure_does_not_emit_no_results_or_analytics():
         file_service=SimpleNamespace(search_files_with_access_check=AsyncMock(
             return_value=([], 0, 0, False, SEARCH_RETRY_MESSAGE)
         )),
-        config=SimpleNamespace(MAX_BTN_SIZE=10),
+        config=SimpleNamespace(MAX_BTN_SIZE=10, ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[]),
     )
     handler._sync_zero_result_analytics = AsyncMock()
     handler._track_successful_query = AsyncMock()
@@ -258,13 +259,13 @@ async def test_pagination_backend_failure_shows_retry_alert(monkeypatch):
             return_value=([], 0, 0, False, SEARCH_RETRY_MESSAGE)
         )),
         cache=MemoryCache(),
-        config=SimpleNamespace(MAX_BTN_SIZE=10),
+        config=SimpleNamespace(MAX_BTN_SIZE=10, ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[]),
     ))
-    callback = SimpleNamespace(
-        from_user=SimpleNamespace(id=42),
-        data="search#page#doctor x#0#10#42",
-        answer=AsyncMock(),
-    )
+    callback = CallbackQuery(id='qa', chat_instance='qa',
+        from_user=SimpleNamespace(id=42, is_bot=False),
+        data='search#page#doctor x#0#10#42',
+        message=SimpleNamespace(chat=SimpleNamespace(id=42)))
+    callback.answer=AsyncMock()
 
     # Use a valid parsed callback without depending on an actual Telegram client.
     import handlers.callbacks_handlers.pagination as pagination_handler
@@ -293,9 +294,11 @@ async def test_pagination_slow_backend_returns_retry_before_callback_expiry(monk
     handler=PaginationCallbackHandler(SimpleNamespace(
         user_repo=SimpleNamespace(get_user=AsyncMock(return_value=SimpleNamespace(status=UserStatus.ACTIVE))),
         file_service=SimpleNamespace(search_files_with_access_check=slow_read),
-        cache=cache,config=SimpleNamespace(MAX_BTN_SIZE=10)))
+        cache=cache,config=SimpleNamespace(MAX_BTN_SIZE=10, ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[])))
     handler.PAGE_READ_TIMEOUT_SECONDS=.01
-    callback=SimpleNamespace(from_user=SimpleNamespace(id=42),data='unused',answer=AsyncMock())
+    callback=CallbackQuery(id='qa',chat_instance='qa',from_user=SimpleNamespace(id=42,is_bot=False),
+        data='unused',message=SimpleNamespace(chat=SimpleNamespace(id=42)))
+    callback.answer=AsyncMock()
     monkeypatch.setattr(pagination_handler.PaginationHelper,'parse_callback_data',
         lambda _:{'query':'doctor x','offset':10,'total':20,'user_id':42})
     monkeypatch.setattr(pagination_handler,'is_private_chat',lambda _:True)

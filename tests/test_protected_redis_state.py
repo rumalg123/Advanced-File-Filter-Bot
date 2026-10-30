@@ -1,3 +1,5 @@
+from pyrogram.types import CallbackQuery
+from repositories.user import UserStatus
 """PH-003: protected operational Redis and safe failure handling.
 
 All tests are self-contained and do not connect to production Redis.
@@ -320,12 +322,13 @@ async def test_pagination_not_updated_if_new_state_session_fails(monkeypatch):
         file_service=SimpleNamespace(search_files_with_access_check=AsyncMock(
             return_value=([media_file], 0, 1, True, None)
         )),
-        config=SimpleNamespace(MAX_BTN_SIZE=10),
+        config=SimpleNamespace(MAX_BTN_SIZE=10, ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[]),
+        user_repo=SimpleNamespace(get_user=AsyncMock(return_value=SimpleNamespace(status=UserStatus.ACTIVE))),
     ))
-    callback = SimpleNamespace(
-        from_user=SimpleNamespace(id=42),
-        data="anything", answer=AsyncMock(),
-    )
+    callback = CallbackQuery(id='qa', chat_instance='qa',
+        from_user=SimpleNamespace(id=42, is_bot=False), data='anything',
+        message=SimpleNamespace(chat=SimpleNamespace(id=42)))
+    callback.answer=AsyncMock()
     monkeypatch.setattr(
         callback_module.PaginationHelper,
         "parse_callback_data",
@@ -335,6 +338,7 @@ async def test_pagination_not_updated_if_new_state_session_fails(monkeypatch):
     await handler.handle_search_pagination(None, callback)
     callback.answer.assert_awaited_once()
     assert "temporarily" in callback.answer.await_args.args[0].lower()
+    handler.bot.file_service.search_files_with_access_check.assert_awaited_once()
 
 
 def test_protected_state_redis_config_is_opt_in():

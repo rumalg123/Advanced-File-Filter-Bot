@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pyrogram.errors import UserIsBlocked
-from pyrogram.types import InlineKeyboardMarkup
+from pyrogram.types import InlineKeyboardMarkup, CallbackQuery
+from repositories.user import UserStatus
 
 from config.settings import FeatureConfig
 from core.cache.config import CacheKeyGenerator
@@ -253,19 +254,19 @@ async def test_variant_grouping_survives_forward_and_back_pagination():
     bot = SimpleNamespace(
         cache=SortedCache(),
         config=SimpleNamespace(
-            MAX_BTN_SIZE=10,
+            MAX_BTN_SIZE=10, ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[],
             FEATURE_DUPLICATE_GROUPING=True
         ),
         file_service=SimpleNamespace(search_files_with_access_check=search),
-        user_repo=SimpleNamespace()
+        user_repo=SimpleNamespace(get_user=AsyncMock(return_value=SimpleNamespace(status=UserStatus.ACTIVE)))
     )
-    message = SimpleNamespace(photo=None, edit_text=AsyncMock())
-    query = SimpleNamespace(
+    message = SimpleNamespace(photo=None, chat=SimpleNamespace(id=7), edit_text=AsyncMock())
+    query = CallbackQuery(id='qa', chat_instance='qa',
         data="search#next#glory#10#30#7",
-        from_user=SimpleNamespace(id=7),
-        message=message,
-        answer=AsyncMock()
+        from_user=SimpleNamespace(id=7, is_bot=False),
+        message=message
     )
+    query.answer=AsyncMock()
     handler = PaginationCallbackHandler(bot)
 
     with patch("handlers.callbacks_handlers.pagination.is_private_chat", return_value=True):
@@ -277,6 +278,8 @@ async def test_variant_grouping_survives_forward_and_back_pagination():
         call.kwargs["reply_markup"]
         for call in message.edit_text.await_args_list
     ]
+    assert len(markups) == 2
+    assert search.await_count == 2
     for markup in markups:
         buttons = [button for row in markup.inline_keyboard for button in row]
         assert any("(3 variants)" in button.text for button in buttons)

@@ -159,7 +159,7 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             callback_query = _CallbackQueryProxy(query, original_callback)
             should_delete_message = False
 
-            if original_callback.startswith('search#page#'):
+            if original_callback.startswith('search#'):
                 from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
                 await PaginationCallbackHandler(self.bot).handle_search_pagination(client, callback_query)
                 return
