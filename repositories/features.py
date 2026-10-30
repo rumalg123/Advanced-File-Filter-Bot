@@ -239,10 +239,20 @@ class FeatureRepository:
 
     async def get_collection(self, user_id: int, name: str = "Favorites") -> dict[str, Any] | None:
         collection = await self._collection("user_collections")
-        return await self.db_pool.execute_with_retry(
+        document = await self.db_pool.execute_with_retry(
             collection.find_one,
             {'user_id': user_id, 'normalized_name': normalize_feature_text(name)}
         )
+        if document:
+            token = collection_callback_token(document)
+            if document.get('callback_token') != token:
+                await self.db_pool.execute_with_retry(
+                    collection.update_one,
+                    {'_id': document['_id'], 'user_id': user_id},
+                    {'$set': {'callback_token': token}},
+                )
+            document['callback_token'] = token
+        return document
 
     async def get_collection_by_token(
         self, user_id: int, token: str

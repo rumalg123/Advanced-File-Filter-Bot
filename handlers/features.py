@@ -188,7 +188,8 @@ class FeatureHandler(BaseHandler):
         title: str,
         file_ids: list[str],
         collection_name: str | None = None,
-        removal_action: str | None = None
+        removal_action: str | None = None,
+        collection_token: str | None = None,
     ) -> None:
         try:
             files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
@@ -211,6 +212,8 @@ class FeatureHandler(BaseHandler):
             row = [ButtonBuilder.file_button(file, is_private=True)]
             if collection_name:
                 remove_callback = (
+                    f"feature#unfavtoken#{file.file_unique_id}#{collection_token}"
+                ) if collection_token else (
                     f"feature#unfavlist#{file.file_unique_id}#{collection_name}"
                 )
                 if len(remove_callback.encode('utf-8')) <= 64:
@@ -747,7 +750,8 @@ class FeatureHandler(BaseHandler):
             message,
             f"⭐ <b>{html.escape(collection['name'])}</b>",
             collection.get('file_ids', []),
-            collection_name=collection['name']
+            collection_name=collection['name'],
+            collection_token=collection.get('callback_token'),
         )
 
     @check_ban()
@@ -986,18 +990,25 @@ class FeatureHandler(BaseHandler):
             )
 
         if (
-            action in {'unfav', 'unfavlist'}
+            action in {'unfav', 'unfavlist', 'unfavtoken'}
             and self.service.enabled('FEATURE_FAVORITES')
         ):
             collection_name = parts[3] if len(parts) == 4 else "Favorites"
-            removed = await self.repository.remove_from_collection(
-                user_id, value, collection_name
-            )
+            if action == 'unfavtoken':
+                collection, state = await self.repository.remove_from_collection_by_token(
+                    user_id, collection_name, value
+                )
+                removed = state == 'removed'
+                collection_name = collection['name'] if collection else 'collection'
+            else:
+                removed = await self.repository.remove_from_collection(
+                    user_id, value, collection_name
+                )
             if removed:
                 await query.answer(
                     f"Removed from {collection_name}.", show_alert=True
                 )
-                if action == 'unfavlist' and query.message:
+                if action in {'unfavlist', 'unfavtoken'} and query.message:
                     await self._remove_feature_menu_row(query.message, query.data)
                 elif action == 'unfav':
                     await self._update_delivery_markers(query.message, 'unfav')
@@ -1088,7 +1099,8 @@ class FeatureHandler(BaseHandler):
                 query.message,
                 f"📁 <b>{html.escape(collection['name'])}</b>",
                 collection.get('file_ids', []),
-                collection_name=collection['name']
+                collection_name=collection['name'],
+                collection_token=collection.get('callback_token'),
             )
             return
 
