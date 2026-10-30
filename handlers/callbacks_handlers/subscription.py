@@ -36,23 +36,30 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
 
         # Parse callback data
         parts = query.data.split('#', 2)
+        session_key = None
 
         # Check if it's a deeplink subscription check
         if len(parts) >= 3 and parts[1] == 'dl':
             # It's a deeplink with cached parameter
             session_key = parts[2]
 
+            if not session_key.startswith(('deeplink_', 'checksub_session:')):
+                await query.answer("Session expired. Please use your original link again.", show_alert=True)
+                return
+
             # Retrieve the cached deeplink
             cached_data = await self.bot.cache.get(session_key)
-            if not cached_data:
+            if (
+                not isinstance(cached_data, dict)
+                or type(cached_data.get('user_id')) is not int
+                or not isinstance(cached_data.get('deeplink'), str)
+                or not cached_data['deeplink']
+            ):
                 await query.answer(ErrorMessageFormatter.format_error("Session expired. Please try again.", plain_text=True), show_alert=True)
                 return
 
-            original_user_id = cached_data.get('user_id', current_user_id)
-            param = cached_data.get('deeplink', 'start')
-
-            # Clear the cache
-            await self.bot.cache_invalidator.invalidate_subscription_session(session_key)
+            original_user_id = cached_data['user_id']
+            param = cached_data['deeplink']
 
         elif len(parts) == 2:
             # Old format: checksub#param
@@ -104,6 +111,10 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
                         show_alert=True
                     )
                     return
+
+        # Keep retries usable until their owner has satisfied every membership.
+        if session_key:
+            await self.bot.cache_invalidator.invalidate_subscription_session(session_key)
 
         # Handle the original command
         if param == "start":
