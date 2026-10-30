@@ -225,7 +225,8 @@ class FileCallbackHandler(BaseCommandHandler):
                 show_alert=True
             )
             return
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not verify if user {callback_user_id} has started the bot: {e}")
             pass
 
         # Check access
@@ -469,7 +470,8 @@ class FileCallbackHandler(BaseCommandHandler):
                 show_alert=True
             )
             return
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not verify if user {user_id} has started the bot: {e}")
             pass
 
         # Get cached search results with debug logging
@@ -624,7 +626,8 @@ class FileCallbackHandler(BaseCommandHandler):
                                 f"{ErrorMessageFormatter.format_success('Success', include_prefix=False)}: {success_count}\n"
                                 f"{ErrorMessageFormatter.format_error('Failed', include_prefix=False)}: {failed_count}"
                             )
-                        except Exception:
+                        except Exception as e:
+                            logger.error(f"Error updating status message: {e}")
                             pass  # Status message update is non-critical
 
                     # Small delay to avoid flooding

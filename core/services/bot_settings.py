@@ -429,7 +429,8 @@ class BotSettingsService:
                          and binding.get('source') == owners.primary and topology
                          and topology.get('state') == 'ready'
                          and topology.get('topology') == owners.topology)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to check media ownership activation status: {e}")
             policy['note'] = 'Cannot verify ownership activation. Check database connectivity before editing.'
             return policy
         policy.update(editable=True, default=ready, bound=bool(binding))

@@ -171,7 +171,8 @@ def extract_file_ref(file_id: str) -> str:
             decoded.file_reference
         ).decode().rstrip("=")
         return file_ref
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to extract file reference from file_id: %s; using fallback hash: %s", e, file_id)
         # Generate a fallback ref using hash
         return hashlib.md5(file_id.encode()).hexdigest()[:20]
 

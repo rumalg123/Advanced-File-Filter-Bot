@@ -179,7 +179,8 @@ class SubscriptionManager:
                         chat_id=self.auth_channel
                     )
                     channel_name = chat.title or "Updates Channel"
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error fetching channel details for {self.auth_channel}: {e}")
                     channel_name = "Updates Channel"
 
                 buttons.append([
@@ -202,7 +203,8 @@ class SubscriptionManager:
                         chat_id=group_id
                     )
                     group_name = chat.title or "Required Group"
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error fetching group details for {group_id}: {e}")
                     group_name = "Required Group"
 
                 buttons.append([

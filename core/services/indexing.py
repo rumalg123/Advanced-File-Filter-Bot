@@ -101,7 +101,8 @@ class IndexingService:
                         enums.ChatMemberStatus.OWNER
                     ]:
                         return None, "I need to be an admin in the channel to index files."
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error occurred while checking channel admin status for chat {chat_id}: {e}")
                     return None, "Make sure I'm an admin in the channel."
 
             return chat.id, None
@@ -411,7 +412,8 @@ class IndexRequestService:
                         chat_id=chat_id
                     )
                     link = invite.invite_link
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error creating invite link for chat {chat_id}: {e}")
                     pass
 
             # Create request message

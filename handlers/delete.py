@@ -209,7 +209,7 @@ class DeleteHandler(BaseHandler):
                 ErrorMessageFormatter.format_warning(html.escape(str(error)))
             )
             return
-        except Exception:
+        except Exception as error:
             logger.exception("PH-007 deletion preview failed")
             await message.reply_text("Deletion preview temporarily unavailable. Try again.")
             return
@@ -340,10 +340,10 @@ class DeleteHandler(BaseHandler):
                 "PH-007 admin=%s interrupted keyword_hash=%s acknowledged=%d: %s",
                 owner_id, fingerprint, deleted, error,
             )
-        except Exception:
+        except Exception as error:
             logger.exception(
-                "PH-007 admin=%s failed keyword_hash=%s acknowledged=%d",
-                owner_id, fingerprint, deleted,
+                "PH-007 admin=%s failed keyword_hash=%s acknowledged=%d error=%s",
+                owner_id, fingerprint, deleted, error
             )
             response = "⚠️ Deletion failed. Review logs before retrying."
         logger.warning(
@@ -363,8 +363,8 @@ class DeleteHandler(BaseHandler):
                     f"Completed: {completed}",
                     chat_id=self.bot.config.LOG_CHANNEL,
                 )
-            except Exception:
-                logger.exception("PH-007 deletion audit Telegram delivery failed")
+            except Exception as e:
+                logger.exception(f"PH-007 deletion audit Telegram delivery failed: {e}")
         await callback_query.answer(
             "Deletion completed" if completed else "Deletion stopped; review details"
         )

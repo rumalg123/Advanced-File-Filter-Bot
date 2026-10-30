@@ -100,8 +100,8 @@ class MediaBulkDeletion:
                                 file_ref=row.get("file_ref"),
                             )
                         )
-                    except Exception:
-                        logger.exception("File cache invalidation raised after deletion")
+                    except Exception as exc:
+                        logger.exception(f"File cache invalidation raised after deletion: {exc}")
                 if not await self.repo.cache_invalidator.invalidate_all_search_results():
                     raise BulkDeleteInterrupted(
                         "Deletion succeeded but search-cache invalidation failed; "

@@ -119,9 +119,9 @@ class FeatureService:
                     return
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as e:
             lost.set()
-            logger.exception("Durable saved-search lease heartbeat failed")
+            logger.exception(f"Durable saved-search lease heartbeat failed: {e}")
 
     async def _run_alert_worker(self):
         """Lease-fenced, bounded-concurrency worker with recoverable retries."""
@@ -153,8 +153,8 @@ class FeatureService:
                     await asyncio.gather(heartbeat, return_exceptions=True)
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception("Saved-search alert worker unavailable")
+            except Exception as e:
+                logger.exception(f"Saved-search alert worker unavailable: {e}")
                 await asyncio.sleep(5)
 
     async def _notify_durable_job(self, job, lost) -> int:
@@ -310,7 +310,8 @@ class FeatureService:
             return
         try:
             error = task.exception()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error occurred while fetching task exception: {e}")
             return
         if error:
             logger.warning(f"Saved-search notification task failed: {error}")

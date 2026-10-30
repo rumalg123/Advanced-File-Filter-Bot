@@ -227,7 +227,8 @@ class RequestHandler(BaseHandler):
                         await self.bot.feature_repo.update_content_request(
                             user_id, message.id, 'forward_failed', 0
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Could not update tracked request after forward failure: {e}")
                         pass
                 await message.reply_text(
                     ErrorMessageFormatter.format_error(

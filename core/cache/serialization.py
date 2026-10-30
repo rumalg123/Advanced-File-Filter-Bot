@@ -119,7 +119,7 @@ class OptimizedSerializer:
             methods[name] = methods.get(name, 0) + 1
             return result
         except Exception as exc:
-            logger.warning("Refused cache value that cannot be encoded safely")
+            logger.warning(f"Refused cache value that cannot be encoded safely: {exc}")
             raise TypeError("Cache value is not safely serializable") from exc
 
     def _deserialize_json(self, data: bytes) -> Any:
@@ -192,9 +192,9 @@ class OptimizedSerializer:
                 except Exception:
                     return self._deserialize_legacy_data(data)
             return self._deserialize_legacy_data(data)
-        except Exception:
+        except Exception as exc:
             self._stats["rejected_invalid"] += 1
-            logger.warning("Ignored malformed Redis cache entry")
+            logger.warning(f"Ignored malformed Redis cache entry: {exc}")
             return None
 
     @staticmethod
@@ -229,12 +229,14 @@ class OptimizedSerializer:
             pass
         try:
             return self._deserialize_msgpack(data)
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"Failed to deserialize MessagePack data: {exc}")
             pass
         try:
             # ASCII pickle bytecode stays inert text if it reaches here.
             return data.decode("utf-8")
-        except UnicodeError:
+        except UnicodeError as exc:
+            logger.warning(f"Failed to decode UTF-8 data: {exc}")
             return None
 
     def estimate_memory_usage(self, data: Any) -> Dict[str, int]:

@@ -74,8 +74,8 @@ class DatabaseConnectionPool:
                     self._database = None
                     try:
                         client.close()
-                    except Exception:
-                        logger.exception("Failed to close incomplete MongoDB client")
+                    except Exception as e:
+                        logger.exception(f"Failed to close incomplete MongoDB client: {e}")
                     raise
                 if 'uvloop' in sys.modules:
                     logger.info(f"Database pool initialized with uvloop optimizations (pool size: {self._pool_size})")

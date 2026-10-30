@@ -55,7 +55,8 @@ class FilterService:
                     chat_id=group_id
                 )
                 return int(group_id), chat.title
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error fetching group info for {group_id}: {e}")
                 return int(group_id), f"Group {group_id}"
         else:
             # Use current chat in groups

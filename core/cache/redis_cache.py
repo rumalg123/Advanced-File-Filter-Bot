@@ -251,8 +251,8 @@ class CacheManager:
                 self._ENSURE_GENERATION_SCRIPT, 1, key, str(random_initial)
             )
             return int(value)
-        except Exception:
-            logger.error("Unable to read/init search cache generation")
+        except Exception as e:
+            logger.error(f"Unable to read/init search cache generation: {e}")
             return None
 
     async def advance_search_generation(self, key: str, random_initial: int) -> Optional[int]:
@@ -264,8 +264,8 @@ class CacheManager:
                 self._ADVANCE_GENERATION_SCRIPT, 1, key, str(random_initial)
             )
             return int(value)
-        except Exception:
-            logger.error("Unable to advance search cache generation")
+        except Exception as e:
+            logger.error(f"Unable to advance search cache generation: {e}")
             return None
 
     async def increment_with_expiry(

@@ -1,6 +1,10 @@
 """Keep database URI/name pairs together when normalizing configuration."""
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def paired_database_sources(primary_uri, primary_name, additional_uris, additional_names):
     if len(additional_names) > len(additional_uris):
         raise ValueError('More database names than additional URIs')
@@ -33,6 +37,7 @@ def validated_database_sources(database_config):
                 raise ValueError('Repeated source identity')
             identities.add(identity)
         return sources
-    except Exception:
+    except Exception as e:
+        logger.error(f"Database source validation failed: {e}")
         # Driver validation errors may include credential-bearing URIs.
         raise ValueError('Configure distinct valid MongoDB URI/database pairs in the environment.') from None

@@ -111,7 +111,8 @@ class ConnectionHandler(BaseHandler):
                             parse_mode=CaptionFormatter.get_parse_mode(),
                             chat_id=user_id
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Error sending confirmation message to user {user_id}: {e}")
                         pass
             else:
                 await message.reply_text(msg, quote=True)
@@ -343,7 +344,8 @@ class ConnectionHandler(BaseHandler):
                 f"👥 Members: {members_count}\n"
                 f"✅ Status: {'Active' if is_active == 'True' else 'Inactive'}"
             )
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching group details for {group_id}: {e}")
             text = (
                 f"<b>Group Details</b>\n\n"
                 f"🆔 ID: <code>{group_id}</code>\n"

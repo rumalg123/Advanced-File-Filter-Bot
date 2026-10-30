@@ -179,7 +179,8 @@ class BotSettingsHandler(BaseHandler):
         if hasattr(message, 'edit_text') and hasattr(message, 'id') and message.chat:
             try:
                 await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-            except Exception:
+            except Exception as e:
+                logger.error(f"Failed to edit settings menu message: {e}")
                 # If edit fails, send a new message
                 await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
         else:
@@ -475,7 +476,8 @@ class BotSettingsHandler(BaseHandler):
         # Delete the cancel message itself
         try:
             await message.delete()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not delete cancel message: {e}")
             pass
 
         logger.info(f"Cancelled edit session for user {user_id}")
@@ -548,7 +550,8 @@ class BotSettingsHandler(BaseHandler):
             # Delete the cancel message itself
             try:
                 await message.delete()
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Could not delete cancel message: {e}")
                 pass
 
             # Clean up session
@@ -727,9 +730,9 @@ class BotSettingsHandler(BaseHandler):
                 'git_before': git_info_before,
             }
             Path('restart_msg.txt').write_text(json.dumps(restart_data), encoding='utf-8')
-        except Exception:
+        except Exception as e:
             self._restart_in_progress = False
-            logger.exception('Update and restart aborted')
+            logger.error(f"Error occurred while preparing restart: {e}")
             if restart_msg is not None:
                 await restart_msg.edit_text(
                     "❌ <b>Update failed; restart cancelled.</b> Check the update log and backups. "

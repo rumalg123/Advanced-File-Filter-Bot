@@ -5,11 +5,14 @@ quickly under partial outages, not to gather operational diagnostics.
 Existing /metrics and /performance collection remains unchanged.
 """
 import asyncio
+import logging
 import time
 from typing import Any
 
 from aiohttp import web
 
+
+logger = logging.getLogger(__name__)
 
 class ReadinessProbe:
     """Single-flight bounded MongoDB/Redis pings, including optional state Redis."""
@@ -33,7 +36,8 @@ class ReadinessProbe:
             client = pool.client
             await asyncio.wait_for(client.admin.command("ping"), self.timeout)
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error occurred while pinging MongoDB: {e}")
             return False
 
     async def _ping_redis(self, redis_client: Any) -> bool:
@@ -41,7 +45,8 @@ class ReadinessProbe:
             return False
         try:
             return bool(await asyncio.wait_for(redis_client.ping(), self.timeout))
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error occurred while pinging Redis: {e}")
             return False
 
     async def _measure(self) -> dict:
@@ -107,7 +112,8 @@ def register_probe_routes(app: web.Application, bot: Any) -> None:
                 "stats": report.get("stats", {}),
                 "meta": report.get("meta", {}),
             }, status=200 if state in ("healthy", "degraded") else 503)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error occurred while fetching system health data: {e}")
             # No exception text/credentials in HTTP error response.
             return web.json_response({"status": "unhealthy"}, status=503)
 

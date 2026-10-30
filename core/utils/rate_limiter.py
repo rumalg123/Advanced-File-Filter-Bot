@@ -145,10 +145,11 @@ class RateLimiter:
             return True, None
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
             logger.warning(
-                "Rate limit Redis unavailable for action %s; applying bounded local fallback",
-                action
+                "Rate limit Redis unavailable for action %s; applying bounded local fallback: %s",
+                action,
+                error
             )
             return await self._degraded_check(user_id, action, config)
 

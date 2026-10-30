@@ -349,8 +349,8 @@ class ChannelHandler:
                 break
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception("Cannot initialize durable index queue; retrying")
+            except Exception as e:
+                logger.exception("Cannot initialize durable index queue; retrying: %s", e)
                 try:
                     await asyncio.wait_for(self._shutdown.wait(), timeout=5)
                 except asyncio.TimeoutError:
@@ -383,8 +383,8 @@ class ChannelHandler:
                     if status == 1:
                         try:
                             await self.channel_repo.update_indexed_count(job["chat_id"])
-                        except Exception:
-                            logger.exception("Indexed file but channel counter update failed")
+                        except Exception as e:
+                            logger.exception("Indexed file but channel counter update failed: %s", e)
                         feature_service = getattr(self.bot, "feature_service", None)
                         if feature_service:
                             try:
@@ -392,10 +392,10 @@ class ChannelHandler:
                                     await feature_service.persist_new_media(media_file)
                                 else:
                                     feature_service.schedule_new_media(media_file)
-                            except Exception:
+                            except Exception as e:
                                 # Media has already been saved and indexing job
                                 # acknowledged; surface the cross-write gap.
-                                logger.exception("Indexed file but durable alert enqueue failed")
+                                logger.exception("Indexed file but durable alert enqueue failed: %s", e)
                         # Admin summaries are independent of saved-search alerts.
                         # Notify only for a newly saved, acknowledged job: replayed
                         # duplicates and workers that lost their lease stay quiet.
@@ -414,8 +414,8 @@ class ChannelHandler:
 
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception("Durable channel indexing worker error")
+            except Exception as error:
+                logger.exception("Durable channel indexing worker error: %s", error)
                 try:
                     await asyncio.wait_for(self._shutdown.wait(), timeout=5)
                 except asyncio.TimeoutError:

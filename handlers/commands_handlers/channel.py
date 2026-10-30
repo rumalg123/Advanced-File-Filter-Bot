@@ -191,7 +191,8 @@ class ChannelCommandHandler(BaseCommandHandler):
                     chat_id=channel_input
                 )
                 channel_id = chat.id
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error occurred while fetching channel info: {e}")
                 await message.reply_text(ErrorMessageFormatter.format_error("Could not find channel"))
                 return
 
@@ -314,7 +315,8 @@ class ChannelCommandHandler(BaseCommandHandler):
                     chat_id=channel_input
                 )
                 channel_id = chat.id
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error occurred while fetching channel info: {e}")
                 await message.reply_text(ErrorMessageFormatter.format_error("Could not find channel"))
                 return
 

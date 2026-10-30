@@ -54,8 +54,8 @@ class IndexOptimizer:
             existing_list = await self.db_pool.execute_with_retry(
                 collection.list_indexes().to_list, length=None
             )
-        except Exception:
-            logger.error("Media index inventory unavailable; refusing blind index DDL")
+        except Exception as e:
+            logger.error(f"Media index inventory unavailable; refusing blind index DDL: {e}")
             return {f"media_{spec['name']}": False for spec in manifest}
 
         existing = {doc["name"]: dict(doc) for doc in existing_list}
@@ -90,10 +90,10 @@ class IndexOptimizer:
                 existing[name] = {
                     "name": name, "key": dict(spec["keys"]), **spec["options"],
                 }
-            except Exception:
+            except Exception as e:
                 # Do not claim an IndexOptionsConflict or any other failure
                 # represents a successful index build. No automatic drops.
-                logger.error("Could not create media index %s; manual review needed", name)
+                logger.error(f"Could not create media index {name}; manual review needed: {e}")
                 results[key] = False
         return results
 

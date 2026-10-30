@@ -753,7 +753,8 @@ class FileStoreService:
                             protect_content=protect
                         )
                         success_count += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Error sending non-media message: {e}")
                         continue
 
                 await asyncio.sleep(1)  # Avoid flooding

@@ -26,7 +26,8 @@ async def verify_user_in_group(
             enums.ChatMemberStatus.LEFT,
             enums.ChatMemberStatus.BANNED
         ]
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error verifying user {user_id} in group {group_id}: {e}")
         return False
 
 
@@ -79,7 +80,8 @@ class ConnectionService:
             )
             if bot_member.status != enums.ChatMemberStatus.ADMINISTRATOR:
                 return False, "I need to be an admin in the group!", None
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error checking bot status in group {group_id}: {e}")
             return False, "Make sure I'm present in the group!", None
 
         # Get group info
@@ -90,7 +92,8 @@ class ConnectionService:
                 chat_id=group_id
             )
             title = chat.title
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching group info for {group_id}: {e}")
             title = f"Group {group_id}"
 
         # Add connection
