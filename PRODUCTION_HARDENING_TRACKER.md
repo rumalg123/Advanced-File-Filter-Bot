@@ -1,19 +1,19 @@
 # Production Hardening Tracker
 
-> **Current QA (2026-10-29):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **776 tests passed, zero failed/skipped** on the final source and rebuilt
-> wzgram 3.1.5 image. Disposable three-source ownership, real indexing/delivery,
-> deep pagination and secondary network-partition recovery passed. The earlier
-> [470-test report](docs/QA_REPORT_20261029.md) remains historical evidence.
-> Whole-bot 100% coverage remains open. `In review` remains appropriate until
-> merge and applicable production acceptance gates are complete. No merge,
-> push or production deployment was performed.
+> **Current QA (2026-10-30):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
+> **906 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
+> inline/group round passed real-account search, pagination, owner checks and
+> document delivery. BUG-066/067 are fixed in separate commits. Source-matched
+> coverage: **68.61% lines, 54.55% branches, 65.11% combined**. Earlier disposable
+> three-source ownership, indexing/delivery and partition evidence remains
+> dated in the report. Whole-bot 100% and production acceptance remain open;
+> `In review` still applies to rollout gates. No production deployment occurred.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The
 > [production runbook](docs/PRODUCTION_CUTOVER.md) separates the recommended
 > single-source release from optional search backfill/ownership activation.
-> This host is QA; production has one MongoDB and a second is planned later.
+> This host is QA; the operator now reports a primary and one secondary in production.
 > BUG-059/060 fixed cross-container Redis startup and index-aware capacity
 > switching; the rebuilt candidate passed 776 tests. Production backup/restore
 > and provider headroom checks remain go-live gates.

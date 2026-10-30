@@ -119,14 +119,15 @@ are preserved for a separate follow-up. The raised ownership CLI default also
 exceeds the existing library's one-million inventory/activation bound and needs
 alignment before using the new default. No production service was accessed.
 
-## Current QA, 2026-10-29
+## Current QA, 2026-10-30
 
-The final full suite passed **776 tests with zero failures or skips** on the
-rebuilt wzgram 3.1.5 runtime. Real-account feature/settings, three-source media
-indexing/delivery, deep pagination and partition/recovery evidence is recorded
-in the [current QA report](docs/qa/coverage-expansion/STATUS.md). Whole-bot 100%
-coverage and the named production operational gates remain open. Dated counts
-below describe earlier checkpoints; feature source defaults remain off.
+The latest bounded round passed **906 tests with zero failures or skips** and
+live inline/group search checks on wzgram 3.1.5. Source-matched coverage is
+**68.61% lines, 54.55% branches, 65.11% combined**. The
+[current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
+scope, configuration, cleanup and earlier feature/multidatabase evidence.
+Whole-bot 100% coverage and production operational gates remain open. Earlier
+dated counts remain historical; feature source defaults remain off.
 
 ## Verification log
 

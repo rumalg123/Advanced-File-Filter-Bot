@@ -1,6 +1,11 @@
-# Final-source QA and remaining coverage
+# QA evidence and remaining coverage
 
-QA date: 2026-10-29. Application source: `850bc31` (documentation follows).
+Latest continuation: [bounded inline/group QA round](#bounded-qa-round-1--inline-and-group-search-2026-10-30),
+**906 tests passed**, **68.61% lines / 54.55% branches / 65.11% combined**.
+Whole-bot 100% remains open. This round is complete; wait for the operator's
+next `continue` before starting another feature.
+
+Historical baseline: QA date 2026-10-29, application source `850bc31`.
 The operator authorized all supplied MongoDB copies, extra commented sources,
 two user sessions and declared QA chats. Original server containers were left
 running. No push, merge or production deployment was performed.
@@ -344,3 +349,63 @@ now distinguishes user subscriptions, per-file durable jobs (completed TTL
 zero-subscriber job overhead. Enabling alerts/backfilling tokens does not enqueue
 all pre-existing media. Source defaults and rollout acceptance gates remain as
 documented; this run does not remeasure whole-bot coverage.
+
+## Bounded QA round 1 — inline and group search (2026-10-30)
+
+**Passed and complete for this round.** Application source `7b973bd` includes
+two separately committed fixes and 28 new regressions:
+
+- **BUG-066, `8c5ba8b`:** inline access-check failures now receive a safe answer.
+  An eight-second deadline cancels slow access/search work; expired replies stay
+  contained in the handler. Twenty inline cases cover gates, exemptions,
+  personal results, offsets, failures, expiry and cancellation.
+- **BUG-067, `7b973bd`:** shared initial/pagination captions escape query HTML,
+  preserving literal text in private and group results. Eight group/caption
+  cases cover scope, ownership, unavailable/empty results, filter fallback,
+  callback size limits, session ownership and result-only auto-deletion.
+
+Full regression: **906 passed, zero failures/errors/skips**, with the same
+22 existing Redis deprecation/aiohttp warnings. Compilation and the focused
+undefined-name Ruff gate pass. Tests used disposable local MongoDB and two
+Redis services, without host-published ports.
+
+**Live Telegram acceptance passed** with both supplied QA accounts after the
+operator enabled inline mode. Twelve tiny documents were indexed through
+`/link`. Normal inline search returned ten results, then two on the final page
+without a further offset; result IDs did not overlap. Admin search, empty
+results and selecting a cached document into the supplied QA group passed.
+Group results showed twelve files over four pages. A different user's page
+click was denied, owner forward/back clicks preserved file IDs, callbacks fit
+Telegram's limit, and a group file button opened successful private delivery.
+A literal `<unknown>` query displayed safely; a group no-result query stayed
+quiet. See the [sanitized evidence](round1-inline-group.json).
+
+Live configuration used premium mode off, custom filters off, indexed media
+search and duplicate grouping on, three results per group page and no
+auto-delete timer. Document selection was tested live; other inline media
+types remain unverified in this round. Ban, subscription, premium, rate-limit,
+backend-failure and deadline cases used automated fixtures. Genuine Telegram
+FloodWait occurred during fixture setup and wzgram retried; this does not
+complete the sustained-load or multi-replica cooldown gates.
+
+Coverage was remeasured across **17,607 statements, 5,846 branches and all 121
+tracked application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 56.98% | 43.47% | 53.61% |
+| Source-matched automated + live | 68.61% | 54.55% | 65.11% |
+
+Both new coverage shards match the current source at process start/end. Earlier
+shards contribute only for files with identical start/end/current SHA256;
+changed files are discarded. The evidence records provenance and the complete
+denominator. The 67.30% line baseline above remains historical; **100% whole-bot
+coverage is not achieved**.
+
+All recorded test messages and one orphan inline fixture from an earlier
+harness failure were deleted. Disposable databases, Redis, containers and
+networks were removed; both original server services remain running. Fixture
+filename/API-return assumptions were corrected in the private harness before
+acceptance. No production server or remote Atlas database was accessed.
+No new product features were added. Remaining feature/media-type checks and
+operational gates stay open for later bounded rounds after `continue`.
