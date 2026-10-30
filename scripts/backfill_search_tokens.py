@@ -78,7 +78,7 @@ def main():
                 rollback=args.rollback, batch_size=args.batch_size, limit=args.limit)
         print(json.dumps(result, sort_keys=True))
     except Exception as e:
-        parser.exit(1, f'Search-token operation failed; inspect network/permissions without logging credentials{e}.\n')
+        parser.exit(1, f'Search-token operation failed; inspect network/permissions without logging credentials {e}.\n')
 
 
 if __name__ == '__main__':
