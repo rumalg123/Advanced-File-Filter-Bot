@@ -312,3 +312,35 @@ network namespace without published ports. All owned containers and the network
 were removed. No production connection or live Telegram notification was made.
 After deployment, verify with a newly indexed file and the configured log
 channel. This run did not remeasure whole-bot coverage.
+
+## Maintenance limits and diagnostics — BUG-064 / BUG-065 fixed
+
+The two operator-script follow-ups from the prior run are resolved separately:
+
+- `147917e`: one shared **10,000,000-document** upper bound for ownership
+  inventory/activation and search-token backfill. Ownership CLI/library defaults
+  now agree at ten million. Backfill retains its one-million default and accepts
+  up to ten million explicitly. Integer/type/bounds checks and the formerly
+  stale regression are aligned with the operator's increased limits.
+- `ca3ae8a`: ownership and backfill errors retain exception type and numeric
+  MongoDB code without rendering arbitrary exception messages/details that may
+  contain credentials, hosts or document values.
+
+Final validation on 2026-10-30: **878 passed, zero failures/errors/skips**, with
+22 existing warnings, against disposable local MongoDB and separate cache/state
+Redis services. Tests include real ownership inventory and CLI activation using
+its new default, permitted bounds above 500,000/one million and at ten million,
+rejection before connection/binding for invalid values, and both CLI error
+paths for connection/authentication/duplicate-key failures. Full compilation,
+undefined-name lint and whitespace validation pass. Large-limit acceptance uses
+small fixtures rather than loading ten million records; no large-catalogue
+throughput or memory claim is made. Owned test containers/network were removed.
+No production server or remote database was accessed.
+
+The saved-search queue storage question was reviewed without changing retention
+or admission behavior. The [queue runbook](../../DURABLE_SAVED_SEARCH_ALERTS.md)
+now distinguishes user subscriptions, per-file durable jobs (completed TTL
+30 days), and recipient deduplication claims (TTL 180 days), and records the
+zero-subscriber job overhead. Enabling alerts/backfilling tokens does not enqueue
+all pre-existing media. Source defaults and rollout acceptance gates remain as
+documented; this run does not remeasure whole-bot coverage.

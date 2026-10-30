@@ -73,6 +73,18 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-061 | High | Fixed | Docker startup | Every startup upgrades packages despite disabled auto-update, changing tested dependencies or failing without package-index access. | Use Dockerfile-installed packages during Docker setup; successful/unavailable installer regressions and an offline image setup check prevent runtime installation. Explicit code-update flows remain separately controlled. |
 | BUG-062 | High | Fixed | Update and restart | `/restart` runs Git in an image without a valid checkout, failing with exit 128. The initial fix also incorrectly removed the command's code-update behavior. | Restore update-before-restart using the validated backup/temporary-clone updater and the configured upstream branch. Preserve secrets and mutable data, install changed requirements, record the applied revision, cancel restart on failure, and gracefully stop through wzgram so Compose restarts the updated container. Real Git branch/update/failure tests and real wzgram shutdown cover this contract. Commit `ffd9d63` is superseded. |
 | BUG-063 | Medium | Fixed | Durable indexing notifications | Durable channel indexing completes jobs but bypasses the memory worker's `LOG_CHANNEL` summary. | Share the summary sender and notify after acknowledging a newly indexed durable job. Duplicate replays and lost leases stay quiet. Notification failure is logged and never requeues indexed media or repeats saved-search fan-out. Summaries are best-effort; completed historical jobs are not replayed. |
+| BUG-064 | High | Fixed | Maintenance scan limits | The ownership CLI accepts/defaults to ten million records while its library rejects values above one million; the backfill regression still treats an intentionally supported limit as invalid. | Share the ten-million maximum between CLI/library/backfill, align ownership defaults, retain the one-million backfill default, validate integer bounds and update boundary regressions. Real-Mongo CLI activation/inventory pass with the new default. |
+| BUG-065 | Medium | Fixed | Operator diagnostics | Ownership and backfill CLI errors interpolate raw exception text that may expose connection strings, credentials or media values. | Keep exception type and numeric MongoDB code; omit arbitrary message/detail payloads. Authentication, connection and duplicate-key regressions confirm diagnostic categories without credentials. |
+
+## Operator follow-up, 2026-10-30
+
+BUG-064 (`147917e`) and BUG-065 (`ca3ae8a`) resolve the two failures recorded
+below. The increased limits are preserved: ownership inventory/activation
+default and maximum 10,000,000 per source; token backfill default 1,000,000,
+maximum 10,000,000. The complete source suite now passes **878 tests, zero
+failures/errors/skips**, with 22 existing warnings. Full compilation,
+undefined-name lint and whitespace checks pass. Large bounds are exercised
+using small fixtures; this is not a ten-million-record performance benchmark.
 
 ## Notification follow-up, 2026-10-30
 

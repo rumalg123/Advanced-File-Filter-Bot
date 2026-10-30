@@ -1,7 +1,6 @@
 # PH-018: Saved-search alert queue, leases, recovery and rollout
 
-**Status:** Code and CI passed ([run 40814929762](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40814929762)); staging and reconciliation acceptance pending. Draft PR #4; do not enable in production.
-This phase is opt-in and must satisfy CI plus isolated staging review.
+**Status:** Code and CI passed ([run 40814929762](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40814929762)). The operator reports this mode enabled in production; fault/reconciliation acceptance checks below remain outstanding. The feature is opt-in.
 
 
 `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` is now editable through `/bsetting`; restart to apply changes. The environment initializes missing settings only; existing MongoDB values take precedence. This control change does not waive the acceptance and rollback checks below.
@@ -110,6 +109,35 @@ before enabling. Do not overclaim idempotency across an unknown external
 send outcome.
 
 ## Monitoring and bounds
+
+### Primary storage footprint
+
+When both alert flags are enabled, every newly indexed distinct media file
+creates one `saved_search_alert_jobs` document, even if there are no active or
+matching saved searches. The worker scans subscribers and may finish with zero
+sends. Enabling the flags does not enqueue the existing catalogue, and the
+search-token backfill does not produce alert jobs.
+
+| Collection | Purpose | Current retention |
+|---|---|---|
+| `saved_searches` | User-created query subscriptions | Until explicitly removed |
+| `saved_search_alert_jobs` | Recoverable per-file matching work and media metadata snapshot | Completed jobs expire 30 days after `finished_at`; pending/processing/dead jobs lack that TTL marker and remain recoverable |
+| `saved_search_notifications` | Per-search/per-file delivery claims used for recipient deduplication | 180 days from `created_at`, through the feature repository's TTL index |
+
+The jobs contain file IDs, names, captions and state, not Telegram video/document
+contents. They still consume primary database data and index space. At 10,000
+new files/day, a 30-day completed-job history is approximately 300,000 job
+documents, plus live backlog and per-recipient delivery claims. Actual byte cost
+depends on metadata size and indexes. MongoDB TTL cleanup is asynchronous, so
+expiration is not an exact deletion deadline. See
+[MongoDB TTL behavior](https://www.mongodb.com/docs/manual/core/index-ttl/).
+
+Completed-job retention and admission when there are no subscribers are possible
+future storage optimizations. Neither policy is changed by the operator-script
+fixes on 2026-10-30. Shortening recipient-claim retention changes deduplication
+semantics; pending/dead work needs review rather than bulk deletion to save space.
+
+### Queue metrics
 
 `SavedSearchAlertJobRepository.metrics()` reports queue counts:
 `pending`, `processing`, `dead`, and
