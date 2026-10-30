@@ -93,6 +93,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-081 | High | Fixed | Ban entry-point coverage | Old user menus, subscription retries, public file-store routes, group filters/connections and duplicate-request shortcuts can bypass the command ban gate. | Apply the shared authoritative gate before user work across those entry points. Normal users are denied; configured admin/owner exemptions remain intact. |
 | BUG-082 | High | Fixed | Background ban enforcement | Saved-search workers and broadcast snapshots can send content to normal users who have since been banned. | Recheck authoritative status immediately before delivery/claim. Skip banned accounts without sent claims, retry unavailable state, and retain configured admin/owner exemptions including broadcast selection. |
 | BUG-083 | High | Fixed | Ban/quota race | A normal-user ban between access validation and reservation does not prevent the atomic quota update. | Guard the reservation with current non-banned status, return a ban denial on the losing race, and leave download counters/ledger unchanged. Legacy and tokenized quota regressions pass. |
+| BUG-084 | High | Fixed | Delayed abuse bans | A delayed request-abuse decision can re-ban a user after an admin unban reset or overwrite a manual ban reason. | Require the current warning threshold and non-banned status in the same MongoDB update. Preserve manual reasons, reset recovery and configured admin exemptions. |
 
 ## Group search follow-up, 2026-10-30
 

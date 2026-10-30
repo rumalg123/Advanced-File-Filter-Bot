@@ -1215,6 +1215,10 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, None
+        if (is_admin(user_id, _channel_config.get_admin_list() or [])
+                or user.status == UserStatus.BANNED
+                or user.warning_count < _feature_config.request_warning_limit):
+            return False, user
 
         update_data = {
             'status': UserStatus.BANNED.value,
@@ -1222,13 +1226,22 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             'updated_at': datetime.now(UTC)
         }
 
-        success = await self.update(user_id, update_data)
+        collection = await self.get_collection()
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {'_id': user_id, 'status': {'$ne': UserStatus.BANNED.value},
+             'warning_count': {'$gte': _feature_config.request_warning_limit}},
+            {'$set': update_data},
+        )
+        success = result.matched_count > 0
 
         if success:
-            await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_user_and_banned(user_id)
+            await self.cache_invalidator.invalidate_user_stats()
             await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
             user.ban_reason = 'Over request warning limit'
+            user.updated_at = update_data['updated_at']
             logger.info(f"User {user_id} auto-banned for request abuse")
 
         return success, user
