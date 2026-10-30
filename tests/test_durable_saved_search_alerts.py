@@ -178,7 +178,7 @@ async def test_real_mongodb_recovery_reprocesses_checkpointed_page_without_dupli
     repo = FeatureRepository(Pool())
     service = FeatureService(
         repo, None, None, SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
-        bot=SimpleNamespace(send_message=AsyncMock()),
+        bot=SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True))),
     )
     service._alert_jobs = queue
     media = make_media()

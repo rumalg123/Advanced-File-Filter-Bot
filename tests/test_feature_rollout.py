@@ -327,7 +327,7 @@ async def test_saved_search_alerts_are_flagged_matched_and_deduplicated():
         claim_saved_search_notification=AsyncMock(return_value=True),
         release_saved_search_notification=AsyncMock()
     )
-    bot = SimpleNamespace(send_message=AsyncMock())
+    bot = SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True)))
     service = FeatureService(
         repository,
         SimpleNamespace(),
@@ -540,7 +540,7 @@ async def test_report_menu_updates_in_place_and_log_channel_includes_file_detail
         message=source_message,
         answer=AsyncMock()
     )
-    client = SimpleNamespace(send_message=AsyncMock())
+    client = SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True)))
     handler = object.__new__(FeatureHandler)
     handler.service = service
     handler.repository = repository

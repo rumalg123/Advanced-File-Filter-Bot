@@ -59,7 +59,7 @@ async def test_every_active_subscriber_matched_after_500_with_bounded_pages():
     service = FeatureService(
         repo, None, None,
         SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
-        bot=SimpleNamespace(send_message=AsyncMock()),
+        bot=SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True))),
     )
 
     with patch("core.services.features.telegram_api.call_api", new=AsyncMock(side_effect=send)):
@@ -82,7 +82,7 @@ async def test_failed_page_read_never_looks_like_end_of_subscriptions():
     )
     service = FeatureService(
         repo, None, None, SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
-        bot=SimpleNamespace(send_message=AsyncMock()),
+        bot=SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True))),
     )
     with pytest.raises(ConnectionError, match="Mongo unavailable"):
         await service.notify_saved_search_matches(media_fixture())
@@ -100,7 +100,7 @@ async def test_invalid_or_out_of_order_pages_fail_closed_instead_of_looping():
     )
     service = FeatureService(
         repo, None, None, SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
-        bot=SimpleNamespace(send_message=AsyncMock()),
+        bot=SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True))),
     )
     with pytest.raises(RuntimeError, match="cursor contract"):
         await service.notify_saved_search_matches(media_fixture())

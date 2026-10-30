@@ -195,6 +195,10 @@ class FeatureService:
                 tokens = entry.get('normalized_query', '').split()
                 if not tokens or not all(token in haystack for token in tokens):
                     continue
+                user_id = int(entry['user_id'])
+                if not await self.bot.user_repo.can_receive_content(user_id):
+                    continue
+
                 state, token = await self._durable_jobs().begin_delivery(
                     search_id, media.file_unique_id
                 )
@@ -354,6 +358,10 @@ class FeatureService:
 
                 tokens = saved_search.get('normalized_query', '').split()
                 if not tokens or not all(token in haystack for token in tokens):
+                    continue
+
+                user_id = int(saved_search['user_id'])
+                if not await self.bot.user_repo.can_receive_content(user_id):
                     continue
 
                 claimed = await self.repository.claim_saved_search_notification(

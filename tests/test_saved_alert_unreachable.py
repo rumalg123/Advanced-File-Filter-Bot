@@ -16,7 +16,7 @@ def fixture():
              {'_id':'b','user_id':2,'query':'Matrix','normalized_query':'matrix'}]
     repo=SimpleNamespace(get_active_saved_search_page=AsyncMock(return_value=entries))
     service=FeatureService(repo,None,None,SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
-                           bot=SimpleNamespace(send_message=AsyncMock()))
+                           bot=SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True))))
     jobs=SimpleNamespace(begin_delivery=AsyncMock(return_value=('claimed','lease')),
         finish_delivery=AsyncMock(return_value=True),release_delivery=AsyncMock(return_value=True),
         checkpoint=AsyncMock(return_value=True))
@@ -69,7 +69,7 @@ async def test_real_queue_completes_with_blocked_and_reachable_subscribers(monke
         {'_id':'b','user_id':2,'active':True,'query':'Matrix','normalized_query':'matrix'}])
     await jobs.enqueue(make_media());job=await jobs.claim()
     service=FeatureService(repository,None,None,SimpleNamespace(FEATURE_SAVED_SEARCH_ALERTS=True),
-                           bot=SimpleNamespace(send_message=AsyncMock()))
+                           bot=SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True))))
     service._alert_jobs=jobs
     async def send(operation,user_id,*args,**kwargs):
         if user_id==1:raise UserIsBlocked()

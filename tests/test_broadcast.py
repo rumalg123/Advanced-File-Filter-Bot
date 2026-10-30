@@ -195,7 +195,7 @@ async def test_raw_html_text_is_parsed_for_broadcast(monkeypatch):
         copy=AsyncMock(),
         reply_markup=object(),
     )
-    service = BroadcastService(object(), object(), object())
+    service = BroadcastService(SimpleNamespace(can_receive_content=AsyncMock(return_value=True)), object(), object())
 
     status, user_id = await service._send_to_user(client, message, 42)
 
@@ -221,7 +221,7 @@ async def test_existing_telegram_formatting_uses_message_copy(monkeypatch):
         entities=[object()],
         copy=AsyncMock(),
     )
-    service = BroadcastService(object(), object(), object())
+    service = BroadcastService(SimpleNamespace(can_receive_content=AsyncMock(return_value=True)), object(), object())
 
     status, user_id = await service._send_to_user(client, message, 43)
 
@@ -240,7 +240,7 @@ async def test_raw_html_media_caption_is_parsed_while_copying(monkeypatch):
         caption="<i>Watch now</i>",
         copy=AsyncMock(),
     )
-    service = BroadcastService(object(), object(), object())
+    service = BroadcastService(SimpleNamespace(can_receive_content=AsyncMock(return_value=True)), object(), object())
 
     status, user_id = await service._send_to_user(
         SimpleNamespace(send_message=AsyncMock()), message, 44

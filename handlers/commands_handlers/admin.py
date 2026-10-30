@@ -15,6 +15,7 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from core.cache.config import CacheKeyGenerator
 from core.database.errors import USER_ACCESS_RETRY_MESSAGE
 from core.utils.telegram_api import telegram_api
+from core.services.broadcast import BroadcastService
 from core.cache.monitor import CacheMonitor
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.button_builder import ButtonBuilder
@@ -199,7 +200,7 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         broadcast_msg = message.reply_to_message
-        user_count = await self.bot.user_repo.count({'status': {'$ne': 'banned'}})
+        user_count = await self.bot.user_repo.count(BroadcastService.recipient_filter(self.bot.config.ADMINS))
 
         # Create preview message
         preview_text = f"📡 <b>Broadcast Preview</b>\n\n"
