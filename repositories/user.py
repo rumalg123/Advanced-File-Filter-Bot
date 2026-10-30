@@ -571,13 +571,20 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         reservation_id = uuid4().hex if ledger_enabled else None
 
         # Get user to check current state
-        user = await self.get_user(user_id)
+        try:
+            user = await self.get_user(user_id, use_cache=False)
+        except Exception:
+            logger.warning("Quota authorization unavailable for %s", user_id, exc_info=True)
+            return False, 0, USER_ACCESS_RETRY_MESSAGE
         if not user:
             await self.create_user(user_id, "User")
             user = await self.get_user(user_id)
             if not user:
                 return False, 0, "Failed to create user"
 
+        privileged = is_admin(user_id, _channel_config.get_admin_list() or [])
+        if user.status == UserStatus.BANNED and not privileged:
+            return False, 0, "User banned"
         collection = await self.get_collection()
 
         # A single guarded update handles both the first request of a new day
@@ -594,6 +601,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 }
             ]
         }
+        if not privileged:
+            selector['status'] = {'$ne': UserStatus.BANNED.value}
         update_fields = {
             'daily_retrieval_count': {
                 '$cond': [
@@ -670,6 +679,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         # The guard failed because another caller consumed the remaining quota.
         fresh_user = await self.find_by_id(user_id, use_cache=False)
+        if fresh_user and fresh_user.status == UserStatus.BANNED and not privileged:
+            return False, 0, "User banned"
         current_count = fresh_user.daily_retrieval_count if fresh_user else daily_limit
         remaining = max(0, daily_limit - current_count)
         if remaining == 0:
