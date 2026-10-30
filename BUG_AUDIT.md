@@ -129,9 +129,9 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **927 tests with zero failures or skips** and
-live Send All/batch checks on wzgram 3.1.5. Source-matched coverage is
-**69.82% lines, 56.00% branches, 66.38% combined**. The
+The latest bounded round passed **936 tests with zero failures or skips** and
+live favorites/recent-file and settings-label checks on wzgram 3.1.5. Source-matched coverage is
+**69.78% lines, 56.35% branches, 66.43% combined**. The
 [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
 scope, configuration, cleanup and earlier feature/multidatabase evidence.
 Whole-bot 100% coverage and production operational gates remain open. Earlier

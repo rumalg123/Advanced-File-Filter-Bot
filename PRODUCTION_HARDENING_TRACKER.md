@@ -1,11 +1,11 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-30):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **927 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
-> Send All/batch round passed private/group delivery, owner/expiry checks,
-> protected and premium batches, and persisted quota reconciliation.
-> BUG-068–071 are fixed in separate commits. Source-matched coverage:
-> **69.82% lines, 56.00% branches, 66.38% combined**. Earlier inline/group and
+> **936 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
+> favorites/recent round passed live membership, named-collection removal,
+> history ordering/deduplication, owner isolation and the Indexed Search label.
+> BUG-072–075 are fixed in separate commits. Source-matched coverage:
+> **69.78% lines, 56.35% branches, 66.43% combined**. Earlier search, batch and
 > multidatabase evidence remains dated in the report. Whole-bot 100% and
 > production acceptance remain open; `In review` still applies to rollout
 > gates. No production deployment occurred.

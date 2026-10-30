@@ -1,7 +1,7 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded Send All/batch QA round](#bounded-qa-round-2--send-all-and-batch-links-2026-10-30),
-**927 tests passed**, **69.82% lines / 56.00% branches / 66.38% combined**.
+Latest continuation: [bounded favorites/recent QA round](#bounded-qa-round-3--favorites-and-recent-files-2026-10-30),
+**936 tests passed**, **69.78% lines / 56.35% branches / 66.43% combined**.
 Whole-bot 100% remains open. This round is complete; wait for the operator's
 next `continue` before starting another feature.
 
@@ -475,3 +475,70 @@ fixture messages, source-channel uploads, owned containers, volumes and networks
 were removed, including cleanup after private harness corrections. The two
 original server services remain running. No production server or remote Atlas
 was accessed. This round stops here; further feature QA waits for `continue`.
+
+## Bounded QA round 3 — favorites and recent files (2026-10-30)
+
+**Passed and complete for this round**, including the requested `/bsetting`
+label correction. Application source `124fcd6` includes four separate commits:
+
+- **BUG-072, `56241ba`:** indexed media search displays **Indexed Search** in
+  both the settings menu and detail view. The stored key, value and behavior
+  are unchanged; both UI surfaces were checked live.
+- **BUG-073, `4525d59`:** `/unfavorite` can remove stale membership by unique ID
+  after media is deleted, for typed commands and replies. Adding unavailable
+  media still fails. Existing aliases resolve to canonical IDs when available.
+- **BUG-074, `9c63812`:** favorite Remove controls use stable owner-scoped
+  collection tokens, keeping long/multibyte names within callback limits and
+  preserving actions from menus opened before a rename. Older name-based
+  callbacks remain valid. Reading a legacy collection lazily fills its existing
+  token field, so those controls also work for old records.
+- **BUG-075, `124fcd6`:** recent-history trimming deletes only owner-scoped rows
+  whose timestamp still matches the snapshot. A refreshed row survives a
+  concurrent prune. Trimming is best-effort during racing writes; the real-Mongo
+  test confirms that a subsequent write restores the fifty-entry bound without
+  touching another user.
+
+The nine new regressions initially reported **seven failures and two passes**;
+all nine now pass. The complete suite reports **936 passed, zero
+failures/errors/skips**, with the same 22 existing warnings. Real MongoDB cases
+verify the prune/refresh interleaving, repeated-download deduplication,
+owner-scoped history removal and legacy token persistence. Compilation, focused
+undefined-name Ruff, Markdown/local-link and whitespace checks pass.
+
+**Eleven live Telegram checks passed** using both QA accounts and three tiny
+indexed documents. Duplicate Favorite clicks produced one membership; opening
+that favorite delivered the same file and kept one recent entry. A collection
+with a thirty-five-character Sinhala name retained its Remove button. Removing
+from its old menu after renaming affected the renamed collection while leaving
+the other account's same-named collection intact. Named collection clear/delete
+and deleted-catalogue membership cleanup passed; adding deleted media was denied.
+
+Repeated downloads moved the file to the front of `/recent` without duplicates.
+Individual removal, clearing all history, the empty menu and preserving the
+other account's history passed. The settings menu/detail both displayed Indexed
+Search. See the [sanitized acceptance and coverage evidence](round3-favorites-recent.json).
+A private-harness assertion was corrected to compare immutable file IDs because
+button filenames use the application's existing normalization.
+
+Live configuration enabled favorites, recent files, indexed search, premium
+mode and the quota ledger, with a twenty-file allowance and no auto-deletion.
+MongoDB and separate cache/state Redis instances were disposable local services
+without published host ports. Large-collection navigation, sustained concurrency
+and production transport-failure recovery remain outside this bounded run.
+
+Coverage includes **17,605 statements, 5,840 branches and all 121 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 57.84% | 44.37% | 54.48% |
+| Source-matched automated + live | 69.78% | 56.35% | 66.43% |
+
+Both new shards match start/end/current source hashes. Earlier shards contribute
+only unchanged files; changed-file evidence is discarded. These are current
+source measurements, not an extension of old line numbers. **100% whole-bot
+coverage remains open.** All recorded QA messages and owned containers, volumes
+and networks were removed, including cleanup after the harness correction. The
+two original server services remain running; no production server or remote
+Atlas database was accessed. No product features were added. Stop here until
+the operator requests `continue`.
