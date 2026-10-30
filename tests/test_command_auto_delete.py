@@ -78,6 +78,8 @@ async def test_start_response_is_scheduled_for_auto_delete():
         config=SimpleNamespace(
             MESSAGE_DELETE_SECONDS=45,
             LOG_CHANNEL=None,
+            AUTH_CHANNEL=None,
+            AUTH_GROUPS=[],
             PICS=[],
             SUPPORT_GROUP_URL=None,
             SUPPORT_GROUP_NAME=None,

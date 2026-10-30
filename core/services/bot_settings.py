@@ -6,6 +6,7 @@ import re
 from core.cache.redis_cache import CacheManager
 from repositories.bot_settings import BotSettingsRepository
 from core.utils.logger import get_logger
+from core.utils.subscription_config import parse_subscription_targets
 
 logger = get_logger(__name__)
 
@@ -124,15 +125,25 @@ class BotSettingsService:
             'category': 'access'
         },
         'AUTH_CHANNEL': {
-            'type': 'str',
-            'default': '',
-            'description': 'Channel ID for force subscription',
+            'type': 'list',
+            'default': [],
+            'description': 'Force-subscription channel IDs or @usernames (comma separated). Bot admin and Invite Users permission are checked before saving.',
             'category': 'subscription'
         },
         'AUTH_GROUPS': {
             'type': 'list',
             'default': [],
-            'description': 'Group IDs for force subscription (comma separated)',
+            'description': 'Force-subscription group IDs or @usernames (comma separated). Bot admin and Invite Users permission are checked before saving.',
+            'category': 'subscription'
+        },
+        'FORCE_SUB_INVITE_EXPIRE_MINUTES': {
+            'type': 'int', 'default': 15, 'min': 1, 'max': 525600,
+            'description': 'Invite-link lifetime in minutes. New links use this value after restart.',
+            'category': 'subscription'
+        },
+        'FORCE_SUB_INVITE_MEMBER_LIMIT': {
+            'type': 'int', 'default': 1, 'min': 1, 'max': 99999,
+            'description': 'Maximum simultaneous members admitted through each invite link. This is not a lifetime join counter. Restart required.',
             'category': 'subscription'
         },
         'SUPPORT_CHAT_ID': {
@@ -397,9 +408,10 @@ class BotSettingsService:
     }
 
     def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager,
-                 *, database_config=None):
+                 *, database_config=None, telegram_client=None):
         self.settings_repo = settings_repo
         self.cache = cache_manager
+        self.telegram_client = telegram_client
         if database_config is None:
             from config.settings import settings
             database_config = settings.database
@@ -463,7 +475,8 @@ class BotSettingsService:
                     env_value = os.environ.get(alias) if alias else None
 
                 if env_value is not None:
-                    value = self._parse_value(env_value, metadata['type'])
+                    value = (parse_subscription_targets(env_value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                             else self._parse_value(env_value, metadata['type']))
                 else:
                     value = default
 
@@ -488,11 +501,14 @@ class BotSettingsService:
             if key in db_settings:
                 stored_value = db_settings[key].value
                 try:
-                    stored_value = self._parse_value(stored_value, metadata['type'], strict=True)
+                    stored_value = (parse_subscription_targets(stored_value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                                    else self._parse_value(stored_value, metadata['type'], strict=True))
                     stored_value = self._validate_value_bounds(
                         key, stored_value, metadata
                     )
                 except (ValueError, TypeError) as error:
+                    if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}:
+                        raise ValueError(f"Invalid stored force-subscription setting {key}; correct it before startup.") from error
                     logger.warning(
                         f"Ignoring invalid stored setting {key}: {error}"
                     )
@@ -526,7 +542,8 @@ class BotSettingsService:
         """Get a single setting value"""
         setting = await self.settings_repo.get_setting(key)
         if setting:
-            return setting.value
+            return (parse_subscription_targets(setting.value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                    else setting.value)
 
         # Return default if not found
         if key in self.SETTINGS_METADATA:
@@ -544,9 +561,18 @@ class BotSettingsService:
         metadata = self.SETTINGS_METADATA[key]
 
         # Validate and parse value
-        parsed_value = self._parse_value(value, metadata['type'], strict=True)
+        parsed_value = (parse_subscription_targets(value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                        else self._parse_value(value, metadata['type'], strict=True))
         parsed_value = self._validate_value_bounds(key, parsed_value, metadata)
         default = metadata['default']
+        if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'} and parsed_value:
+            if self.telegram_client is None:
+                raise ValueError('Cannot verify force-subscription permissions. Reopen settings in the running bot and retry.')
+            from core.utils.subscription import SubscriptionManager
+            parsed_value = await SubscriptionManager.validate_targets(
+                self.telegram_client, parsed_value,
+                expected_type='channel' if key == 'AUTH_CHANNEL' else 'group'
+            )
         if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
             policy = await self.owner_registry_policy()
             if not policy['editable']:

@@ -1,5 +1,6 @@
 from pyrogram import Client
 from pyrogram.types import CallbackQuery
+from pyrogram.types import InlineKeyboardMarkup
 
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import MessageProxy
@@ -110,6 +111,15 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
                         ErrorMessageFormatter.format_access_denied("You still need to join the required channel(s)!", plain_text=True),
                         show_alert=True
                     )
+                    # A previous invite may have expired or filled its limit.
+                    # Keep the original owned action, but offer fresh links.
+                    try:
+                        buttons = await self.bot.subscription_manager.build_subscription_buttons(
+                            client, current_user_id, custom_callback_data=query.data
+                        )
+                        await query.message.edit_reply_markup(InlineKeyboardMarkup(buttons))
+                    except Exception:
+                        logger.warning("Could not refresh subscription invite buttons", exc_info=True)
                     return
 
         # Keep retries usable until their owner has satisfied every membership.

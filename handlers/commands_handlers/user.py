@@ -60,8 +60,8 @@ class UserCommandHandler(BaseCommandHandler):
                 except Exception as e:
                     logger.error(f"Failed to log new user: {e}")
 
-        # Handle deep link
-        if len(message.command) > 1:
+        # Gate the first welcome as well as file/inline deep links.
+        if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Check subscription for deeplinks using validator
             skip_sub = skip_subscription_check(
                 user_id,
@@ -78,16 +78,17 @@ class UserCommandHandler(BaseCommandHandler):
                 if not is_subscribed:
                     # Send subscription message with the deeplink parameter
                     await self._send_subscription_message_for_deeplink(
-                        client, message, 'start' if message.command[1] == 'subscribe' else message.command[1]
+                        client, message, ('start' if len(message.command) < 2 or message.command[1] == 'subscribe'
+                                          else message.command[1])
                     )
                     return
 
-            # The inline switch-to-PM entry is a membership gate, not a file ID.
-            if message.command[1] != 'subscribe':
-                from handlers.deeplink import DeepLinkHandler
-                deeplink_handler = DeepLinkHandler(self.bot)
-                await deeplink_handler.handle_deep_link_internal(client, message, message.command[1])
-                return
+        # The inline switch-to-PM entry is a membership gate, not a file ID.
+        if len(message.command) > 1 and message.command[1] != 'subscribe':
+            from handlers.deeplink import DeepLinkHandler
+            deeplink_handler = DeepLinkHandler(self.bot)
+            await deeplink_handler.handle_deep_link_internal(client, message, message.command[1])
+            return
 
         # Send welcome message (rest of the original code remains the same)
         buttons = [

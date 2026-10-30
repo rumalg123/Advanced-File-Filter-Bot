@@ -7,6 +7,7 @@ import os
 from typing import List, Optional, Any
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from core.utils.subscription_config import parse_subscription_targets
 
 # Import moved to avoid circular dependency
 # from core.utils import default_messages
@@ -264,9 +265,13 @@ class ChannelConfig(BaseSettings):
     support_group_id: Optional[int] = Field(default=None, description="Support group ID")
     
     # Auth configuration
-    auth_channel: Optional[str] = Field(default=None, description="Auth channel")
+    auth_channel: Optional[str] = Field(default=None, description="Force-subscription channels (comma-separated)")
     auth_groups: str = Field(default='', description="Auth groups (comma-separated)")
     auth_users: str = Field(default='', description="Auth users (comma-separated)")
+    force_sub_invite_expire_minutes: int = Field(default=15, ge=1, le=525600,
+        description="Force-subscription invite lifetime in minutes")
+    force_sub_invite_member_limit: int = Field(default=1, ge=1, le=99999,
+        description="Maximum simultaneous members admitted through each invite")
     
     # Channel lists
     admins: str = Field(default='', description="Admin user IDs (comma-separated)")
@@ -317,11 +322,12 @@ class ChannelConfig(BaseSettings):
             return [str(pic).strip() for pic in self.pics if str(pic).strip()]
         return [pic.strip() for pic in self.pics.split(',') if pic.strip()]
 
-    def get_auth_groups_list(self) -> List[int]:
+    def get_auth_channel_list(self) -> List[int | str]:
+        return parse_subscription_targets(self.auth_channel)
+
+    def get_auth_groups_list(self) -> List[int | str]:
         """Parse auth group IDs - handles both string and list input"""
-        if isinstance(self.auth_groups, list):
-            return [int(x) for x in self.auth_groups if str(x).strip().lstrip('-').isdigit()]
-        return [int(x.strip()) for x in self.auth_groups.split(',') if x.strip().lstrip('-').isdigit()]
+        return parse_subscription_targets(self.auth_groups)
 
     def get_auth_users_list(self) -> List[int]:
         """Parse auth user IDs - handles both string and list input"""

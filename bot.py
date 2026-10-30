@@ -120,6 +120,8 @@ class BotConfig:
         'SUPPORT_GROUP_ID': ('channels', 'support_group_id'),
         'AUTH_CHANNEL': ('channels', 'auth_channel'),
         'AUTH_GROUPS': ('channels', 'auth_groups'),
+        'FORCE_SUB_INVITE_EXPIRE_MINUTES': ('channels', 'force_sub_invite_expire_minutes'),
+        'FORCE_SUB_INVITE_MEMBER_LIMIT': ('channels', 'force_sub_invite_member_limit'),
         'AUTH_USERS': ('channels', 'auth_users'),
         'ADMINS': ('channels', 'admins'),
         'CHANNELS': ('channels', 'channels'),
@@ -222,6 +224,9 @@ class BotConfig:
         self.REQ_CHANNEL = self._settings.channels.req_channel
         self.SUPPORT_GROUP_ID = self._settings.channels.support_group_id
         self.AUTH_CHANNEL = self._parse_auth_channel()
+        self.AUTH_CHANNELS = self._settings.channels.get_auth_channel_list()
+        self.FORCE_SUB_INVITE_EXPIRE_MINUTES = self._settings.channels.force_sub_invite_expire_minutes
+        self.FORCE_SUB_INVITE_MEMBER_LIMIT = self._settings.channels.force_sub_invite_member_limit
         
         # Lists from settings
         self.ADMINS = self._settings.channels.get_admin_list()
@@ -243,21 +248,10 @@ class BotConfig:
         self.PAYMENT_LINK = self._settings.messages.payment_link
     
     def _parse_auth_channel(self) -> Optional[Union[int, str]]:
-        """Parse auth channel from settings"""
-        auth_channel = self._settings.channels.auth_channel
-        if not auth_channel:
-            return None
-
-        if isinstance(auth_channel, int):
-            return auth_channel if auth_channel != 0 else None
-
-        auth_channel = str(auth_channel).strip()
-        if not auth_channel or auth_channel == '0':
-            return None
-
-        if auth_channel.lstrip('-').isdigit():
-            return int(auth_channel)
-        return auth_channel
+        """Keep the legacy first-channel attribute for existing gate checks."""
+        from core.utils.subscription_config import parse_subscription_targets
+        channels = parse_subscription_targets(self._settings.channels.auth_channel)
+        return channels[0] if channels else None
     
     def _parse_database_uris(self) -> List[str]:
         """Parse multiple database URIs from settings"""
@@ -323,6 +317,9 @@ class BotConfig:
         # as environment startup: '0' disables the gate and numeric IDs must
         # stay integers when passed to Telegram.
         self.AUTH_CHANNEL = self._parse_auth_channel()
+        from core.utils.subscription_config import parse_subscription_targets
+        self.AUTH_CHANNELS = parse_subscription_targets(self._settings.channels.auth_channel)
+        self.AUTH_GROUPS = parse_subscription_targets(getattr(self, 'AUTH_GROUPS', []))
 
         logger.info(f"Synced {len(db_settings)} settings from database to config objects")
 
@@ -759,6 +756,7 @@ class MediaSearchBot(Client):
             self.bot_settings_repo,
             self.cache,
             database_config=self.config._settings.database,
+            telegram_client=self,
         )
         # Initialize settings from environment
         await self.bot_settings_service.initialize_settings()
@@ -952,9 +950,11 @@ class MediaSearchBot(Client):
                 expire=CacheTTLConfig.BANNED_USERS_LIST
             )
             self.subscription_manager = SubscriptionManager(
-                auth_channel=self.config.AUTH_CHANNEL,
+                auth_channel=self.config.AUTH_CHANNELS,
                 auth_groups=self.config.AUTH_GROUPS,
                 cache_manager=self.cache,
+                invite_expire_minutes=self.config.FORCE_SUB_INVITE_EXPIRE_MINUTES,
+                invite_member_limit=self.config.FORCE_SUB_INVITE_MEMBER_LIMIT,
             )
             self.background_tasks = []
             # Start Pyrogram client
@@ -1135,7 +1135,7 @@ class MediaSearchBot(Client):
                         for error in check_results['errors']:
                             error_msg += f"• <b>{error['type']}</b> <code>{error['id']}</code>\n"
                             error_msg += f"  Error: {error['error']}\n\n"
-                        error_msg += "Please add the bot to these channels/groups and make it an admin."
+                        error_msg += "Please add the bot to these channels/groups, make it an admin and enable Invite Users permission."
 
                         await telegram_api.call_api(
                             self.send_message,

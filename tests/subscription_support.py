@@ -16,7 +16,8 @@ def fixture(data='checksub#42#general', *, uid=42, subscribed=True):
             AUTH_GROUPS=[-1002], LOG_CHANNEL=0, INDEX_REQ_CHANNEL=0,
             REQ_CHANNEL=0, DELETE_CHANNEL=0, PICS=[], MESSAGE_DELETE_SECONDS=0),
         user_repo=SimpleNamespace(get_user=AsyncMock(return_value=BotUser(id=uid, name='QA'))),
-        subscription_manager=SimpleNamespace(is_subscribed=AsyncMock(return_value=subscribed)),
+        subscription_manager=SimpleNamespace(is_subscribed=AsyncMock(return_value=subscribed),
+            build_subscription_buttons=AsyncMock(return_value=[])),
         cache=cache, cache_invalidator=SimpleNamespace(
             invalidate_subscription_session=AsyncMock(side_effect=cache.delete)),
         bot_username='qa_subscription_bot', bot_name='QA subscription bot',
@@ -24,6 +25,7 @@ def fixture(data='checksub#42#general', *, uid=42, subscribed=True):
     message = Message(id=10, chat=Chat(id=uid, type=enums.ChatType.PRIVATE))
     message.reply_text = AsyncMock()
     message.edit_text = AsyncMock()
+    message.edit_reply_markup = AsyncMock()
     message.delete = AsyncMock()
     query = CallbackQuery(id='qa-query', from_user=User(id=uid, first_name='QA', is_bot=False,
         client=SimpleNamespace(parse_mode=enums.ParseMode.HTML)),
