@@ -5,6 +5,7 @@ import html
 from typing import Any
 
 from pyrogram.types import InlineKeyboardMarkup
+from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from config.settings import settings
 from repositories.saved_search_alert_jobs import SavedSearchAlertJobRepository
@@ -222,6 +223,18 @@ class FeatureService:
                     ):
                         raise RuntimeError("Saved-search delivery lease was lost")
                     sent += 1
+                except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid) as error:
+                    # An unreachable recipient must not poison this file's fan-out.
+                    # Do not record an unsent alert as a successful delivery.
+                    released = await self._durable_jobs().release_delivery(
+                        search_id, media.file_unique_id, token
+                    )
+                    if not released:
+                        raise RuntimeError("Saved-search recipient lease was lost") from error
+                    logger.warning(
+                        "Skipping unreachable saved-search recipient user_id=%s error_type=%s",
+                        user_id, type(error).__name__,
+                    )
                 except Exception:
                     await self._durable_jobs().release_delivery(
                         search_id, media.file_unique_id, token
