@@ -11,9 +11,9 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **906 tests with zero failures or skips** and
-live inline/group search checks on wzgram 3.1.5. Source-matched coverage is
-**68.61% lines, 54.55% branches, 65.11% combined**. The
+The latest bounded round passed **927 tests with zero failures or skips** and
+live Send All/batch checks on wzgram 3.1.5. Source-matched coverage is
+**69.82% lines, 56.00% branches, 66.38% combined**. The
 [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
 scope, configuration, cleanup and earlier feature/multidatabase evidence.
 Whole-bot 100% coverage and production operational gates remain open. Earlier

@@ -663,7 +663,7 @@ When `PUBLIC_FILE_STORE=false`, these are admin-only. When it is `true`, they ar
 | `/batch_premium first_link last_link` | Create a premium-only batch. Alias: `/bprem`. |
 | `/pbatch_premium first_link last_link` | Create a protected premium-only batch. Alias: `/pbprem`. |
 
-Both batch endpoints must refer to the same source channel and the bot must be able to read it.
+Both batch endpoints must refer to the same source channel and the bot must be able to read it. Normal/protected batch ranges must have positive message IDs, first ID no greater than last ID, and an inclusive size within `PROCESSING_MAX_BATCH_MESSAGES`. This existing configured maximum now applies when creating and opening ordinary encoded batch links, including older links. Single-message ordinary batches remain valid.
 
 ### Admin commands
 
@@ -883,7 +883,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The repository currently contains 104 focused tests covering access/quota and premium-duration consistency, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
+The latest bounded QA round passed **927 tests** with zero failures or skips, plus live Send All and batch delivery checks. Source-matched coverage is **69.82% lines and 56.00% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

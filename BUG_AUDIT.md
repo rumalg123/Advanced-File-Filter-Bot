@@ -77,7 +77,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-065 | Medium | Fixed | Operator diagnostics | Ownership and backfill CLI errors interpolate raw exception text that may expose connection strings, credentials or media values. | Keep exception type and numeric MongoDB code; omit arbitrary message/detail payloads. Authentication, connection and duplicate-key regressions confirm diagnostic categories without credentials. |
 | BUG-066 | Medium | Fixed | Inline search | Access-check failures escape before the search error handler, and slow checks/searches can outlive the inline response window. An expired error reply can also escape dispatch. | Bound the entire inline operation to eight seconds, cancel slow work and attempt a safe retry answer; contain expired/error answers. Existing access gates, personal results and page offsets remain covered. |
 | BUG-067 | Medium | Fixed | Search captions | User queries are interpolated directly into HTML captions, interpreting valid tags or rejecting unsupported tags instead of displaying the query literally. | Escape query text in the shared initial/pagination caption formatter. Private and group captions preserve literal markup and ampersands; group ownership, sessions, error paths and cleanup remain covered. |
-| BUG-068 | High | Fixed | Send All ownership | Private callbacks trust the callback user ID without checking the cached search owner, allowing a forged callback to use another user's result session. | Check cached ownership before reservation or delivery, matching the deep-link path; a forged-owner regression denies the request without sends or quota writes. |
+| BUG-068 | Medium | Fixed | Send All ownership | The private callback handler checks the button owner but does not independently check the cached search owner. A handler-level forged-owner fixture can enter delivery with another user's session. | Check cached ownership before reservation or delivery, matching the deep-link path; a forged-owner regression denies the request without sends or quota writes. |
 | BUG-069 | Medium | Fixed | Send All captions | Cached queries are interpolated into HTML progress/completion messages, so literal tags can break the transfer setup or be interpreted as formatting. | Escape the query once for every Send All status; a literal-tag/ampersand regression verifies both progress and completion while files still send. |
 | BUG-070 | Medium | Fixed | Bulk delivery settlement | Send All marks definitely unsent/cancelled work as uncertain and can count a successful delivery again as failed when recent-history storage fails. | Use shared exception-safe delivery progress for setup, lookup, send and cancellation. Charge confirmed sends, distinguish unknown in-flight sends from unsent work, and isolate optional recent-history failures. Six new settlement/counter cases and existing setup regressions pass. |
 | BUG-071 | High | Fixed | Ordinary batch bounds | Batch creation accepts reversed, zero and oversized message ranges; encoded DSTORE links bypass bounds and accept invalid modes or a zero chat. | Validate inclusive ranges against the existing configured maximum before Telegram/access/quota work at both entry points. Preserve legacy single-message batches and three-field payloads; reject invalid chat/mode/base64. No configured limit is reduced. |
@@ -125,9 +125,9 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **906 tests with zero failures or skips** and
-live inline/group search checks on wzgram 3.1.5. Source-matched coverage is
-**68.61% lines, 54.55% branches, 65.11% combined**. The
+The latest bounded round passed **927 tests with zero failures or skips** and
+live Send All/batch checks on wzgram 3.1.5. Source-matched coverage is
+**69.82% lines, 56.00% branches, 66.38% combined**. The
 [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
 scope, configuration, cleanup and earlier feature/multidatabase evidence.
 Whole-bot 100% coverage and production operational gates remain open. Earlier

@@ -1,13 +1,14 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-30):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **906 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
-> inline/group round passed real-account search, pagination, owner checks and
-> document delivery. BUG-066/067 are fixed in separate commits. Source-matched
-> coverage: **68.61% lines, 54.55% branches, 65.11% combined**. Earlier disposable
-> three-source ownership, indexing/delivery and partition evidence remains
-> dated in the report. Whole-bot 100% and production acceptance remain open;
-> `In review` still applies to rollout gates. No production deployment occurred.
+> **927 tests passed, zero failed/skipped** on wzgram 3.1.5. The bounded
+> Send All/batch round passed private/group delivery, owner/expiry checks,
+> protected and premium batches, and persisted quota reconciliation.
+> BUG-068–071 are fixed in separate commits. Source-matched coverage:
+> **69.82% lines, 56.00% branches, 66.38% combined**. Earlier inline/group and
+> multidatabase evidence remains dated in the report. Whole-bot 100% and
+> production acceptance remain open; `In review` still applies to rollout
+> gates. No production deployment occurred.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The

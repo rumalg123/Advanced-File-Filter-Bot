@@ -1,7 +1,7 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded inline/group QA round](#bounded-qa-round-1--inline-and-group-search-2026-10-30),
-**906 tests passed**, **68.61% lines / 54.55% branches / 65.11% combined**.
+Latest continuation: [bounded Send All/batch QA round](#bounded-qa-round-2--send-all-and-batch-links-2026-10-30),
+**927 tests passed**, **69.82% lines / 56.00% branches / 66.38% combined**.
 Whole-bot 100% remains open. This round is complete; wait for the operator's
 next `continue` before starting another feature.
 
@@ -409,3 +409,69 @@ filename/API-return assumptions were corrected in the private harness before
 acceptance. No production server or remote Atlas database was accessed.
 No new product features were added. Remaining feature/media-type checks and
 operational gates stay open for later bounded rounds after `continue`.
+
+## Bounded QA round 2 — Send All and batch links (2026-10-30)
+
+**Passed and complete for this round.** Application source `89bc359` adds no
+features and preserves configured limits. Four fixes were committed separately:
+
+- **BUG-068, `9ab903b`:** private Send All independently verifies cached result
+  ownership before reserving quota or sending files.
+- **BUG-069, `e45bd2a`:** every Send All status escapes literal query markup.
+- **BUG-070, `c4ce99c`:** Send All uses shared exception-safe delivery progress.
+  Missing media and cancellation before/during lookup or after a confirmed send
+  settle as definitely unsent where appropriate; an interrupted in-flight send
+  stays uncertain. Optional recent-history failure no longer counts a delivered
+  file as failed or changes its quota outcome.
+- **BUG-071, `89bc359`:** ordinary batch creation and encoded DSTORE requests
+  validate positive, ordered inclusive bounds against the existing configured
+  maximum before Telegram/access/quota work. Zero chats and unsupported modes
+  are rejected. Legacy single-item and three-field batches remain supported.
+  Existing encoded links above the configured maximum are now rejected too;
+  no configured limit or maintenance scan limit was reduced.
+
+The initial 21 focused cases reproduced **16 failures and five passes** before
+fixes; all 21 pass afterward (eight Send All, thirteen batch range cases).
+Full regression: **927 passed, zero failures/errors/skips**, with 22 existing
+warnings. Compilation, focused undefined-name Ruff and whitespace checks pass.
+
+**Thirteen live Telegram checks passed** using both QA accounts, the supplied
+QA group and a supplied test channel. Private Send All delivered three distinct
+files and displayed a literal `<unknown> &` query in its status. Group Send All
+redirected to successful three-file private delivery. Cross-user group clicks,
+shared owner-bound deep links and expired search sessions were denied.
+Telegram rejected altered callback data with `DATA_INVALID` before dispatch;
+the new independent cached-owner guard is verified by its handler regression,
+without claiming a demonstrated external exploit.
+
+Ordinary and protected batch links each delivered two files. A premium batch
+rejected a non-premium user, then delivered two protected files after an admin
+premium grant in the disposable database. Expiring its BSON date and
+invalidating its exact cache entry caused immediate application rejection,
+without waiting for the TTL sweep. A reversed encoded range was also rejected.
+The user document recorded exactly **ten charged non-premium file deliveries**;
+retained ledger entries were settled, with no reserved/uncertain entry. The
+premium transfer did not require a non-premium reservation. See the
+[sanitized evidence and coverage provenance](round2-sendall-batch.json).
+
+Live configuration enabled premium mode, quota delivery ledger, recent files
+and indexed media search, with a twenty-file allowance and no auto-deletion.
+Local MongoDB plus separate cache/state Redis instances had no published host
+ports. Cancellation, missing-media, uncertain sends and recent-history failures
+used injected automated cases; real transport-failure recovery and production
+load gates remain open.
+
+Coverage includes **17,593 statements, 5,834 branches and all 121 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 57.52% | 44.05% | 54.17% |
+| Source-matched automated + live | 69.82% | 56.00% | 66.38% |
+
+Both new shards match source hashes at start/end/current; prior evidence is
+accepted only for identical files. Whole-bot **100% remains open**. All recorded
+fixture messages, source-channel uploads, owned containers, volumes and networks
+were removed, including cleanup after private harness corrections. The two
+original server services remain running. No production server or remote Atlas
+was accessed. This round stops here; further feature QA waits for `continue`.
