@@ -1,12 +1,13 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-30):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **1,232 tests passed, zero failed/skipped** on wzgram 3.1.6. The bounded
-> recommendation/feedback round passed **20 live checks**, including account
-> isolation, feature toggles, Redis resets, missing files and Refresh/Close.
-> BUG-104–107 are fixed separately; CACHE-026 records the ranking cache contract.
-> Admin/owner bypasses and operator diagnostics are preserved.
-> Source-matched coverage: **71.30% lines, 58.55% branches, 68.13% combined**.
+> **1,310 tests passed, zero failed/skipped** on wzgram 3.1.6. The bounded
+> advanced-search/autocomplete round passed **18 live checks**, including private,
+> group and inline filtering, owned pagination, retained-Redis restarts and
+> application-type routing. BUG-108–112 are fixed separately; CACHE-027 records
+> current-media validation of historical suggestions. Admin/owner bypasses and
+> operator diagnostics are preserved.
+> Source-matched coverage: **71.40% lines, 58.92% branches, 68.29% combined**.
 > Earlier evidence remains dated in the report. Whole-bot 100% and production
 > acceptance remain open; `In review` still applies to review/merge and rollout
 > gates. No production deployment occurred.

@@ -11,14 +11,14 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,232 tests with zero failures or skips** and
-**20 live recommendation/feedback checks** on wzgram 3.1.6. BUG-104–107 fix
-negative-feedback influence, ranking cache limits/flags/data (CACHE-026), safe
-menu rendering and independent favorite/feedback markers. Account isolation,
-feature disable/re-enable, retained-cache and empty-Redis restarts, deleted
-files and Refresh/Close passed. Admin/owner bypasses and operator diagnostics
-are preserved. Source-matched coverage is **71.30% lines, 58.55% branches,
-68.13% combined**.
+The latest bounded round passed **1,310 tests with zero failures or skips** and
+**18 live advanced-search/autocomplete checks** on wzgram 3.1.6. BUG-108–112 fix
+filter validation/size precision, inline filter handling, current-media
+suggestion checks, quoted command text and application-type routing. Private,
+group and inline results, owned pagination, retained-Redis restarts and caption
+setting changes passed. Admin/owner bypasses and operator diagnostics are
+preserved. Source-matched coverage is **71.40% lines, 58.92% branches,
+68.29% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
@@ -53,10 +53,10 @@ counts remain historical; no feature defaults or production limits changed.
 |---|---|---|---|---|
 | FEAT-001 | Implemented (off) | Saved searches and new-file alerts | `FEATURE_SAVED_SEARCH_ALERTS` | Users can save, list, pause/resume, and delete searches; newly indexed matching files produce deduplicated notifications without blocking indexing. |
 | FEAT-002 | Implemented (off) | Favorites and named collections | `FEATURE_FAVORITES` | Users can add/remove files, create collections, list contents, and delete a collection; missing/deleted media is skipped safely. |
-| FEAT-003 | Implemented (off) | Advanced search filters | `FEATURE_ADVANCED_SEARCH` | Search accepts validated type, year, language, quality, season, episode, and size constraints while an unqualified query retains current behavior. |
+| FEAT-003 | Implemented (off) | Advanced search filters | `FEATURE_ADVANCED_SEARCH` | Search accepts validated type, year, language, quality, season, episode, and size constraints while an unqualified query retains current behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30), including private/group/inline filtering, pagination and all declared file types. |
 | FEAT-004 | Implemented (off) | Recommendation feedback | `FEATURE_RECOMMENDATION_FEEDBACK` | "More like this" and "Not interested" feedback changes ranking, invalidates the user cache, and never attributes feedback to the wrong file. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including two-account isolation, disabled old controls and Redis-reset persistence. |
 | FEAT-005 | Implemented (off) | File reporting and health workflow | `FEATURE_FILE_REPORTS` | Users can report broken, incorrect, duplicate, or poor-quality files; repeat reports are deduplicated and admins can list/resolve them. |
-| FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Inline/private suggestions use valid indexed/search-history candidates, exclude the exact query, enforce ownership, and stay within Telegram callback limits. |
+| FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Private `/suggest` uses successful history validated against current media/filter/caption rules, excludes normalized exact queries, enforces owned references and stays within Telegram callback limits. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30); a dedicated inline suggestion UI is outside this implemented command scope. |
 | FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Search can group likely variants by canonical title and expose quality variants without hiding files when metadata is incomplete. |
 | FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users can view their requests and statuses, duplicate requests are detected, and completion/rejection transitions are persisted and notified idempotently. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |

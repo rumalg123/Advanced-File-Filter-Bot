@@ -182,6 +182,22 @@ sequenceDiagram
 
 No-result private searches query the same search history for fuzzy “Did you mean?” suggestions. Group searches deliberately avoid no-result noise.
 
+Advanced filters are parsed before repository search and remain attached to
+cached pages and owned pagination references. Malformed recognized values fail
+validation before a media query. Decimal sizes retain exact byte precision and
+must fit signed 64-bit storage. Advanced inline requests preserve their full
+query; legacy inline requests retain the existing 100-character cap. Invalid
+inline filters point to search help/start. Every declared file type, including
+application, maps to its matching repository enum.
+
+The optional `/suggest` command preserves quoted search syntax, normalizes and
+deduplicates history candidates, then verifies current matches with effective
+filter/caption settings. Default requests inspect at most 24 candidates with
+five concurrent checks. Unavailable media or protected callback storage yields
+a retry response. Query buttons use compact owned references. These lookups
+add read work; representative production load remains an operational gate.
+See the [advanced search/autocomplete QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30).
+
 Private search, private pagination, inline search and file delivery require all
 configured memberships unless the actor has an existing admin/owner/authorized
 exemption. Group search previews and pagination remain public. Unverifiable

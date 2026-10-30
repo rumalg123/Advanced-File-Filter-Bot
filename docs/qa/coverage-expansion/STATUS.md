@@ -1,8 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [recommendations and feedback](#bounded-qa-round-10--recommendations-and-feedback-2026-10-30),
-**1,232 tests passed**, **71.30% lines / 58.55% branches / 68.13% combined**.
-Next bounded round: advanced search and autocomplete.
+Latest continuation: [advanced search and autocomplete](#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30),
+**1,310 tests passed**, **71.40% lines / 58.92% branches / 68.29% combined**.
+Next bounded round: duplicate grouping and variant delivery.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -1213,3 +1213,114 @@ services remain running untouched. The final bot logs contain one handled
 FloodWait and no unhandled exception/traceback. No production server, remote
 Atlas database, deployment `.env` or production limits were changed.
 Stop here until `continue`. **Next bounded scope: advanced search and autocomplete.**
+
+## Bounded QA round 11 — advanced search and autocomplete (2026-10-30)
+
+**Passed and complete for this bounded round.** Application/test source
+`bdcfb37`. No new product feature/flag, schema migration, index, deployment
+setting or production limit was introduced. Existing admin/owner bypasses and
+all operator diagnostics remain intact: 405 exact logger lines plus the two
+channel-context adjustments from round 8, with none removed.
+
+| Issue | Commit | Result |
+|---|---|---|
+| BUG-108 | `775c085` | Reject empty, unclosed or undelimited recognized filter values. Parse byte limits with exact decimal arithmetic and signed 64-bit bounds, producing validation errors before search rather than rounded values, overflow or BSON failures. |
+| BUG-109 | `9e280ad` | Preserve full advanced inline queries instead of cutting at 100 characters; keep the old cap for legacy mode. Invalid inline filters point to search help/start rather than premium. |
+| BUG-110 / CACHE-027 | `7dcfb79` | Validate normalized history candidates against current media, filter and caption rules. Backfill within a bounded window, limit concurrent checks, and show retry feedback for lookup/protected-button-state failures. |
+| BUG-111 | `3168fd7` | `/suggest` preserves raw quoted query syntax instead of stripping it through shell-style argument splitting. |
+| BUG-112 | `bdcfb37` | Map application to the declared application enum instead of silently falling back to document. |
+
+**Automated: 1,310 passed, zero failures/errors/skips**, with 22 existing
+warnings and **78 new cases**. Filter validation/precision contributes 25 cases;
+inline dispatch three; autocomplete 13; the real-Mongo filter matrix 23;
+quoted-command preservation two; all declared file-type mappings/service routes
+12. Initial regressions were 20 failures/five passes for parsing, two failures/
+one pass for inline handling, 12 failures for autocomplete, two failures for
+quoted commands and two failures/ten passes for file types. The matrix checks
+mixed token-bearing and legacy records, combined metadata/text/caption filters,
+exact size boundaries, metadata-only queries, dimensions versus quality and
+precise large-byte matching. `98ff9d4` commits that real-Mongo acceptance.
+The first matrix fixture passed a whole dictionary to a filename/caption token
+helper; correcting that fixture restored valid indexed tokens without changing
+production matching. Full Python compilation, Ruff F821/F822/F823, `pip check`,
+Markdown links/anchors, JSON/privacy and whitespace checks pass.
+
+**18 live checks passed across three bot phases**, using both supplied QA
+accounts, four distinct tiny documents, the declared group and QA log channel.
+MongoDB and dual Redis were local/disposable. Advanced search, autocomplete,
+indexed search and caption matching started enabled; premium enforcement,
+force subscription, durable workers, duplicate grouping and auto-deletion were
+disabled for this fixture. Both restarts retained Redis to test existing cached
+queries and history under changed settings. No production configuration changed.
+
+The baseline query found all four indexed documents. Type, year, language,
+quality, season/episode and byte bounds together returned the expected two;
+an exact 2KB range returned only the matching document. Nonmatching type and
+dimensions did not leak other files. Filtered private/group pagination retained
+the exact three-file set, and another account could not operate the group page.
+Missing, unclosed and oversized filters returned private validation feedback.
+Inline filters returned the same expected documents. Queries over 100 characters
+retained trailing size filters, and malformed inline input offered search help
+with a normal start parameter.
+
+Successful searches seeded real history. `/suggest` preserved quoted size
+syntax and excluded the exact query. Its compact buttons stayed within 64
+bytes, stored the normal user's ownership in protected Redis and opened the
+correct filtered search. Removing the last matching local media row caused its
+historical query to disappear from suggestions. The local search generation
+was advanced after that direct fixture mutation, without clearing history.
+
+Disabling advanced search/autocomplete and restarting with Redis retained
+removed the suggestion command and restored literal-query behavior. Re-enabling
+both while turning caption matching off respected the new setting despite
+retained caches/history: caption-only results and that historical query were
+omitted, while valid filename/fuzzy alternatives remained available. Finally,
+one existing QA document row was locally classified as application to represent
+supported legacy data. Private and inline `type:application` selected only that
+record, while document searches selected the document category. See the
+[sanitized evidence](round11-search.json).
+
+The first live fixture assumed long uploaded filenames retained trailing
+metadata; Telegram shortened/normalized them. The corrected fixture uses short,
+verified metadata-bearing names. A later assertion was narrowed to exclusion of
+the caption-only query, allowing valid fuzzy alternatives as intended. A complete
+16-check run preceded the final application-type correction; the final suite
+and 18-check run were rerun on that corrected source. All earlier attempt/run
+artifacts are archived outside accepted coverage inputs and cleaned without
+errors. No product failure is inferred from those fixture corrections.
+
+Coverage includes **18,026 statements, 5,986 branches and all 122 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 62.05% | 49.78% | 59.00% |
+| Source-matched automated + live | 71.40% | 58.92% | 68.29% |
+
+All four new process shards match application hashes at start/end/final source.
+Historical execution contributes only unchanged files; the explicitly validated
+round-8 aggregate retains its recorded-source/report verification. No line/arc
+remapping was used. Runtime is Python 3.13.7 / wzgram 3.1.6 with the tested
+application snapshot mounted into the retained runtime image. Its bundled
+application remains older source; no new deployment-image build is claimed.
+
+**Whole-bot 100% remains open.** Malformed input, byte precision, all file-type
+routes, bounded/concurrent validation and injected lookup/button-store failures
+use deterministic tests. Live acceptance covers small profiles and local data;
+large histories, representative Atlas/multidatabase latency/load, every possible
+filter combination and real infrastructure outages were not live acceptance
+claims. The default eight-suggestion request checks at most 24 candidates with
+five concurrent checks, adding bounded read work and potentially returning fewer
+suggestions. FEAT-006's register now accurately describes private `/suggest`;
+a dedicated inline suggestion UI was not added in this QA round. Inline advanced
+search itself was exercised.
+
+All 84 final-run recorded messages, including five log posts and two group
+messages, were removed. The two earlier attempts and pre-application-fix run
+cleaned another 185 messages, with no cleanup errors. Memberships, permissions
+and block states were unchanged. Owned containers, anonymous volumes and networks
+were removed; the two original server services remain running untouched.
+Final bot logs show one handled FloodWait and no unhandled exception/traceback.
+No production server, remote Atlas database, deployment `.env` or production
+limits were changed. Stop here until `continue`.
+**Next bounded scope: duplicate grouping and variant delivery.**

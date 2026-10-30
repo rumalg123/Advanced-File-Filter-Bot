@@ -1,0 +1,466 @@
+{
+  "date": "2026-10-30",
+  "round": 11,
+  "scope": [
+    "advanced-search",
+    "private-autocomplete",
+    "private-group-inline-filtering",
+    "owned-pagination"
+  ],
+  "application_and_tests_commit": "bdcfb371160958fc634d49f9c683120a61d08478",
+  "source_manifest_sha256": "1eabe6aecbb642ed6019b3d976338817389b1a936814ed5e98be6ebcb7c1bc98",
+  "fixes": {
+    "BUG-108": "775c085",
+    "BUG-109": "9e280ad",
+    "BUG-110 / CACHE-027": "7dcfb79",
+    "BUG-111": "3168fd7",
+    "BUG-112": "bdcfb37"
+  },
+  "real_mongo_matrix_commit": "98ff9d4",
+  "tests": {
+    "passed": 1310,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 78,
+    "seconds": 42.64,
+    "filter_validation_and_precision_cases": 25,
+    "inline_cases": 3,
+    "autocomplete_cases": 13,
+    "real_mongo_matrix_cases": 23,
+    "quoted_command_cases": 2,
+    "all_file_type_mapping_and_service_cases": 12
+  },
+  "before_fixes": {
+    "filter_validation": {
+      "failed": 20,
+      "passed": 5
+    },
+    "inline": {
+      "failed": 2,
+      "passed": 1
+    },
+    "autocomplete_initial": {
+      "failed": 12,
+      "passed": 0
+    },
+    "quoted_command": {
+      "failed": 2,
+      "passed": 0
+    },
+    "file_types": {
+      "failed": 2,
+      "passed": 10
+    }
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "all_four_new_process_shards_match_start_end_current_source": true,
+  "automated": {
+    "covered_lines": 11186,
+    "num_statements": 18026,
+    "percent_covered": 58.99550224887556,
+    "percent_covered_display": "59",
+    "missing_lines": 6840,
+    "excluded_lines": 41,
+    "percent_statements_covered": 62.054809719294354,
+    "percent_statements_covered_display": "62",
+    "num_branches": 5986,
+    "num_partial_branches": 896,
+    "covered_branches": 2980,
+    "missing_branches": 3006,
+    "percent_branches_covered": 49.78282659538924,
+    "percent_branches_covered_display": "50"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12870,
+    "num_statements": 18026,
+    "percent_covered": 68.28668998833916,
+    "percent_covered_display": "68",
+    "missing_lines": 5156,
+    "excluded_lines": 41,
+    "percent_statements_covered": 71.39687118606457,
+    "percent_statements_covered_display": "71",
+    "num_branches": 5986,
+    "num_partial_branches": 1037,
+    "covered_branches": 3527,
+    "missing_branches": 2459,
+    "percent_branches_covered": 58.92081523554962,
+    "percent_branches_covered_display": "59"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 64,
+        "changed_files_discarded": 54
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 53,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 54,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 51,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round10-phase1-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round10-phase2-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round10-phase3-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round10-unit",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round11-phase1-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round11-phase2-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round11-phase3-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round11-unit",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 74,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 74,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 103,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 103,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.round8-unit",
+        "matching_files": 110,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round8-validated-aggregate",
+        "matching_files": 110,
+        "changed_files_discarded": 12,
+        "kind": "validated historical aggregate, not a process shard",
+        "verification": {
+          "source_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+          "source_manifest_matches_committed_round8": true,
+          "all_file_execution_and_totals_equal_original_report": true,
+          "data_sha256": "5df644e3b3eb8117cd170969198e937bbbc68dfb7a65ca76aaebace6badb7018"
+        }
+      },
+      {
+        "shard": ".coverage.round9-phase1-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round9-phase2-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round9-phase3-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round9-unit",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      }
+    ],
+    "combined_percent": 68.28668998833916,
+    "policy": "Raw process files require identical start/end/current SHA256. The labelled historical aggregate reproduces its recorded-source report exactly and contributes only unchanged files. No line/arc remapping; earlier round11 runs are outside accepted inputs."
+  },
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "pymongo": "4.19.0",
+    "motor": "3.7.1",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "image": "file-filter-bot:qa-multisub-20261030",
+    "tested_application": "current source snapshot mounted into retained runtime image",
+    "image_bundled_application": "b2fcb38, not rebuilt for this round",
+    "deployment_image_build_claimed": false
+  },
+  "configuration": {
+    "database": "disposable-local-mongodb",
+    "cache": "disposable-local-dual-redis",
+    "destinations": "two provided QA accounts and declared QA group/log channel",
+    "fixture_documents": 4,
+    "fixture_sizes_bytes": [
+      512,
+      2048,
+      4096,
+      512
+    ],
+    "bot_phases": 3,
+    "advanced_autocomplete_phases": [
+      true,
+      false,
+      true
+    ],
+    "caption_phases": [
+      true,
+      true,
+      false
+    ],
+    "redis_retained_across_both_restarts": true,
+    "flags_edited_only_in_local_fixture_settings": true,
+    "indexed_search_enabled": true,
+    "page_size": 2,
+    "duplicate_grouping": false,
+    "premium_disabled": true,
+    "force_subscription": false,
+    "durable_workers": false,
+    "auto_delete_seconds": 0,
+    "application_record": "one existing real QA document row locally reclassified to represent supported legacy application data",
+    "generation_after_local_media_mutations": "existing protected search generation incremented; history retained"
+  },
+  "live": {
+    "scope": "advanced-search-and-autocomplete",
+    "checks": {
+      "search_help_usage_and_cold_autocomplete_return_clear_responses": true,
+      "unqualified_private_search_finds_all_four_real_indexed_documents": true,
+      "combined_type_year_language_quality_pair_and_size_filters_match_expected_files": true,
+      "size_boundaries_and_nonmatching_type_or_dimensions_do_not_leak_other_files": true,
+      "private_filtered_pagination_keeps_constraints_on_later_pages": true,
+      "group_filtered_results_paginate_correctly_and_reject_foreign_actor": true,
+      "missing_unclosed_and_oversized_filters_get_validation_feedback": true,
+      "inline_advanced_filters_return_the_same_expected_documents": true,
+      "inline_queries_over_one_hundred_characters_keep_trailing_size_filters": true,
+      "invalid_inline_filters_show_help_and_normal_start_instead_of_premium": true,
+      "suggest_command_preserves_quoted_size_syntax_and_excludes_the_exact_query": true,
+      "autocomplete_uses_compact_owned_buttons_and_opens_the_correct_filtered_search": true,
+      "autocomplete_omits_a_historical_query_after_its_last_matching_file_is_deleted": true,
+      "disabled_flags_remove_suggest_and_restore_literal_query_behavior_with_redis_retained": true,
+      "reenabled_search_and_autocomplete_respect_caption_off_even_with_old_history_and_cache": true,
+      "reenabled_autocomplete_keeps_valid_filename_candidates_after_restart": true,
+      "application_type_search_selects_only_the_seeded_legacy_application_record": true,
+      "inline_application_type_uses_the_correct_enum_and_matching_file": true
+    },
+    "fixture_documents": 4,
+    "passed": true
+  },
+  "autocomplete_contract": {
+    "default_results": 8,
+    "default_candidate_validation_window": 24,
+    "concurrent_validation_limit": 5,
+    "filters_and_caption_settings_checked": true,
+    "normalized_exact_and_duplicate_queries_excluded": true,
+    "quoted_query_body_preserved": true,
+    "backend_and_callback_storage_errors_show_retry": true,
+    "dedicated_inline_suggestion_ui_added": false
+  },
+  "fixture_corrections": [
+    "Mixed-token unit fixture now calls the token helper with filename/caption rather than a dictionary",
+    "Telegram shortened long uploaded filenames; final fixtures use short verified metadata-bearing names",
+    "Caption-off autocomplete must omit the stale caption-only query while allowing valid fuzzy alternatives",
+    "A complete 16-check run preceded the application-type regression fix; final 18-check run uses corrected source"
+  ],
+  "cleanup": {
+    "final_run": {
+      "messages_removed": {
+        "round11-admin": 14,
+        "round11-normal": 63,
+        "log_channel": 5,
+        "qa_group": 2
+      },
+      "errors": []
+    },
+    "final_run_recorded_messages_removed": 84,
+    "earlier_runs": {
+      "attempt1": {
+        "messages_removed": {
+          "round11-admin": 14,
+          "round11-normal": 12,
+          "log_channel": 3,
+          "qa_group": 0
+        },
+        "errors": []
+      },
+      "attempt2": {
+        "messages_removed": {
+          "round11-admin": 14,
+          "round11-normal": 56,
+          "log_channel": 5,
+          "qa_group": 2
+        },
+        "errors": []
+      },
+      "before-application-fix": {
+        "messages_removed": {
+          "round11-admin": 14,
+          "round11-normal": 58,
+          "log_channel": 5,
+          "qa_group": 2
+        },
+        "errors": []
+      }
+    },
+    "earlier_recorded_messages_removed": 185,
+    "earlier_coverage_excluded": true,
+    "memberships_permissions_block_state_changed": false,
+    "owned_containers_anonymous_volumes_networks_removed": true,
+    "original_two_services_running_untouched": true
+  },
+  "policy": {
+    "admin_owner_bypasses_preserved": true,
+    "operator_diagnostic_lines_unchanged": 405,
+    "operator_diagnostic_lines_context_updates_from_round8": 2,
+    "operator_diagnostics_removed": 0,
+    "new_product_features_or_flags_added": false,
+    "production_defaults_or_limits_changed": false,
+    "production_server_accessed": false,
+    "remote_atlas_accessed": false,
+    "deployment_environment_changed": false,
+    "mongo_migration_or_new_index_required": false,
+    "legacy_inline_limit_unchanged_when_advanced_disabled": true
+  },
+  "validation": {
+    "python_compilation": true,
+    "ruff_F821_F822_F823": true,
+    "pip_check": true,
+    "markdown_links_anchors": true,
+    "json_privacy": true,
+    "git_diff_check": true,
+    "live_unhandled_error_or_traceback": false,
+    "expected_live_warning": "handled Telegram FloodWait",
+    "local_markdown_links_checked": 264
+  },
+  "limitations": [
+    "Whole-bot 100% remains open",
+    "Byte bounds, malformed inputs, injected lookup/button-storage failures and concurrency limits are deterministic tests",
+    "Small local profiles; no representative Atlas/multidatabase load or latency acceptance",
+    "Not every filter combination or real infrastructure outage was exercised live",
+    "Default autocomplete validates at most 24 candidates and can return fewer than eight matches; validation adds bounded read work",
+    "FEAT-006 is the private suggest command; no dedicated inline suggestion UI was added",
+    "Retained runtime image bundles older application; deployment must build the newly committed branch source"
+  ],
+  "next_bounded_scope": [
+    "duplicate grouping",
+    "variant delivery"
+  ]
+}

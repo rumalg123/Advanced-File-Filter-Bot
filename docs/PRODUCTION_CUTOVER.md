@@ -10,9 +10,9 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed 1,232 tests and 20 real-account recommendation/feedback
-checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.30%
-lines / 58.55% branches. Sustained production load, cloud
+The latest bounded QA passed 1,310 tests and 18 real-account advanced-search/autocomplete
+checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.40%
+lines / 58.92% branches. Sustained production load, cloud
 restore and production-specific configuration/index checks remain release
 gates; 100% coverage is not the sole definition of production readiness.
 See [the QA evidence](qa/coverage-expansion/STATUS.md).
@@ -33,14 +33,14 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application source is `d8ddb57`. Its complete suite and all
+The current QA application source is `bdcfb37`. Its complete suite and all
 three live phases used the wzgram 3.1.6 runtime from
 `file-filter-bot:qa-multisub-20261030` with the tested source snapshot mounted
 into the container. That image's bundled code remains the earlier `b2fcb38`;
 it is a runtime fixture for this round, not an updated deployment image.
 Build the new branch source for deployment and retain a validated rollback
 artifact. Historical image/archive checks certify their original source and
-dependencies. See the [current round evidence](qa/coverage-expansion/round10-recommendations.json).
+dependencies. See the [current round evidence](qa/coverage-expansion/round11-search.json).
 
 For the exact two-service stack supplied by the operator, use the
 [production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including
@@ -93,6 +93,13 @@ feedback remains in MongoDB; legacy ranking-cache payloads automatically
 recompute under the new validated format. Feedback/explanation flag changes
 still require the usual restart. A deliberate Redis clear removes learned
 search/click relationships, which accumulate again through normal use.
+
+Advanced-search/autocomplete fixes require no schema migration, new index or
+full Redis clear. Existing media metadata/filename/caption fallback remains
+supported. The default `/suggest` request now validates up to 24 candidates with
+five concurrent checks using current media routing. This adds bounded read
+work; measure actual Atlas latency/load before treating QA as production-scale
+acceptance. Feature/caption settings still apply through the normal restart.
 
 ### Single database, indexed search off
 

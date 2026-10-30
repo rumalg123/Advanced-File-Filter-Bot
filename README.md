@@ -657,6 +657,28 @@ The bot publishes different Telegram command menus for private chats, groups, ad
 
 Send ordinary text with at least two characters to search. In inline mode, type the bot username and query in another chat.
 
+With `FEATURE_ADVANCED_SEARCH` enabled, add filters to the title, for example:
+
+```text
+movie type:video year:2026 lang:English quality:1080p
+show season:1 episode:4 minsize:700MB maxsize:2GB
+movie language:"Brazilian Portuguese" maxsize:"1.5 GB"
+```
+
+Types are `video`, `audio`, `document`, `photo`, `animation` and `application`.
+Years range from 1900 to 2100; season/episode values range from 0 to 999.
+Quality accepts labels such as `720p` or dimensions such as `1920x1080`;
+dimensions do not imply a quality label. Size units use powers of 1024 and
+support decimals; computed bytes must fit a signed 64-bit MongoDB integer.
+Recognized filters require a value and complete, whitespace-delimited quotes.
+Unknown keys remain title text. With the feature disabled, filter-like text
+keeps the existing literal-search behavior.
+
+Private validation errors show details; inline errors point to `/search_help`.
+Advanced inline queries keep their full filter text. Group results retain the
+existing public-preview policy, and pagination keeps the query constraints and
+requesting user's ownership.
+
 ### Optional user commands
 
 | Feature | Commands |
@@ -668,6 +690,18 @@ Send ordinary text with at least two characters to search. In inline mode, type 
 | Autocomplete | `/suggest partial title` |
 | Advanced search | `/search_help` |
 | Request tracking | `/myrequests` |
+
+`/suggest partial title` uses successful user/global search history, excludes
+the exact query and collapses spacing/case duplicates. Suggestions are checked
+against current indexed media using the active advanced-filter and caption
+settings. Deleted-file queries are omitted; valid fuzzy alternatives can still
+appear. Quotes in the command body are preserved. Compact buttons store an
+owned query reference rather than embedding a long query in callback data.
+The default eight-result request validates up to 24 candidates with at most
+five concurrent existence checks; it may return fewer valid suggestions.
+Lookup or callback-storage outages show a retry message. Disabling the flag
+removes the command after restart; existing query buttons use normal search
+rules. A caption-setting change applies after restart even with Redis retained.
 
 For `/favorite`, reply to a delivered file, or use `/favorite file_unique_id [collection name]`.
 Delivered files expose Favorite, Remove, and Add to Collection buttons. Favorite
@@ -976,7 +1010,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,232 tests** with zero failures or skips, plus **20 live recommendation/feedback checks** on wzgram 3.1.6, including account isolation, feature toggles, Redis-reset persistence and deleted-file recovery. Source-matched coverage is **71.30% lines and 58.55% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,310 tests** with zero failures or skips, plus **18 live advanced-search/autocomplete checks** on wzgram 3.1.6, including private/group/inline filters, pagination, current-media suggestions and retained-Redis setting changes. Source-matched coverage is **71.40% lines and 58.92% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

@@ -166,14 +166,14 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,232 tests with zero failures or skips** and
-**20 live recommendation/feedback checks** on wzgram 3.1.6. BUG-104–107 fix
-negative-feedback influence, ranking cache limits/flags/data (CACHE-026), safe
-menu rendering and independent favorite/feedback markers. Account isolation,
-feature disable/re-enable, retained-cache and empty-Redis restarts, deleted
-files and Refresh/Close passed. Admin/owner bypasses and operator diagnostics
-are preserved. Source-matched coverage is **71.30% lines, 58.55% branches,
-68.13% combined**.
+The latest bounded round passed **1,310 tests with zero failures or skips** and
+**18 live advanced-search/autocomplete checks** on wzgram 3.1.6. BUG-108–112 fix
+filter validation/size precision, inline filter handling, current-media
+suggestion checks, quoted command text and application-type routing. Private,
+group and inline results, owned pagination, retained-Redis restarts and caption
+setting changes passed. Admin/owner bypasses and operator diagnostics are
+preserved. Source-matched coverage is **71.40% lines, 58.92% branches,
+68.29% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
