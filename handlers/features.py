@@ -902,7 +902,10 @@ class FeatureHandler(BaseHandler):
     @check_ban()
     @require_subscription()
     async def suggest_command(self, client: Client, message: Message):
-        query = " ".join(self._arguments(message)).strip()
+        # Search syntax owns its quotes; shell-style argument splitting would
+        # turn language:"Hong Kong" into a different query.
+        parts = self._text(message).split(None, 1)
+        query = parts[1].strip() if len(parts) > 1 else ''
         if not query:
             return await self._reply_with_cleanup(
                 message, "Usage: <code>/suggest partial title</code>"
