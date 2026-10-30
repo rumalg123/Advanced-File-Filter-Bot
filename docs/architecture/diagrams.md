@@ -310,6 +310,16 @@ flowchart LR
 
 Query similarity first uses bidirectional co-occurrence and then fills gaps with RapidFuzz matching against user and global history. File recommendations combine query-to-file mappings, file co-occurrence, user interaction history, and global trends. Per-user recommendation output is cached for ten minutes and invalidated when new user signals arrive.
 
+Explicit negative feedback excludes a file from profile seeds as well as from
+results; positive feedback prioritizes a seed and reset restores implicit
+history. MongoDB keeps one preference per user/file across Redis resets. Redis
+relationships must accumulate again after a clear. Ranking cache payloads are
+versioned and validated against the limit, feedback/explanation flags and data
+shape; legacy or mismatched entries recompute. Menus resolve files in rank
+order, omit duplicates/unavailable media and escape query/reason text. Favorite
+and feedback markers update independently. See the
+[recommendation QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30).
+
 ## 8. User-owned feature CRUD
 
 ```mermaid

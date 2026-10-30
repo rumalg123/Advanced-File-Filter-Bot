@@ -690,6 +690,21 @@ one to be reset; resets invalidate cached personalized results. File-report
 reason buttons open on the delivered-file keyboard and become a visible report
 status after submission, avoiding detached menus in the user's chat.
 
+Recommendation feedback belongs to the clicking user and selected file.
+**More like this** gives that file priority as a source of related suggestions.
+**Not interested** hides the file and stops using it as a profile source;
+**Reset** removes the explicit preference and lets ordinary click history apply
+again. Repeated clicks update one saved preference. Favorite and feedback
+markers preserve each other's selection.
+
+Feedback stays in MongoDB when Redis is cleared or its feature is disabled.
+Search/click relationships in Redis must build up again after a clear before
+related suggestions return. Changes to feedback/explanation flags apply after
+restart; cached rankings are checked against the active flags and requested
+limit. Old cache entries recompute automatically. Recommended file buttons keep
+their rank, appear once per menu and skip unavailable files. Similar-query text
+is displayed literally, including HTML-like characters.
+
 Interactive feature messages follow a state-consistency rule: persist the
 owner-scoped mutation, re-read list state where needed, and edit the originating
 message. Telegram edit failures are non-fatal—the stored mutation and callback
@@ -961,7 +976,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,199 tests** with zero failures or skips, plus **17 live premium/quota checks** on wzgram 3.1.6, including grants, removal, notifications, actual expiry, quota enforcement and restart persistence. Source-matched coverage is **70.80% lines and 58.02% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,232 tests** with zero failures or skips, plus **20 live recommendation/feedback checks** on wzgram 3.1.6, including account isolation, feature toggles, Redis-reset persistence and deleted-file recovery. Source-matched coverage is **71.30% lines and 58.55% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

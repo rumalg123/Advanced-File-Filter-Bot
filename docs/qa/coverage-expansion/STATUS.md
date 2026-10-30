@@ -1,8 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [premium grants, removal, expiry and quotas](#bounded-qa-round-9--premium-grants-removal-expiry-and-quotas-2026-10-30),
-**1,199 tests passed**, **70.80% lines / 58.02% branches / 67.62% combined**.
-Next bounded round: recommendations and recommendation feedback.
+Latest continuation: [recommendations and feedback](#bounded-qa-round-10--recommendations-and-feedback-2026-10-30),
+**1,232 tests passed**, **71.30% lines / 58.55% branches / 68.13% combined**.
+Next bounded round: advanced search and autocomplete.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -1103,3 +1103,113 @@ running untouched. Live warnings are expected quota denials and the deliberate
 blocked-user notification; the SDK handled one 37-second FloodWait. No unhandled
 live exception/traceback was observed. Stop here until `continue`.
 **Next bounded scope: recommendations and recommendation feedback.**
+
+## Bounded QA round 10 — recommendations and feedback (2026-10-30)
+
+**Passed and complete for this bounded round.** Application/test source
+`d8ddb57`. No new product feature, flag, environment change, MongoDB migration
+or production limit was introduced. FEAT-004 and FEAT-010 retain default-off
+flags. Admin/owner bypasses and all operator diagnostics are preserved: 405
+exact logger lines and two channel-context adjustments from round 8, with none
+removed.
+
+| Issue | Commit | Result |
+|---|---|---|
+| BUG-104 | `9a5244e` | Explicit Not interested feedback removes a file from profile seeds, instead of continuing to promote its neighbors through download history. Reset restores implicit history; other positive sources remain usable. |
+| BUG-105 / CACHE-026 | `c4ba5b2` | Ranking cache validates version, requested limit, feedback/explanation flags and result shape. Legacy/mismatched/malformed payloads recompute; invalid limits return empty results. |
+| BUG-106 | `52205cc` | Escape displayed query text, preserve file rank through batch lookup, omit repeated/unavailable files and show an empty-state message when no visible candidates remain. |
+| BUG-107 | `ab362f0` | Favorite and recommendation marker updates preserve the other control group's selection. |
+
+**Automated: 1,232 passed, zero failures/errors/skips**, with 22 existing
+warnings and **33 new cases**. Feedback acceptance has four cases, including
+real-Mongo upserts, replacement, repeated reset and two-user isolation. Ranking
+cache coverage has 18 cases: limits, flags, legacy/malformed data, invalid limits,
+valid cache hits and versioned-payload boundaries. Presentation has six cases
+for literal queries, safe names/reasons, rank order in both sections, duplicate
+files and all-deleted candidates. Five cases verify independent marker groups.
+Initial failures were 2/4 feedback cases, 12/13 cache cases, 4/5 presentation
+cases and all five marker cases. Later cache-boundary/presentation cases extend
+that matrix. The four fixes are separate commits; `d8ddb57` adds cache-boundary
+acceptance. Full Python compilation, Ruff F821/F822/F823, `pip check`, local
+Markdown links/anchors, JSON/privacy and whitespace checks pass.
+
+**20 live checks passed across three bot phases**, using both supplied QA
+accounts, three distinct tiny indexed files and the declared QA log channel.
+MongoDB and dual Redis were local/disposable. Feedback, explanations, favorites
+and indexed search were enabled in this fixture; premium enforcement, force
+subscription, durable workers and auto-deletion were disabled. These choices
+did not alter production settings.
+
+A cold user received a clear empty state. A global query containing literal
+`<b>&` characters displayed safely, and its owned suggestion button opened the
+correct three-file search. Clicking one file delivered that exact document and
+updated the actual user's interaction plus originating query/file mapping.
+Recommendations showed its two neighbors, omitted the downloaded seed and
+included a safe generic explanation without account IDs. Not interested
+removed the seed's influence; More restored related files. Repeated More kept
+one MongoDB preference. Delivery Reset restored ordinary history without
+clearing Favorite; removing Favorite preserved the feedback selection. List
+Reset removed the saved row and deleted the empty preference menu.
+
+The two accounts then saved opposite signals for the same file: normal-user
+Less produced no related files, while admin More produced both neighbors.
+The bot was recreated with feedback/explanations disabled **while retaining
+Redis**, and the old ranking bytes were verified unchanged before the next
+request. The request recomputed under the disabled flags, omitted explanations,
+and newly delivered files had no feedback controls. An old More button also
+returned unavailable and left MongoDB unchanged. Existing preferences remained
+stored.
+
+Feedback/explanations were re-enabled, then the bot was recreated with both
+owned Redis instances empty. Both accounts' preference lists survived. A new
+normal-user search rebuilt co-occurrence; another actual seed download still
+respected the saved negative signal. The admin's positive preference produced
+related files without a new admin download. After all three local media records
+were deleted, a real cached file-only ranking showed a clear empty state.
+An old feedback button rejected the deleted file without changing its saved
+preference. The admin could reset its missing-file preference without changing
+the other user's row. Refresh recomputed empty results, and Close removed the
+menu. Four actual file deliveries were confirmed. See the
+[sanitized evidence](round10-recommendations.json).
+
+Three earlier attempts corrected **fixture expectations**: suggestion callbacks
+edit the originating menu; indexed display names normalize filename punctuation;
+and surviving query suggestions remain visible even when ranked files are
+gone. The final deletion fixture uses an actual file-only ranking. Each attempt
+cleaned its messages/infrastructure with zero errors. Their partial coverage
+artifacts are archived outside the accepted coverage inputs; only the complete
+final run and unit suite contribute new execution for this round.
+
+Coverage includes **17,969 statements, 5,962 branches and all 122 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 61.91% | 49.55% | 58.83% |
+| Source-matched automated + live | 71.30% | 58.55% | 68.13% |
+
+All four new shards match start/end/current application hashes. Historical
+execution contributes only unchanged files; the explicitly validated round-8
+aggregate retains its recorded-source/report verification from round 9. No
+line/arc remapping was used. Runtime is Python 3.13.7 / wzgram 3.1.6 with the
+tested source snapshot mounted into the retained runtime image. Its bundled
+application remains older code; no new deployment-image build is claimed.
+
+**Whole-bot 100% remains open.** This bounded acceptance covers small profiles;
+large click/feedback histories, ranking-quality/load evaluation, cache-write or
+MongoDB outages during live preference changes, concurrent feedback races and
+cross-chat forwarded keyboards were not live acceptance claims. Failure/data
+shape and flag/limit boundaries use deterministic tests. Click signals here
+came from actual file buttons; not every delivery/deep-link route was rerun.
+New message keyboards are not claimed to synchronize every older message's
+markers. Clearing Redis removes learned relationships while MongoDB retains
+explicit preferences.
+
+All 64 final-run recorded messages, including five log posts, were removed;
+111 messages from earlier attempts were also cleaned, with zero cleanup errors.
+No chat membership, bot permission or block state was changed. Owned containers,
+anonymous volumes and networks were removed, and the two original server
+services remain running untouched. The final bot logs contain one handled
+FloodWait and no unhandled exception/traceback. No production server, remote
+Atlas database, deployment `.env` or production limits were changed.
+Stop here until `continue`. **Next bounded scope: advanced search and autocomplete.**

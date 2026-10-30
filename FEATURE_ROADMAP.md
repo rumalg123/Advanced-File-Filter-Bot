@@ -11,13 +11,14 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,199 tests with zero failures or skips** and
-**17 live premium/quota checks** on wzgram 3.1.6. BUG-101–103 fix stale/concurrent
-premium mutations, unsafe automatic expiration and stale/malformed premium
-cache decisions (CACHE-025). Default/override grants, notifications, actual
-expiry, exhausted quota and empty-Redis restarts passed. Admin/owner bypasses
-and operator diagnostics are preserved. Source-matched coverage is **70.80%
-lines, 58.02% branches, 67.62% combined**.
+The latest bounded round passed **1,232 tests with zero failures or skips** and
+**20 live recommendation/feedback checks** on wzgram 3.1.6. BUG-104–107 fix
+negative-feedback influence, ranking cache limits/flags/data (CACHE-026), safe
+menu rendering and independent favorite/feedback markers. Account isolation,
+feature disable/re-enable, retained-cache and empty-Redis restarts, deleted
+files and Refresh/Close passed. Admin/owner bypasses and operator diagnostics
+are preserved. Source-matched coverage is **71.30% lines, 58.55% branches,
+68.13% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
@@ -53,13 +54,13 @@ counts remain historical; no feature defaults or production limits changed.
 | FEAT-001 | Implemented (off) | Saved searches and new-file alerts | `FEATURE_SAVED_SEARCH_ALERTS` | Users can save, list, pause/resume, and delete searches; newly indexed matching files produce deduplicated notifications without blocking indexing. |
 | FEAT-002 | Implemented (off) | Favorites and named collections | `FEATURE_FAVORITES` | Users can add/remove files, create collections, list contents, and delete a collection; missing/deleted media is skipped safely. |
 | FEAT-003 | Implemented (off) | Advanced search filters | `FEATURE_ADVANCED_SEARCH` | Search accepts validated type, year, language, quality, season, episode, and size constraints while an unqualified query retains current behavior. |
-| FEAT-004 | Implemented (off) | Recommendation feedback | `FEATURE_RECOMMENDATION_FEEDBACK` | "More like this" and "Not interested" feedback changes ranking, invalidates the user cache, and never attributes feedback to the wrong file. |
+| FEAT-004 | Implemented (off) | Recommendation feedback | `FEATURE_RECOMMENDATION_FEEDBACK` | "More like this" and "Not interested" feedback changes ranking, invalidates the user cache, and never attributes feedback to the wrong file. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including two-account isolation, disabled old controls and Redis-reset persistence. |
 | FEAT-005 | Implemented (off) | File reporting and health workflow | `FEATURE_FILE_REPORTS` | Users can report broken, incorrect, duplicate, or poor-quality files; repeat reports are deduplicated and admins can list/resolve them. |
 | FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Inline/private suggestions use valid indexed/search-history candidates, exclude the exact query, enforce ownership, and stay within Telegram callback limits. |
 | FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Search can group likely variants by canonical title and expose quality variants without hiding files when metadata is incomplete. |
 | FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users can view their requests and statuses, duplicate requests are detected, and completion/rejection transitions are persisted and notified idempotently. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
-| FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. |
+| FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including safe rendered reasons and feature-toggle cache recovery. |
 | FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view currently unresolved zero-result searches, popular searches, report counts, request demand, and index/file-health summaries; successful/later-indexed matches self-heal through bounded current-search validation. |
 | FEAT-012 | Implemented (configured) | Multiple force-subscription channels and limited invites | Existing `AUTH_CHANNEL` / `AUTH_GROUPS` configuration | Accept comma-separated channels with legacy single-value compatibility; validate bot admin/Invite Users rights before settings writes; generate expiring, member-limited links for missing memberships and refresh them on retry. Defaults: 15 minutes and one member, editable through `/bsetting`. QA passed: 55 new automated cases and 18 live checks; see [round 8](docs/qa/coverage-expansion/STATUS.md#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30). |
 
