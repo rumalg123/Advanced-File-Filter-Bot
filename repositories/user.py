@@ -11,7 +11,7 @@ from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import cache_premium_status
 from core.concurrency.semaphore_manager import semaphore_manager
-from core.database.base import BaseRepository, AggregationMixin
+from core.database.base import BaseRepository, AggregationMixin, expired_premium_filter
 from core.database.errors import USER_ACCESS_RETRY_MESSAGE
 
 from core.utils.error_formatter import ErrorMessageFormatter
@@ -415,7 +415,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # activation date, but a future expiry still represents valid access.
         if not is_premium_valid(user.is_premium, user.premium_expiry_date):
             # Premium expired
-            await self.update_premium_status(user.id, False)
+            # Automatic expiry must not reset consumed quota or revoke a
+            # new grant issued after this caller read its old snapshot.
+            await self._batch_expire_premium([user.id])
+            current = await self.get_user(user.id, use_cache=False)
+            if current and is_premium_valid(current.is_premium, current.premium_expiry_date):
+                return True, f"Premium active ({get_days_remaining(current.premium_expiry_date)} days remaining)"
             return False, "Premium subscription expired"
 
         days_remaining = get_days_remaining(user.premium_expiry_date)
@@ -475,7 +480,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 expiry_date = doc.get("premium_expiry_date")
                 # Parse expiry date if needed
                 if isinstance(expiry_date, str):
-                    expiry_date = datetime.fromisoformat(expiry_date)
+                    try:
+                        expiry_date = datetime.fromisoformat(expiry_date)
+                    except ValueError:
+                        expiry_date = None
+                if not isinstance(expiry_date, datetime):
+                    expiry_date = None
 
                 # Use validator utility for premium check
                 if not is_premium_valid(True, expiry_date):
@@ -515,7 +525,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             async with semaphore_manager.acquire('database_write'):
                 await self.db_pool.execute_with_retry(
                     collection.update_many,
-                    {"_id": {"$in": user_ids}},
+                    expired_premium_filter(user_ids),
                     {"$set": {
                         "is_premium": False,
                         "premium_activation_date": None,
@@ -1009,11 +1019,17 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         try:
             # Get all premium users
-            premium_users = await self.find_many({'is_premium': True})
+            # Read IDs without constructing User DTOs: one malformed legacy
+            # expiry must not prevent cleanup for every other subscriber.
+            collection = await self.get_collection()
+            premium_users = await self.db_pool.execute_with_retry(
+                collection.find({'is_premium': True}, {'_id': 1}).to_list,
+                length=None,
+            )
             if not premium_users:
                 return result
 
-            user_ids = [u.id for u in premium_users]
+            user_ids = [u['_id'] for u in premium_users]
             result['checked_count'] = len(user_ids)
 
             # Use batch_check_premium_status for consistent validation

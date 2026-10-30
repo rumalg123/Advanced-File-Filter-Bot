@@ -19,6 +19,17 @@ logger = get_logger(__name__)
 T = TypeVar('T')
 
 
+def expired_premium_filter(user_ids):
+    """Recheck expiry at the write, accepting legacy ISO and BSON dates."""
+    return {
+        '_id': {'$in': user_ids}, 'is_premium': True,
+        '$expr': {'$lte': [{'$convert': {
+            'input': '$premium_expiry_date', 'to': 'date',
+            'onError': None, 'onNull': None,
+        }}, '$$NOW']},
+    }
+
+
 class BaseRepository(ABC, Generic[T]):
     """Base repository with common CRUD operations"""
 
