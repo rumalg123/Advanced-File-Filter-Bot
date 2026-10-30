@@ -42,6 +42,7 @@ SEARCH_TEXT_FILTER = (
 
 class SearchHandler:
     """Handler for search functionality with subscription checks"""
+    INLINE_QUERY_TIMEOUT = 8
 
     def __init__(self, bot):
         self.bot = bot
@@ -266,6 +267,32 @@ class SearchHandler:
         await self._handle_group_search(client, message, query, user_id)
 
     async def handle_inline_query(self, client: Client, query: InlineQuery):
+        """Answer within Telegram's query lifetime, including access checks."""
+        try:
+            await asyncio.wait_for(
+                self._handle_inline_query(client, query), timeout=self.INLINE_QUERY_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.warning('Inline query exceeded its response deadline')
+            await self._answer_inline_failure(query, SEARCH_RETRY_MESSAGE)
+        except QueryIdInvalid:
+            logger.warning('Inline query expired before its answer could be delivered')
+        except Exception:
+            logger.exception('Inline query failed before completion')
+            await self._answer_inline_failure(query, ErrorMessageFormatter.format_error(
+                'Search Error', include_prefix=False, plain_text=True))
+
+    async def _answer_inline_failure(self, query: InlineQuery, text: str):
+        """Expired queries cannot be answered again; keep dispatcher cleanup safe."""
+        try:
+            await query.answer(results=[], cache_time=0, is_personal=True,
+                               switch_pm_text=text, switch_pm_parameter='start')
+        except QueryIdInvalid:
+            logger.warning('Inline query expired before its error answer')
+        except Exception:
+            logger.warning('Unable to answer failed inline query', exc_info=True)
+
+    async def _handle_inline_query(self, client: Client, query: InlineQuery):
         """Handle inline search queries - send files directly when clicked"""
         user_id = extract_user_id(query)
         if not user_id:

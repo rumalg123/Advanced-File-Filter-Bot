@@ -75,6 +75,17 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-063 | Medium | Fixed | Durable indexing notifications | Durable channel indexing completes jobs but bypasses the memory worker's `LOG_CHANNEL` summary. | Share the summary sender and notify after acknowledging a newly indexed durable job. Duplicate replays and lost leases stay quiet. Notification failure is logged and never requeues indexed media or repeats saved-search fan-out. Summaries are best-effort; completed historical jobs are not replayed. |
 | BUG-064 | High | Fixed | Maintenance scan limits | The ownership CLI accepts/defaults to ten million records while its library rejects values above one million; the backfill regression still treats an intentionally supported limit as invalid. | Share the ten-million maximum between CLI/library/backfill, align ownership defaults, retain the one-million backfill default, validate integer bounds and update boundary regressions. Real-Mongo CLI activation/inventory pass with the new default. |
 | BUG-065 | Medium | Fixed | Operator diagnostics | Ownership and backfill CLI errors interpolate raw exception text that may expose connection strings, credentials or media values. | Keep exception type and numeric MongoDB code; omit arbitrary message/detail payloads. Authentication, connection and duplicate-key regressions confirm diagnostic categories without credentials. |
+| BUG-066 | Medium | Fixed | Inline search | Access-check failures escape before the search error handler, and slow checks/searches can outlive the inline response window. An expired error reply can also escape dispatch. | Bound the entire inline operation to eight seconds, cancel slow work and attempt a safe retry answer; contain expired/error answers. Existing access gates, personal results and page offsets remain covered. |
+
+## Inline search follow-up, 2026-10-30
+
+BUG-066 has **20 passing focused cases** covering normal/admin access,
+subscription exemptions, ban/premium/rate gates, empty and failed searches,
+personal result caching, page offsets, access-check exceptions, expired answers
+and cancellation of slow access/search work. The deadline covers checks before
+the previous inner search handler. Timeout responses attempt an uncached retry
+answer; Telegram may already have expired a query, in which case the dispatcher
+contains that error.
 
 ## Operator follow-up, 2026-10-30
 
