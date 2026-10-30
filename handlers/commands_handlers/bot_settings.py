@@ -63,9 +63,9 @@ class BotSettingsHandler(BaseHandler):
 
     async def bsetting_command(self, client: Client, message: Message):
         """Handle /bsetting command"""
-        await self.show_settings_menu(message, page=0)
+        await self.show_settings_menu(message, page=0, edit=False)
 
-    async def show_settings_menu(self, message: Message, page: int = 0):
+    async def show_settings_menu(self, message: Message, page: int = 0, *, edit: bool = True):
         """Show settings menu with numbered page navigation"""
         settings = await self.settings_service.get_all_settings()
 
@@ -176,9 +176,12 @@ class BotSettingsHandler(BaseHandler):
             f"Page {page + 1} of {total_pages} • Total Settings: {total_settings}"
         )
 
-        if hasattr(message, 'edit_text') and hasattr(message, 'id') and message.chat:
+        if edit:
             try:
                 await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+            except MessageNotModified:
+                # Repeated navigation should keep the existing menu.
+                pass
             except Exception as e:
                 logger.error(f"Failed to edit settings menu message: {e}")
                 # If edit fails, send a new message
