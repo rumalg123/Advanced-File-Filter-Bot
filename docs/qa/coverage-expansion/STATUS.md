@@ -282,3 +282,33 @@ remote Atlas database was accessed for this change. The earlier coverage
 percentages remain the historical snapshot; this full regression run did not
 remeasure whole-bot coverage. Exposing the controls does not complete outstanding
 canonical-metadata, quota reconciliation or durable-queue production drills.
+
+## Durable indexing log-channel summaries — BUG-063 fixed
+
+Commit `ca6eb4e` restores the Auto-Index Batch Summary for durable automatic
+channel indexing. A newly inserted file sends one summary after its job is
+acknowledged; memory indexing retains its existing per-batch summary. Both paths
+share the sender. Disabled log channels, duplicate replays and lost leases do
+not announce a new indexed file. A Telegram notification error emits a warning
+without requeueing saved media or repeating saved-search work. Delivery remains
+best-effort across process cancellation/crash; old completed jobs are not replayed.
+
+Validation on 2026-10-30: six failures reproduced before the fix; all **13 new
+notification cases pass**, including real-Mongo acknowledgements with both
+successful and failed Telegram test-double sends. All **33 related indexing,
+notification and saved-search tests pass**. Changed-source compilation,
+undefined-name lint and whitespace checks passed.
+
+Full suite: **842 passed, 2 failed, 0 skipped**, with the 22 existing warnings.
+The two failures are in recent operator-script changes already present at
+`05dd4de`: the backfill bounds test still rejects a limit now permitted by the
+script, and the ownership CLI prints raw exception text that its privacy test
+rejects. The new ten-million ownership CLI default also disagrees with the
+library's existing one-million inventory/activation bound. These are separate
+follow-ups; this notification fix preserves those commits.
+
+Tests used disposable MongoDB and two Redis instances in a private Docker
+network namespace without published ports. All owned containers and the network
+were removed. No production connection or live Telegram notification was made.
+After deployment, verify with a newly indexed file and the configured log
+channel. This run did not remeasure whole-bot coverage.
