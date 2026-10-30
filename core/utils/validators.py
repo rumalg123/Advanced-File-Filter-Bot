@@ -522,7 +522,7 @@ class InputValidation:
         return sanitized[:255]
     
     @staticmethod
-    def sanitize_search_query(query: str) -> str:
+    def sanitize_search_query(query: str, max_length: Optional[int] = 100) -> str:
         """Sanitize search query"""
         if not query:
             return ""
@@ -531,7 +531,7 @@ class InputValidation:
         sanitized = re.sub(r'[\x00-\x1f\x7f]', '', query)
         sanitized = ' '.join(sanitized.split())
         # Limit length
-        return sanitized[:100]
+        return sanitized if max_length is None else sanitized[:max_length]
 
     @staticmethod
     def validate_message_text(message: Union[Message, CallbackQuery]) -> Optional[str]:
