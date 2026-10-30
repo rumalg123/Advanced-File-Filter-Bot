@@ -10,4 +10,3 @@ async def test_sendall_forged_owner_does_not_read_another_users_cached_results(m
     client.send_cached_media.assert_not_awaited()
     handler.bot.user_repo.reserve_quota_atomic.assert_not_awaited()
     assert 'another user' in query.answer.await_args.args[0].lower()
-

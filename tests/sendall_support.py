@@ -42,4 +42,3 @@ def fixture(monkeypatch):
 
 async def run(handler, client, query):
     await FileCallbackHandler.handle_sendall_callback.__wrapped__(handler, client, query)
-

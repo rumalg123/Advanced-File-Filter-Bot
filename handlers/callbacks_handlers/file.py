@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html
 from typing import Set
 
 from pyrogram import Client
@@ -486,7 +487,7 @@ class FileCallbackHandler(BaseCommandHandler):
             return
 
         files_data = cached_data.get('files', [])
-        search_query = cached_data.get('query', '')
+        search_query = html.escape(cached_data.get('query', ''))
 
         if not files_data:
             await query.answer(ErrorMessageFormatter.format_not_found("Files", plain_text=True), show_alert=True)
