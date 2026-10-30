@@ -118,7 +118,7 @@ class SubscriptionManager:
             logger.error(f"Error creating invite link for {chat_id}: {e}")
             return None
 
-    async def get_chat_link(self, client: Client, chat_id: int) -> str:
+    async def get_chat_link(self, client: Client, chat_id: int) -> Optional[str]:
         """Get chat link (invite link or @username)"""
         try:
             chat = await telegram_api.call_api(
@@ -133,11 +133,11 @@ class SubscriptionManager:
 
             # Otherwise, get invite link
             invite_link = await self.get_invite_link(client, chat_id)
-            return invite_link or f"Chat ID: {chat_id}"
+            return invite_link
 
         except Exception as e:
             logger.error(f"Error getting chat link for {chat_id}: {e}")
-            return f"Chat ID: {chat_id}"
+            return None
 
     async def build_subscription_buttons(
         self,
@@ -183,12 +183,13 @@ class SubscriptionManager:
                     logger.error(f"Error fetching channel details for {self.auth_channel}: {e}")
                     channel_name = "Updates Channel"
 
-                buttons.append([
-                    ButtonBuilder.action_button(
-                        f"📢 Join {channel_name}",
-                        url=chat_link
-                    )
-                ])
+                if chat_link:
+                    buttons.append([
+                        ButtonBuilder.action_button(
+                            f"📢 Join {channel_name}",
+                            url=chat_link
+                        )
+                    ])
             except Exception as e:
                 logger.error(f"Error creating AUTH_CHANNEL button: {e}")
 
@@ -207,12 +208,13 @@ class SubscriptionManager:
                     logger.error(f"Error fetching group details for {group_id}: {e}")
                     group_name = "Required Group"
 
-                buttons.append([
-                    ButtonBuilder.action_button(
-                        f"👥 Join {group_name}",
-                        url=chat_link
-                    )
-                ])
+                if chat_link:
+                    buttons.append([
+                        ButtonBuilder.action_button(
+                            f"👥 Join {group_name}",
+                            url=chat_link
+                        )
+                    ])
             except Exception as e:
                 logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
 
