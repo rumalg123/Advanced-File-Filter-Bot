@@ -66,12 +66,12 @@ def main():
     mode.add_argument('--status', action='store_true')
     parser.add_argument('--allow-remote', action='store_true')
     parser.add_argument('--activation-token')
-    parser.add_argument('--limit', type=int, default=1000000)
+    parser.add_argument('--limit', type=int, default=10000000)
     args = parser.parse_args()
     if args.apply and not args.activation_token:
         parser.error('--apply requires an explicit --activation-token and stopped writers')
-    if not 1 <= args.limit <= 1000000:
-        parser.error('--limit must be 1..1000000')
+    if not 1 <= args.limit <= 10000000:
+        parser.error('--limit must be 1..10000000')
     try:
         sources = source_configuration()
         if args.apply and len(sources) < 2:
@@ -82,8 +82,8 @@ def main():
         print(json.dumps(result, sort_keys=True))
         if result.get('eligible') is False:
             raise SystemExit(2)
-    except Exception:
-        parser.exit(1, 'Ownership operation failed; activation remains locked if incomplete. Inspect network, inventory conflicts and configuration without logging secrets.\n')
+    except Exception as e:
+        parser.exit(1, f'Ownership operation failed; activation remains locked if incomplete. Inspect network, inventory conflicts and configuration without logging secrets {e}.\n')
 
 
 if __name__ == '__main__':
