@@ -16,6 +16,7 @@ from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.pagination import PaginationBuilder
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import validate_callback_data
@@ -82,6 +83,7 @@ class RequestHandler(BaseHandler):
     # _create_auto_delete_task, _schedule_auto_delete, and _auto_delete_message
     # are all inherited from BaseHandler
 
+    @check_ban()
     async def handle_request_message(self, client: Client, message: Message):
         """Handle #request messages in support group"""
         if not message.text or not message.from_user:

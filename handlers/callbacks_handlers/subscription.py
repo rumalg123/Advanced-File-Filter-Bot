@@ -4,6 +4,7 @@ from pyrogram.types import CallbackQuery
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import MessageProxy
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.validators import extract_user_id, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 
@@ -28,6 +29,7 @@ class _CallbackQueryProxy:
 class SubscriptionCallbackHandler(BaseCommandHandler):
     """Handler for subscription-related callbacks"""
 
+    @check_ban()
     async def handle_checksub_callback(self, client: Client, query: CallbackQuery):
         """Handle 'Try Again' subscription check callback"""
         current_user_id = extract_user_id(query)

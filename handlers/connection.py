@@ -6,6 +6,7 @@ from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin, is_group_admin
 from handlers.base import BaseHandler
@@ -48,6 +49,7 @@ class ConnectionHandler(BaseHandler):
 
     # cleanup() method is inherited from BaseHandler
 
+    @check_ban()
     async def connect_command(self, client: Client, message: Message):
         """Handle /connect command"""
         user_id = extract_user_id(message)
@@ -138,6 +140,7 @@ class ConnectionHandler(BaseHandler):
                     quote=True
                 )
 
+    @check_ban()
     async def disconnect_command(self, client: Client, message: Message):
         """Handle /disconnect command"""
         user_id = extract_user_id(message)
@@ -200,6 +203,7 @@ class ConnectionHandler(BaseHandler):
                     quote=True
                 )
 
+    @check_ban()
     async def delete_group_filters_callback(self, client: Client, query: CallbackQuery):
         """Handle delete group filters callback"""
         user_id = extract_user_id(query)
@@ -223,6 +227,7 @@ class ConnectionHandler(BaseHandler):
                 logger.error(f"Error deleting filters: {e}")
                 await query.answer(ErrorMessageFormatter.format_error("Error deleting filters", plain_text=True), show_alert=True)
 
+    @check_ban()
     async def connections_command(self, client: Client, message: Message):
         """Handle /connections command"""
         user_id = extract_user_id(message)
@@ -282,6 +287,7 @@ class ConnectionHandler(BaseHandler):
                 quote=True
             )
 
+    @check_ban()
     async def connection_callback(self, client: Client, query: CallbackQuery):
         """Handle connection selection callback"""
         await query.answer()
@@ -359,6 +365,7 @@ class ConnectionHandler(BaseHandler):
             parse_mode=CaptionFormatter.get_parse_mode()
         )
 
+    @check_ban()
     async def connection_action_callback(self, client: Client, query: CallbackQuery):
         """Handle connection action callbacks"""
         user_id = query.from_user.id
@@ -446,6 +453,7 @@ class ConnectionHandler(BaseHandler):
             # Go back to connections list
             await self._show_connections(client, query.message, user_id, edit=True)
 
+    @check_ban()
     async def cleanup_connections_callback(self, client: Client, query: CallbackQuery):
         """Handle cleanup connections callback"""
         await query.answer("Cleaning up invalid connections...", show_alert=True)

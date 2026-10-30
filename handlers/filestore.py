@@ -7,6 +7,7 @@ from core.services.filestore import FileStoreService
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.link_parser import TelegramLinkParser
 from handlers.base import BaseHandler
 
@@ -50,6 +51,7 @@ class FileStoreHandler(BaseHandler):
 
     # cleanup() method is inherited from BaseHandler
 
+    @check_ban()
     async def link_command(self, client: Client, message: Message) -> None:
         """Generate shareable link for a file"""
         if not message.reply_to_message:
@@ -71,6 +73,7 @@ class FileStoreHandler(BaseHandler):
         else:
             await message.reply("Failed to generate link. Make sure you replied to a supported media.")
 
+    @check_ban()
     async def batch_command(self, client: Client, message: Message) -> None:
         """Generate batch link for multiple files"""
         # Parse command
@@ -122,6 +125,7 @@ class FileStoreHandler(BaseHandler):
                 "• Links are in correct format"
             )
 
+    @check_ban()
     async def premium_batch_command(self, client: Client, message: Message) -> None:
         """Generate premium-only batch link for multiple files with enhanced validation"""
         # Check if global premium is enabled first
