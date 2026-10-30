@@ -10,6 +10,7 @@ from handlers.filestore import FileStoreHandler
 from handlers.connection import ConnectionHandler
 from handlers.filter import FilterHandler
 from handlers.request import RequestHandler
+from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
 from repositories.user import User,UserStatus
 
 ROUTES=[(UserCallbackHandler,name,'callback') for name in [
@@ -22,7 +23,7 @@ ROUTES += [(ConnectionHandler,name,'message') for name in ['connect_command','di
 ROUTES += [(ConnectionHandler,name,'callback') for name in ['delete_group_filters_callback','connection_callback','connection_action_callback','cleanup_connections_callback']]
 ROUTES += [(FilterCallBackHandler,name,'callback') for name in ['handle_filter_alert_callback','handle_delall_confirm_callback','handle_delall_cancel_callback']]
 
-ROUTES += [(RequestHandler,'handle_request_message','message')]
+ROUTES += [(RequestHandler,'handle_request_message','message'),(PaginationCallbackHandler,'handle_search_pagination','callback')]
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('user_id',[42])

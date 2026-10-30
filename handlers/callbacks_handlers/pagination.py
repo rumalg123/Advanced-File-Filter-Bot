@@ -19,6 +19,7 @@ from core.utils.pagination import (
 )
 from core.utils.validators import is_private_chat
 from handlers.commands_handlers.base import BaseCommandHandler
+from handlers.decorators import check_ban
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,7 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
     PAGE_READ_TIMEOUT_SECONDS = 8.0
 
+    @check_ban()
     async def handle_search_pagination(self, client: Client, query: CallbackQuery):
         """Handle search pagination callbacks"""
         callback_user_id = query.from_user.id

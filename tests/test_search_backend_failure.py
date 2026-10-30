@@ -1,3 +1,4 @@
+from repositories.user import UserStatus
 """PH-002: a database outage must never masquerade as a valid empty search.
 
 No MongoDB/Redis instance is required. Error paths are injected at the same
@@ -252,6 +253,7 @@ async def test_pagination_backend_failure_shows_retry_alert(monkeypatch):
     from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
 
     handler = PaginationCallbackHandler(SimpleNamespace(
+        user_repo=SimpleNamespace(get_user=AsyncMock(return_value=SimpleNamespace(status=UserStatus.ACTIVE))),
         file_service=SimpleNamespace(search_files_with_access_check=AsyncMock(
             return_value=([], 0, 0, False, SEARCH_RETRY_MESSAGE)
         )),
@@ -289,6 +291,7 @@ async def test_pagination_slow_backend_returns_retry_before_callback_expiry(monk
         finally:cancelled.set()
     cache=MemoryCache()
     handler=PaginationCallbackHandler(SimpleNamespace(
+        user_repo=SimpleNamespace(get_user=AsyncMock(return_value=SimpleNamespace(status=UserStatus.ACTIVE))),
         file_service=SimpleNamespace(search_files_with_access_check=slow_read),
         cache=cache,config=SimpleNamespace(MAX_BTN_SIZE=10)))
     handler.PAGE_READ_TIMEOUT_SECONDS=.01
