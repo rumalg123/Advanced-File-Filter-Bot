@@ -24,7 +24,7 @@ async def test_old_page_button_rechecks_membership_before_reading_search_cache(m
 
 @pytest.mark.asyncio
 async def test_group_preview_pagination_preserves_the_existing_subscription_exemption(monkeypatch):
-    owner, query, cache = fixture('search#page#@qa#1#50#42', subscribed=False)
+    owner, query, cache = fixture('search#page#@aabbccdd#1#50#42', subscribed=False)
     query.message.chat.type = enums.ChatType.SUPERGROUP
     cache.get = AsyncMock(return_value=None)
     prompt = AsyncMock()
