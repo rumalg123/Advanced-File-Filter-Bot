@@ -277,8 +277,8 @@ class SearchHandler:
             await self._answer_inline_failure(query, SEARCH_RETRY_MESSAGE)
         except QueryIdInvalid:
             logger.warning('Inline query expired before its answer could be delivered')
-        except Exception:
-            logger.exception('Inline query failed before completion')
+        except Exception as e:
+            logger.error(f"Error occurred while handling inline query: {e}")
             await self._answer_inline_failure(query, ErrorMessageFormatter.format_error(
                 'Search Error', include_prefix=False, plain_text=True))
 
@@ -335,7 +335,7 @@ class SearchHandler:
 
         # Check if user is banned using validators
         if not is_admin(user_id, self.bot.config.ADMINS):
-            user = await self.bot.user_repo.get_user(user_id)
+            user = await self.bot.user_repo.get_user(user_id, use_cache=False)
             if user and user.status == UserStatus.BANNED:
                 # Get ban message from bot config or default (shortened for inline query)
                 ban_msg_template = MessageHelper.get_ban_message(self.bot.config)

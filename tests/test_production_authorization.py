@@ -44,12 +44,9 @@ def make_repo(monkeypatch, user, *, premium_disabled=False, admins=(1,)):
     [
         (True, 42, (), None),
         (False, 42, (), None),
-        (True, 1, (1,), 1),
-        (False, 1, (1,), 1),
-        (False, 42, (), 42),
     ],
 )
-async def test_banned_users_are_denied_before_every_allow_shortcut(
+async def test_banned_normal_users_are_denied_in_free_and_premium_modes(
     monkeypatch, premium_disabled, user_id, admins, owner_id
 ):
     banned = User(
@@ -74,7 +71,6 @@ async def test_banned_users_are_denied_before_every_allow_shortcut(
 @pytest.mark.parametrize("premium_disabled", [False, True])
 @pytest.mark.parametrize(("user_id", "admins", "owner_id"), [
     (42, (), None),
-    (1, (1,), 1),
 ])
 async def test_unknown_or_unavailable_user_fails_closed(
     monkeypatch, premium_disabled, user_id, admins, owner_id
@@ -155,7 +151,7 @@ async def test_single_file_and_search_early_reject_banned_user(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_banned_admin_rejected_by_decorated_callback(monkeypatch):
+async def test_banned_admin_keeps_configured_decorator_bypass(monkeypatch):
     # Using a simple callback stub avoids reliance on Telegram's constructors.
     class FakeCallback:
         def __init__(self):
@@ -184,18 +180,18 @@ async def test_banned_admin_rejected_by_decorated_callback(monkeypatch):
         await protected_handler()
 
     await protected(handler, None, callback)
-    protected_handler.assert_not_awaited()
-    callback.answer.assert_awaited_once()
-    assert callback.answer.await_args.kwargs["show_alert"] is True
+    protected_handler.assert_awaited_once()
+    callback.answer.assert_not_awaited()
+    user_repo.get_user.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_sendall_callback_ban_gate_precedes_cache_read(monkeypatch):
     # The actual method already uses @check_ban; its decorator must not
-    # bypass a banned admin and enter the cached delivery flow.
+    # bypass a banned regular user and enter the cached delivery flow.
     class FakeCallback:
         def __init__(self):
-            self.from_user = SimpleNamespace(id=1)
+            self.from_user = SimpleNamespace(id=42)
             self.answer = AsyncMock()
 
     import handlers.decorators as decorators
@@ -203,7 +199,7 @@ async def test_sendall_callback_ban_gate_precedes_cache_read(monkeypatch):
 
     user_repo = SimpleNamespace(
         get_user=AsyncMock(return_value=User(
-            id=1, name="Banned admin", status=UserStatus.BANNED
+            id=42, name="Banned regular user", status=UserStatus.BANNED
         ))
     )
     cache = SimpleNamespace(get=AsyncMock())
@@ -274,3 +270,14 @@ def test_callback_and_deeplink_file_flows_still_use_central_access():
         FileCallbackHandler.handle_sendall_callback,
     ):
         assert "can_retrieve_file" in inspect.getsource(handler)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('missing',[False,True])
+@pytest.mark.parametrize('user_id,admins,owner_id',[(1,(1,),None),(42,(),42)])
+async def test_configured_admin_and_explicit_owner_keep_access_bypass(monkeypatch,missing,user_id,admins,owner_id):
+    user=None if missing else User(id=user_id,name='Privileged',status=UserStatus.BANNED)
+    repo=make_repo(monkeypatch,user,premium_disabled=False,admins=admins)
+    allowed,_=await repo.can_retrieve_file(user_id,owner_id)
+    assert allowed
+    repo.get_user.assert_not_awaited()

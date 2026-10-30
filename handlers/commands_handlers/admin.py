@@ -13,6 +13,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator
+from core.database.errors import USER_ACCESS_RETRY_MESSAGE
 from core.utils.telegram_api import telegram_api
 from core.cache.monitor import CacheMonitor
 from core.concurrency.semaphore_manager import semaphore_manager
@@ -555,7 +556,12 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         # Ban the user
-        success, msg, user_data = await self.bot.user_repo.ban_user(target_user_id, reason)
+        try:
+            success, msg, user_data = await self.bot.user_repo.ban_user(target_user_id, reason)
+        except Exception as e:
+            logger.error(f"Error occurred while banning user: {e}")
+            await message.reply_text(ErrorMessageFormatter.format_error(USER_ACCESS_RETRY_MESSAGE))
+            return
 
         await message.reply_text(msg)
 
@@ -605,7 +611,12 @@ class AdminCommandHandler(BaseCommandHandler):
             return
 
         # Unban the user
-        success, msg, user_data = await self.bot.user_repo.unban_user(target_user_id)
+        try:
+            success, msg, user_data = await self.bot.user_repo.unban_user(target_user_id)
+        except Exception as e:
+            logger.error(f"Error occurred while unbanning user: {e}")
+            await message.reply_text(ErrorMessageFormatter.format_error(USER_ACCESS_RETRY_MESSAGE))
+            return
 
         await message.reply_text(msg)
 
@@ -1232,7 +1243,8 @@ class AdminCommandHandler(BaseCommandHandler):
                     f"{ErrorMessageFormatter.format_error('Unexpected error occurred')}",
                     parse_mode=CaptionFormatter.get_parse_mode()
                 )
-            except Exception:
+            except Exception as exc:
+                logger.error(f"Failed to edit status message after shell command error: {exc}")
                 await message.reply_text(
                     f"🐚 <b>Shell Command Error</b>\n\n"
                     f"<b>Error:</b> {html.escape(str(e))}\n\n"

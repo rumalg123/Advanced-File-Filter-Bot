@@ -11,6 +11,7 @@ from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import cache_premium_status
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.base import BaseRepository, AggregationMixin
+from core.database.errors import USER_ACCESS_RETRY_MESSAGE
 
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
@@ -177,8 +178,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             logger.error(f"Error creating user {user_id}: {e}")
             return False
 
-    async def get_user(self, user_id: int) -> Optional[User]:
-        """Get user by ID with proper TTL"""
+    async def get_user(self, user_id: int, *, use_cache: bool = True) -> Optional[User]:
+        """Read cached profile data or authoritative state for authorization.
+
+        Strict reads bypass Redis and propagate database failures, so callers
+        can distinguish a missing user from unavailable authorization state.
+        """
+        if not use_cache:
+            collection = await self.get_collection()
+            data = await self.db_pool.execute_with_retry(collection.find_one, {'_id': user_id})
+            return self._dict_to_entity(data) if data is not None else None
         cache_key = CacheKeyGenerator.user(user_id)
 
         # Try cache first
@@ -208,7 +217,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def ban_user(self, user_id: int, reason: str = "No reason") -> Tuple[bool, str, Optional[User]]:
         """Ban a user"""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, ErrorMessageFormatter.format_not_found("User") + " in database. User must have used the bot before.", None
             # Check if already banned
@@ -242,7 +251,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def unban_user(self, user_id: int) -> Tuple[bool, str, Optional[User]]:
         """Unban a user"""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, ErrorMessageFormatter.format_not_found("User") + " in database.", None
 
@@ -804,12 +813,26 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                        count, user_id, day_key)
         return False
 
+    async def can_receive_content(self, user_id: int, owner_id: Optional[int] = None) -> bool:
+        """Check status while preserving configured admin/owner exemptions."""
+        if is_admin(user_id, _channel_config.get_admin_list() or []) or user_id == owner_id:
+            return True
+        user = await self.get_user(user_id, use_cache=False)
+        return user is not None and user.status != UserStatus.BANNED
+
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""
-        # PH-001: A ban overrides premium-disabled mode and administrator/owner
-        # quota exemptions. All search, file, batch and deep-link paths call
-        # this method, so the ban check must happen before every allow shortcut.
-        user = await self.get_user(user_id)
+        # Operator policy: configured admins and the explicit owner retain
+        # their access bypass. Free/premium mode never exempts ordinary bans.
+        if is_admin(user_id, _channel_config.get_admin_list() or []):
+            return True, "Admin access"
+        if owner_id is not None and user_id == owner_id:
+            return True, "Owner access"
+        try:
+            user = await self.get_user(user_id, use_cache=False)
+        except Exception:
+            logger.warning("User access check unavailable for %s", user_id, exc_info=True)
+            return False, USER_ACCESS_RETRY_MESSAGE
         if user is None:
             # Fail closed on missing/unavailable user state, even when premium
             # is disabled. /start creates the user before delivering links.
@@ -820,14 +843,6 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # Disabling premium removes quota enforcement, never status checks.
         if _feature_config.disable_premium:
             return True, "Unlimited access (Premium disabled)"
-
-        # Admin/owner status bypasses quotas, but never a ban.
-        admin_list = _channel_config.get_admin_list()
-        if is_admin(user_id, admin_list or []):
-            return True, "Admin access"
-
-        if owner_id is not None and user_id == owner_id:
-            return True, "Owner access"
 
         # Check premium status
         is_premium, premium_msg = await self.check_and_update_premium_status(user)
@@ -986,11 +1001,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         Track a user request and apply limits
         Returns: (is_allowed, message, should_ban, should_log_warning)
         """
-        user = await self.get_user(user_id)
+        if is_admin(user_id, _channel_config.get_admin_list() or []):
+            return True, "Admin access", False, False
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             # Create user if doesn't exist
             await self.create_user(user_id, user_name)
-            user = await self.get_user(user_id)
+            user = await self.get_user(user_id, use_cache=False)
 
         if user and user.status == UserStatus.BANNED:
             return (
@@ -1184,7 +1201,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def auto_ban_for_request_abuse(self, user_id: int) -> Tuple[bool, Optional[User]]:
         """Auto-ban user for request abuse"""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, None
 
