@@ -358,10 +358,20 @@ Treat these as deployment/bootstrap settings and manage them in the environment:
 - `API_ID`, `API_HASH`, `BOT_TOKEN`, `SESSION`
 - `DATABASE_URI`, `DATABASE_NAME`, `DATABASE_URIS`, `DATABASE_NAMES`
 - `REDIS_URI`
-- `PROCESSING_*`, `CONCURRENCY_*`
+- `PROCESSING_*`, except the two Mongo-backed durable-processing switches below
+- `CONCURRENCY_*`
 - Update-wrapper settings such as `AUTO_UPDATE`
 
 Treat feature flags, limits, messages, channel IDs, and most presentation settings as Mongo-backed after their first seed. `/bsetting` explicitly reminds the admin to restart because handlers, command menus, repositories, worker counts, and optional indexes are constructed during startup.
+
+`PROCESSING_DURABLE_INDEXING` and `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` are also
+Mongo-backed switches available through `/bsetting`; their environment values
+seed missing settings only. Connection credentials stay protected from bot edits
+and resets. Secondary bot admins cannot operate the primary admin's settings
+controls. Complete prompted text edits in the bot's private chat; `/cancel`
+discards an unfinished edit. Closing an older menu preserves an edit opened from
+a different menu. Saved captions and templates display as literal text without
+changing the stored formatting.
 
 ### Environment precedence
 
@@ -896,7 +906,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,016 tests** with zero failures or skips, plus **19 live ban/unban checks**, including restart with empty Redis and retained MongoDB. Configured admin/owner exemptions and the operator's logging edits are preserved. Source-matched coverage is **69.37% lines and 56.00% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,050 tests** with zero failures or skips, plus **18 live settings checks**, including owner/secondary-admin permissions and restart with empty Redis and retained MongoDB. Source-matched coverage is **69.53% lines and 56.40% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

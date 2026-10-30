@@ -422,6 +422,14 @@ flowchart LR
 
 Environment changes do not overwrite an existing Mongo-backed setting. Use `/bsetting`, then restart, for managed runtime settings. Keep Telegram credentials and database/Redis connection details in the deployment environment because they are required before settings synchronization.
 
+Only the primary bot admin can operate settings callbacks. Connection settings
+cannot be edited or reset through the bot. Edit dialogs are owned by a message,
+chat and session token: closing an older menu or finishing a delayed operation
+cannot cancel a newer dialog. If delivery of an edit prompt fails, its session is
+removed so the next owner message is not captured invisibly. Clearing Redis
+discards unfinished dialogs; saved Mongo-backed settings survive and are loaded
+on restart. See the [bounded settings QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-6--bot-settings-2026-10-30).
+
 ## 11. Multi-database routing and circuit breaker
 
 ```mermaid

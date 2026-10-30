@@ -147,12 +147,12 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-30
 
-The latest bounded round passed **1,016 tests with zero failures or skips** and
-**19 live ban/unban checks** on wzgram 3.1.5, including a bot recreation with
-empty Redis and retained MongoDB. Configured admin/owner bypasses and the
-operator's logging changes are preserved. Source-matched coverage is
-**69.37% lines, 56.00% branches, 66.05% combined**. The
-[current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
+The latest bounded round passed **1,050 tests with zero failures or skips** and
+**18 live settings checks** on wzgram 3.1.5, including primary/secondary admin
+permissions and a bot recreation with empty Redis and retained MongoDB. Four
+settings fixes passed; admin/owner ban bypasses and operator logging are preserved.
+Source-matched coverage is **69.53% lines, 56.40% branches, 66.26% combined**.
+The [current QA report](docs/qa/coverage-expansion/STATUS.md) records this round's
 scope, configuration, cleanup and earlier feature/multidatabase evidence.
 Whole-bot 100% coverage and production operational gates remain open. Earlier
 dated counts remain historical; feature source defaults remain off.

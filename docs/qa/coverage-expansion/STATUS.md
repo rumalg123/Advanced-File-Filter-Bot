@@ -1,7 +1,7 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [bounded ban/unban QA round](#bounded-qa-round-5--ban-and-unban-2026-10-30),
-**1,016 tests passed**, **69.37% lines / 56.00% branches / 66.05% combined**.
+Latest continuation: [bounded settings QA round](#bounded-qa-round-6--bot-settings-2026-10-30),
+**1,050 tests passed**, **69.53% lines / 56.40% branches / 66.26% combined**.
 Configured admin/owner bypasses and the operator's logging changes are preserved.
 Whole-bot 100% remains open. This round is complete; wait for the operator's
 next `continue` before starting another feature.
@@ -686,7 +686,8 @@ The run also exercised Telegram FloodWait retries. Opening `/bsetting` logged a
 handled `MESSAGE_ID_INVALID` when it tried to edit the incoming command; its
 fallback reply displayed the menu, the setting persisted and restart applied it.
 That existing menu fallback is recorded for the next settings QA round; this
-round does not claim a clean log or complete settings-menu coverage.
+round does not claim a clean log or complete settings-menu coverage. The next
+round resolved that routine fallback with BUG-090; its evidence follows below.
 
 Coverage includes **17,776 statements, 5,880 branches and all 121 tracked
 application/operator Python files**, including unimported modules:
@@ -709,3 +710,78 @@ All recorded QA messages and owned containers, volumes and networks were removed
 The two original server services remain running. No production server or remote
 Atlas database was accessed. No product features or schema migrations were added.
 Stop here until the next `continue`.
+
+
+## Bounded QA round 6 — bot settings (2026-10-30)
+
+**Passed and complete for this round.** Final application source `3c676f2`.
+This round covers `/bsetting`, primary-owner permissions, settings controls and
+edit-dialog lifecycle. Configured admin/owner ban/quota bypasses and all prior
+operator-added diagnostic lines remain preserved. Four fixes are committed
+separately:
+
+| Issue | Commit | Result |
+|---|---|---|
+| BUG-090 | `9624114` | Reply directly to `/bsetting`; edit existing bot menus on navigation, ignore unchanged-message responses, and retain a fallback for uneditable bot messages. |
+| BUG-091 | `04c1d3a` | Reject protected edits/resets, invalid boolean controls and malformed pages; validate removed/locked settings before capturing the next owner message. |
+| BUG-092 | `a8330a0` | Display saved/default values and policy notes literally; preserve stored captions/templates unchanged. |
+| BUG-093 | `3c676f2` | Closing an older menu cannot cancel another dialog; failed or cancelled prompts clean up only their own session token. |
+
+The initial 31 focused cases reported **22 failures and nine passes** before
+these fixes. Three additional session-boundary cases were then added. The full
+suite now passes **1,050 tests, zero failures/errors/skips**, with 22 existing
+warnings and **34 new cases**. They cover incoming-command versus bot-menu
+behavior, unchanged and uneditable menus, protected settings across mutation
+controls, malformed/removed controls, primary/secondary/ordinary-user permissions,
+literal string/list rendering, message/chat ownership and session token races.
+Injected failed/cancelled prompt delivery leaves no hidden edit session.
+Compilation, Ruff F821/F822/F823, local Markdown links/anchors and whitespace
+checks pass.
+
+**18 live Telegram checks passed** using both supplied accounts and declared QA
+group/log destinations. The primary owner opened private and group menus; normal
+users could neither open settings nor operate the owner's group controls. Normal
+callback answers and repeat No-op navigation created no duplicate menu. Protected
+connection settings had no mutation controls; the single-source global-owner
+registry toggle remained locked. A boolean value persisted with a restart
+reminder. Integer zero failed validation without a MongoDB write; valid input
+saved as an integer and its source message was deleted. `/cancel` discarded a
+dialog without writing. Closing an older menu left the newer edit usable.
+
+A caption containing literal markup, ampersands, quotes and an existing filename
+placeholder was stored unchanged, displayed literally and reopened for editing.
+Both special auto-delete/start template prompts rendered. The owner saved a
+second admin ID through the list editor; the resulting list contained integers.
+An unfinished edit was then left open while the bot was recreated with **both
+owned Redis databases empty and the same disposable MongoDB**. The saved integer,
+boolean, caption and admin list loaded into the new runtime. The unfinished edit
+did not overwrite the saved value. The second account was now a configured
+secondary admin and still could not open or operate primary-owner settings. The
+primary owner retained access and reset a saved value to its default. See the
+[sanitized evidence](round6-bsettings.json).
+
+Telegram rejected one early harness request for a page callback absent from its
+issued keyboard before the bot could dispatch it. The harness was corrected to
+click existing controls, and all owned posts/resources from that attempt were
+cleaned. The successful run logged the expected rejected-integer validation
+exception, and **no routine settings-menu edit failure**. Forged protected
+callbacks, malformed controls, unchanged-menu server responses, prompt failures
+and token races use injected automated checks. Live edits used private chat;
+full 60-second expiry, every combination of all 67 settings, cross-chat owner
+edits, multi-process timing and representative production load remain open.
+
+Coverage includes **17,813 statements, 5,892 branches and all 121 tracked
+application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 59.33% | 46.06% | 56.03% |
+| Source-matched automated + live | 69.53% | 56.40% | 66.26% |
+
+All three new shards match start/end/current source hashes. Historical shards
+contribute only unchanged-file evidence; no old arcs are remapped to edited
+source. **Whole-bot 100% remains open.** All recorded QA messages and owned
+containers, volumes and networks were removed. The two original server services
+remain running. No production server, remote Atlas database, deployment `.env`
+or production limit was changed. No new product features or schema migrations
+were added. Stop here until the next `continue`.
