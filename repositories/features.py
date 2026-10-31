@@ -930,7 +930,10 @@ class FeatureRepository:
             {
                 'user_id': user_id,
                 'normalized_query': normalize_feature_text(query),
-                'status': 'pending',
+                'status': {'$in': [
+                    'pending', 'processing:completed', 'processing:rejected',
+                    'processing:available', 'processing:unavailable',
+                ]},
             }
         )
 
@@ -958,14 +961,11 @@ class FeatureRepository:
             await self.db_pool.execute_with_retry(collection.insert_one, document)
             return document, True
         except DuplicateKeyError:
-            existing = await self.db_pool.execute_with_retry(
-                collection.find_one,
-                {
-                    'user_id': user_id,
-                    'normalized_query': normalized_query,
-                    'status': 'pending',
-                }
-            )
+            existing = await self.find_pending_content_request(user_id, query)
+            if existing is None:
+                existing = await self.get_content_request(user_id, message_id)
+            if existing is None:
+                raise
             return existing, False
 
     async def update_content_request(
@@ -974,7 +974,8 @@ class FeatureRepository:
         collection = await self._collection("content_requests")
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
-            {'_id': f"{user_id}:{message_id}", 'status': 'pending'},
+            {'_id': f"{user_id}:{message_id}", 'status': 'pending',
+             'target_status': {'$exists': False}},
             {
                 '$set': {
                     'status': status,
@@ -1004,10 +1005,13 @@ class FeatureRepository:
         collection = await self._collection("content_requests")
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
-            {'_id': f"{user_id}:{message_id}", 'status': 'pending'},
+            {'_id': f"{user_id}:{message_id}", 'status': 'pending',
+             'target_status': {'$exists': False}},
             {
                 '$set': {
-                    'status': f"processing:{target_status}",
+                    # Stay in the existing pending-only unique index while
+                    # notification delivery is in flight.
+                    'status': 'pending',
                     'target_status': target_status,
                     'handled_by': admin_id,
                     'updated_at': datetime.now(UTC),
@@ -1024,7 +1028,10 @@ class FeatureRepository:
             collection.update_one,
             {
                 '_id': f"{user_id}:{message_id}",
-                'status': f"processing:{target_status}",
+                '$or': [
+                    {'status': 'pending', 'target_status': target_status},
+                    {'status': f"processing:{target_status}"},
+                ],
             },
             {
                 '$set': {
@@ -1045,7 +1052,10 @@ class FeatureRepository:
             collection.update_one,
             {
                 '_id': f"{user_id}:{message_id}",
-                'status': f"processing:{target_status}",
+                '$or': [
+                    {'status': 'pending', 'target_status': target_status},
+                    {'status': f"processing:{target_status}"},
+                ],
             },
             {
                 '$set': {'status': 'pending', 'updated_at': datetime.now(UTC)},

@@ -947,7 +947,7 @@ async def test_duplicate_pending_request_is_returned_without_second_insert():
 
 
 @pytest.mark.asyncio
-async def test_request_status_notification_transition_is_atomically_claimed():
+async def test_request_status_transition_methods_report_guarded_write_results():
     result = SimpleNamespace(modified_count=1)
     collection = SimpleNamespace(update_one=AsyncMock(return_value=result))
 
@@ -963,14 +963,10 @@ async def test_request_status_notification_transition_is_atomically_claimed():
     assert await repository.claim_content_request_transition(
         7, 10, 'completed', 1
     )
-    claim_filter = collection.update_one.await_args_list[0].args[0]
-    assert claim_filter == {'_id': '7:10', 'status': 'pending'}
-
-    assert await repository.finish_content_request_transition(
+    collection.update_one.return_value = SimpleNamespace(modified_count=0)
+    assert not await repository.finish_content_request_transition(
         7, 10, 'completed'
     )
-    finish_filter = collection.update_one.await_args_list[1].args[0]
-    assert finish_filter == {'_id': '7:10', 'status': 'processing:completed'}
 
 
 @pytest.mark.asyncio

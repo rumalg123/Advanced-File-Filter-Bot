@@ -131,6 +131,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-117 | Medium | Fixed | Request callback validation | Extra fields, malformed IDs, out-of-range IDs and the wrong callback prefix can raise handler errors or notify a user for invalid request data. | Validate the exact callback structure and positive bounded identifiers before database/Telegram work; keep configured-admin authorization. |
 
+| BUG-118 | High | Fixed | Tracked request idempotency and in-flight state | Claiming removes the pending unique-index guard, replayed source IDs can return no record or consume another slot, and read/claim/finalization failures can notify without a claim or present false completion. | Keep claimed records in the pending index with a guarded target; retain legacy processing compatibility, resolve source-ID replays, stop unclaimed delivery, and report unresolved finalization honestly. Existing tracked cards remain guarded with new tracking disabled. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight

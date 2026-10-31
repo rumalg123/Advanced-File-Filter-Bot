@@ -14,7 +14,7 @@ def request_fixture(tracking=True):
         find_pending_content_request=AsyncMock(return_value=None),
         create_content_request=AsyncMock(return_value=({'query':'Missing title'}, True)),
         update_content_request=AsyncMock(return_value=True),
-        get_content_request=AsyncMock(return_value={'status':'pending'}),
+        get_content_request=AsyncMock(return_value=None),
         claim_content_request_transition=AsyncMock(return_value=True),
         finish_content_request_transition=AsyncMock(return_value=True),
         rollback_content_request_transition=AsyncMock(return_value=True),
@@ -36,6 +36,7 @@ def request_fixture(tracking=True):
 
 def callback_fixture(data='req_action#done#7#10', admin_id=1, tracking=True):
     handler, _, client = request_fixture(tracking)
+    handler.bot.feature_repo.get_content_request.return_value={'status':'pending'}
     query = SimpleNamespace(data=data, from_user=SimpleNamespace(id=admin_id),
                             answer=AsyncMock(),
                             message=SimpleNamespace(text='New request', edit_text=AsyncMock(),

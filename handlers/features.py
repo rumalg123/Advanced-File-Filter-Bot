@@ -964,8 +964,8 @@ class FeatureHandler(BaseHandler):
         lines = ["📮 <b>Your requests</b>"]
         for request in requests:
             status = request['status']
-            if status.startswith('processing:'):
-                status = status.split(':', 1)[1]
+            if status.startswith('processing:') or request.get('target_status'):
+                status = 'update in progress'
             lines.append(
                 f"• <code>{html.escape(request['query'])}</code> — "
                 f"<b>{html.escape(status.title())}</b>"

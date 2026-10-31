@@ -113,6 +113,11 @@ class RequestHandler(BaseHandler):
             and feature_service.enabled('FEATURE_REQUEST_TRACKING')
         ):
             try:
+                existing = await self.bot.feature_repo.get_content_request(user_id, message.id)
+                if existing:
+                    return await message.reply_text(
+                        "📮 This request has already been recorded. Use /myrequests to check it."
+                    )
                 pending = await self.bot.feature_repo.find_pending_content_request(
                     user_id, keyword
                 )
@@ -396,13 +401,10 @@ class RequestHandler(BaseHandler):
         }
         target_status = status_map[action]
 
-        feature_service = getattr(self.bot, 'feature_service', None)
-        tracking_enabled = bool(
-            feature_service
-            and feature_service.enabled('FEATURE_REQUEST_TRACKING')
-        )
+        # Existing tracked cards retain their guard even if new tracking is off.
+        tracking_repository = getattr(self.bot, 'feature_repo', None)
         transition_claimed = False
-        if tracking_enabled:
+        if tracking_repository is not None:
             try:
                 tracked_request = await self.bot.feature_repo.get_content_request(
                     user_id, msg_id
@@ -413,11 +415,15 @@ class RequestHandler(BaseHandler):
                     )
                     if not transition_claimed:
                         return await query.answer(
-                            "This request has already been handled.", show_alert=True
+                            "This request has already been handled or an update is in progress.", show_alert=True
                         )
             except Exception as e:
-                # Legacy request processing remains available if optional storage fails.
+                # Sending without the claim could duplicate an in-flight update.
                 logger.warning(f"Could not claim tracked request transition: {e}")
+                return await query.answer(
+                    "Request tracking is temporarily unavailable. Please try again.",
+                    show_alert=True
+                )
 
         # Try to send PM first
         notification_sent = False
@@ -476,11 +482,18 @@ class RequestHandler(BaseHandler):
 
         if transition_claimed:
             try:
-                await self.bot.feature_repo.finish_content_request_transition(
+                finished = await self.bot.feature_repo.finish_content_request_transition(
                     user_id, msg_id, target_status
                 )
             except Exception as e:
                 logger.warning(f"Could not finish tracked request transition: {e}")
+                finished = False
+            if not finished:
+                return await query.answer(
+                    "Requester notified, but tracking could not be finalized. "
+                    "Check the request before retrying.",
+                    show_alert=True
+                )
 
         # Update admin message
         await query.message.edit_reply_markup(None)
