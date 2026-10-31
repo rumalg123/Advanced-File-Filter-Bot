@@ -10,6 +10,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.services.search_results import SearchResultsService
 from core.utils.button_builder import ButtonBuilder
 from core.utils.error_formatter import ErrorMessageFormatter
@@ -194,6 +195,9 @@ class RequestHandler(BaseHandler):
         # Normal request processing continues here
         search_results = await self._search_for_request(client, message, keyword, user_id)
 
+        if search_results is None:
+            return
+
         if search_results:
             logger.debug(f"Search results found for request: {keyword}")
         else:
@@ -243,7 +247,7 @@ class RequestHandler(BaseHandler):
         try:
             # Don't search if shutting down
             if self._shutdown.is_set():
-                return False
+                return None
 
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
@@ -255,7 +259,11 @@ class RequestHandler(BaseHandler):
                 limit=page_size
             )
 
-            if has_access and files:
+            if not has_access:
+                await message.reply_text(html.escape(access_reason or SEARCH_RETRY_MESSAGE))
+                return None
+
+            if files:
                 # Send search results using centralized service
                 search_sent = await self.search_results_service.send_results(
                     client=client,
@@ -274,11 +282,13 @@ class RequestHandler(BaseHandler):
                 if search_sent:
                     return search_sent
                 else:
-                    return False
+                    await message.reply_text(SEARCH_RETRY_MESSAGE)
+                    return None
             return False
         except Exception as e:
             logger.error(f"Error searching for request: {e}")
-            return False
+            await message.reply_text(SEARCH_RETRY_MESSAGE)
+            return None
 
 
     async def _forward_request_to_admins(self, client: Client, message: Message, keyword: str):

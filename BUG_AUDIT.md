@@ -125,6 +125,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-113 | Medium | Fixed | Normalized variant formats | Indexed filenames have dots replaced by spaces, so MKV/MP4/etc. suffixes split related variants. Generic dotted-suffix removal also discards real title words or years. | Remove recognized terminal formats in raw/normalized filenames while preserving unknown dotted words, years and every original file. |
 | BUG-114 | Medium | Fixed | Variant title collisions | Global encode-noise stripping removes real title words such as Proper/HDR/SDR, merging unrelated titles under one heading. | Preserve the title prefix and strip technical release noise only after a recognizable metadata/encoding boundary; keep year and episode distinctions. |
 
+| BUG-115 | High | Fixed | Missing-content search outcome | Request handling treats backend failures, access denials and failed result delivery as an empty search and forwards a false missing-content request. | Distinguish completed empty results from incomplete/denied lookups; return safe feedback and stop before creating or forwarding a request. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
