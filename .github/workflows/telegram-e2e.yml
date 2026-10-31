@@ -1,0 +1,159 @@
+name: Telegram QA E2E
+
+# Only trusted commits merged into QA may run with live Telegram sessions.
+# Fork pull requests and pull_request_target must never access these secrets.
+on:
+  push:
+    branches: [QA]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialized access to two fixed Telegram QA accounts.
+# GitHub may replace an older pending run with a newer pending run.
+concurrency:
+  group: telegram-qa-live
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: QA workflow bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Compile QA scripts without secrets
+        run: python3 -m py_compile scripts/qa_ci_guard.py tests/live_telegram/test_smoke.py
+      - name: Record readiness
+        shell: bash
+        env:
+          QA_LIVE_ENABLED: ${{ vars.QA_LIVE_ENABLED }}
+        run: |
+          if [ "$QA_LIVE_ENABLED" = "true" ]; then
+            echo "Real Telegram smoke job is enabled." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Real Telegram smoke job is disabled. Set repository Actions variable QA_LIVE_ENABLED=true after review." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  live-smoke:
+    name: Authenticated Telegram smoke
+    needs: bootstrap
+    if: ${{ github.ref == 'refs/heads/QA' && vars.QA_LIVE_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: telegram-qa
+      deployment: false
+    permissions:
+      contents: read
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+      redis-cache:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      QA_LIVE_ENABLED: ${{ vars.QA_LIVE_ENABLED }}
+      ENVIRONMENT: staging
+      STAGING_OPERATOR_ACK: I_HAVE_VERIFIED_ISOLATION
+      API_ID: ${{ vars.QA_API_ID }}
+      API_HASH: ${{ secrets.QA_API_HASH }}
+      BOT_TOKEN: ${{ secrets.QA_BOT_TOKEN }}
+      SESSION: ci_qa_staging
+      ADMINS: ${{ vars.QA_OWNER_ID }}
+      QA_OWNER_ID: ${{ vars.QA_OWNER_ID }}
+      QA_ADMIN_SESSION: ${{ secrets.QA_ADMIN_SESSION }}
+      QA_USER_SESSION: ${{ secrets.QA_USER_SESSION }}
+      QA_BOT_USERNAME: ${{ vars.QA_BOT_USERNAME }}
+      QA_GROUP_ID: ${{ vars.QA_GROUP_ID }}
+      LOG_CHANNEL: ${{ vars.QA_LOG_CHANNEL_ID }}
+      CHANNELS: ${{ vars.QA_CHANNEL_ID }}
+      DATABASE_URI: mongodb://127.0.0.1:27017/
+      DATABASE_NAME: staging_filefilter
+      DATABASE_URIS: ""
+      DATABASE_NAMES: ""
+      REDIS_URI: redis://127.0.0.1:6379/0
+      REDIS_STATE_URI: ""
+      AUTO_UPDATE: "false"
+      UPDATE_ON_START: "false"
+      PUBLIC_FILE_STORE: "false"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout reviewed QA commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Validate trusted QA branch and resource isolation
+        shell: bash
+        run: python3 scripts/qa_ci_guard.py
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install bot and pytest
+        shell: bash
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip check
+
+      - name: Start disposable QA bot
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup python -u bot.py > "$RUNNER_TEMP/telegram-qa-bot.log" 2>&1 < /dev/null &
+          echo "$!" > "$RUNNER_TEMP/telegram-qa-bot.pid"
+
+      - name: Await Telegram bot and backing services
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --show-error --max-time 3               http://127.0.0.1:8000/ready > /dev/null 2>&1; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/telegram-qa-bot.pid")" 2>/dev/null; then
+              echo "::error::QA bot exited before becoming ready. Private bot logs will not be uploaded."
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::QA bot readiness timed out. Check the QA credentials and chat access privately."
+          exit 1
+
+      - name: Exercise two real Telegram user sessions
+        shell: bash
+        run: |
+          python -m pytest -q -m telegram_e2e             tests/live_telegram             --tb=short --show-capture=no
+
+      - name: Stop QA bot and erase private local logs
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/telegram-qa-bot.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/telegram-qa-bot.pid")" 2>/dev/null || true
+          fi
+          rm -f "$RUNNER_TEMP/telegram-qa-bot.pid" "$RUNNER_TEMP/telegram-qa-bot.log"
