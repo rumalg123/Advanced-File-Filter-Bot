@@ -1,14 +1,15 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-10-31):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **1,335 tests passed, zero failed/skipped** on wzgram 3.1.6. The bounded
-> grouping/variant-delivery round passed **15 live checks with three accounts**,
-> including private/group paging, exact variant selection, foreign-user rejection,
-> bulk quota settlement and retained-Redis toggles. BUG-113/114 are fixed in
-> separate commits. Admin/owner bypasses and operator diagnostics are preserved.
-> Source-matched coverage: **71.55% lines, 59.10% branches, 68.45% combined**.
-> Whole-bot 100% and production acceptance remain open; `In review` still applies
-> to review/merge and rollout gates. No production deployment occurred.
+> **1,388 tests passed, zero failed/skipped** on wzgram 3.1.6. The bounded
+> request-lifecycle round passed **17 live checks with three accounts**, covering
+> all four admin outcomes, duplicates/replays, owned history, real blocked-PM
+> fallback, empty-Redis recovery and tracking-off behavior. BUG-115–118 are fixed
+> in separate commits. Admin/owner bypasses and operator diagnostics remain.
+> Source-matched coverage: **71.88% lines, 59.56% branches, 68.80% combined**.
+> Interrupted notification claims require review before reconciliation. Whole-bot
+> 100% and production acceptance remain open; `In review` still applies to
+> review/merge and rollout gates. No production deployment occurred.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The

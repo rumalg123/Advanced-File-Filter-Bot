@@ -1010,7 +1010,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,335 tests** with zero failures or skips, plus **15 live grouping/variant-delivery checks** with three QA accounts on wzgram 3.1.6. Exact file selection, private/group paging, foreign-user rejection, bulk quota settlement and retained-Redis flag changes passed. Source-matched coverage is **71.55% lines and 59.10% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,388 tests** with zero failures or skips, plus **17 live request-lifecycle checks** with three QA accounts on wzgram 3.1.6. All four admin outcomes, owned history, duplicate/replay guards, blocked-PM group fallback and Redis-reset recovery passed. Source-matched coverage is **71.88% lines and 59.56% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 

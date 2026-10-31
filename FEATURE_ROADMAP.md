@@ -11,13 +11,13 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-10-31
 
-The latest bounded round passed **1,335 tests with zero failures or skips** and
-**15 live grouping/variant-delivery checks** using three QA accounts on wzgram
-3.1.6. BUG-113/114 fix normalized container formats and preserve meaningful
-title words. Private/group paging, exact variant selection, cross-user ownership,
-bulk delivery/quota settlement and retained-Redis flag changes passed.
-Admin/owner bypasses and operator diagnostics are preserved. Source-matched
-coverage is **71.55% lines, 59.10% branches, 68.45% combined**.
+The latest bounded round passed **1,388 tests with zero failures or skips** and
+**17 live request-lifecycle checks** using three QA accounts on wzgram 3.1.6.
+BUG-115–118 fix failed-search forwarding, request HTML/length handling, callback
+validation and notification/replay guards. All four admin outcomes, owned
+history, blocked-PM group fallback, empty-Redis recovery and tracking-off behavior
+passed. Admin/owner bypasses and operator diagnostics are preserved.
+Source-matched coverage is **71.88% lines, 59.56% branches, 68.80% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
@@ -57,7 +57,7 @@ counts remain historical; no feature defaults or production limits changed.
 | FEAT-005 | Implemented (off) | File reporting and health workflow | `FEATURE_FILE_REPORTS` | Users can report broken, incorrect, duplicate, or poor-quality files; repeat reports are deduplicated and admins can list/resolve them. |
 | FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Private `/suggest` uses successful history validated against current media/filter/caption rules, excludes normalized exact queries, enforces owned references and stays within Telegram callback limits. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30); a dedicated inline suggestion UI is outside this implemented command scope. |
 | FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Page-local headings group likely filename variants while retaining every file button. Known container suffixes normalize across formats; meaningful title prefixes remain distinct. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31), including three accounts, exact variant delivery, paging, bulk quotas and retained-Redis toggles. Inline files remain individual. |
-| FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users can view their requests and statuses, duplicate requests are detected, and completion/rejection transitions are persisted and notified idempotently. |
+| FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users see owned request history; pending/in-flight duplicates and source replays are suppressed. Stored admin transitions retain notification guards through restarts and tracking-off changes. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31), including all four outcomes and blocked-PM fallback. Ambiguous interrupted notifications require review before reconciliation. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
 | FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including safe rendered reasons and feature-toggle cache recovery. |
 | FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view currently unresolved zero-result searches, popular searches, report counts, request demand, and index/file-health summaries; successful/later-indexed matches self-heal through bounded current-search validation. |

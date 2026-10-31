@@ -1,8 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [duplicate grouping and variant delivery](#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31),
-**1,335 tests passed**, **71.55% lines / 59.10% branches / 68.45% combined**.
-Next bounded round: request tracking lifecycle and admin status transitions.
+Latest continuation: [request tracking and admin transitions](#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31),
+**1,388 tests passed**, **71.88% lines / 59.56% branches / 68.80% combined**.
+Next bounded round: admin content dashboard and zero-result search analytics.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -1421,3 +1421,113 @@ without errors. Owned containers, anonymous volumes and networks were removed;
 the two original server services remain running untouched. Final bot logs show
 one handled FloodWait and no error/unhandled traceback. Stop here until `continue`.
 **Next bounded scope: request tracking lifecycle and admin status transitions.**
+
+
+## Bounded QA round 13 — request tracking and admin transitions (2026-10-31)
+
+**Completed:** 1,388 tests passed, zero failures/errors/skips, with the same 22
+existing warnings. The 53 new cases cover request search outcomes, literal HTML
+and display bounds, callback validation, notification failures, source replays,
+legacy compatibility and transition concurrency. Twelve new cases use real
+MongoDB, including eight competing claims for one request and duplicate creation
+while delivery is in flight. All 105 related tests passed. Compilation,
+undefined-name Ruff and dependency consistency passed. Source: `d994af7`;
+[sanitized evidence](round13-requests.json).
+
+| Fix | Commit | Regression evidence |
+|---|---|---|
+| BUG-115 | `19225a3` | Failed/denied searches and failed result rendering cannot forward false missing-content requests. Before: 4 failed, 3 passed. After: all 7 passed. |
+| BUG-116 | `4b40341` | Escape and bound displayed keywords, including warning logs and handled-card edits. Before: all 5 failed. After: all 5 passed. |
+| BUG-117 | `29e8095` | Reject malformed callback shape/IDs before database or notification work; retain admin-only actions. Before: 10 failed, 5 passed. After: all 15 passed. |
+| BUG-118 | `d994af7` | Keep claims inside the pending unique index, guard source/action replays and storage failures, and show honest in-flight state. Initial regressions: 17 failed, 6 passed. Final 26 cases also cover tracking disabled with stored cards. |
+
+The refreshed read-only preflight authenticated all three supplied human
+accounts, including `normal_user_2`, resolved the updated chats and verified bot
+admin access. Live QA used one disposable local MongoDB and two local Redis
+instances. The bot could post only to the three private account chats and the
+declared QA support group, request channel and log channel. No remote Atlas or
+production service was accessed. Source feature defaults, deployment `.env` and
+production limits were preserved. The fixture alone used a 20-request allowance,
+free mode and disabled message deletion.
+
+**17 live checks passed across three bot phases.** Both normal users began with
+empty request lists. A missing title containing literal HTML and an ampersand
+created one pending record and a correctly escaped admin card with all four
+actions. Case/whitespace duplicates produced no second record or request slot.
+The second normal user's identical title created a separate owned record.
+The bot wrapper copied the first real admin card into the QA group solely to
+exercise action authorization without joining either normal account to the
+request channel. Both normal users were denied; configured admins retained
+their existing authorization.
+
+Upload Complete, Unavailable, Already Available and Reject each notified the
+correct requester, persisted the expected terminal status and notification
+timestamp, and removed the handled card's controls. Replaying a completed
+action through the retained QA card copy did not notify again or alter its
+timestamp. Private histories displayed all four outcomes and did not expose the
+other user's unique requests. A real temporary bot block by the second normal
+user exercised the support-group reply fallback and still finalized the request.
+The account was unblocked afterward and its original state independently checked.
+
+A real uploaded/indexed file produced owned search results instead of a new
+missing-content record. This still consumed one admitted request slot, matching
+the existing allowance policy. To exercise interruption handling, a local-only
+claim was explicitly seeded without sending a notification. Its record stayed
+inside the pending duplicate guard, duplicate admission consumed no extra slot,
+admin re-entry was rejected and `/myrequests` displayed Update In Progress.
+This is a fixture state, not a claim that a real process crash was induced.
+
+Both QA Redis databases were cleared before the second bot phase; MongoDB was
+retained. Owned history, the in-flight state and completed-action guards survived.
+Only the known-unsent seeded claim was rolled back, after which the admin
+completed it once. The third phase disabled new tracking with Redis retained
+and cleared the local request-channel setting. `/myrequests` disappeared;
+preexisting tracked cards still rejected completed-action replays. A new legacy
+request used the configured log-channel fallback and its established admin
+notification flow without adding a tracking row. The final collection held six
+tracked requests. Request allowances were six for the first normal user and two
+for the second, including the found-content and untracked legacy admissions.
+
+Coverage includes **18,056 statements, 6,002 branches
+and all 122 tracked application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 62.97% | 50.80% | 59.93% |
+| Source-matched automated + live | 71.88% | 59.56% | 68.80% |
+
+All four new process shards match start/end/final application hashes. Historical
+execution contributes only unchanged files. The validated round-8 aggregate
+remains explicitly labelled with its original source/report verification; no
+line/arc remapping was used. Runtime is Python 3.13.7 / wzgram 3.1.6 with the
+current source snapshot mounted into the retained image. Its bundled application
+is older `b2fcb38`; no new deployment-image build is claimed. All 405 exact
+operator diagnostic lines and the two earlier channel-context substitutions
+remain; none were removed. Admin/owner bypasses remain intact.
+
+**Whole-bot 100% remains open.** Injected storage/delivery failures and source
+update replay are deterministic regressions. The live claim was explicitly
+seeded; real infrastructure outages and a crash during Telegram delivery were
+not induced. A crash after a send can leave an ambiguous claim. Preserve the
+record and delivery evidence and review it before targeted reconciliation;
+blindly resetting/replaying claims can duplicate notifications. Automatic stale
+claim recovery was not added. No schema rewrite or new index is required, but
+older writers must be stopped before cutover because they do not honor the new
+target guard. Legacy processing records remain compatible. Untracked legacy
+cards retain legacy behavior when tracking is off. Request admission still
+consumes its allowance before lookup; this round did not add refunds for failed
+lookups. Moving historical request identity between support groups, representative
+Atlas/multidatabase load, review/merge, backup/restore and production rollout
+remain outside this bounded acceptance.
+
+All **67 recorded messages**, including six request-channel posts, seven log
+posts and the exact join/leave service messages, were removed. The second normal
+user's temporary group membership was restored, its owned 15-minute/one-member
+invite revoked and original bot-block state restored. A separate cleanup-state
+verifier needed its numeric bot peer resolved through the verified username;
+that harness correction passed independent verification after the successful
+live flow. No extra application rerun is inferred from it. Permissions stayed
+unchanged. Owned containers, anonymous volumes and networks were removed, and
+the two original server services remain running untouched. Final bot logs show
+zero errors or unhandled tracebacks. Stop here until `continue`.
+**Next bounded scope: admin content dashboard and zero-result search analytics.**

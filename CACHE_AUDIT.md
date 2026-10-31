@@ -12,13 +12,13 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
 
 ## Current QA, 2026-10-31
 
-The latest bounded round passed **1,335 tests with zero failures or skips** and
-**15 live grouping/variant-delivery checks** using three QA accounts on wzgram
-3.1.6. BUG-113/114 fix normalized container formats and preserve meaningful
-title words. Private/group paging, exact variant selection, cross-user ownership,
-bulk delivery/quota settlement and retained-Redis flag changes passed.
-Admin/owner bypasses and operator diagnostics are preserved. Source-matched
-coverage is **71.55% lines, 59.10% branches, 68.45% combined**.
+The latest bounded round passed **1,388 tests with zero failures or skips** and
+**17 live request-lifecycle checks** using three QA accounts on wzgram 3.1.6.
+BUG-115–118 fix failed-search forwarding, request HTML/length handling, callback
+validation and notification/replay guards. All four admin outcomes, owned
+history, blocked-PM group fallback, empty-Redis recovery and tracking-off behavior
+passed. Admin/owner bypasses and operator diagnostics are preserved.
+Source-matched coverage is **71.88% lines, 59.56% branches, 68.80% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated

@@ -421,6 +421,33 @@ write. Saved searches expose create/list, pause-resume, and delete; their Run
 action reuses the normal user-owned search session. Reports and content requests
 are lifecycle/audit records and are resolved rather than hard-deleted by users.
 
+### Content request transitions
+
+`#request` uses the existing moderation and request allowance checks. Only a
+completed empty lookup creates a missing-content request; denied or incomplete
+lookups stop with safe feedback. Admin cards escape and bound displayed keywords
+to 500 characters without changing the search keyword or normalized duplicate
+key. The existing stored display query stays capped at 100 characters. Request
+allowance counts admitted messages, including found-content searches.
+
+Tracking normalizes pending/in-flight duplicate queries per user, and a replayed
+source ID returns its original record without another request slot. An admin
+transition atomically claims a pending record only if `target_status` is absent.
+The record remains `pending` with its target/admin fields, so it stays protected
+by the existing partial unique index until finalization. A concurrent late
+forward-failure write cannot overwrite that claim. MongoDB read/claim failure
+stops notification. Successful private delivery or the existing group fallback
+allows guarded finalization; failure of both permits guarded rollback.
+
+Stored cards retain their guards even when new tracking is disabled. Untracked
+legacy cards retain the established action flow. `/myrequests` is user-owned
+and displays claims, including older `processing:*` records, as Update In
+Progress. A failed finalization after notification leaves the claim for review
+and does not present a finished admin card. Interruption can leave an ambiguous
+delivery outcome; automatic stale-claim replay is not implemented. Stop older
+writers before cutover because their claim predicate differs. See the
+[request lifecycle QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31).
+
 ## 9. Cache ownership and invalidation
 
 ```mermaid

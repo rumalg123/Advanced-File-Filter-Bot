@@ -124,13 +124,9 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-112 | Medium | Fixed | Application-type search routing | Advanced syntax accepts `type:application`, but the string-to-enum helper falls back to DOCUMENT, returning the wrong category. | Map application explicitly and verify every declared type through both the helper and FileAccessService. |
 | BUG-113 | Medium | Fixed | Normalized variant formats | Indexed filenames have dots replaced by spaces, so MKV/MP4/etc. suffixes split related variants. Generic dotted-suffix removal also discards real title words or years. | Remove recognized terminal formats in raw/normalized filenames while preserving unknown dotted words, years and every original file. |
 | BUG-114 | Medium | Fixed | Variant title collisions | Global encode-noise stripping removes real title words such as Proper/HDR/SDR, merging unrelated titles under one heading. | Preserve the title prefix and strip technical release noise only after a recognizable metadata/encoding boundary; keep year and episode distinctions. |
-
 | BUG-115 | High | Fixed | Missing-content search outcome | Request handling treats backend failures, access denials and failed result delivery as an empty search and forwards a false missing-content request. | Distinguish completed empty results from incomplete/denied lookups; return safe feedback and stop before creating or forwarding a request. |
-
 | BUG-116 | Medium | Fixed | Request card HTML and length | User keywords are inserted raw into forwarded/warning HTML, can exceed the admin-card size budget, and become raw HTML again when a handled card is edited. | Escape and bound displayed keywords, preserving the full search/tracking input; escape rendered card text before adding the handled marker. |
-
 | BUG-117 | Medium | Fixed | Request callback validation | Extra fields, malformed IDs, out-of-range IDs and the wrong callback prefix can raise handler errors or notify a user for invalid request data. | Validate the exact callback structure and positive bounded identifiers before database/Telegram work; keep configured-admin authorization. |
-
 | BUG-118 | High | Fixed | Tracked request idempotency and in-flight state | Claiming removes the pending unique-index guard, replayed source IDs can return no record or consume another slot, and read/claim/finalization failures can notify without a claim or present false completion. | Keep claimed records in the pending index with a guarded target; retain legacy processing compatibility, resolve source-ID replays, stop unclaimed delivery, and report unresolved finalization honestly. Existing tracked cards remain guarded with new tracking disabled. |
 
 ## Group search follow-up, 2026-10-30
@@ -176,13 +172,13 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-31
 
-The latest bounded round passed **1,335 tests with zero failures or skips** and
-**15 live grouping/variant-delivery checks** using three QA accounts on wzgram
-3.1.6. BUG-113/114 fix normalized container formats and preserve meaningful
-title words. Private/group paging, exact variant selection, cross-user ownership,
-bulk delivery/quota settlement and retained-Redis flag changes passed.
-Admin/owner bypasses and operator diagnostics are preserved. Source-matched
-coverage is **71.55% lines, 59.10% branches, 68.45% combined**.
+The latest bounded round passed **1,388 tests with zero failures or skips** and
+**17 live request-lifecycle checks** using three QA accounts on wzgram 3.1.6.
+BUG-115–118 fix failed-search forwarding, request HTML/length handling, callback
+validation and notification/replay guards. All four admin outcomes, owned
+history, blocked-PM group fallback, empty-Redis recovery and tracking-off behavior
+passed. Admin/owner bypasses and operator diagnostics are preserved.
+Source-matched coverage is **71.88% lines, 59.56% branches, 68.80% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated

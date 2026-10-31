@@ -10,9 +10,9 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed 1,335 tests and 15 real-account grouping/variant-delivery
-checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.55%
-lines / 59.10% branches. Sustained production load, cloud
+The latest bounded QA passed 1,388 tests and 17 real-account request-lifecycle
+checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.88%
+lines / 59.56% branches. Sustained production load, cloud
 restore and production-specific configuration/index checks remain release
 gates; 100% coverage is not the sole definition of production readiness.
 See [the QA evidence](qa/coverage-expansion/STATUS.md).
@@ -33,14 +33,14 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application source is `fe9e5fb`. Its complete suite and all
+The current QA application source is `d994af7`. Its complete suite and all
 three live phases used the wzgram 3.1.6 runtime from
 `file-filter-bot:qa-multisub-20261030` with the tested source snapshot mounted
 into the container. That image's bundled code remains the earlier `b2fcb38`;
 it is a runtime fixture for this round, not an updated deployment image.
 Build the new branch source for deployment and retain a validated rollback
 artifact. Historical image/archive checks certify their original source and
-dependencies. See the [current round evidence](qa/coverage-expansion/round12-variants.json).
+dependencies. See the [current round evidence](qa/coverage-expansion/round13-requests.json).
 
 For the exact two-service stack supplied by the operator, use the
 [production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including
@@ -100,6 +100,22 @@ supported. The default `/suggest` request now validates up to 24 candidates with
 five concurrent checks using current media routing. This adds bounded read
 work; measure actual Atlas latency/load before treating QA as production-scale
 acceptance. Feature/caption settings still apply through the normal restart.
+
+Request fixes reuse the existing `request_one_pending_idx`; no new index or
+manual data rewrite is required. A new in-flight notification keeps status
+`pending` with `target_status`, preserving that index's duplicate guard. Legacy
+`processing:*` records remain readable and compatible with finish/rollback.
+Stop all older writers before deployment: they do not honor the new target
+guard. Existing tracked callbacks read MongoDB and retain their guards even
+when new tracking is disabled. Tracking lookup/claim failures return retry
+feedback before notification.
+
+Inspect any retained pending/target or legacy processing claims individually.
+An interrupted send can have an unknown outcome, so do not bulk-reset claims or
+replay notifications blindly. Preserve the record and delivery evidence, decide
+whether notification occurred, then reconcile that specific record while writers
+are stopped. This QA round does not add automatic stale-claim replay. See the
+[request lifecycle QA](qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31).
 
 ### Single database, indexed search off
 
