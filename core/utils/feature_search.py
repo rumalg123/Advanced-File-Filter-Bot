@@ -109,6 +109,13 @@ _MEDIA_EXTENSION = re.compile(
     re.IGNORECASE,
 )
 
+_VARIANT_METADATA_START = re.compile(
+    r"\b(?:(?:19|20|21)\d{2}|s\d{1,3}(?:e\d{1,3})?|"
+    r"(?:e|ep|episode|season)\s*\d{1,3}|\d{3,4}p|\d{3,4}x\d{3,4}|4k|8k|"
+    r"x264|x265|h264|h265|hevc|av1|web[- ]?dl|webrip|bluray|brrip|hdrip|dvdrip)\b",
+    re.IGNORECASE,
+)
+
 
 def canonicalize_media_title(file_name: str) -> str:
     """Return a conservative title key that removes encode/quality noise."""
@@ -117,8 +124,13 @@ def canonicalize_media_title(file_name: str) -> str:
     # or years after a dot (Doctor.No, Film.2025).
     value = _MEDIA_EXTENSION.sub("", file_name or "")
     value = re.sub(r"[._+\-]+", " ", value)
-    value = _VARIANT_NOISE.sub(" ", value)
-    value = re.sub(r"\b\d{3,4}x\d{3,4}\b", " ", value, flags=re.IGNORECASE)
+    # Proper, HDR, SDR, etc. can be real title words. Only discard release
+    # noise after an identifiable year/episode/quality/encoding boundary.
+    boundary = _VARIANT_METADATA_START.search(value)
+    if boundary:
+        suffix = _VARIANT_NOISE.sub(" ", value[boundary.start():])
+        suffix = re.sub(r"\b\d{3,4}x\d{3,4}\b", " ", suffix, flags=re.IGNORECASE)
+        value = value[:boundary.start()] + suffix
     value = re.sub(r"\s+", " ", value).strip().lower()
     return value or (file_name or "unknown").lower()
 

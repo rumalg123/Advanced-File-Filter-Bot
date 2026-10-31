@@ -123,6 +123,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-111 | Medium | Fixed | Autocomplete quoted query text | `/suggest` uses shell-style argument splitting, removing quotes required by multiword advanced-filter values and changing exact-query comparisons. | Preserve the command's raw query body; the shared search parser retains responsibility for quote syntax. |
 | BUG-112 | Medium | Fixed | Application-type search routing | Advanced syntax accepts `type:application`, but the string-to-enum helper falls back to DOCUMENT, returning the wrong category. | Map application explicitly and verify every declared type through both the helper and FileAccessService. |
 | BUG-113 | Medium | Fixed | Normalized variant formats | Indexed filenames have dots replaced by spaces, so MKV/MP4/etc. suffixes split related variants. Generic dotted-suffix removal also discards real title words or years. | Remove recognized terminal formats in raw/normalized filenames while preserving unknown dotted words, years and every original file. |
+| BUG-114 | Medium | Fixed | Variant title collisions | Global encode-noise stripping removes real title words such as Proper/HDR/SDR, merging unrelated titles under one heading. | Preserve the title prefix and strip technical release noise only after a recognizable metadata/encoding boundary; keep year and episode distinctions. |
 
 ## Group search follow-up, 2026-10-30
 
