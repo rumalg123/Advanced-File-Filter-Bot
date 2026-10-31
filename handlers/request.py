@@ -26,6 +26,11 @@ from handlers.base import BaseHandler
 logger = get_logger(__name__)
 
 
+def _request_keyword_html(keyword: str) -> str:
+    """Keep untrusted request text literal and leave room for the admin card."""
+    return html.escape(keyword[:500]) + ('…' if len(keyword) > 500 else '')
+
+
 class RequestHandler(BaseHandler):
     """Handler for #request feature in support group"""
 
@@ -180,7 +185,7 @@ class RequestHandler(BaseHandler):
                     f"#RequestWarning\n"
                     f"👤 <b>User:</b> {user.mention} [<code>{user_id}</code>]\n"
                     f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
-                    f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
+                    f"🔍 <b>Keyword:</b> <code>{_request_keyword_html(keyword)}</code>\n"
                     f"⚠️ <b>Message:</b> {limit_message}\n"
                     f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
@@ -303,7 +308,7 @@ class RequestHandler(BaseHandler):
             f"👤 <b>User:</b> {user.mention} [<code>{user.id}</code>]\n"
             f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
             f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
+            f"🔍 <b>Keyword:</b> <code>{_request_keyword_html(keyword)}</code>\n"
         )
 
         # Build buttons
@@ -472,7 +477,7 @@ class RequestHandler(BaseHandler):
         # Update admin message
         await query.message.edit_reply_markup(None)
         await query.message.edit_text(
-            query.message.text + "\n" + ErrorMessageFormatter.format_success(f"Action Taken: {action.title()}", include_prefix=False)
+            html.escape(str(query.message.text or '')) + "\n" + ErrorMessageFormatter.format_success(f"Action Taken: {action.title()}", include_prefix=False)
         )
 
         await query.answer(

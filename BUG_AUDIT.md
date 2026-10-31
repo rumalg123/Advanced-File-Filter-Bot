@@ -127,6 +127,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-115 | High | Fixed | Missing-content search outcome | Request handling treats backend failures, access denials and failed result delivery as an empty search and forwards a false missing-content request. | Distinguish completed empty results from incomplete/denied lookups; return safe feedback and stop before creating or forwarding a request. |
 
+| BUG-116 | Medium | Fixed | Request card HTML and length | User keywords are inserted raw into forwarded/warning HTML, can exceed the admin-card size budget, and become raw HTML again when a handled card is edited. | Escape and bound displayed keywords, preserving the full search/tracking input; escape rendered card text before adding the handled marker. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
