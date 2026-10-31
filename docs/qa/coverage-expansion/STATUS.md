@@ -1,8 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [advanced search and autocomplete](#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30),
-**1,310 tests passed**, **71.40% lines / 58.92% branches / 68.29% combined**.
-Next bounded round: duplicate grouping and variant delivery.
+Latest continuation: [duplicate grouping and variant delivery](#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31),
+**1,335 tests passed**, **71.55% lines / 59.10% branches / 68.45% combined**.
+Next bounded round: request tracking lifecycle and admin status transitions.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -1324,3 +1324,100 @@ Final bot logs show one handled FloodWait and no unhandled exception/traceback.
 No production server, remote Atlas database, deployment `.env` or production
 limits were changed. Stop here until `continue`.
 **Next bounded scope: duplicate grouping and variant delivery.**
+
+
+## Bounded QA round 12 — duplicate grouping and variant delivery (2026-10-31)
+
+**Completed:** 1,335 tests passed, zero failures/errors/skips, with the same 22
+existing warnings. The 25 new cases cover normalized/mixed container formats,
+meaningful title suffixes/words and grouped/flat private/group callback identity
+and ownership. The related focused run passed 58 tests. Compilation,
+undefined-name Ruff checks and dependency consistency passed. Application/tests
+source: `fe9e5fb`; sanitized evidence: [round12-variants.json](round12-variants.json).
+
+| Fix | Commit | Regression evidence |
+|---|---|---|
+| BUG-113 | `bd8df2c` | Normalized MKV/MP4/etc. suffixes now group across containers; dotted title words/years survive. Before: 8 failed, 2 passed. After: all 10 passed. |
+| BUG-114 | `290fa91` | Preserve title words such as Proper/HDR/SDR before the metadata boundary; strip release tags in the suffix. Before: 5 failed, 2 passed. After: all 7 passed. |
+| Button contract | `fe9e5fb` | Eight cases retain every original file identity and owned query context within the 64-byte callback limit. |
+
+The updated `.env` chat targets were resolved and bot admin access checked.
+All three distinct human accounts authenticated, including `normal_user_2`.
+Outside the three private account chats, only the selected QA group and log
+channel received bot posts. The second normal account temporarily joined the group through a QA-owned 15-minute, one-member
+invite for cross-user checks. Its original nonmember state was restored, the
+owned invite revoked and its exact join/leave service messages deleted.
+Existing admin/normal memberships, permissions and block states were preserved.
+
+**15 live checks passed across three bot phases**, using six distinct real
+Telegram uploads indexed into a disposable local MongoDB. Mixed MKV/MP4/WebM
+variants from two episodes grouped as expected after filename normalization;
+the title containing Proper stayed separate. Private and group forward/back
+paging retained every original file, including groups split across pages.
+An inert heading consumed no quota. Selecting the 2160p WebM delivered its
+exact original Telegram identity. The second normal user's independent file
+selection charged only that user's allowance.
+
+Both the foreign normal account and configured admin were denied the first
+normal user's group file, bulk and pagination controls without changing that
+menu or quotas. Existing privileged ban/subscription/quota exemptions remain;
+they do not grant ownership of another user's callback session. The owner
+could still page and redirect to private file delivery after the rejections.
+Grouped private Send All delivered all three original page files once and
+charged three slots. Both foreign accounts were denied the shared group bulk
+deep link without consuming its owner's state; the owner then received the
+three files. Confirmed delivery totals were seven for the first normal user
+and one for the second, with settled quota ledgers.
+
+The second phase disabled grouping with both Redis instances retained. Existing
+and new menus lost variant headings while keeping the same selectable file IDs.
+The final phase re-enabled grouping and used six files per page: three episode-1
+variants and two episode-2 variants received their own headings, while Proper
+remained separate. Premium mode correctly restricted the normal inline request;
+the configured admin bypass returned all six individually selectable results. MongoDB still
+contained exactly the six fixture media records; grouping deletes nothing.
+
+Earlier attempts corrected actor environment setup, pagination no-op versus
+variant-heading classification, a stale edited message reference, fixture
+expectations for the existing indexed-at/ID ordering, and old completion wording
+under the updated environment. Repeated actor identity lookups also hit a Telegram
+FloodWait; quota assertions now reuse already authenticated IDs and clients
+respect required waits. These harness-only issues were corrected. All attempt
+posts and temporary memberships were cleaned without errors, and their coverage
+artifacts were archived outside accepted inputs. The final complete run used
+unchanged application source. The normal inline request was correctly blocked by
+existing premium-mode policy; final acceptance verifies that gate and uses the
+existing admin bypass to inspect the six individual inline results. No product
+failure is attributed to those harness corrections.
+
+Coverage includes **18,031 statements, 5,988 branches
+and all 122 tracked application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 62.10% | 49.88% | 59.05% |
+| Source-matched automated + live | 71.55% | 59.10% | 68.45% |
+
+All four new process shards match start/end/final application hashes. Historical
+execution contributes only unchanged files. The previously validated round-8
+aggregate remains explicitly identified as an aggregate with its original
+source/report verification; no line/arc remapping was used. The runtime is
+Python 3.13.7 / wzgram 3.1.6 with the tested application snapshot mounted into
+the retained image. Its bundled code remains older `b2fcb38`; no new deployment
+image build is claimed. All 405 exact operator logger lines and the two earlier
+channel-context substitutions remain, with zero diagnostics removed.
+
+**Whole-bot 100% remains open.** Grouping is a conservative filename heuristic,
+with imperfect groups possible for unknown tags and ambiguous titles. Headings/counts are page-local, all file buttons remain visible, and
+there is no physical deduplication or expandable variant picker. This small
+local fixture does not certify Atlas/multidatabase latency, production load or
+every filename convention. Review/merge, backup/restore and production rollout
+gates remain open. No feature defaults, production limits, deployment `.env`,
+remote Atlas database or production server were changed.
+
+All **63 final recorded messages**, including tracked log/group posts and
+membership service messages, were removed. Earlier attempts cleaned another 264 recorded messages
+without errors. Owned containers, anonymous volumes and networks were removed;
+the two original server services remain running untouched. Final bot logs show
+one handled FloodWait and no error/unhandled traceback. Stop here until `continue`.
+**Next bounded scope: request tracking lifecycle and admin status transitions.**

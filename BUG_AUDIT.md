@@ -166,16 +166,15 @@ are preserved for a separate follow-up. The raised ownership CLI default also
 exceeds the existing library's one-million inventory/activation bound and needs
 alignment before using the new default. No production service was accessed.
 
-## Current QA, 2026-10-30
+## Current QA, 2026-10-31
 
-The latest bounded round passed **1,310 tests with zero failures or skips** and
-**18 live advanced-search/autocomplete checks** on wzgram 3.1.6. BUG-108–112 fix
-filter validation/size precision, inline filter handling, current-media
-suggestion checks, quoted command text and application-type routing. Private,
-group and inline results, owned pagination, retained-Redis restarts and caption
-setting changes passed. Admin/owner bypasses and operator diagnostics are
-preserved. Source-matched coverage is **71.40% lines, 58.92% branches,
-68.29% combined**.
+The latest bounded round passed **1,335 tests with zero failures or skips** and
+**15 live grouping/variant-delivery checks** using three QA accounts on wzgram
+3.1.6. BUG-113/114 fix normalized container formats and preserve meaningful
+title words. Private/group paging, exact variant selection, cross-user ownership,
+bulk delivery/quota settlement and retained-Redis flag changes passed.
+Admin/owner bypasses and operator diagnostics are preserved. Source-matched
+coverage is **71.55% lines, 59.10% branches, 68.45% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated

@@ -9,16 +9,15 @@ feature ID below. Multilingual search is explicitly out of scope.
 Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (configured)`,
 `Enabled`, `Blocked`.
 
-## Current QA, 2026-10-30
+## Current QA, 2026-10-31
 
-The latest bounded round passed **1,310 tests with zero failures or skips** and
-**18 live advanced-search/autocomplete checks** on wzgram 3.1.6. BUG-108–112 fix
-filter validation/size precision, inline filter handling, current-media
-suggestion checks, quoted command text and application-type routing. Private,
-group and inline results, owned pagination, retained-Redis restarts and caption
-setting changes passed. Admin/owner bypasses and operator diagnostics are
-preserved. Source-matched coverage is **71.40% lines, 58.92% branches,
-68.29% combined**.
+The latest bounded round passed **1,335 tests with zero failures or skips** and
+**15 live grouping/variant-delivery checks** using three QA accounts on wzgram
+3.1.6. BUG-113/114 fix normalized container formats and preserve meaningful
+title words. Private/group paging, exact variant selection, cross-user ownership,
+bulk delivery/quota settlement and retained-Redis flag changes passed.
+Admin/owner bypasses and operator diagnostics are preserved. Source-matched
+coverage is **71.55% lines, 59.10% branches, 68.45% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
@@ -57,7 +56,7 @@ counts remain historical; no feature defaults or production limits changed.
 | FEAT-004 | Implemented (off) | Recommendation feedback | `FEATURE_RECOMMENDATION_FEEDBACK` | "More like this" and "Not interested" feedback changes ranking, invalidates the user cache, and never attributes feedback to the wrong file. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including two-account isolation, disabled old controls and Redis-reset persistence. |
 | FEAT-005 | Implemented (off) | File reporting and health workflow | `FEATURE_FILE_REPORTS` | Users can report broken, incorrect, duplicate, or poor-quality files; repeat reports are deduplicated and admins can list/resolve them. |
 | FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Private `/suggest` uses successful history validated against current media/filter/caption rules, excludes normalized exact queries, enforces owned references and stays within Telegram callback limits. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30); a dedicated inline suggestion UI is outside this implemented command scope. |
-| FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Search can group likely variants by canonical title and expose quality variants without hiding files when metadata is incomplete. |
+| FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Page-local headings group likely filename variants while retaining every file button. Known container suffixes normalize across formats; meaningful title prefixes remain distinct. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31), including three accounts, exact variant delivery, paging, bulk quotas and retained-Redis toggles. Inline files remain individual. |
 | FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users can view their requests and statuses, duplicate requests are detected, and completion/rejection transitions are persisted and notified idempotently. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
 | FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including safe rendered reasons and feature-toggle cache recovery. |

@@ -198,6 +198,15 @@ a retry response. Query buttons use compact owned references. These lookups
 add read work; representative production load remains an operational gate.
 See the [advanced search/autocomplete QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30).
 
+Optional duplicate grouping adds inert headings within the current result page
+and retains every original file button and owned query reference. Known terminal
+container formats normalize after filename punctuation normalization. Release
+noise is stripped after an identifiable metadata boundary, preserving meaningful
+title prefixes such as “Proper”. Groups and counts are page-local; paging, bulk
+delivery and quota accounting still operate on original files. Inline results
+remain individual. This filename heuristic does not deduplicate stored media or
+add an expandable picker. See [grouping/variant QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31).
+
 Private search, private pagination, inline search and file delivery require all
 configured memberships unless the actor has an existing admin/owner/authorized
 exemption. Group search previews and pagination remain public. Unverifiable
