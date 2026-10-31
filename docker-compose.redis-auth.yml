@@ -1,0 +1,54 @@
+# PH-010 opt-in authenticated Redis Compose overlay.
+#
+# Only start after generating .secrets/ with:
+#   python scripts/generate_redis_acl.py
+#
+#   docker compose -f docker-compose.yml -f docker-compose.redis-auth.yml config --quiet
+#
+# DO NOT run against the live Redis container until credentials, backups,
+# client behavior, user sessions, and rollback have been tested on staging.
+# Never publish either Redis TCP port.
+services:
+  file-filter-bot:
+    environment:
+      - REDIS_USERNAME=filebot
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_cache_password
+      - REDIS_STATE_USERNAME=filebot
+      - REDIS_STATE_PASSWORD_FILE=/run/secrets/redis_state_password
+    secrets:
+      - redis_cache_password
+      - redis_state_password
+
+  redis:
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --aclfile
+      - /run/secrets/redis_cache_acl
+    secrets:
+      - redis_cache_acl
+    healthcheck:
+      # Health probe checks an unauthenticated request is refused, which also
+      # proves the opt-in ACL is active. Bot tests its own credentials at startup.
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -q 'NOAUTH'"]
+
+  redis-state:
+    command:
+      - redis-server
+      - /usr/local/etc/redis/state.conf
+      - --aclfile
+      - /run/secrets/redis_state_acl
+    secrets:
+      - redis_state_acl
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -q 'NOAUTH'"]
+
+secrets:
+  redis_cache_acl:
+    file: ./.secrets/redis-cache.acl
+  redis_cache_password:
+    file: ./.secrets/redis-cache.password
+  redis_state_acl:
+    file: ./.secrets/redis-state.acl
+  redis_state_password:
+    file: ./.secrets/redis-state.password

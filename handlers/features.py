@@ -3,6 +3,9 @@
 import html
 import shlex
 
+from core.database.errors import SearchBackendUnavailableError, FILE_LOOKUP_RETRY_MESSAGE, SEARCH_RETRY_MESSAGE
+from core.cache.errors import OperationalStateUnavailableError
+
 from pyrogram import Client, filters
 from pyrogram.errors import InputUserDeactivated, PeerIdInvalid, UserIsBlocked
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
@@ -186,9 +189,14 @@ class FeatureHandler(BaseHandler):
         title: str,
         file_ids: list[str],
         collection_name: str | None = None,
-        removal_action: str | None = None
+        removal_action: str | None = None,
+        collection_token: str | None = None,
     ) -> None:
-        files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
+        try:
+            files_by_id = await self.bot.media_repo.find_files_batch(file_ids[:20])
+        except SearchBackendUnavailableError:
+            await self._reply_with_cleanup(message, FILE_LOOKUP_RETRY_MESSAGE)
+            return
         files = [
             files_by_id[file_id]
             for file_id in file_ids[:20]
@@ -205,6 +213,8 @@ class FeatureHandler(BaseHandler):
             row = [ButtonBuilder.file_button(file, is_private=True)]
             if collection_name:
                 remove_callback = (
+                    f"feature#unfavtoken#{file.file_unique_id}#{collection_token}"
+                ) if collection_token else (
                     f"feature#unfavlist#{file.file_unique_id}#{collection_name}"
                 )
                 if len(remove_callback.encode('utf-8')) <= 64:
@@ -378,17 +388,14 @@ class FeatureHandler(BaseHandler):
         if not rows:
             return False
 
-        labels = {
-            'fav': '⭐ Favorite',
-            'more': '👍 More like this',
-            'less': '👎 Not interested',
-        }
-        if selected_action == 'fav':
-            labels['fav'] = '✅ Favorited'
-        elif selected_action == 'more':
-            labels['more'] = '✅ More like this'
-        elif selected_action == 'less':
-            labels['less'] = '✅ Not interested'
+        # These are independent preferences. Updating feedback must not
+        # erase a favorite marker, or vice versa.
+        labels = {}
+        if selected_action in {'fav', 'unfav'}:
+            labels['fav'] = '✅ Favorited' if selected_action == 'fav' else '⭐ Favorite'
+        elif selected_action in {'more', 'less', 'rec_reset'}:
+            labels['more'] = '✅ More like this' if selected_action == 'more' else '👍 More like this'
+            labels['less'] = '✅ Not interested' if selected_action == 'less' else '👎 Not interested'
 
         changed = False
         updated_rows = []
@@ -689,13 +696,15 @@ class FeatureHandler(BaseHandler):
             )
 
         file = await self.bot.media_repo.find_file(file_id)
-        if not file:
+        if not file and not remove:
             return await self._reply_with_cleanup(
                 message, "That file is no longer available."
             )
+        identifier = file.file_unique_id if file else file_id
+        display_name = file.file_name if file else file_id
         if remove:
             success = await self.repository.remove_from_collection(
-                message.from_user.id, file.file_unique_id, collection_name
+                message.from_user.id, identifier, collection_name
             )
             action = "removed from"
         else:
@@ -706,7 +715,7 @@ class FeatureHandler(BaseHandler):
         if success:
             await self._reply_with_cleanup(
                 message,
-                f"⭐ <code>{html.escape(file.file_name)}</code> {action} "
+                f"⭐ <code>{html.escape(display_name)}</code> {action} "
                 f"<b>{html.escape(collection_name)}</b>."
             )
         else:
@@ -739,7 +748,8 @@ class FeatureHandler(BaseHandler):
             message,
             f"⭐ <b>{html.escape(collection['name'])}</b>",
             collection.get('file_ids', []),
-            collection_name=collection['name']
+            collection_name=collection['name'],
+            collection_token=collection.get('callback_token'),
         )
 
     @check_ban()
@@ -892,29 +902,38 @@ class FeatureHandler(BaseHandler):
     @check_ban()
     @require_subscription()
     async def suggest_command(self, client: Client, message: Message):
-        query = " ".join(self._arguments(message)).strip()
+        # Search syntax owns its quotes; shell-style argument splitting would
+        # turn language:"Hong Kong" into a different query.
+        parts = self._text(message).split(None, 1)
+        query = parts[1].strip() if len(parts) > 1 else ''
         if not query:
             return await self._reply_with_cleanup(
                 message, "Usage: <code>/suggest partial title</code>"
             )
-        suggestions = await self.service.autocomplete(message.from_user.id, query)
+        try:
+            suggestions = await self.service.autocomplete(message.from_user.id, query)
+        except SearchBackendUnavailableError:
+            return await self._reply_with_cleanup(message, SEARCH_RETRY_MESSAGE)
         if not suggestions:
             return await self._reply_with_cleanup(
                 message, "No valid suggestions were found."
             )
         buttons = []
-        for suggestion in suggestions:
-            reference = await create_search_query_reference(
-                self.bot.cache, suggestion, message.from_user.id
-            )
-            buttons.append([
-                ButtonBuilder.action_button(
-                    f"🔍 {suggestion[:45]}",
-                    callback_data=(
-                        f"search#page#{reference}#0#0#{message.from_user.id}"
-                    )
+        try:
+            for suggestion in suggestions:
+                reference = await create_search_query_reference(
+                    self.bot.cache, suggestion, message.from_user.id
                 )
-            ])
+                buttons.append([
+                    ButtonBuilder.action_button(
+                        f"🔍 {suggestion[:45]}",
+                        callback_data=(
+                            f"search#page#{reference}#0#0#{message.from_user.id}"
+                        )
+                    )
+                ])
+        except OperationalStateUnavailableError:
+            return await self._reply_with_cleanup(message, SEARCH_RETRY_MESSAGE)
         await self._reply_with_cleanup(
             message,
             "💡 <b>Search suggestions</b>",
@@ -945,8 +964,8 @@ class FeatureHandler(BaseHandler):
         lines = ["📮 <b>Your requests</b>"]
         for request in requests:
             status = request['status']
-            if status.startswith('processing:'):
-                status = status.split(':', 1)[1]
+            if status.startswith('processing:') or request.get('target_status'):
+                status = 'update in progress'
             lines.append(
                 f"• <code>{html.escape(request['query'])}</code> — "
                 f"<b>{html.escape(status.title())}</b>"
@@ -978,18 +997,25 @@ class FeatureHandler(BaseHandler):
             )
 
         if (
-            action in {'unfav', 'unfavlist'}
+            action in {'unfav', 'unfavlist', 'unfavtoken'}
             and self.service.enabled('FEATURE_FAVORITES')
         ):
             collection_name = parts[3] if len(parts) == 4 else "Favorites"
-            removed = await self.repository.remove_from_collection(
-                user_id, value, collection_name
-            )
+            if action == 'unfavtoken':
+                collection, state = await self.repository.remove_from_collection_by_token(
+                    user_id, collection_name, value
+                )
+                removed = state == 'removed'
+                collection_name = collection['name'] if collection else 'collection'
+            else:
+                removed = await self.repository.remove_from_collection(
+                    user_id, value, collection_name
+                )
             if removed:
                 await query.answer(
                     f"Removed from {collection_name}.", show_alert=True
                 )
-                if action == 'unfavlist' and query.message:
+                if action in {'unfavlist', 'unfavtoken'} and query.message:
                     await self._remove_feature_menu_row(query.message, query.data)
                 elif action == 'unfav':
                     await self._update_delivery_markers(query.message, 'unfav')
@@ -1080,7 +1106,8 @@ class FeatureHandler(BaseHandler):
                 query.message,
                 f"📁 <b>{html.escape(collection['name'])}</b>",
                 collection.get('file_ids', []),
-                collection_name=collection['name']
+                collection_name=collection['name'],
+                collection_token=collection.get('callback_token'),
             )
             return
 
@@ -1302,12 +1329,16 @@ class FeatureHandler(BaseHandler):
         if not report:
             return await message.reply_text("Open report not found.")
 
-        file = await self.bot.media_repo.find_file(report['file_unique_id'])
-        file_name = (
-            report.get('file_name')
-            or getattr(file, 'file_name', None)
-            or "Unavailable file"
-        )
+        # Resolution is already committed. Optional display metadata must not
+        # prevent notifying reporters or make the operation appear unfinished.
+        file_name = report.get('file_name')
+        if not file_name:
+            try:
+                file = await self.bot.media_repo.find_file(report['file_unique_id'])
+                file_name = getattr(file, 'file_name', None)
+            except Exception:
+                logger.warning("Could not load resolved report filename", exc_info=True)
+        file_name = file_name or "Unavailable file"
         notification_results = await self._notify_reporters(
             client, report, file_name
         )
@@ -1350,12 +1381,18 @@ class FeatureHandler(BaseHandler):
         )
 
     async def content_dashboard_command(self, client: Client, message: Message):
-        dashboard = await self.service.dashboard()
+        try:
+            dashboard = await self.service.dashboard()
+        except Exception:
+            logger.exception("Could not build content dashboard")
+            return await message.reply_text(
+                "Content dashboard is temporarily unavailable. Please try again."
+            )
         media = dashboard.get('media', {})
         lines = [
             "📊 <b>Content dashboard</b>",
             f"Files: <b>{media.get('total_files', 0):,}</b>",
-            f"Storage: <b>{format_file_size(media.get('total_size', 0))}</b>",
+            f"Total file size: <b>{format_file_size(media.get('total_size', 0))}</b>",
             f"Open reports: <b>{dashboard.get('open_reports', 0)}</b>",
             f"Pending requests: <b>{dashboard.get('pending_requests', 0)}</b>",
             f"Saved searches: <b>{dashboard.get('saved_searches', 0)}</b>",
@@ -1371,7 +1408,7 @@ class FeatureHandler(BaseHandler):
             lines.append("\n🔎 <b>Top zero-result searches</b>")
             for item in zero_results[:5]:
                 lines.append(
-                    f"• <code>{html.escape(item.get('query', item['_id']))}</code> "
+                    f"• <code>{html.escape(str(item.get('query') or item.get('_id') or ''))}</code> "
                     f"({item.get('count', 0)})"
                 )
         await message.reply_text("\n".join(lines))

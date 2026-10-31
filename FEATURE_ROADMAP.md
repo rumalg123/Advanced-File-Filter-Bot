@@ -1,15 +1,35 @@
 # Feature Implementation and Live-Rollout Register
 
+> Current continuation: [QA evidence and remaining gates](docs/qa/coverage-expansion/STATUS.md). Earlier dated test counts below are historical; source defaults and production rollout status remain separate from QA enablement.
+
 This document is the source of truth for the additive feature program started on
 2026-07-18. Code, tests, rollout decisions, and status changes must reference a
 feature ID below. Multilingual search is explicitly out of scope.
 
-Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
-`Blocked`.
+Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (configured)`,
+`Enabled`, `Blocked`.
+
+## Current QA, 2026-10-31
+
+The latest bounded round passed **1,425 tests with zero failures or skips** and
+**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
+BUG-119–122 fix complete query identity, unavailable verification/statistics,
+concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
+payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
+persistence and handled failure recovery passed. Admin/owner bypasses and
+operator diagnostics remain. Source-matched coverage is **71.94% lines,
+59.71% branches, 68.89% combined**.
+The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
+configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
+100% coverage and production operational gates remain open. Earlier dated
+counts remain historical; no feature defaults or production limits changed.
 
 ## Live-safety contract
 
-1. New behavior is guarded by a dedicated feature flag that defaults to `false`.
+1. New optional feature modules are guarded by dedicated flags that default to
+   `false`. FEAT-012 is an explicitly requested extension of existing force
+   subscription: it uses `AUTH_CHANNEL` / `AUTH_GROUPS`, remains inactive when
+   both are empty, and has no additional feature flag.
 2. Existing commands, callback payloads, cache keys, and MongoDB documents remain
    backward compatible.
 3. New persistence is additive. Existing collections are not rewritten in place;
@@ -22,8 +42,10 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
    before it may be marked `Implemented (off)`.
 8. A feature may be marked `Enabled` only after its flag is deliberately enabled
    in deployment and a live smoke test succeeds.
-9. Rollback is performed by disabling the flag; no destructive data migration is
-   required.
+9. Optional modules can be disabled through their flags. FEAT-012 targets can
+   be cleared through existing settings. Before rolling back to code with only
+   one channel, prepare a scalar channel setting compatible with that version.
+   No destructive data migration is required.
 
 ## Feature register
 
@@ -31,15 +53,16 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
 |---|---|---|---|---|
 | FEAT-001 | Implemented (off) | Saved searches and new-file alerts | `FEATURE_SAVED_SEARCH_ALERTS` | Users can save, list, pause/resume, and delete searches; newly indexed matching files produce deduplicated notifications without blocking indexing. |
 | FEAT-002 | Implemented (off) | Favorites and named collections | `FEATURE_FAVORITES` | Users can add/remove files, create collections, list contents, and delete a collection; missing/deleted media is skipped safely. |
-| FEAT-003 | Implemented (off) | Advanced search filters | `FEATURE_ADVANCED_SEARCH` | Search accepts validated type, year, language, quality, season, episode, and size constraints while an unqualified query retains current behavior. |
-| FEAT-004 | Implemented (off) | Recommendation feedback | `FEATURE_RECOMMENDATION_FEEDBACK` | "More like this" and "Not interested" feedback changes ranking, invalidates the user cache, and never attributes feedback to the wrong file. |
+| FEAT-003 | Implemented (off) | Advanced search filters | `FEATURE_ADVANCED_SEARCH` | Search accepts validated type, year, language, quality, season, episode, and size constraints while an unqualified query retains current behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30), including private/group/inline filtering, pagination and all declared file types. |
+| FEAT-004 | Implemented (off) | Recommendation feedback | `FEATURE_RECOMMENDATION_FEEDBACK` | "More like this" and "Not interested" feedback changes ranking, invalidates the user cache, and never attributes feedback to the wrong file. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including two-account isolation, disabled old controls and Redis-reset persistence. |
 | FEAT-005 | Implemented (off) | File reporting and health workflow | `FEATURE_FILE_REPORTS` | Users can report broken, incorrect, duplicate, or poor-quality files; repeat reports are deduplicated and admins can list/resolve them. |
-| FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Inline/private suggestions use valid indexed/search-history candidates, exclude the exact query, enforce ownership, and stay within Telegram callback limits. |
-| FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Search can group likely variants by canonical title and expose quality variants without hiding files when metadata is incomplete. |
-| FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users can view their requests and statuses, duplicate requests are detected, and completion/rejection transitions are persisted and notified idempotently. |
+| FEAT-006 | Implemented (off) | Search autocomplete | `FEATURE_SEARCH_AUTOCOMPLETE` | Private `/suggest` uses successful history validated against current media/filter/caption rules, excludes normalized exact queries, enforces owned references and stays within Telegram callback limits. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30); a dedicated inline suggestion UI is outside this implemented command scope. |
+| FEAT-007 | Implemented (off) | Duplicate-file grouping | `FEATURE_DUPLICATE_GROUPING` | Page-local headings group likely filename variants while retaining every file button. Known container suffixes normalize across formats; meaningful title prefixes remain distinct. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31), including three accounts, exact variant delivery, paging, bulk quotas and retained-Redis toggles. Inline files remain individual. |
+| FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users see owned request history; pending/in-flight duplicates and source replays are suppressed. Stored admin transitions retain notification guards through restarts and tracking-off changes. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31), including all four outcomes and blocked-PM fallback. Ambiguous interrupted notifications require review before reconciliation. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
-| FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. |
-| FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view currently unresolved zero-result searches, popular searches, report counts, request demand, and index/file-health summaries; successful/later-indexed matches self-heal through bounded current-search validation. |
+| FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including safe rendered reasons and feature-toggle cache recovery. |
+| FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins view bounded current unmet searches, historical popularity, open-report/active-request totals and aggregate file/feature counts. Full query identities and effective filters/caption settings drive reconciliation; failures show retry feedback and snapshot cleanup preserves newer demand. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31). Total file size means referenced Telegram bytes, not database storage. |
+| FEAT-012 | Implemented (configured) | Multiple force-subscription channels and limited invites | Existing `AUTH_CHANNEL` / `AUTH_GROUPS` configuration | Accept comma-separated channels with legacy single-value compatibility; validate bot admin/Invite Users rights before settings writes; generate expiring, member-limited links for missing memberships and refresh them on retry. Defaults: 15 minutes and one member, editable through `/bsetting`. QA passed: 55 new automated cases and 18 live checks; see [round 8](docs/qa/coverage-expansion/STATUS.md#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30). |
 
 ## Delivery order
 
@@ -84,6 +107,15 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Enabled`,
    stored and becomes available again if the feature is re-enabled.
 
 ## Verification log
+
+- 2026-10-29: [Extended QA report](docs/QA_REPORT_20261029.md) records 470
+  passing tests and private Telegram verification of saved searches/alerts,
+  favorites/collections, advanced search, feedback, file reports, autocomplete,
+  request completion, recent history, recommendations and the dashboard.
+  Grouping/pagination have automated regressions and controlled live same-title
+  variant/heading/timer checks passed. Disabling optional flags preserved file
+  search/delivery and removed feature controls. Source defaults and production
+  rollout statuses remain unchanged.
 
 - 2026-07-18: Register created. All new flags are required to default off because
   the working tree is deployed directly to a live system.

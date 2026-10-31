@@ -1,0 +1,201 @@
+{
+  "date": "2026-10-29",
+  "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",
+  "tests": {
+    "passed": 776,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22
+  },
+  "application_files": 118,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 9563,
+    "num_statements": 17440,
+    "percent_covered": 51.34343782294179,
+    "percent_covered_display": "51",
+    "missing_lines": 7877,
+    "excluded_lines": 41,
+    "percent_statements_covered": 54.83371559633027,
+    "percent_statements_covered_display": "55",
+    "num_branches": 5784,
+    "num_partial_branches": 827,
+    "covered_branches": 2361,
+    "missing_branches": 3423,
+    "percent_branches_covered": 40.8195020746888,
+    "percent_branches_covered_display": "41"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 11737,
+    "num_statements": 17440,
+    "percent_covered": 63.71856699965553,
+    "percent_covered_display": "64",
+    "missing_lines": 5703,
+    "excluded_lines": 41,
+    "percent_statements_covered": 67.2993119266055,
+    "percent_statements_covered_display": "67",
+    "num_branches": 5784,
+    "num_partial_branches": 1089,
+    "covered_branches": 3061,
+    "missing_branches": 2723,
+    "percent_branches_covered": 52.92185338865837,
+    "percent_branches_covered_display": "53"
+  },
+  "target_100_percent_reached": false,
+  "largest_remaining_gaps": [
+    {
+      "file": "handlers/search.py",
+      "missing_lines": 237,
+      "missing_branches": 111,
+      "line_percent": 39.23
+    },
+    {
+      "file": "core/database/multi_pool.py",
+      "missing_lines": 225,
+      "missing_branches": 126,
+      "line_percent": 64.29
+    },
+    {
+      "file": "handlers/commands_handlers/admin.py",
+      "missing_lines": 218,
+      "missing_branches": 88,
+      "line_percent": 63.36
+    },
+    {
+      "file": "core/services/filestore.py",
+      "missing_lines": 215,
+      "missing_branches": 91,
+      "line_percent": 38.75
+    },
+    {
+      "file": "bot.py",
+      "missing_lines": 187,
+      "missing_branches": 86,
+      "line_percent": 73.25
+    },
+    {
+      "file": "repositories/user.py",
+      "missing_lines": 179,
+      "missing_branches": 111,
+      "line_percent": 69.19
+    },
+    {
+      "file": "core/services/indexing.py",
+      "missing_lines": 164,
+      "missing_branches": 65,
+      "line_percent": 30.8
+    },
+    {
+      "file": "handlers/channel.py",
+      "missing_lines": 163,
+      "missing_branches": 64,
+      "line_percent": 54.47
+    },
+    {
+      "file": "handlers/request.py",
+      "missing_lines": 158,
+      "missing_branches": 67,
+      "line_percent": 21.0
+    },
+    {
+      "file": "handlers/connection.py",
+      "missing_lines": 149,
+      "missing_branches": 72,
+      "line_percent": 19.89
+    },
+    {
+      "file": "handlers/features.py",
+      "missing_lines": 142,
+      "missing_branches": 93,
+      "line_percent": 80.78
+    },
+    {
+      "file": "handlers/deeplink.py",
+      "missing_lines": 138,
+      "missing_branches": 72,
+      "line_percent": 55.77
+    },
+    {
+      "file": "handlers/commands_handlers/bot_settings.py",
+      "missing_lines": 138,
+      "missing_branches": 61,
+      "line_percent": 64.8
+    },
+    {
+      "file": "core/services/filter.py",
+      "missing_lines": 128,
+      "missing_branches": 70,
+      "line_percent": 20.0
+    },
+    {
+      "file": "handlers/filter.py",
+      "missing_lines": 127,
+      "missing_branches": 79,
+      "line_percent": 27.84
+    },
+    {
+      "file": "repositories/media.py",
+      "missing_lines": 124,
+      "missing_branches": 58,
+      "line_percent": 73.67
+    },
+    {
+      "file": "handlers/callbacks_handlers/file.py",
+      "missing_lines": 121,
+      "missing_branches": 41,
+      "line_percent": 64.2
+    },
+    {
+      "file": "handlers/delete.py",
+      "missing_lines": 115,
+      "missing_branches": 40,
+      "line_percent": 51.48
+    },
+    {
+      "file": "core/cache/redis_cache.py",
+      "missing_lines": 113,
+      "missing_branches": 37,
+      "line_percent": 62.58
+    },
+    {
+      "file": "repositories/features.py",
+      "missing_lines": 111,
+      "missing_branches": 52,
+      "line_percent": 75.39
+    }
+  ],
+  "complete_registry_modules": {
+    "core/database/media_owners.py": {
+      "covered_lines": 231,
+      "num_statements": 231,
+      "percent_covered": 100.0,
+      "percent_covered_display": "100",
+      "missing_lines": 0,
+      "excluded_lines": 0,
+      "percent_statements_covered": 100.0,
+      "percent_statements_covered_display": "100",
+      "num_branches": 96,
+      "num_partial_branches": 0,
+      "covered_branches": 96,
+      "missing_branches": 0,
+      "percent_branches_covered": 100.0,
+      "percent_branches_covered_display": "100"
+    },
+    "scripts/activate_media_owners.py": {
+      "covered_lines": 67,
+      "num_statements": 67,
+      "percent_covered": 100.0,
+      "percent_covered_display": "100",
+      "missing_lines": 0,
+      "excluded_lines": 2,
+      "percent_statements_covered": 100.0,
+      "percent_statements_covered_display": "100",
+      "num_branches": 28,
+      "num_partial_branches": 0,
+      "covered_branches": 28,
+      "missing_branches": 0,
+      "percent_branches_covered": 100.0,
+      "percent_branches_covered_display": "100"
+    }
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "date": "2026-10-30",
+  "round": 2,
+  "scope": [
+    "send-all",
+    "batch-links"
+  ],
+  "application_commit": "89bc35945c183980149a720725b69c80c426212f",
+  "source_manifest_sha256": "eebb82182d71bb74c5dd2f5fa7ebb62849dd582056d3c738c7577cb5f398f02c",
+  "fixes": {
+    "BUG-068": "9ab903b",
+    "BUG-069": "e45bd2a",
+    "BUG-070": "c4ce99c",
+    "BUG-071": "89bc359"
+  },
+  "tests": {
+    "passed": 927,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new_sendall": 8,
+    "new_batch_ranges": 13,
+    "before_fixes": {
+      "failed": 16,
+      "passed": 5
+    }
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10120,
+    "num_statements": 17593,
+    "percent_covered": 54.168267383787935,
+    "percent_covered_display": "54",
+    "missing_lines": 7473,
+    "excluded_lines": 41,
+    "percent_statements_covered": 57.522878417552434,
+    "percent_statements_covered_display": "58",
+    "num_branches": 5834,
+    "num_partial_branches": 846,
+    "covered_branches": 2570,
+    "missing_branches": 3264,
+    "percent_branches_covered": 44.052108330476514,
+    "percent_branches_covered_display": "44"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12284,
+    "num_statements": 17593,
+    "percent_covered": 66.38067187433303,
+    "percent_covered_display": "66",
+    "missing_lines": 5309,
+    "excluded_lines": 41,
+    "percent_statements_covered": 69.82322514636503,
+    "percent_statements_covered_display": "70",
+    "num_branches": 5834,
+    "num_partial_branches": 1081,
+    "covered_branches": 3267,
+    "missing_branches": 2567,
+    "percent_branches_covered": 55.999314364072674,
+    "percent_branches_covered_display": "56"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 103,
+        "changed_files_discarded": 15
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 88,
+        "changed_files_discarded": 20
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 97,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 102,
+        "changed_files_discarded": 16
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 99,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 90,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 102,
+        "changed_files_discarded": 16
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 85,
+        "changed_files_discarded": 23
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 117,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 117,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 66.38067187433303,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "live": {
+    "scope": [
+      "send-all",
+      "batch-links"
+    ],
+    "checks": {
+      "private_sendall_three_files_literal_status": true,
+      "telegram_rejects_forged_callback_data": true,
+      "group_cross_user_sendall_denied": true,
+      "group_sendall_private_delivery": true,
+      "shared_sendall_deeplink_owner_denied": true,
+      "expired_search_session_denied": true,
+      "ordinary_batch_delivery": true,
+      "protected_batch_delivery": true,
+      "quota_ten_confirmed_files_no_unsettled_entries": true,
+      "premium_batch_nonmember_denied": true,
+      "premium_protected_batch_after_grant": true,
+      "expired_premium_batch_denied_before_ttl_sweep": true,
+      "reversed_encoded_batch_denied": true
+    },
+    "fixture_documents": 5,
+    "forged_callback_boundary": "Telegram rejected modified callback data; cached-owner guard verified by unit regression",
+    "passed": true,
+    "configuration": {
+      "premium_enabled": true,
+      "non_premium_daily_limit": 20,
+      "quota_delivery_ledger": true,
+      "recent_files": true,
+      "indexed_media_search": true,
+      "group_page_size": 3,
+      "auto_delete_seconds": 0,
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis"
+    }
+  },
+  "cleanup": {
+    "successful_run_messages": {
+      "admin": 23,
+      "normal": 36,
+      "group": 2,
+      "source": 2
+    },
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true,
+    "failed_harness_attempt_messages_also_removed": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Telegram rejected modified callback data before dispatch; cached-owner defense is verified at handler level by regression",
+    "Partial sends, cancellation, missing media and recent-history failure were injected automated cases, not real network faults",
+    "Batch-link expiry was set in the owned local database and its exact cache entry invalidated; application rejection was tested without waiting for the MongoDB TTL sweep",
+    "No production server or remote database accessed",
+    "Configured batch limits were preserved; oversized old encoded links now obey that existing maximum"
+  ],
+  "next_round": "Stop after this bounded round and wait for the operator to say continue."
+}

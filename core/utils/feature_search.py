@@ -2,12 +2,13 @@
 
 import re
 from collections import OrderedDict
+from decimal import Decimal, localcontext
 
 from repositories.media import MediaFile
 
 ADVANCED_FILTER_PATTERN = re.compile(
     r"(?<!\S)(type|year|lang|language|quality|season|episode|minsize|maxsize):"
-    r"(\"[^\"]+\"|'[^']+'|\S+)",
+    r"(\"[^\"]*\"|'[^']*'|[^\s\"']*)",
     re.IGNORECASE
 )
 
@@ -20,7 +21,6 @@ def _parse_size(value: str) -> int:
     match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(b|kb|mb|gb|tb)?", value.lower())
     if not match:
         raise ValueError(f"Invalid size '{value}'. Use values such as 700MB or 2GB.")
-    amount = float(match.group(1))
     unit = match.group(2) or "b"
     multipliers = {
         "b": 1,
@@ -29,7 +29,14 @@ def _parse_size(value: str) -> int:
         "gb": 1024 ** 3,
         "tb": 1024 ** 4,
     }
-    return int(amount * multipliers[unit])
+    # Floats round otherwise valid large byte limits and may overflow before
+    # callers can report a validation error. MongoDB integers are signed 64-bit.
+    with localcontext() as context:
+        context.prec = max(28, len(match.group(1)) + 16)
+        amount = Decimal(match.group(1)) * multipliers[unit]
+        if amount > 9223372036854775807:
+            raise ValueError("Size must not exceed 9223372036854775807 bytes.")
+        return int(amount)
 
 
 def parse_advanced_search_query(query: str) -> tuple[str, dict[str, object]]:
@@ -41,6 +48,8 @@ def parse_advanced_search_query(query: str) -> tuple[str, dict[str, object]]:
         value = match.group(2).strip("\"'").strip()
         if not value:
             raise ValueError(f"Filter '{key}' requires a value.")
+        if match.end() < len(query) and not query[match.end()].isspace():
+            raise ValueError(f"Filter '{key}' must end at whitespace after its value.")
 
         if key == "type":
             normalized_type = value.lower()
@@ -92,13 +101,36 @@ _VARIANT_NOISE = re.compile(
     re.IGNORECASE
 )
 
+_MEDIA_EXTENSION = re.compile(
+    r"(?:\.|\s+)(?:mkv|mp4|avi|mov|webm|m4v|ts|m2ts|flv|wmv|mpg|mpeg|vob|"
+    r"mp3|m4a|flac|ogg|wav|aac|opus|pdf|epub|mobi|txt|zip|rar|7z|"
+    r"srt|ass|vtt|jpg|jpeg|png|webp|gif|bmp|tif|tiff|heic|"
+    r"doc|docx|ppt|pptx|xls|xlsx|apk|exe|iso)\Z",
+    re.IGNORECASE,
+)
+
+_VARIANT_METADATA_START = re.compile(
+    r"\b(?:(?:19|20|21)\d{2}|s\d{1,3}(?:e\d{1,3})?|"
+    r"(?:e|ep|episode|season)\s*\d{1,3}|\d{3,4}p|\d{3,4}x\d{3,4}|4k|8k|"
+    r"x264|x265|h264|h265|hevc|av1|web[- ]?dl|webrip|bluray|brrip|hdrip|dvdrip)\b",
+    re.IGNORECASE,
+)
+
 
 def canonicalize_media_title(file_name: str) -> str:
     """Return a conservative title key that removes encode/quality noise."""
-    value = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", file_name or "")
+    # Indexed filenames have already had dots replaced by spaces. Recognize
+    # actual terminal formats in either representation, not arbitrary words
+    # or years after a dot (Doctor.No, Film.2025).
+    value = _MEDIA_EXTENSION.sub("", file_name or "")
     value = re.sub(r"[._+\-]+", " ", value)
-    value = _VARIANT_NOISE.sub(" ", value)
-    value = re.sub(r"\b\d{3,4}x\d{3,4}\b", " ", value, flags=re.IGNORECASE)
+    # Proper, HDR, SDR, etc. can be real title words. Only discard release
+    # noise after an identifiable year/episode/quality/encoding boundary.
+    boundary = _VARIANT_METADATA_START.search(value)
+    if boundary:
+        suffix = _VARIANT_NOISE.sub(" ", value[boundary.start():])
+        suffix = re.sub(r"\b\d{3,4}x\d{3,4}\b", " ", suffix, flags=re.IGNORECASE)
+        value = value[:boundary.start()] + suffix
     value = re.sub(r"\s+", " ", value).strip().lower()
     return value or (file_name or "unknown").lower()
 

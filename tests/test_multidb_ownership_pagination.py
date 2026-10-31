@@ -1,0 +1,345 @@
+"""PH-025/026 isolated multi-DB ownership and bounded pagination tests.
+
+All DB writes are limited to disposable localhost MongoDB names. Production
+still uses one database and multi-DB is not enabled by these tests.
+"""
+import asyncio
+import os
+from datetime import datetime
+from uuid import uuid4
+
+import pytest
+from pymongo.errors import OperationFailure
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from core.database.multi_pool import DatabaseInfo, MultiDatabaseManager
+from scripts.profile_media_search import is_local
+
+
+class Pool:
+    def __init__(self, database):
+        self.db = database
+
+    async def get_collection(self, name):
+        return self.db[name]
+
+    async def execute_with_retry(self, fn, *args, **kwargs):
+        return await fn(*args, **kwargs)
+
+
+def multi_manager(*databases):
+    # Avoid affecting the production module singleton or its global pools.
+    manager = object.__new__(MultiDatabaseManager)
+    manager.__init__()
+    manager.databases = [
+        DatabaseInfo(uri="localhost", name=f"fixture_{i}", pool=Pool(db))
+        for i, db in enumerate(databases)
+    ]
+    return manager
+
+
+@pytest.fixture
+def local_mongo_uri():
+    uri = os.environ.get("TEST_MONGO_URI")
+    if not uri:
+        pytest.skip("Disposable MongoDB CI service required")
+    assert is_local(uri), "Never run integration writes against remote MongoDB"
+    return uri
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_ph025_one_owner_one_write_and_duplicate_owners_fail_closed(local_mongo_uri):
+    name = "ph025_" + uuid4().hex
+    client = AsyncIOMotorClient(local_mongo_uri, serverSelectionTimeoutMS=5000)
+    a, b = client[name + "a"].FILES, client[name + "b"].FILES
+    manager = multi_manager(client[name + "a"], client[name + "b"])
+    try:
+        await a.insert_many([{"_id": "only-a", "state": 1},
+                             {"_id": "duplicate", "state": 1}])
+        await b.insert_many([{"_id": "only-b", "state": 1},
+                             {"_id": "duplicate", "state": 1}])
+
+        assert await manager.update_one_across_databases(
+            "FILES", {"_id": "only-b"}, {"$set": {"state": 2}}
+        )
+        assert (await b.find_one({"_id": "only-b"}))["state"] == 2
+        assert await a.find_one({"_id": "only-b"}) is None
+        # A matched no-op is still a successful update.
+        assert await manager.update_one_across_databases(
+            "FILES", {"_id": "only-b"}, {"$set": {"state": 2}}
+        )
+        assert await manager.update_one_across_databases(
+            "FILES", {"_id": "only-a"}, {"$set": {"state": 3}},
+            upsert=True
+        )
+        assert (await a.find_one({"_id": "only-a"}))["state"] == 3
+
+        with pytest.raises(RuntimeError, match="Ambiguous"):
+            await manager.update_one_across_databases(
+                "FILES", {"_id": "duplicate"}, {"$set": {"state": 4}}
+            )
+        assert (await a.find_one({"_id": "duplicate"}))["state"] == 1
+        assert (await b.find_one({"_id": "duplicate"}))["state"] == 1
+
+        assert not await manager.update_one_across_databases(
+            "FILES", {"_id": "missing"}, {"$set": {"state": 4}}
+        )
+        with pytest.raises(RuntimeError, match="PH-028"):
+            await manager.update_one_across_databases(
+                "FILES", {"_id": "missing"}, {"$set": {"state": 4}},
+                upsert=True
+            )
+        assert await a.find_one({"_id": "missing"}) is None
+        assert await b.find_one({"_id": "missing"}) is None
+
+        manager.databases[1].is_active = False
+        with pytest.raises(RuntimeError, match="unavailable"):
+            await manager.update_one_across_databases(
+                "FILES", {"_id": "only-a"}, {"$set": {"state": 5}}
+            )
+        assert (await a.find_one({"_id": "only-a"}))["state"] == 3
+    finally:
+        await client.drop_database(name + "a")
+        await client.drop_database(name + "b")
+        client.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_ph025_single_database_upsert_preserves_legacy_behavior(local_mongo_uri):
+    name = "ph025single_" + uuid4().hex
+    client = AsyncIOMotorClient(local_mongo_uri, serverSelectionTimeoutMS=5000)
+    manager = multi_manager(client[name])
+    try:
+        assert await manager.update_one_across_databases(
+            "FILES", {"_id": "new"}, {"$set": {"state": "created"}}, upsert=True
+        )
+        assert (await client[name].FILES.find_one({"_id": "new"}))["state"] == "created"
+        assert await manager.update_one_across_databases(
+            "FILES", {"_id": "new"}, {"$set": {"state": "created"}}
+        )
+        assert await client[name].FILES.count_documents({}) == 1
+    finally:
+        await client.drop_database(name)
+        client.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_ph026_deep_pages_are_stable_bounded_and_nonoverlapping(local_mongo_uri):
+    name = "ph026_" + uuid4().hex
+    client = AsyncIOMotorClient(local_mongo_uri, serverSelectionTimeoutMS=5000)
+    dbs = [client[f"{name}{i}"] for i in range(3)]
+    manager = multi_manager(*dbs)
+    records = []
+    try:
+        for i, database in enumerate(dbs):
+            batch = []
+            for j in range(1250):
+                # Repeated timestamps exercise stable _id tie breaking.
+                date = datetime(2026, 10, 29, 10, (j // 25) % 60).isoformat()
+                item = {"_id": f"{i}-{j:05d}", "indexed_at": date, "tag": i}
+                batch.append(item)
+                records.append(item)
+            await database.FILES.insert_many(batch)
+
+        expected = sorted(
+            records,
+            key=lambda d: (d["indexed_at"], d["_id"]),
+            reverse=True
+        )
+        sort = [("indexed_at", -1)]  # _id must be appended automatically
+        pages = []
+        for offset, size in [(0, 50), (50, 50), (1050, 150), (3200, 100)]:
+            result = await manager.search_across_all_databases(
+                "FILES", {}, limit=size, skip=offset, sort=sort
+            )
+            assert [x["_id"] for x in result] == [
+                x["_id"] for x in expected[offset:offset + size]
+            ]
+            assert len({x["_id"] for x in result}) == len(result)
+            pages.append(result)
+        assert not ({x["_id"] for x in pages[0]} & {x["_id"] for x in pages[1]})
+        again = await manager.search_across_all_databases(
+            "FILES", {}, limit=150, skip=1050, sort=sort
+        )
+        assert [x["_id"] for x in again] == [x["_id"] for x in pages[2]]
+
+        assert await manager.search_across_all_databases(
+            "FILES", {}, limit=0, skip=500, sort=sort
+        ) == []
+        for invalid in ({"limit": -1}, {"skip": -1}, {"skip": 1.3}):
+            with pytest.raises(ValueError):
+                await manager.search_across_all_databases(
+                    "FILES", {}, sort=sort, **invalid
+                )
+
+        # Search did not change any original collection or create an index.
+        for database in dbs:
+            assert await database.FILES.count_documents({}) == 1250
+            assert sorted(await database.FILES.index_information()) == ["_id_"]
+    finally:
+        for i in range(3):
+            await client.drop_database(f"{name}{i}")
+        client.close()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_shallow_merge_fits_small_server_sort_budget_without_disk_spill(local_mongo_uri):
+    client = AsyncIOMotorClient(local_mongo_uri, serverSelectionTimeoutMS=5000)
+    name = 'ph026_sort_' + uuid4().hex
+    database = client[name]
+    original = await client.admin.command('getParameter', 1,
+        internalQueryMaxBlockingSortMemoryUsageBytes=1)
+    try:
+        await database.FILES.insert_many([{'_id': str(i), 'indexed_at': f'{i:04d}',
+            'payload': 'x'*4096} for i in range(250)])
+        await client.admin.command('setParameter', 1,
+            internalQueryMaxBlockingSortMemoryUsageBytes=65536)
+        class Collection:
+            def find(self, query): return database.FILES.find(query).allow_disk_use(False)
+            async def count_documents(self, query): return await database.FILES.count_documents(query)
+        class BoundedPool:
+            async def get_collection(self, collection): return Collection()
+            async def execute_with_retry(self, fn, *args, **kwargs): return await fn(*args, **kwargs)
+        manager = multi_manager(database)
+        manager.databases[0].pool = BoundedPool()
+        # A query-wide sort is too large even though its first page is tiny.
+        with pytest.raises(OperationFailure):
+            await database.FILES.find({}).sort([('indexed_at',-1),('_id',-1)]).allow_disk_use(False).to_list(length=5)
+        rows = await manager.search_across_all_databases('FILES', {}, limit=5,
+                                                        sort=[('indexed_at',-1)])
+        assert [row['_id'] for row in rows] == ['249','248','247','246','245']
+        await database.FILES.create_index([('indexed_at',-1),('_id',-1)], name='qa_stable_sort')
+        rows = await manager.search_across_all_databases('FILES', {}, limit=5, skip=230,
+            sort=[('indexed_at',-1)], sort_index_hint='qa_stable_sort')
+        assert [row['_id'] for row in rows] == ['19','18','17','16','15']
+    finally:
+        await client.admin.command('setParameter', 1,
+            internalQueryMaxBlockingSortMemoryUsageBytes=original['internalQueryMaxBlockingSortMemoryUsageBytes'])
+        await client.drop_database(name)
+        client.close()
+
+
+@pytest.mark.parametrize('counts',[(2000,3,2),(1250,1250,1250),(0,200,0),(7,4),(0,0,0)])
+def test_guaranteed_prefixes_only_remove_rows_before_the_reference_page(counts):
+    import random
+    rng=random.Random(20261029)
+    records=[(rng.random(), source, index) for source,count in enumerate(counts) for index in range(count)]
+    ordered=sorted(records)
+    per_source=[sorted([row for row in records if row[1]==source]) for source in range(len(counts))]
+    total=sum(counts)
+    for skip in [0,1,total//2,max(0,total-10),total,total+10]:
+        prefixes,remaining=MultiDatabaseManager._guaranteed_prefix_skips(counts,skip)
+        retained=sorted([row for source,rows in enumerate(per_source) for row in rows[prefixes[source]:]])
+        assert retained[remaining:remaining+10]==ordered[skip:skip+10]
+        if skip<=total:
+            dropped={row for source,rows in enumerate(per_source) for row in rows[:prefixes[source]]}
+            assert dropped<=set(ordered[:skip])
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_skewed_deep_indexed_page_matches_reference_and_skips_large_owner_prefix(local_mongo_uri):
+    client=AsyncIOMotorClient(local_mongo_uri,serverSelectionTimeoutMS=5000)
+    name='ph026_skew_'+uuid4().hex
+    dbs=[client[name+str(i)] for i in range(3)]
+    manager=multi_manager(*dbs);records=[]
+    try:
+        for source,(db,count) in enumerate(zip(dbs,[2000,3,2])):
+            docs=[{'_id':f'{source}-{i:05}','indexed_at':f'{i:05}'} for i in range(count)]
+            await db.FILES.insert_many(docs);records.extend(docs)
+            await db.FILES.create_index([('indexed_at',-1),('_id',-1)],name='qa_deep_sort')
+        expected=sorted(records,key=lambda row:(row['indexed_at'],row['_id']),reverse=True)
+        rows=await manager.search_across_all_databases('FILES',{},limit=10,skip=1990,
+            sort=[('indexed_at',-1)],sort_index_hint='qa_deep_sort')
+        assert rows==expected[1990:2000]
+        prefixes,remaining=manager._guaranteed_prefix_skips([2000,3,2],1990)
+        assert prefixes[0]==1985 and remaining==5
+    finally:
+        for db in dbs:await client.drop_database(db.name)
+        client.close()
+
+
+@pytest.mark.asyncio
+async def test_ph026_allows_only_bounded_cursor_pages_and_closes_on_failure():
+    class Cursor:
+        def __init__(self, docs, fail=False):
+            self.docs = docs
+            self.fail = fail
+            self.requests = []
+            self.closed = False
+            self.pos = 0
+
+        def sort(self, fields):
+            self.docs = sorted(
+                self.docs, key=lambda d: (d["indexed_at"], d["_id"]),
+                reverse=True
+            )
+            return self
+
+        def batch_size(self, size):
+            assert size <= 64
+            return self
+
+        def limit(self, count):
+            assert count > 0
+            self.docs = self.docs[:count]
+            return self
+
+        async def to_list(self, *, length):
+            assert length <= 64 and length is not None
+            self.requests.append(length)
+            if self.fail:
+                raise RuntimeError("simulated DB failure")
+            data = self.docs[self.pos:self.pos + length]
+            self.pos += len(data)
+            return data
+
+        async def close(self):
+            self.closed = True
+
+    class Collection:
+        def __init__(self, cursor):
+            self.cursor = cursor
+        def find(self, query):
+            return self.cursor
+
+    class TestPool:
+        def __init__(self, cursor):
+            self.collection = Collection(cursor)
+        async def get_collection(self, name):
+            return self.collection
+
+    first = Cursor([{"_id": f"A{i:05}", "indexed_at": "2026-10-29"} for i in range(400)])
+    second = Cursor([{"_id": f"B{i:05}", "indexed_at": "2026-10-29"} for i in range(400)])
+    manager = object.__new__(MultiDatabaseManager)
+    manager.__init__()
+    manager.databases = [
+        DatabaseInfo(uri="local", name="A", pool=TestPool(first)),
+        DatabaseInfo(uri="local", name="B", pool=TestPool(second)),
+    ]
+    result = await manager.search_across_all_databases(
+        "FILES", {}, skip=510, limit=20, sort=[("indexed_at", -1)]
+    )
+    assert len(result) == 20
+    assert first.closed and second.closed
+    assert first.requests and second.requests
+    assert max(first.requests + second.requests) <= 64
+
+    broken = Cursor([{"_id": "X", "indexed_at": "2026-10-29"}], fail=True)
+    other = Cursor([{"_id": "Y", "indexed_at": "2026-10-29"}])
+    manager.databases = [
+        DatabaseInfo(uri="local", name="broken", pool=TestPool(broken)),
+        DatabaseInfo(uri="local", name="healthy", pool=TestPool(other)),
+    ]
+    with pytest.raises(RuntimeError, match="simulated DB failure"):
+        await manager.search_across_all_databases(
+            "FILES", {}, skip=0, limit=3, sort=[("indexed_at", -1)]
+        )
+    assert broken.closed and other.closed
+    manager.databases[0].is_active = False
+    with pytest.raises(RuntimeError, match="unavailable"):
+        await manager.search_across_all_databases("FILES", {}, limit=1)

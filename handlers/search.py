@@ -12,6 +12,7 @@ from pyrogram.types import Message, InlineQuery, InlineQueryResultCachedDocument
     InlineKeyboardMarkup, ReplyKeyboardRemove
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.session.manager import SessionType
 from core.services.search_results import SearchResultsService
 from core.utils.button_builder import ButtonBuilder
@@ -41,6 +42,7 @@ SEARCH_TEXT_FILTER = (
 
 class SearchHandler:
     """Handler for search functionality with subscription checks"""
+    INLINE_QUERY_TIMEOUT = 8
 
     def __init__(self, bot):
         self.bot = bot
@@ -57,7 +59,8 @@ class SearchHandler:
             cache_manager=bot.cache,
             config=bot.config,
             recommendation_service=getattr(bot, 'recommendation_service', None),
-            media_repo=bot.media_repo
+            media_repo=bot.media_repo,
+            task_manager=getattr(bot, 'handler_manager', None),
         )
         
         # Get search history service from bot
@@ -135,6 +138,8 @@ class SearchHandler:
 
         # Signal shutdown
         self._shutdown.set()
+
+        await self.search_results_service.tasks.close()
 
         # If handler_manager is available, let it handle everything
         if hasattr(self.bot, 'handler_manager') and self.bot.handler_manager:
@@ -262,6 +267,32 @@ class SearchHandler:
         await self._handle_group_search(client, message, query, user_id)
 
     async def handle_inline_query(self, client: Client, query: InlineQuery):
+        """Answer within Telegram's query lifetime, including access checks."""
+        try:
+            await asyncio.wait_for(
+                self._handle_inline_query(client, query), timeout=self.INLINE_QUERY_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.warning('Inline query exceeded its response deadline')
+            await self._answer_inline_failure(query, SEARCH_RETRY_MESSAGE)
+        except QueryIdInvalid:
+            logger.warning('Inline query expired before its answer could be delivered')
+        except Exception as e:
+            logger.error(f"Error occurred while handling inline query: {e}")
+            await self._answer_inline_failure(query, ErrorMessageFormatter.format_error(
+                'Search Error', include_prefix=False, plain_text=True))
+
+    async def _answer_inline_failure(self, query: InlineQuery, text: str):
+        """Expired queries cannot be answered again; keep dispatcher cleanup safe."""
+        try:
+            await query.answer(results=[], cache_time=0, is_personal=True,
+                               switch_pm_text=text, switch_pm_parameter='start')
+        except QueryIdInvalid:
+            logger.warning('Inline query expired before its error answer')
+        except Exception:
+            logger.warning('Unable to answer failed inline query', exc_info=True)
+
+    async def _handle_inline_query(self, client: Client, query: InlineQuery):
         """Handle inline search queries - send files directly when clicked"""
         user_id = extract_user_id(query)
         if not user_id:
@@ -304,7 +335,7 @@ class SearchHandler:
 
         # Check if user is banned using validators
         if not is_admin(user_id, self.bot.config.ADMINS):
-            user = await self.bot.user_repo.get_user(user_id)
+            user = await self.bot.user_repo.get_user(user_id, use_cache=False)
             if user and user.status == UserStatus.BANNED:
                 # Get ban message from bot config or default (shortened for inline query)
                 ban_msg_template = MessageHelper.get_ban_message(self.bot.config)
@@ -375,13 +406,16 @@ class SearchHandler:
                     return
 
         # Get and sanitize search query
-        search_query = sanitize_search_query(query.query)
+        # A legacy 100-character cut can remove or split trailing structured
+        # filters. Preserve the complete inline query when those are enabled.
+        query_limit = None if getattr(self.bot.config, 'FEATURE_ADVANCED_SEARCH', False) else 100
+        search_query = sanitize_search_query(query.query, max_length=query_limit)
 
         # Parse query for file type filter
         file_type = None
         if '|' in search_query:
             parts = search_query.split('|', maxsplit=1)
-            search_query = sanitize_search_query(parts[0])
+            search_query = sanitize_search_query(parts[0], max_length=query_limit)
             # file_type_str = parts[1].strip().lower()
             # Add file type parsing if needed
 
@@ -412,9 +446,14 @@ class SearchHandler:
             )
 
             if not has_access:
+                invalid_filter = bool(access_reason and access_reason.startswith('Invalid search filter:'))
                 # Check if it's daily limit
                 if access_reason and "Daily limit reached" in access_reason:
                     switch_text = "⚠️ Daily limit reached. Upgrade to premium for unlimited access!"
+                elif access_reason == SEARCH_RETRY_MESSAGE:
+                    switch_text = SEARCH_RETRY_MESSAGE
+                elif invalid_filter:
+                    switch_text = "Invalid search filter. Check /search_help for syntax."
                 else:
                     switch_text = ErrorMessageFormatter.format_access_denied(access_reason, include_prefix=False, plain_text=True)
                 try:
@@ -422,7 +461,7 @@ class SearchHandler:
                         results=[],
                         cache_time=0,
                         switch_pm_text=switch_text,
-                        switch_pm_parameter="premium"
+                        switch_pm_parameter="start" if access_reason == SEARCH_RETRY_MESSAGE or invalid_filter else "premium"
                     )
                 except QueryIdInvalid:
                     logger.warning(f"Inline query expired for user {user_id} (access denied)")
@@ -478,7 +517,7 @@ class SearchHandler:
             try:
                 await query.answer(
                     results=results,
-                    cache_time=30,
+                    cache_time=30 if is_admin(user_id, self.bot.config.ADMINS) else 0,
                     is_personal=True,
                     next_offset=str(next_offset) if next_offset else "",
                     switch_pm_text=f"📁 Found {total} files" if total > 0 else "🔍 Search Files",
@@ -699,6 +738,16 @@ class SearchHandler:
                         title="Daily Limit Reached"
                     )
                 await message.reply_text(limit_msg)
+                return
+
+            # Search is temporarily down. Do not proceed to filter results,
+            # success tracking or zero-result analytics for a failed search.
+            if not has_access and access_reason == SEARCH_RETRY_MESSAGE:
+                await message.reply_text(
+                    ErrorMessageFormatter.format_warning(
+                        SEARCH_RETRY_MESSAGE, title="Search Unavailable"
+                    )
+                )
                 return
 
             search_sent = False

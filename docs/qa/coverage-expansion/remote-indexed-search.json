@@ -1,0 +1,162 @@
+[
+  {
+    "query_id": "af70854e4edb",
+    "legacy": {
+      "p50_ms": 5317.57,
+      "max_ms": 5353.75,
+      "matches": 34,
+      "samples": 5
+    },
+    "indexed": {
+      "p50_ms": 114.5,
+      "max_ms": 127.92,
+      "matches": 34,
+      "samples": 5
+    },
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 599,
+      "totalKeysExamined": 601,
+      "executionTimeMillis": 54,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "OR",
+        "SORT"
+      ],
+      "indexesUsed": [
+        "media_search_terms_v1"
+      ]
+    }
+  },
+  {
+    "query_id": "e75f0c4cf30b",
+    "legacy": {
+      "p50_ms": 3506.28,
+      "max_ms": 3582.93,
+      "matches": 135,
+      "samples": 5
+    },
+    "indexed": {
+      "p50_ms": 136.98,
+      "max_ms": 139.88,
+      "matches": 135,
+      "samples": 5
+    },
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 207,
+      "totalKeysExamined": 208,
+      "executionTimeMillis": 19,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "OR",
+        "SORT"
+      ],
+      "indexesUsed": [
+        "media_search_terms_v1"
+      ]
+    }
+  },
+  {
+    "query_id": "2428e85c84d6",
+    "legacy": {
+      "p50_ms": 3407.61,
+      "max_ms": 3415.62,
+      "matches": 0,
+      "samples": 5
+    },
+    "indexed": {
+      "p50_ms": 59.23,
+      "max_ms": 74.55,
+      "matches": 0,
+      "samples": 5
+    },
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 0,
+      "totalDocsExamined": 0,
+      "totalKeysExamined": 1,
+      "executionTimeMillis": 0,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "OR",
+        "SORT"
+      ],
+      "indexesUsed": [
+        "media_search_terms_v1"
+      ]
+    }
+  },
+  {
+    "query_id": "a952c5f2c6c4",
+    "legacy": {
+      "p50_ms": 3348.94,
+      "max_ms": 3443.08,
+      "matches": 34,
+      "samples": 5
+    },
+    "indexed": {
+      "p50_ms": 83.89,
+      "max_ms": 85.25,
+      "matches": 34,
+      "samples": 5
+    },
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 599,
+      "totalKeysExamined": 601,
+      "executionTimeMillis": 24,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "OR",
+        "SORT"
+      ],
+      "indexesUsed": [
+        "media_search_terms_v1"
+      ]
+    }
+  },
+  {
+    "query_id": "b69397bb5b63",
+    "legacy": {
+      "p50_ms": 3360.42,
+      "max_ms": 3421.9,
+      "matches": 23,
+      "samples": 5
+    },
+    "indexed": {
+      "p50_ms": 112.99,
+      "max_ms": 135.87,
+      "matches": 23,
+      "samples": 5
+    },
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 753,
+      "totalKeysExamined": 754,
+      "executionTimeMillis": 65,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "OR",
+        "SORT"
+      ],
+      "indexesUsed": [
+        "media_search_terms_v1"
+      ]
+    }
+  }
+]

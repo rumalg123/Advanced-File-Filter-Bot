@@ -55,6 +55,19 @@ The bot can index media from Telegram channels, search it with typo-tolerant mat
 - Supports additional authorized users, bans, request limits, warnings, and auto-ban behavior.
 - Restricts sensitive operations to configured administrators; `/bsetting` and `/shell` are primary-admin-only.
 
+Configured bot admins and the explicit owner retain their ban, subscription and
+quota exemptions. Ordinary-user ban checks read MongoDB directly, so an old
+Redis profile cannot override a ban or prevent recovery after unban. A failed
+authorization read returns a retry response. Bans still apply when premium is
+disabled or the ordinary user has premium access. Unbanning resets request-abuse
+counters while preserving premium grants and consumed download quota.
+
+Content alerts and broadcasts skip banned ordinary users. Bulk deliveries check
+status before each remaining file and refund definitely unsent reserved quota.
+Files already delivered, already issued inline results and Telegram requests
+already in flight cannot be retroactively revoked. Fresh normal-user inline
+queries use zero result-cache time so they can check current status.
+
 ### Filters and group connections
 
 - Lets group admins create text/media auto-filters.
@@ -122,6 +135,18 @@ Telegram update
 
 See the code-derived [architecture diagrams](docs/architecture/diagrams.md) for system context, startup, search, delivery, indexing, recommendations, cache, settings, multi-database, data-model, and deployment views.
 
+PH-006 search diagnostics: [read-only MongoDB EXPLAIN profiler and latency baseline guide](docs/SEARCH_PERFORMANCE_BASELINE.md). The existing `/metrics` response adds `metrics.media_search` with per-process cache hit/miss counts and approximate p50/p95/p99 latency buckets. This does not change search semantics or create new production indexes.
+
+PH-008 release safety: the [CI/CD release gates and required branch checks guide](docs/CI_CD_RELEASE_GATES.md) documents the full Python/MongoDB/Redis suite, Docker build preflight, SHA-pinned GitHub Actions, and staging-only deployment approval. The PR checklist is at [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
+
+PH-010 Redis security: [optional file-backed Redis ACL authentication and staging cutover guide](docs/REDIS_ACCESS_SECURITY.md). This uses an opt-in [Compose overlay](docker-compose.redis-auth.yml) and independent secret files for cache/state Redis; the existing unauthenticated Redis default is unchanged.
+
+PH-011 search-cache consistency: [atomic Redis generations, bounded search retry and staging verification guide](docs/SEARCH_CACHE_GENERATION.md). Missing/malformed Redis counters never default to `v1`, and concurrent invalidations trigger bounded search retries.
+
+PH-012 staging and recovery: [isolated staging deployment and Atlas/Redis backup-restore rehearsal](docs/STAGING_AND_RECOVERY.md), [evidence template](docs/RECOVERY_EVIDENCE_TEMPLATE.md), and a [separate staging Compose project](docker-compose.staging.yml) that requires dedicated Telegram, MongoDB and Redis resources. The host preflight is offline; no production environment was accessed.
+
+PH-013 health checks: [cheap liveness, bounded dependency readiness and on-demand diagnostic behavior](docs/HEALTH_PROBES.md). Docker liveness stays at `/health` and cannot trigger restarts from MongoDB/Redis outages; `/ready` reports dependency status separately.
+
 ### Wzgram compatibility note
 
 The project dependency is pinned to a specific `wzgram` Git commit in `pyproject.toml` and `requirements.txt`. Wzgram exposes a Pyrogram-compatible import namespace, so source imports such as `from pyrogram import Client` are expected; they do not mean the project still installs the unmaintained upstream Pyrogram distribution.
@@ -129,7 +154,7 @@ The project dependency is pinned to a specific `wzgram` Git commit in `pyproject
 ## Requirements
 
 - Python 3.13 or newer.
-- Git, because `wzgram` is installed directly from a pinned Git revision.
+- `wzgram` is installed from PyPI using the latest published release.
 - A Telegram API ID and API hash from `my.telegram.org`.
 - A bot token from BotFather.
 - MongoDB, either local or hosted.
@@ -227,7 +252,9 @@ Compose overrides the bot's `REDIS_URI` with `redis://redis:6379/0`, waits for R
 ### Check health
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/health  # cheap process liveness
+curl http://localhost:8000/ready   # bounded MongoDB and Redis readiness
+curl http://localhost:8000/health/details  # explicit detailed legacy report
 curl http://localhost:8000/metrics
 ```
 
@@ -254,6 +281,23 @@ Do not run `docker compose down -v` during a normal update; `-v` removes named R
 - If `PORT` is changed from `8000`, update the Compose port mapping and health check consistently.
 
 ## Production deployment
+
+For an existing MongoDB deployment, planned Redis reset, or adding a second
+database later, follow the [production cutover runbook](docs/PRODUCTION_CUTOVER.md).
+It distinguishes disposable Redis volumes from application backups/data and
+documents capacity headroom, ownership activation and rollback.
+
+`/restart` updates the bot from the database-backed `UPSTREAM_REPO` and
+`UPSTREAM_BRANCH` settings, then restarts it. The updater backs up application
+files, clones and validates the requested branch, and installs requirements if
+they changed. It preserves `.env`, sessions, logs and data. Failed updates cancel
+the restart. In Docker, graceful shutdown lets the `unless-stopped` restart
+policy start the same container with the updated source. No image Git checkout
+or Docker socket is required. Normal startup still uses installed dependencies.
+
+These source changes survive container restarts. Recreating the container uses
+the built image, so also update the host checkout and rebuild when making a
+release permanent or changing Docker/system dependencies.
 
 The `Dockerfile` can be used on a VPS or a container PaaS.
 
@@ -314,10 +358,20 @@ Treat these as deployment/bootstrap settings and manage them in the environment:
 - `API_ID`, `API_HASH`, `BOT_TOKEN`, `SESSION`
 - `DATABASE_URI`, `DATABASE_NAME`, `DATABASE_URIS`, `DATABASE_NAMES`
 - `REDIS_URI`
-- `PROCESSING_*`, `CONCURRENCY_*`
+- `PROCESSING_*`, except the two Mongo-backed durable-processing switches below
+- `CONCURRENCY_*`
 - Update-wrapper settings such as `AUTO_UPDATE`
 
 Treat feature flags, limits, messages, channel IDs, and most presentation settings as Mongo-backed after their first seed. `/bsetting` explicitly reminds the admin to restart because handlers, command menus, repositories, worker counts, and optional indexes are constructed during startup.
+
+`PROCESSING_DURABLE_INDEXING` and `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` are also
+Mongo-backed switches available through `/bsetting`; their environment values
+seed missing settings only. Connection credentials stay protected from bot edits
+and resets. Secondary bot admins cannot operate the primary admin's settings
+controls. Complete prompted text edits in the bot's private chat; `/cancel`
+discards an unfinished edit. Closing an older menu preserves an edit opened from
+a different menu. Saved captions and templates display as literal text without
+changing the stored formatting.
 
 ### Environment precedence
 
@@ -343,7 +397,7 @@ Never commit `.env`. The repository `.gitignore` is intended to keep secrets out
 | Variable | Default | Purpose |
 |---|---:|---|
 | `SESSION` | `Media_search` | Local wzgram session name. Use a stable value per deployment. |
-| `PORT` | `8000` | aiohttp port serving `/`, `/health`, `/metrics`, and `/performance`. |
+| `PORT` | `8000` | aiohttp port serving liveness (`/`, `/health`, `/live`), readiness (`/ready`), details (`/health/details`) and existing metrics endpoints. |
 | `WORKERS` | `50` | Wzgram update worker count configured when the client is constructed. |
 | `ENVIRONMENT` | `production` | Marks `dev`/`development`; other values are treated as production. |
 | `IN_DOCKER` | unset | Explicit Docker detection hint; Docker is also detected through `/.dockerenv`. |
@@ -378,13 +432,54 @@ Only media operations use the optional multi-database manager. Users, settings, 
 | `DELETE_CHANNEL` | unset | Optional channel involved in file-deletion workflows. |
 | `REQ_CHANNEL` | `0` | Destination for content requests. Set it explicitly; `0` leaves the destination unset. |
 | `SUPPORT_GROUP_ID` | unset | Group where messages beginning with `#request ` are handled. |
-| `AUTH_CHANNEL` | unset | Force-subscription channel ID or username. |
-| `AUTH_GROUPS` | empty | Comma-separated force-subscription group IDs. |
+| `AUTH_CHANNEL` | unset | Comma-separated force-subscription channel IDs or `@usernames`; a legacy single value still works. |
+| `AUTH_GROUPS` | empty | Comma-separated force-subscription group IDs or `@usernames`. |
+| `FORCE_SUB_INVITE_EXPIRE_MINUTES` | `15` | Lifetime of newly generated join links, in minutes; range 1–525600. |
+| `FORCE_SUB_INVITE_MEMBER_LIMIT` | `1` | Telegram member limit for each new join link; range 1–99999. |
 | `AUTH_USERS` | empty | Comma-separated users allowed by authorization checks; admins are appended automatically. |
 | `CHANNELS` | `0` | Comma-separated numeric source-channel IDs for auto-indexing. `0` is discarded. Channels can also be managed with admin commands. |
 | `PICS` | empty | Comma-separated image URLs used randomly by the start command. |
 
-The bot must be a member and usually an administrator in each configured channel/group. Use full Telegram IDs, including the `-100` prefix for channels and supergroups.
+For force subscription, the bot must be an administrator with **Invite Users**
+permission in every required channel/group. Use full Telegram IDs, including
+the `-100` prefix for channels and supergroups. In `/bsetting`, **Force Sub
+Channels** and **Force Sub Groups** accept comma-separated values. Before saving
+a nonempty edit, the bot resolves every target, checks its type and permissions,
+and stores canonical IDs. A failed check returns an actionable error without
+changing the saved setting or requesting a restart.
+
+**Invite Expiry (min)** and **Invite Member Limit** are also editable through
+`/bsetting`. Restart to apply saved changes. Existing MongoDB settings override
+environment initialization; new keys are seeded automatically, and no manual
+MongoDB migration is needed. Startup checks report inaccessible targets and
+missing invite permissions for settings supplied through the environment.
+
+Force subscription applies to an ordinary user's initial `/start`, private search and pagination, inline search,
+protected user menus and file delivery. Group search previews and their pages
+remain public; file buttons lead to the private delivery gate. Configured bot
+admins, the primary owner and `AUTH_USERS` retain their subscription exemptions.
+The ordinary-user ban policy still applies to authorized non-admin users.
+
+Every required membership must be verifiable. An inaccessible chat or failed
+membership lookup denies ordinary-user access until verification works again.
+A restricted user who is still a member satisfies the membership requirement;
+Telegram exposes this separately through the
+[`is_member` field](https://core.telegram.org/bots/api#chatmemberrestricted).
+
+Join prompts include only missing memberships. Each button uses a newly created,
+expiring, member-limited invite, including for public chats. **Try Again** checks
+membership and refreshes links while the user still needs to join. Changed
+settings apply to newly generated links after restart; previously issued links
+retain their original expiry. Telegram's member limit caps simultaneous members
+who joined through that link; it does not bind a link to one user or count all
+lifetime joins. See the [Telegram invite-link definition](https://core.telegram.org/bots/api#chatinvitelink).
+
+Try Again controls belong to the requesting user. Failed membership checks and
+other users' clicks preserve the saved action; after joining, the owner can
+resume the original file, bulk delivery, menu or private page. Expired sessions
+require the original command/link again. Long retry actions use short keys in
+operational Redis. If that action cannot be stored, a general membership check
+remains available and the user repeats the original action after joining.
 
 ### Established feature and access settings
 
@@ -407,7 +502,10 @@ The bot must be a member and usually an administrator in each configured channel
 
 ### Additive feature flags
 
-Every value below defaults to `false`:
+All flags below are available to the primary admin through `/bsetting` and
+take effect after restart. Environment values initialize missing MongoDB
+settings; existing saved values take precedence, including after Redis clearing.
+Defaults are `false`, with the activation-aware registry recommendation below.
 
 | Variable | Capability |
 |---|---|
@@ -422,6 +520,30 @@ Every value below defaults to `false`:
 | `FEATURE_RECENT_FILES` | Store successful deliveries and expose `/recent`, per-file removal, and `/clear_recent`. |
 | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Show a reason beside recommended files. |
 | `FEATURE_CONTENT_DASHBOARD` | Persist currently unresolved zero-result analytics, reconcile newly matching titles, and expose `/content_dashboard` to admins. |
+| `FEATURE_INDEXED_MEDIA_SEARCH` | Indexed word candidates followed by the legacy matcher; complete token backfill and verify optional indexes before rollout. |
+| `FEATURE_CANONICAL_MEDIA_METADATA` | Persist optional width, height and quality on new media; older-image rollback needs compatibility review. |
+| `FEATURE_QUOTA_DELIVERY_LEDGER` | Durable quota reservations and one-time settlements; uncertain deliveries need operator reconciliation. |
+| `PROCESSING_DURABLE_INDEXING` | MongoDB-backed channel indexing jobs with retries, restart recovery and a best-effort log-channel summary for each newly indexed, acknowledged job. |
+| `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` | MongoDB-backed alert jobs and bounded workers; also requires Saved Alerts enabled. |
+| `DATABASE_GLOBAL_OWNER_REGISTRY` | Coordinated permanent file ownership across multiple database sources; requires explicit ownership activation. |
+
+The **Media Owners** setting is locked when fewer than two distinct valid
+MongoDB URI/database pairs are configured. URI syntax and database names are
+validated without connecting or resolving SRV DNS for the menu. Repeated source
+identities, including credential/option variants of the same source, do not
+unlock it. Connection and complete activation checks still run at startup.
+Connection URIs/names remain environment configuration.
+
+With multiple valid sources, the recommended default is `false` until matching
+ownership activation is ready, then `true`. Existing saved choices are retained.
+You can stage `true` in `/bsetting` before maintenance, but stop all writers and
+complete activation before restarting. Once a source is bound, setting it to
+`false` is rejected; retiring ownership requires a separate migration. See
+[ownership rollout](docs/MULTIDB_GLOBAL_IDENTITY.md).
+
+Moving the four other operational flags into the menu does not complete their
+outstanding production acceptance drills. Their defaults remain off; use the
+individual metadata, quota and durable-queue rollout runbooks before enabling.
 
 ### Messages and presentation
 
@@ -465,6 +587,8 @@ All processing variables use the `PROCESSING_` prefix:
 | `PROCESSING_MAX_BATCH_MESSAGES` | `10000` | Maximum messages represented by one batch link. |
 | `PROCESSING_MESSAGE_QUEUE_SIZE` | `1000` | Main auto-indexing queue capacity. |
 | `PROCESSING_OVERFLOW_QUEUE_SIZE` | `500` | Overflow queue capacity. |
+| `PROCESSING_DURABLE_INDEXING` | `false` | Opt-in MongoDB-backed recoverable channel auto-index queue (new collection only). See [reliability runbook](docs/INDEXING_RELIABILITY.md). |
+| `PROCESSING_DURABLE_INDEXING_LEASE_SECONDS` | `180` | Duration after which a crashed worker's claimed job is eligible for replay. |
 | `PROCESSING_INTER_MESSAGE_DELAY` | `0.5` | Delay between processed messages in seconds. |
 | `PROCESSING_BATCH_WAIT_TIME_HIGH` | `2` | High-load batch wait in seconds. |
 | `PROCESSING_BATCH_WAIT_TIME_MEDIUM` | `3` | Medium-load batch wait in seconds. |
@@ -533,6 +657,28 @@ The bot publishes different Telegram command menus for private chats, groups, ad
 
 Send ordinary text with at least two characters to search. In inline mode, type the bot username and query in another chat.
 
+With `FEATURE_ADVANCED_SEARCH` enabled, add filters to the title, for example:
+
+```text
+movie type:video year:2026 lang:English quality:1080p
+show season:1 episode:4 minsize:700MB maxsize:2GB
+movie language:"Brazilian Portuguese" maxsize:"1.5 GB"
+```
+
+Types are `video`, `audio`, `document`, `photo`, `animation` and `application`.
+Years range from 1900 to 2100; season/episode values range from 0 to 999.
+Quality accepts labels such as `720p` or dimensions such as `1920x1080`;
+dimensions do not imply a quality label. Size units use powers of 1024 and
+support decimals; computed bytes must fit a signed 64-bit MongoDB integer.
+Recognized filters require a value and complete, whitespace-delimited quotes.
+Unknown keys remain title text. With the feature disabled, filter-like text
+keeps the existing literal-search behavior.
+
+Private validation errors show details; inline errors point to `/search_help`.
+Advanced inline queries keep their full filter text. Group results retain the
+existing public-preview policy, and pagination keeps the query constraints and
+requesting user's ownership.
+
 ### Optional user commands
 
 | Feature | Commands |
@@ -544,6 +690,18 @@ Send ordinary text with at least two characters to search. In inline mode, type 
 | Autocomplete | `/suggest partial title` |
 | Advanced search | `/search_help` |
 | Request tracking | `/myrequests` |
+
+`/suggest partial title` uses successful user/global search history, excludes
+the exact query and collapses spacing/case duplicates. Suggestions are checked
+against current indexed media using the active advanced-filter and caption
+settings. Deleted-file queries are omitted; valid fuzzy alternatives can still
+appear. Quotes in the command body are preserved. Compact buttons store an
+owned query reference rather than embedding a long query in callback data.
+The default eight-result request validates up to 24 candidates with at most
+five concurrent existence checks; it may return fewer valid suggestions.
+Lookup or callback-storage outages show a retry message. Disabling the flag
+removes the command after restart; existing query buttons use normal search
+rules. A caption-setting change applies after restart even with Redis retained.
 
 For `/favorite`, reply to a delivered file, or use `/favorite file_unique_id [collection name]`.
 Delivered files expose Favorite, Remove, and Add to Collection buttons. Favorite
@@ -565,6 +723,21 @@ MongoDB. `/recent` can remove one history entry without clearing the list.
 one to be reset; resets invalidate cached personalized results. File-report
 reason buttons open on the delivered-file keyboard and become a visible report
 status after submission, avoiding detached menus in the user's chat.
+
+Recommendation feedback belongs to the clicking user and selected file.
+**More like this** gives that file priority as a source of related suggestions.
+**Not interested** hides the file and stops using it as a profile source;
+**Reset** removes the explicit preference and lets ordinary click history apply
+again. Repeated clicks update one saved preference. Favorite and feedback
+markers preserve each other's selection.
+
+Feedback stays in MongoDB when Redis is cleared or its feature is disabled.
+Search/click relationships in Redis must build up again after a clear before
+related suggestions return. Changes to feedback/explanation flags apply after
+restart; cached rankings are checked against the active flags and requested
+limit. Old cache entries recompute automatically. Recommended file buttons keep
+their rank, appear once per menu and skip unavailable files. Similar-query text
+is displayed literally, including HTML-like characters.
 
 Interactive feature messages follow a state-consistency rule: persist the
 owner-scoped mutation, re-read list state where needed, and edit the originating
@@ -603,7 +776,7 @@ When `PUBLIC_FILE_STORE=false`, these are admin-only. When it is `true`, they ar
 | `/batch_premium first_link last_link` | Create a premium-only batch. Alias: `/bprem`. |
 | `/pbatch_premium first_link last_link` | Create a protected premium-only batch. Alias: `/pbprem`. |
 
-Both batch endpoints must refer to the same source channel and the bot must be able to read it.
+Both batch endpoints must refer to the same source channel and the bot must be able to read it. Normal/protected batch ranges must have positive message IDs, first ID no greater than last ID, and an inclusive size within `PROCESSING_MAX_BATCH_MESSAGES`. This existing configured maximum now applies when creating and opening ordinary encoded batch links, including older links. Single-message ordinary batches remain valid.
 
 ### Admin commands
 
@@ -628,6 +801,20 @@ grants only. Existing users keep their stored expiry. `/plans` labels the
 configured value as the default and shows an active user's stored UTC expiry
 and rounded-up remaining days. See the
 [premium consistency rules](docs/features/premium_duration_consistency.md).
+
+Active grants are not overwritten by repeated `/addpremium` calls; an expired
+raw premium flag can receive a new grant without waiting for cleanup. Grants
+and removals use current MongoDB state, and concurrent grants have one winner.
+Notification failure does not undo a saved change; the configured log channel
+records whether notification succeeded.
+
+Automatic expiry rechecks the stored expiry before clearing premium, so an
+older cleanup candidate cannot revoke a fresh grant. It preserves consumed
+download quota. Explicit `/removepremium` retains the existing behavior of
+resetting the free download count to zero. Free quotas use UTC calendar days;
+atomic reservations prevent concurrent downloads from exceeding the limit,
+and known unsent files refund unused slots. Configured admin/owner bypasses
+remain intact. No manual MongoDB migration is needed for these fixes.
 
 Primary-admin-only commands:
 
@@ -759,12 +946,14 @@ Important defaults from `core/cache/config.py`:
 
 | Endpoint | Purpose | Status behavior |
 |---|---|---|
-| `GET /` | Alias of health. | `200` for healthy/degraded, otherwise `503`. |
-| `GET /health` | Bot identity plus Mongo/Redis/system health data. | `200` or `503`. |
+| `GET /`, `GET /health`, `GET /live` | Cheap HTTP liveness (no database/statistics work). | `200` while the HTTP server responds. |
+| `GET /ready` | Bounded, cached MongoDB/Redis pings; also protected Redis if configured. | `200` when dependencies respond, otherwise `503`. |
+| `GET /health/details` | Explicit on-demand legacy user/file/storage diagnostics. | `200` healthy/degraded, otherwise `503`. |
+| `GET /health?details=1` | Compatibility alias for detailed legacy report. | Same as `/health/details`. |
 | `GET /metrics` | Process/system performance metrics. | `200`, or `500` on collection error. |
 | `GET /performance` | Alias of metrics. | Same as `/metrics`. |
 
-These endpoints currently allow broad CORS and have no authentication. Expose them only through a trusted network, firewall, or authenticated reverse proxy if the metric details are sensitive.
+These endpoints currently allow broad CORS and have no authentication (PH-004 was operator-deferred). Keep them on a trusted network. Existing dashboards relying on the old `/health` JSON `stats` / `meta` fields should use `/health/details` or `/health?details=1`. `/health` is a liveness check, not proof that MongoDB or Redis is available.
 
 ### Logging
 
@@ -821,7 +1010,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The repository currently contains 104 focused tests covering access/quota and premium-duration consistency, batch links, cache correctness, configuration/packaging, feature rollout and live-state UX, channel indexing, recommendations/similarity, sessions, wzgram integration boundaries, and plain-text Telegram surfaces.
+The latest bounded QA round passed **1,425 tests** with zero failures or skips, plus **16 live dashboard/analytics checks** with three QA accounts on wzgram 3.1.6. Admin access, aggregate totals, full-query reconciliation, indexing/caption changes, cache repair and retained/reset Redis behavior passed. Source-matched coverage is **71.94% lines and 59.71% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
 
 Useful additional checks:
 
@@ -895,7 +1084,10 @@ Confirm the bot can read the source channel, the channel is present/enabled in `
 
 ### Force subscription always denies users
 
-The bot must be able to inspect membership in `AUTH_CHANNEL` and every `AUTH_GROUPS` entry. Add it with the required permissions and verify the configured IDs/usernames.
+The bot must be able to inspect membership in every `AUTH_CHANNEL` and
+`AUTH_GROUPS` entry, and must be an administrator with Invite Users permission
+to generate join buttons. Verify all configured IDs/usernames. Use Try Again to
+refresh expired links; use `/bsetting` to correct saved targets, then restart.
 
 ### Search buttons expire
 

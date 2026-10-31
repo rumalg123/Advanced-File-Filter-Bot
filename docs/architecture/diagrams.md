@@ -182,6 +182,50 @@ sequenceDiagram
 
 No-result private searches query the same search history for fuzzy “Did you mean?” suggestions. Group searches deliberately avoid no-result noise.
 
+Advanced filters are parsed before repository search and remain attached to
+cached pages and owned pagination references. Malformed recognized values fail
+validation before a media query. Decimal sizes retain exact byte precision and
+must fit signed 64-bit storage. Advanced inline requests preserve their full
+query; legacy inline requests retain the existing 100-character cap. Invalid
+inline filters point to search help/start. Every declared file type, including
+application, maps to its matching repository enum.
+
+The optional `/suggest` command preserves quoted search syntax, normalizes and
+deduplicates history candidates, then verifies current matches with effective
+filter/caption settings. Default requests inspect at most 24 candidates with
+five concurrent checks. Unavailable media or protected callback storage yields
+a retry response. Query buttons use compact owned references. These lookups
+add read work; representative production load remains an operational gate.
+See the [advanced search/autocomplete QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-11--advanced-search-and-autocomplete-2026-10-30).
+
+Optional duplicate grouping adds inert headings within the current result page
+and retains every original file button and owned query reference. Known terminal
+container formats normalize after filename punctuation normalization. Release
+noise is stripped after an identifiable metadata boundary, preserving meaningful
+title prefixes such as “Proper”. Groups and counts are page-local; paging, bulk
+delivery and quota accounting still operate on original files. Inline results
+remain individual. This filename heuristic does not deduplicate stored media or
+add an expandable picker. See [grouping/variant QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-12--duplicate-grouping-and-variant-delivery-2026-10-31).
+
+Private search, private pagination, inline search and file delivery require all
+configured memberships unless the actor has an existing admin/owner/authorized
+exemption. Group search previews and pagination remain public. Unverifiable
+memberships deny access; restricted group members use their `is_member` flag.
+
+`AUTH_CHANNEL` and `AUTH_GROUPS` normalize to lists, including legacy scalar
+channel settings. Initial `/start` also checks ordinary users. Join buttons
+cover only missing memberships and create expiring invites with the configured
+member limit (defaults: 15 minutes and one member). Failed membership retries
+refresh those links without consuming the owned action.
+
+Subscription retries carry the original actor and action. Long actions use an
+owner-bound operational Redis session. Foreign clicks and failed membership
+checks leave that session intact; a verified owner consumes it before replay.
+Replayed callbacks retain the CallbackQuery type and enter the normal guarded
+handler. An expired session cannot deliver content. See the
+[subscription QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-7--force-subscription-2026-10-30)
+and [multiple-channel/invite QA](../qa/coverage-expansion/STATUS.md#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30).
+
 ## 5. File delivery and atomic quota reservation
 
 ```mermaid
@@ -219,6 +263,17 @@ sequenceDiagram
 ```
 
 Quota is reserved before bulk delivery and unused capacity is released afterward, preventing concurrent callbacks from exceeding a free-user limit.
+
+Premium mutations read MongoDB directly and guard the write against current
+entitlement. Repeated grants cannot overwrite an active subscription; expired
+raw flags can receive a new grant. Both batch expiration paths and on-access
+expiration recheck normalized expiry at the write, so old cleanup candidates
+cannot revoke a fresh grant. Automatic expiry preserves consumed quota;
+explicit administrator removal retains its existing free-count reset.
+Decision-cache hits must have a valid tuple shape and agree with the passed
+user's flag/expiry. UTC-day rollover and known-unsent refunds remain guarded.
+Configured admin/owner bypasses are unchanged. See the
+[premium/quota QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-9--premium-grants-removal-expiry-and-quotas-2026-10-30).
 
 ## 6. Channel and manual indexing pipeline
 
@@ -279,6 +334,16 @@ flowchart LR
 ```
 
 Query similarity first uses bidirectional co-occurrence and then fills gaps with RapidFuzz matching against user and global history. File recommendations combine query-to-file mappings, file co-occurrence, user interaction history, and global trends. Per-user recommendation output is cached for ten minutes and invalidated when new user signals arrive.
+
+Explicit negative feedback excludes a file from profile seeds as well as from
+results; positive feedback prioritizes a seed and reset restores implicit
+history. MongoDB keeps one preference per user/file across Redis resets. Redis
+relationships must accumulate again after a clear. Ranking cache payloads are
+versioned and validated against the limit, feedback/explanation flags and data
+shape; legacy or mismatched entries recompute. Menus resolve files in rank
+order, omit duplicates/unavailable media and escape query/reason text. Favorite
+and feedback markers update independently. See the
+[recommendation QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30).
 
 ## 8. User-owned feature CRUD
 
@@ -356,6 +421,58 @@ write. Saved searches expose create/list, pause-resume, and delete; their Run
 action reuses the normal user-owned search session. Reports and content requests
 are lifecycle/audit records and are resolved rather than hard-deleted by users.
 
+### Content request transitions
+
+`#request` uses the existing moderation and request allowance checks. Only a
+completed empty lookup creates a missing-content request; denied or incomplete
+lookups stop with safe feedback. Admin cards escape and bound displayed keywords
+to 500 characters without changing the search keyword or normalized duplicate
+key. The existing stored display query stays capped at 100 characters. Request
+allowance counts admitted messages, including found-content searches.
+
+Tracking normalizes pending/in-flight duplicate queries per user, and a replayed
+source ID returns its original record without another request slot. An admin
+transition atomically claims a pending record only if `target_status` is absent.
+The record remains `pending` with its target/admin fields, so it stays protected
+by the existing partial unique index until finalization. A concurrent late
+forward-failure write cannot overwrite that claim. MongoDB read/claim failure
+stops notification. Successful private delivery or the existing group fallback
+allows guarded finalization; failure of both permits guarded rollback.
+
+Stored cards retain their guards even when new tracking is disabled. Untracked
+legacy cards retain the established action flow. `/myrequests` is user-owned
+and displays claims, including older `processing:*` records, as Update In
+Progress. A failed finalization after notification leaves the claim for review
+and does not present a finished admin card. Interruption can leave an ambiguous
+delivery outcome; automatic stale-claim replay is not implemented. Stop older
+writers before cutover because their claim predicate differs. See the
+[request lifecycle QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31).
+
+### Content dashboard and unmet search demand
+
+The dashboard command is registered for configured admins only when enabled.
+Authorized empty results increment global query counts without storing a user ID;
+access/backend failures and invalid advanced queries do not create unmet demand.
+Successful searches resolve existing demand. Historical successful-query popularity
+comes from Redis and does not guarantee present media availability.
+
+Reconciliation reads at most 30 candidates and uses five concurrent media checks,
+the complete analytics string `_id`, and current advanced/caption settings.
+The stored display query remains capped at 100 characters. Invalid current syntax
+is retained but omitted; unavailable verification returns retry feedback rather
+than a confirmed unmet list. Confirmed matches are removed using their observed
+count/timestamp, so changed demand prevents deletion by that stale snapshot.
+Cleanup failure can leave a confirmed match for a later pass without listing it
+as unmet. The existing direct successful-search resolver stays compatible.
+
+The service returns at most ten unmet rows and the renderer shows five. Aggregate
+counts include current and legacy in-flight request states, open reports, both
+active/paused saved searches and empty/nonempty collections. Total file size is
+referenced Telegram bytes, not MongoDB storage. Stats reject malformed cache
+payloads and propagate single-database aggregation failure; valid cache entries
+keep their TTL. Reads are not one transaction across concurrent writes. See the
+[dashboard QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31).
+
 ## 9. Cache ownership and invalidation
 
 ```mermaid
@@ -421,6 +538,22 @@ flowchart LR
 ```
 
 Environment changes do not overwrite an existing Mongo-backed setting. Use `/bsetting`, then restart, for managed runtime settings. Keep Telegram credentials and database/Redis connection details in the deployment environment because they are required before settings synchronization.
+
+Only the primary bot admin can operate settings callbacks. Connection settings
+cannot be edited or reset through the bot. Edit dialogs are owned by a message,
+chat and session token: closing an older menu or finishing a delayed operation
+cannot cancel a newer dialog. If delivery of an edit prompt fails, its session is
+removed so the next owner message is not captured invisibly. Clearing Redis
+discards unfinished dialogs; saved Mongo-backed settings survive and are loaded
+on restart. See the [bounded settings QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-6--bot-settings-2026-10-30).
+
+There are now 69 managed settings. Interactive force-subscription target edits
+resolve every channel/group and verify the bot's administrator status and
+Invite Users permission before any write. Successful edits store canonical IDs;
+invalid targets leave MongoDB unchanged. Validation creates no invite links.
+Environment bootstrap runs before Telegram connects; startup diagnostics report
+access/permission problems for those initial targets. Invite expiry and member
+limit are managed through the same settings/restart flow.
 
 ## 11. Multi-database routing and circuit breaker
 

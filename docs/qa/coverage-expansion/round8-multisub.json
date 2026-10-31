@@ -1,0 +1,340 @@
+{
+  "date": "2026-10-30",
+  "round": 8,
+  "scope": [
+    "multiple-force-subscription-channels",
+    "pre-save-target-permission-validation",
+    "expiring-member-limited-invites",
+    "new-user-start-and-retry-recovery"
+  ],
+  "application_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+  "source_manifest_sha256": "86684c54c7d702e4dd46dc286fbccfa5ef746da12a4cb79b20624f94c44ae4b6",
+  "feature": {
+    "id": "FEAT-012",
+    "commit": "b2dea82",
+    "status": "implemented-and-QA-passed",
+    "activation": "existing AUTH_CHANNEL and AUTH_GROUPS settings; no additional feature flag"
+  },
+  "fixes": {
+    "BUG-100": {
+      "commit": "b2fcb38",
+      "problem": "BSON Int64 chat IDs rejected after valid settings storage",
+      "regression_before": {
+        "passed": 27,
+        "failed": 4
+      },
+      "regression_after": {
+        "passed": 31,
+        "failed": 0
+      },
+      "real_mongodb_roundtrip": true
+    }
+  },
+  "tests": {
+    "passed": 1163,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 55,
+    "seconds": 39.61
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10908,
+    "num_statements": 17914,
+    "percent_covered": 57.69617706237425,
+    "percent_covered_display": "58",
+    "missing_lines": 7006,
+    "excluded_lines": 41,
+    "percent_statements_covered": 60.89092330021212,
+    "percent_statements_covered_display": "61",
+    "num_branches": 5942,
+    "num_partial_branches": 902,
+    "covered_branches": 2856,
+    "missing_branches": 3086,
+    "percent_branches_covered": 48.06462470548637,
+    "percent_branches_covered_display": "48"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12606,
+    "num_statements": 17914,
+    "percent_covered": 67.1193829644534,
+    "percent_covered_display": "67",
+    "missing_lines": 5308,
+    "excluded_lines": 41,
+    "percent_statements_covered": 70.36954337389751,
+    "percent_statements_covered_display": "70",
+    "num_branches": 5942,
+    "num_partial_branches": 1068,
+    "covered_branches": 3406,
+    "missing_branches": 2536,
+    "percent_branches_covered": 57.32076741837765,
+    "percent_branches_covered_display": "57"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 70,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 59,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 67,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 69,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 67,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 60,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 69,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 56,
+        "changed_files_discarded": 52
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 78,
+        "changed_files_discarded": 43
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 78,
+        "changed_files_discarded": 43
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 81,
+        "changed_files_discarded": 40
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 81,
+        "changed_files_discarded": 40
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 113,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 114,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 114,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round8-phase1-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round8-phase2-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round8-phase3-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round8-unit",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 67.1193829644534,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "new_shards_match_start_end_current_source": true,
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "pymongo": "4.19.0",
+    "motor": "3.7.1",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "image": "file-filter-bot:qa-multisub-20261030",
+    "image_id": "sha256:8ea67dde9ec1d7fbc27647ef52e427ae5b43c50d6d462fd517ae11fa3775873e",
+    "all_final_regressions_and_live_phases_on_rebuilt_image": true,
+    "prior_shards_may_use_historical_dependencies": true,
+    "all_122_image_application_files_match_tested_source": true
+  },
+  "configuration": {
+    "managed_settings": 69,
+    "required_channels": 2,
+    "required_groups": 1,
+    "default_invite_expiry_minutes": 15,
+    "default_invite_member_limit": 1,
+    "changed_invite_expiry_minutes": 1,
+    "changed_invite_member_limit": 2,
+    "bot_phases": 3,
+    "empty_redis_restarts": 2,
+    "database": "disposable-local-mongodb",
+    "cache": "disposable-local-dual-redis",
+    "destinations": "provided QA accounts/chats and one owned temporary channel",
+    "premium_disabled": true,
+    "durable_workers": false,
+    "auto_delete_seconds": 0,
+    "environment_bootstrap_validation": "startup diagnostics; interactive target saves validate before storage",
+    "validation_probe_invites_created": 0
+  },
+  "policy": {
+    "admin_owner_authorized_subscription_exemptions_preserved": true,
+    "public_group_preview_policy_preserved": true,
+    "operator_logger_lines_unchanged": 405,
+    "operator_logger_lines_adjusted_to_actual_channel": 2,
+    "operator_diagnostics_removed": 0,
+    "no_manual_schema_or_index_migration": true,
+    "no_production_server_access": true,
+    "no_remote_atlas_access": true,
+    "deployment_environment_unchanged": true,
+    "production_limits_unchanged": true
+  },
+  "live": {
+    "scope": "multi-force-subscription",
+    "checks": {
+      "inaccessible_channel_is_rejected_before_db_write_and_restart_notice": true,
+      "admin_without_invite_users_is_rejected_before_storage": true,
+      "configuration_validation_does_not_create_probe_invites": true,
+      "multiple_channels_save_as_a_canonical_list_after_permissions_pass": true,
+      "force_sub_group_is_checked_and_saved_through_settings": true,
+      "multiple_targets_and_defaults_load_after_empty_redis_restart": true,
+      "new_user_start_generates_default_fifteen_minute_one_member_invite": true,
+      "already_joined_channel_and_group_do_not_get_extra_join_buttons": true,
+      "not_joined_retry_refreshes_limited_links_and_preserves_action": true,
+      "joining_second_channel_satisfies_all_requirements_and_opens_welcome": true,
+      "multiple_missing_channels_and_groups_each_get_a_working_limited_link": true,
+      "invalid_expiry_is_rejected_without_changing_saved_defaults": true,
+      "invite_expiry_and_member_limit_are_editable_through_settings": true,
+      "saved_invite_controls_survive_redis_clear_and_apply_after_restart": true,
+      "changed_controls_are_passed_to_real_telegram_invites": true,
+      "telegram_rejects_the_invite_after_its_real_expiry": true,
+      "expired_invite_retry_regenerates_a_fresh_link_and_restores_access": true,
+      "primary_admin_owner_bypass_and_settings_access_remain_available": true
+    },
+    "passed": true
+  },
+  "cleanup": {
+    "provided_memberships_restored": true,
+    "provided_bot_permissions_unchanged": true,
+    "owned_temporary_channel_deleted": true,
+    "bot_invites": {
+      "phase1": {
+        "created": 0,
+        "revoked": 0,
+        "expired": 0,
+        "errors": []
+      },
+      "phase2": {
+        "created": 4,
+        "revoked": 4,
+        "expired": 0,
+        "errors": []
+      },
+      "phase3": {
+        "created": 2,
+        "revoked": 2,
+        "expired": 0,
+        "errors": []
+      }
+    },
+    "admin_recovery_links_revoked": 2,
+    "recorded_messages_and_service_messages_removed": true,
+    "owned_containers_and_networks_removed": true,
+    "original_two_services_running": true
+  },
+  "validation": {
+    "full_python_compilation": true,
+    "ruff_F821_F822_F823": true,
+    "pip_check": true,
+    "markdown_local_links_and_anchors": true,
+    "json_and_privacy": true,
+    "git_diff_check": true,
+    "local_markdown_links_checked": 254,
+    "expected_handled_rejection_diagnostics": "inaccessible target, missing Invite Users, expiry below minimum"
+  },
+  "limitations": [
+    "100% whole-bot coverage remains open",
+    "Member limit verified through actual Telegram response metadata and joins; no independent second-recipient cap rejection test",
+    "Member limit is simultaneous per-link membership, not identity binding or a lifetime join count",
+    "Public-chat link choice and non-admin group roles use automated cases",
+    "No live large-target-list, join-request-only, concurrent consumption, burst/FloodWait or production load acceptance",
+    "Historical coverage accepted only for unchanged files, with dependencies recorded in earlier rounds",
+    "Premium grants, removal, expiry and daily quotas are the next bounded QA round"
+  ]
+}

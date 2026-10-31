@@ -13,6 +13,11 @@ from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+ACTIVE_CONTENT_REQUEST_STATUSES = (
+    'pending', 'processing:completed', 'processing:rejected',
+    'processing:available', 'processing:unavailable',
+)
+
 
 def normalize_feature_text(value: str) -> str:
     """Normalize user-owned names and queries without changing display text."""
@@ -239,10 +244,20 @@ class FeatureRepository:
 
     async def get_collection(self, user_id: int, name: str = "Favorites") -> dict[str, Any] | None:
         collection = await self._collection("user_collections")
-        return await self.db_pool.execute_with_retry(
+        document = await self.db_pool.execute_with_retry(
             collection.find_one,
             {'user_id': user_id, 'normalized_name': normalize_feature_text(name)}
         )
+        if document:
+            token = collection_callback_token(document)
+            if document.get('callback_token') != token:
+                await self.db_pool.execute_with_retry(
+                    collection.update_one,
+                    {'_id': document['_id'], 'user_id': user_id},
+                    {'$set': {'callback_token': token}},
+                )
+            document['callback_token'] = token
+        return document
 
     async def get_collection_by_token(
         self, user_id: int, token: str
@@ -453,13 +468,18 @@ class FeatureRepository:
 
         # Keep only the newest 50 records per user without touching other users.
         cursor = collection.find(
-            {'user_id': user_id}, {'_id': 1}
+            {'user_id': user_id}, {'_id': 1, 'last_accessed_at': 1}
         ).sort('last_accessed_at', -1).skip(50).limit(100)
         stale = await self.db_pool.execute_with_retry(cursor.to_list, length=100)
         if stale:
+            # A concurrent download may refresh a row after this snapshot.
+            # Delete only unchanged rows so the refreshed entry survives.
             await self.db_pool.execute_with_retry(
                 collection.delete_many,
-                {'_id': {'$in': [item['_id'] for item in stale]}}
+                {'user_id': user_id, '$or': [
+                    {'_id': item['_id'], 'last_accessed_at': item.get('last_accessed_at')}
+                    for item in stale
+                ]}
             )
 
     async def get_recent_files(self, user_id: int, limit: int = 20) -> list[str]:
@@ -522,7 +542,7 @@ class FeatureRepository:
             )
             return existing, False
 
-    async def list_saved_searches(self, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    async def list_saved_searches(self, user_id: int, limit: int = 25) -> list[dict[str, Any]]:
         collection = await self._collection("saved_searches")
         cursor = collection.find({'user_id': user_id}).sort('updated_at', -1).limit(limit)
         return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
@@ -549,8 +569,35 @@ class FeatureRepository:
         return bool(result.deleted_count)
 
     async def get_active_saved_searches(self, limit: int = 500) -> list[dict[str, Any]]:
+        """Legacy bounded list API, retained for existing external callers."""
         collection = await self._collection("saved_searches")
         cursor = collection.find({'active': True}).sort('updated_at', -1).limit(limit)
+        return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
+
+    async def get_active_saved_search_page(
+        self, *, after_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """PH-017: bounded keyset page across *all* active subscriptions.
+
+        Saved-search identifiers are generated as UUID hex strings. Ordering by
+        immutable _id avoids updated_at reordering while processing alerts.
+        The projection keeps only the data needed to notify a subscriber.
+        A database exception must propagate; an empty page means completion.
+        """
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("Saved-search page limit must be between 1 and 100")
+        if after_id is not None and (
+            not isinstance(after_id, str) or not after_id
+        ):
+            raise ValueError("Saved-search cursor must be a nonempty string")
+        selector: dict[str, Any] = {'active': True}
+        if after_id is not None:
+            selector['_id'] = {'$gt': after_id}
+        collection = await self._collection("saved_searches")
+        cursor = collection.find(
+            selector,
+            {'_id': 1, 'user_id': 1, 'query': 1, 'normalized_query': 1},
+        ).sort('_id', 1).limit(limit)
         return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
 
     async def claim_saved_search_notification(self, search_id: str, file_unique_id: str) -> bool:
@@ -888,7 +935,7 @@ class FeatureRepository:
             {
                 'user_id': user_id,
                 'normalized_query': normalize_feature_text(query),
-                'status': 'pending',
+                'status': {'$in': list(ACTIVE_CONTENT_REQUEST_STATUSES)},
             }
         )
 
@@ -916,14 +963,11 @@ class FeatureRepository:
             await self.db_pool.execute_with_retry(collection.insert_one, document)
             return document, True
         except DuplicateKeyError:
-            existing = await self.db_pool.execute_with_retry(
-                collection.find_one,
-                {
-                    'user_id': user_id,
-                    'normalized_query': normalized_query,
-                    'status': 'pending',
-                }
-            )
+            existing = await self.find_pending_content_request(user_id, query)
+            if existing is None:
+                existing = await self.get_content_request(user_id, message_id)
+            if existing is None:
+                raise
             return existing, False
 
     async def update_content_request(
@@ -932,7 +976,8 @@ class FeatureRepository:
         collection = await self._collection("content_requests")
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
-            {'_id': f"{user_id}:{message_id}", 'status': 'pending'},
+            {'_id': f"{user_id}:{message_id}", 'status': 'pending',
+             'target_status': {'$exists': False}},
             {
                 '$set': {
                     'status': status,
@@ -962,10 +1007,13 @@ class FeatureRepository:
         collection = await self._collection("content_requests")
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
-            {'_id': f"{user_id}:{message_id}", 'status': 'pending'},
+            {'_id': f"{user_id}:{message_id}", 'status': 'pending',
+             'target_status': {'$exists': False}},
             {
                 '$set': {
-                    'status': f"processing:{target_status}",
+                    # Stay in the existing pending-only unique index while
+                    # notification delivery is in flight.
+                    'status': 'pending',
                     'target_status': target_status,
                     'handled_by': admin_id,
                     'updated_at': datetime.now(UTC),
@@ -982,7 +1030,10 @@ class FeatureRepository:
             collection.update_one,
             {
                 '_id': f"{user_id}:{message_id}",
-                'status': f"processing:{target_status}",
+                '$or': [
+                    {'status': 'pending', 'target_status': target_status},
+                    {'status': f"processing:{target_status}"},
+                ],
             },
             {
                 '$set': {
@@ -1003,7 +1054,10 @@ class FeatureRepository:
             collection.update_one,
             {
                 '_id': f"{user_id}:{message_id}",
-                'status': f"processing:{target_status}",
+                '$or': [
+                    {'status': 'pending', 'target_status': target_status},
+                    {'status': f"processing:{target_status}"},
+                ],
             },
             {
                 '$set': {'status': 'pending', 'updated_at': datetime.now(UTC)},
@@ -1040,14 +1094,18 @@ class FeatureRepository:
         cursor = collection.find({}).sort([('count', -1), ('last_searched_at', -1)]).limit(limit)
         return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
 
-    async def resolve_zero_result(self, query: str) -> bool:
+    async def resolve_zero_result(self, query: str, *, observed: dict | None = None) -> bool:
         """Remove demand that now has an authoritative search result."""
         normalized_query = normalize_feature_text(query)
         if not normalized_query:
             return False
         collection = await self._collection("search_analytics")
+        predicate = {'_id': normalized_query}
+        if observed is not None:
+            for field in ('count', 'last_searched_at'):
+                predicate[field] = observed[field] if field in observed else {'$exists': False}
         result = await self.db_pool.execute_with_retry(
-            collection.delete_one, {'_id': normalized_query}
+            collection.delete_one, predicate
         )
         return bool(result.deleted_count)
 

@@ -10,18 +10,25 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineK
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.services.search_results import SearchResultsService
 from core.utils.button_builder import ButtonBuilder
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.file_emoji import get_file_emoji
 from core.utils.helpers import format_file_size
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.pagination import PaginationBuilder
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import validate_callback_data
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
+
+
+def _request_keyword_html(keyword: str) -> str:
+    """Keep untrusted request text literal and leave room for the admin card."""
+    return html.escape(keyword[:500]) + ('…' if len(keyword) > 500 else '')
 
 
 class RequestHandler(BaseHandler):
@@ -36,7 +43,8 @@ class RequestHandler(BaseHandler):
             cache_manager=bot.cache,
             config=bot.config,
             recommendation_service=getattr(bot, 'recommendation_service', None),
-            media_repo=bot.media_repo
+            media_repo=bot.media_repo,
+            task_manager=getattr(bot, 'handler_manager', None),
         )
         
         self.register_handlers()
@@ -63,6 +71,7 @@ class RequestHandler(BaseHandler):
     # cleanup() method is inherited from BaseHandler, with background_tasks cleanup added
     async def cleanup(self) -> None:
         """Clean up handler resources including background tasks"""
+        await self.search_results_service.tasks.close()
         # Cancel any background tasks specific to this handler
         for task in self.background_tasks:
             if not task.done():
@@ -80,6 +89,7 @@ class RequestHandler(BaseHandler):
     # _create_auto_delete_task, _schedule_auto_delete, and _auto_delete_message
     # are all inherited from BaseHandler
 
+    @check_ban()
     async def handle_request_message(self, client: Client, message: Message):
         """Handle #request messages in support group"""
         if not message.text or not message.from_user:
@@ -103,6 +113,11 @@ class RequestHandler(BaseHandler):
             and feature_service.enabled('FEATURE_REQUEST_TRACKING')
         ):
             try:
+                existing = await self.bot.feature_repo.get_content_request(user_id, message.id)
+                if existing:
+                    return await message.reply_text(
+                        "📮 This request has already been recorded. Use /myrequests to check it."
+                    )
                 pending = await self.bot.feature_repo.find_pending_content_request(
                     user_id, keyword
                 )
@@ -150,7 +165,7 @@ class RequestHandler(BaseHandler):
                 if self.bot.config.LOG_CHANNEL:
                     log_text = (
                         f"#AutoBan #RequestAbuse\n"
-                        f"<b>User:</b> <code>{user_id}</code> ({banned_user.name if banned_user else 'Unknown'})\n"
+                        f"<b>User:</b> <code>{user_id}</code> ({html.escape(banned_user.name) if banned_user else 'Unknown'})\n"
                         f"<b>Reason:</b> Over request warning limit\n"
                         f"<b>Total Requests:</b> {banned_user.total_requests if banned_user else 'N/A'}\n"
                         f"<b>Warnings:</b> {banned_user.warning_count if banned_user else 'N/A'}\n"
@@ -175,7 +190,7 @@ class RequestHandler(BaseHandler):
                     f"#RequestWarning\n"
                     f"👤 <b>User:</b> {user.mention} [<code>{user_id}</code>]\n"
                     f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
-                    f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
+                    f"🔍 <b>Keyword:</b> <code>{_request_keyword_html(keyword)}</code>\n"
                     f"⚠️ <b>Message:</b> {limit_message}\n"
                     f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
@@ -189,6 +204,9 @@ class RequestHandler(BaseHandler):
 
         # Normal request processing continues here
         search_results = await self._search_for_request(client, message, keyword, user_id)
+
+        if search_results is None:
+            return
 
         if search_results:
             logger.debug(f"Search results found for request: {keyword}")
@@ -225,7 +243,8 @@ class RequestHandler(BaseHandler):
                         await self.bot.feature_repo.update_content_request(
                             user_id, message.id, 'forward_failed', 0
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Could not update tracked request after forward failure: {e}")
                         pass
                 await message.reply_text(
                     ErrorMessageFormatter.format_error(
@@ -238,7 +257,7 @@ class RequestHandler(BaseHandler):
         try:
             # Don't search if shutting down
             if self._shutdown.is_set():
-                return False
+                return None
 
             # Search for files
             page_size = self.bot.config.MAX_BTN_SIZE
@@ -250,7 +269,11 @@ class RequestHandler(BaseHandler):
                 limit=page_size
             )
 
-            if has_access and files:
+            if not has_access:
+                await message.reply_text(html.escape(access_reason or SEARCH_RETRY_MESSAGE))
+                return None
+
+            if files:
                 # Send search results using centralized service
                 search_sent = await self.search_results_service.send_results(
                     client=client,
@@ -269,11 +292,13 @@ class RequestHandler(BaseHandler):
                 if search_sent:
                     return search_sent
                 else:
-                    return False
+                    await message.reply_text(SEARCH_RETRY_MESSAGE)
+                    return None
             return False
         except Exception as e:
             logger.error(f"Error searching for request: {e}")
-            return False
+            await message.reply_text(SEARCH_RETRY_MESSAGE)
+            return None
 
 
     async def _forward_request_to_admins(self, client: Client, message: Message, keyword: str):
@@ -288,7 +313,7 @@ class RequestHandler(BaseHandler):
             f"👤 <b>User:</b> {user.mention} [<code>{user.id}</code>]\n"
             f"📝 <b>Username:</b> @{user.username if user.username else 'N/A'}\n"
             f"📅 <b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"🔍 <b>Keyword:</b> <code>{keyword}</code>\n"
+            f"🔍 <b>Keyword:</b> <code>{_request_keyword_html(keyword)}</code>\n"
         )
 
         # Build buttons
@@ -341,12 +366,20 @@ class RequestHandler(BaseHandler):
 
         # Validate callback data using validator
         is_valid, data = validate_callback_data(query, expected_parts=4)
-        if not is_valid:
+        if not is_valid or len(data) != 4 or data[0] != 'req_action':
             return await query.answer(ErrorMessageFormatter.format_invalid("data", plain_text=True), show_alert=True)
 
         _, action, user_id, msg_id = data
-        user_id = int(user_id)
-        msg_id = int(msg_id)
+        try:
+            user_id = int(user_id)
+            msg_id = int(msg_id)
+            if not (0 < user_id <= 9223372036854775807 and 0 < msg_id <= 2147483647):
+                raise ValueError('Request identifiers out of range')
+        except (ValueError, TypeError):
+            return await query.answer(
+                ErrorMessageFormatter.format_invalid("request identifiers", plain_text=True),
+                show_alert=True
+            )
 
         # Map actions to messages
         action_messages = {
@@ -368,13 +401,10 @@ class RequestHandler(BaseHandler):
         }
         target_status = status_map[action]
 
-        feature_service = getattr(self.bot, 'feature_service', None)
-        tracking_enabled = bool(
-            feature_service
-            and feature_service.enabled('FEATURE_REQUEST_TRACKING')
-        )
+        # Existing tracked cards retain their guard even if new tracking is off.
+        tracking_repository = getattr(self.bot, 'feature_repo', None)
         transition_claimed = False
-        if tracking_enabled:
+        if tracking_repository is not None:
             try:
                 tracked_request = await self.bot.feature_repo.get_content_request(
                     user_id, msg_id
@@ -385,11 +415,15 @@ class RequestHandler(BaseHandler):
                     )
                     if not transition_claimed:
                         return await query.answer(
-                            "This request has already been handled.", show_alert=True
+                            "This request has already been handled or an update is in progress.", show_alert=True
                         )
             except Exception as e:
-                # Legacy request processing remains available if optional storage fails.
+                # Sending without the claim could duplicate an in-flight update.
                 logger.warning(f"Could not claim tracked request transition: {e}")
+                return await query.answer(
+                    "Request tracking is temporarily unavailable. Please try again.",
+                    show_alert=True
+                )
 
         # Try to send PM first
         notification_sent = False
@@ -448,16 +482,23 @@ class RequestHandler(BaseHandler):
 
         if transition_claimed:
             try:
-                await self.bot.feature_repo.finish_content_request_transition(
+                finished = await self.bot.feature_repo.finish_content_request_transition(
                     user_id, msg_id, target_status
                 )
             except Exception as e:
                 logger.warning(f"Could not finish tracked request transition: {e}")
+                finished = False
+            if not finished:
+                return await query.answer(
+                    "Requester notified, but tracking could not be finalized. "
+                    "Check the request before retrying.",
+                    show_alert=True
+                )
 
         # Update admin message
         await query.message.edit_reply_markup(None)
         await query.message.edit_text(
-            query.message.text + "\n" + ErrorMessageFormatter.format_success(f"Action Taken: {action.title()}", include_prefix=False)
+            html.escape(str(query.message.text or '')) + "\n" + ErrorMessageFormatter.format_success(f"Action Taken: {action.title()}", include_prefix=False)
         )
 
         await query.answer(

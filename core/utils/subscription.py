@@ -1,12 +1,16 @@
 from typing import Optional, Dict, Any, List
+from uuid import uuid4
+from datetime import UTC, datetime, timedelta
 
 from pyrogram import Client, enums
 from pyrogram.errors import UserNotParticipant, ChatAdminRequired
 from pyrogram.types import InlineKeyboardButton
 
 from core.utils.button_builder import ButtonBuilder
+from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
+from core.utils.subscription_config import parse_subscription_targets
 
 logger = get_logger(__name__)
 
@@ -14,9 +18,73 @@ logger = get_logger(__name__)
 class SubscriptionManager:
     """Manages force subscription functionality"""
 
-    def __init__(self, auth_channel: Optional[int] = None, auth_groups: Optional[list] = None):
-        self.auth_channel = auth_channel
-        self.auth_groups = auth_groups or []
+    def __init__(self, auth_channel=None, auth_groups=None, cache_manager=None,
+                 invite_expire_minutes: int = 15, invite_member_limit: int = 1):
+        self.auth_channels = parse_subscription_targets(auth_channel)
+        self.auth_channel = self.auth_channels[0] if self.auth_channels else None
+        self.auth_groups = parse_subscription_targets(auth_groups)
+        self.cache = cache_manager
+        if type(invite_expire_minutes) is not int or not 1 <= invite_expire_minutes <= 525600:
+            raise ValueError('Invite expiry must be between 1 and 525600 minutes.')
+        if type(invite_member_limit) is not int or not 1 <= invite_member_limit <= 99999:
+            raise ValueError('Invite member limit must be between 1 and 99999.')
+        self.invite_expire_minutes = invite_expire_minutes
+        self.invite_member_limit = invite_member_limit
+
+    @staticmethod
+    async def inspect_chat(client: Client, target, expected_type=None):
+        """Read the actual bot role; never create a probe link or write settings."""
+        try:
+            chat = await telegram_api.call_api(client.get_chat, target, chat_id=target)
+        except Exception as error:
+            logger.error("Cannot inspect force-subscription chat %s: %s", target, error, exc_info=True)
+            raise ValueError(f'Cannot access chat {target}. Add the bot as an administrator with Invite Users permission.') from error
+        allowed = ({enums.ChatType.CHANNEL} if expected_type == 'channel' else
+                   {enums.ChatType.GROUP, enums.ChatType.SUPERGROUP} if expected_type == 'group' else
+                   {enums.ChatType.CHANNEL, enums.ChatType.GROUP, enums.ChatType.SUPERGROUP})
+        if chat.type not in allowed:
+            raise ValueError(f'Chat {target} is not a valid force-subscription {expected_type or "channel/group"}.')
+        try:
+            member = await telegram_api.call_api(client.get_chat_member, chat.id, 'me', chat_id=chat.id)
+        except Exception as error:
+            logger.error("Cannot verify bot permissions in chat %s: %s", target, error, exc_info=True)
+            raise ValueError(f'Cannot verify bot permissions in chat {target}. Add it as an administrator with Invite Users permission.') from error
+        if member.status not in {enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER}:
+            raise ValueError(f'Bot is not an administrator in chat {target}. Grant admin and Invite Users permission before saving.')
+        if member.status != enums.ChatMemberStatus.OWNER and getattr(
+            getattr(member, 'privileges', None), 'can_invite_users', False
+        ) is not True:
+            raise ValueError(f'Bot is missing Invite Users permission in chat {target}. Enable it before saving.')
+        return chat
+
+    @classmethod
+    async def validate_targets(cls, client, targets, *, expected_type):
+        resolved = []
+        for target in parse_subscription_targets(targets):
+            chat = await cls.inspect_chat(client, target, expected_type)
+            if chat.id not in resolved:
+                resolved.append(chat.id)
+        return resolved
+
+    async def _is_user_member(self, client, chat_id, user_id):
+        try:
+            member = await telegram_api.call_api(client.get_chat_member, chat_id, user_id, chat_id=chat_id)
+            return self._is_current_member(member)
+        except UserNotParticipant:
+            return False
+        except Exception as error:
+            logger.error("Cannot check subscription for chat %s: %s", chat_id, error, exc_info=True)
+            return False
+
+    @staticmethod
+    def _is_current_member(member) -> bool:
+        if member.status == enums.ChatMemberStatus.RESTRICTED:
+            return getattr(member, 'is_member', None) is True
+        return member.status in {
+            enums.ChatMemberStatus.OWNER,
+            enums.ChatMemberStatus.ADMINISTRATOR,
+            enums.ChatMemberStatus.MEMBER,
+        }
 
     async def is_subscribed(
             self,
@@ -39,35 +107,29 @@ class SubscriptionManager:
         """
         try:
             # Check AUTH_CHANNEL
-            if check_channel and self.auth_channel:
-                try:
-                    member = await telegram_api.call_api(
-                        client.get_chat_member,
-                        self.auth_channel,
-                        user_id,
-                        chat_id=self.auth_channel
-                    )
-                    if member.status == enums.ChatMemberStatus.BANNED:
+            if check_channel and self.auth_channels:
+                for auth_channel in self.auth_channels:
+                    try:
+                        member = await telegram_api.call_api(
+                            client.get_chat_member,
+                            auth_channel,
+                            user_id,
+                            chat_id=auth_channel
+                        )
+                        if not self._is_current_member(member):
+                            return False
+                    except UserNotParticipant:
                         return False
-                    # If user is left/kicked, they're not subscribed
-                    if member.status in [
-                        enums.ChatMemberStatus.LEFT,
-                        enums.ChatMemberStatus.RESTRICTED
-                    ]:
-                        return False
-                except UserNotParticipant:
-                    return False
-                except Exception as e:
-                    error_msg = str(e).lower()
-                    if "channel_private" in error_msg or "chat not found" in error_msg:
-                        # If bot can't access channel, log error but don't block user
-                        logger.error(f"Bot cannot access AUTH_CHANNEL {self.auth_channel}: {e}")
-                        # You might want to notify admins here
-                        return True  # Allow access if bot can't verify
-                    else:
-                        logger.error(f"Error checking channel subscription: {e}")
-                        return False
-
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        if "channel_private" in error_msg or "chat not found" in error_msg:
+                            # An inaccessible required chat cannot prove membership.
+                            logger.error(f"Bot cannot access AUTH_CHANNEL {auth_channel}: {e}")
+                            # You might want to notify admins here
+                            return False
+                        else:
+                            logger.error(f"Error checking channel subscription: {e}")
+                            return False
             # Check AUTH_GROUPS
             if check_groups and self.auth_groups:
                 for group_id in self.auth_groups:
@@ -78,11 +140,7 @@ class SubscriptionManager:
                             user_id,
                             chat_id=group_id
                         )
-                        if member.status in [
-                            enums.ChatMemberStatus.BANNED,
-                            enums.ChatMemberStatus.LEFT,
-                            enums.ChatMemberStatus.RESTRICTED
-                        ]:
+                        if not self._is_current_member(member):
                             return False
                     except UserNotParticipant:
                         return False
@@ -90,7 +148,7 @@ class SubscriptionManager:
                         error_msg = str(e).lower()
                         if "channel_private" in error_msg or "chat not found" in error_msg:
                             logger.error(f"Bot cannot access AUTH_GROUP {group_id}: {e}")
-                            continue  # Skip this group if bot can't access
+                            return False
                         else:
                             logger.error(f"Error checking group {group_id} subscription: {e}")
                             return False
@@ -101,13 +159,19 @@ class SubscriptionManager:
             logger.error(f"Error in subscription check: {e}")
             return False
 
-    async def get_invite_link(self, client: Client, chat_id: int) -> Optional[str]:
+    async def get_invite_link(self, client: Client, chat_id, *, verified_chat=None) -> Optional[str]:
         """Get invite link for a chat"""
         try:
+            if verified_chat is None:
+                verified_chat = await self.inspect_chat(client, chat_id)
             # Try to create invite link
             invite = await telegram_api.call_api(
                 client.create_chat_invite_link,
-                chat_id,
+                verified_chat.id,
+                name='Force subscription',
+                expire_date=datetime.now(UTC) + timedelta(minutes=self.invite_expire_minutes),
+                member_limit=self.invite_member_limit,
+                creates_join_request=False,
                 chat_id=chat_id
             )
             return invite.invite_link
@@ -118,26 +182,15 @@ class SubscriptionManager:
             logger.error(f"Error creating invite link for {chat_id}: {e}")
             return None
 
-    async def get_chat_link(self, client: Client, chat_id: int) -> str:
-        """Get chat link (invite link or @username)"""
+    async def get_chat_link(self, client: Client, chat_id, *, verified_chat=None) -> Optional[str]:
+        """Always use a limited invite, including for public chats."""
         try:
-            chat = await telegram_api.call_api(
-                client.get_chat,
-                chat_id,
-                chat_id=chat_id
-            )
-
-            # If chat has username, return t.me link
-            if chat.username:
-                return f"https://t.me/{chat.username}"
-
-            # Otherwise, get invite link
-            invite_link = await self.get_invite_link(client, chat_id)
-            return invite_link or f"Chat ID: {chat_id}"
+            invite_link = await self.get_invite_link(client, chat_id, verified_chat=verified_chat)
+            return invite_link
 
         except Exception as e:
             logger.error(f"Error getting chat link for {chat_id}: {e}")
-            return f"Chat ID: {chat_id}"
+            return None
 
     async def build_subscription_buttons(
         self,
@@ -169,48 +222,48 @@ class SubscriptionManager:
         buttons = []
 
         # AUTH_CHANNEL button
-        if self.auth_channel:
+        for auth_channel in self.auth_channels:
             try:
-                chat_link = await self.get_chat_link(client, self.auth_channel)
+                if await self._is_user_member(client, auth_channel, user_id):
+                    continue
+                chat = await self.inspect_chat(client, auth_channel, 'channel')
+                chat_link = await self.get_chat_link(client, auth_channel, verified_chat=chat)
                 try:
-                    chat = await telegram_api.call_api(
-                        client.get_chat,
-                        self.auth_channel,
-                        chat_id=self.auth_channel
-                    )
                     channel_name = chat.title or "Updates Channel"
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error fetching channel details for {auth_channel}: {e}")
                     channel_name = "Updates Channel"
 
-                buttons.append([
-                    ButtonBuilder.action_button(
-                        f"📢 Join {channel_name}",
-                        url=chat_link
-                    )
-                ])
+                if chat_link:
+                    buttons.append([
+                        ButtonBuilder.action_button(
+                            f"📢 Join {channel_name}",
+                            url=chat_link
+                        )
+                    ])
             except Exception as e:
                 logger.error(f"Error creating AUTH_CHANNEL button: {e}")
 
         # AUTH_GROUPS buttons
         for group_id in self.auth_groups:
             try:
-                chat_link = await self.get_chat_link(client, group_id)
+                if await self._is_user_member(client, group_id, user_id):
+                    continue
+                chat = await self.inspect_chat(client, group_id, 'group')
+                chat_link = await self.get_chat_link(client, group_id, verified_chat=chat)
                 try:
-                    chat = await telegram_api.call_api(
-                        client.get_chat,
-                        group_id,
-                        chat_id=group_id
-                    )
                     group_name = chat.title or "Required Group"
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error fetching group details for {group_id}: {e}")
                     group_name = "Required Group"
 
-                buttons.append([
-                    ButtonBuilder.action_button(
-                        f"👥 Join {group_name}",
-                        url=chat_link
-                    )
-                ])
+                if chat_link:
+                    buttons.append([
+                        ButtonBuilder.action_button(
+                            f"👥 Join {group_name}",
+                            url=chat_link
+                        )
+                    ])
             except Exception as e:
                 logger.error(f"Error creating AUTH_GROUP button for {group_id}: {e}")
 
@@ -228,6 +281,25 @@ class SubscriptionManager:
         else:
             callback_data = f"checksub#{user_id}#general"
 
+        if len(callback_data.encode('utf-8')) > 64:
+            original = callback_data.split('#', 2)
+            stored = False
+            if self.cache and len(original) == 3 and original[:2] == ['checksub', str(user_id)]:
+                key = CacheKeyGenerator.subscription_session(uuid4().hex[:16])
+                try:
+                    stored = await self.cache.set(
+                        key, {'user_id': user_id, 'deeplink': original[2]},
+                        expire=CacheTTLConfig.USER_DATA
+                    )
+                except Exception:
+                    logger.warning("Could not store subscription retry action", exc_info=True)
+                if stored:
+                    callback_data = f"checksub#dl#{key}"
+            if not stored:
+                # Membership can still be checked; repeat the original action
+                # after joining when operational state cannot be stored.
+                callback_data = f"checksub#{user_id}#general"
+
         buttons.append([
             ButtonBuilder.action_button("🔄 Try Again", callback_data=callback_data)
         ])
@@ -241,108 +313,14 @@ class SubscriptionManager:
             'errors': []
         }
 
-        # Check AUTH_CHANNEL
-        if self.auth_channel:
-            try:
-                chat = await telegram_api.call_api(
-                    client.get_chat,
-                    self.auth_channel,
-                    chat_id=self.auth_channel
-                )
-                # Try to get bot's member status
+        for kind, targets, expected in [
+            ('AUTH_CHANNEL', self.auth_channels, 'channel'),
+            ('AUTH_GROUP', self.auth_groups, 'group'),
+        ]:
+            for target in targets:
                 try:
-                    member = await telegram_api.call_api(
-                        client.get_chat_member,
-                        self.auth_channel,
-                        "me",
-                        chat_id=self.auth_channel
-                    )
-                    if member.status not in [
-                        enums.ChatMemberStatus.ADMINISTRATOR,
-                        enums.ChatMemberStatus.MEMBER
-                    ]:
-                        results['accessible'] = False
-                        results['errors'].append({
-                            'type': 'AUTH_CHANNEL',
-                            'id': self.auth_channel,
-                            'name': chat.title,
-                            'error': 'Bot is not a member'
-                        })
-                except Exception as e:
+                    await self.inspect_chat(client, target, expected)
+                except ValueError as error:
                     results['accessible'] = False
-                    results['errors'].append({
-                        'type': 'AUTH_CHANNEL',
-                        'id': self.auth_channel,
-                        'name': getattr(chat, 'title', 'Unknown'),
-                        'error': 'Cannot verify membership'
-                    })
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "channel_private" in error_msg:
-                    results['accessible'] = False
-                    results['errors'].append({
-                        'type': 'AUTH_CHANNEL',
-                        'id': self.auth_channel,
-                        'error': 'Channel is private - Bot needs to be added'
-                    })
-                else:
-                    results['accessible'] = False
-                    results['errors'].append({
-                        'type': 'AUTH_CHANNEL',
-                        'id': self.auth_channel,
-                        'error': str(e)
-                    })
-
-        # Check AUTH_GROUPS
-        for group_id in self.auth_groups:
-            try:
-                chat = await telegram_api.call_api(
-                    client.get_chat,
-                    group_id,
-                    chat_id=group_id
-                )
-                # Try to get bot's member status
-                try:
-                    member = await telegram_api.call_api(
-                        client.get_chat_member,
-                        group_id,
-                        "me",
-                        chat_id=group_id
-                    )
-                    if member.status not in [
-                        enums.ChatMemberStatus.ADMINISTRATOR,
-                        enums.ChatMemberStatus.MEMBER
-                    ]:
-                        results['accessible'] = False
-                        results['errors'].append({
-                            'type': 'AUTH_GROUP',
-                            'id': group_id,
-                            'name': chat.title,
-                            'error': 'Bot is not a member'
-                        })
-                except Exception as e:
-                    results['accessible'] = False
-                    results['errors'].append({
-                        'type': 'AUTH_GROUP',
-                        'id': group_id,
-                        'name': getattr(chat, 'title', 'Unknown'),
-                        'error': 'Cannot verify membership'
-                    })
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "channel_private" in error_msg or "chat not found" in error_msg:
-                    results['accessible'] = False
-                    results['errors'].append({
-                        'type': 'AUTH_GROUP',
-                        'id': group_id,
-                        'error': 'Group is private - Bot needs to be added'
-                    })
-                else:
-                    results['accessible'] = False
-                    results['errors'].append({
-                        'type': 'AUTH_GROUP',
-                        'id': group_id,
-                        'error': str(e)
-                    })
-
+                    results['errors'].append({'type': kind, 'id': target, 'error': str(error)})
         return results

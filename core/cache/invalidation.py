@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from typing import TYPE_CHECKING, Optional
 
 from core.cache.config import CachePatterns, CacheKeyGenerator
@@ -33,32 +34,27 @@ class CacheInvalidator:
         return succeeded
 
     async def get_search_cache_version(self) -> int:
-        """Get current search cache version"""
-        version = await self.cache.get(self.SEARCH_CACHE_VERSION_KEY)
-        if version is None:
-            return 1
-        try:
-            parsed = int(version)
-            if parsed < 1:
-                raise ValueError("version must be positive")
-            return parsed
-        except (TypeError, ValueError):
-            logger.warning("Discarding malformed search cache version")
-            await self.cache.delete(self.SEARCH_CACHE_VERSION_KEY)
-            return 1
+        """Read/init a never-defaulted search generation atomically in Redis.
+
+        A missing key after cache eviction or a Redis restore gets a fresh,
+        unpredictable counter. Never fall back to v1 or delete malformed
+        counters, because that can resurrect stale cache entries.
+        """
+        generation = await self.cache.ensure_search_generation(
+            self.SEARCH_CACHE_VERSION_KEY, secrets.randbits(60) + 1
+        )
+        if generation is None or generation < 1:
+            raise RuntimeError("Search cache generation unavailable")
+        return int(generation)
 
     async def increment_search_cache_version(self) -> Optional[int]:
-        """Increment search cache version to invalidate all search caches lazily"""
-        new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
-        if new_version is None:
+        """Atomically initialize and increment, even during Redis restarts."""
+        version = await self.cache.advance_search_generation(
+            self.SEARCH_CACHE_VERSION_KEY, secrets.randbits(60) + 1
+        )
+        if version is None or version < 1:
             return None
-        if new_version == 1:
-            # First increment, set to 2 to ensure version exists
-            new_version = await self.cache.increment(self.SEARCH_CACHE_VERSION_KEY)
-            # Set a very long expiration (1 year) for the version key since it's a persistent counter
-            # This prevents memory leaks while keeping the version persistent
-            await self.cache.expire(self.SEARCH_CACHE_VERSION_KEY, 31536000)  # 1 year
-        return new_version
+        return int(version)
 
     async def invalidate_user_data(self, user_id: int) -> bool:
         """Invalidate just the user data cache (lightweight)"""

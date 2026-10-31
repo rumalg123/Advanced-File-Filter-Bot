@@ -1,40 +1,37 @@
-"""
-Optimized cache serialization with compression and binary formats
-Reduces Redis memory usage and network overhead
-"""
+"""Redis cache serializer.
 
+The legacy cache wire format (j/m/cj/cm) is retained. Old pickle cache
+entries (p/cp and unprefixed binary pickle) are NEVER executed. Old safe
+JSON/MessagePack and plain-text cache values can still be read.
+"""
 import json
-import pickle
 import zlib
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional, Dict
 
 import msgpack
-
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class SerializationMethod(Enum):
-    """Available serialization methods"""
     JSON = "json"
-    PICKLE = "pickle"
+    PICKLE = "pickle"  # Legacy hint only; maps to MessagePack
     MSGPACK = "msgpack"
     COMPRESSED_JSON = "compressed_json"
-    COMPRESSED_PICKLE = "compressed_pickle"
+    COMPRESSED_PICKLE = "compressed_pickle"  # Legacy hint only
     COMPRESSED_MSGPACK = "compressed_msgpack"
 
 
 class OptimizedSerializer:
-    """Optimized serializer with compression and method selection"""
-    
-    # Size thresholds for compression (bytes)
-    COMPRESSION_THRESHOLD = 1024  # 1KB
-    
-    # Method preferences based on data type
-    # Note: Avoid pickle for security - use JSON/msgpack only
+    """Backward-compatible cache wire format, without executable codecs."""
+
+    COMPRESSION_THRESHOLD = 1024
+    MAX_ENCODED_BYTES = 16 * 1024 * 1024
+    MAX_DECODED_BYTES = 32 * 1024 * 1024
+    PICKLE_DISABLED = True  # Historical public flag; pickle is now unconditional.
     METHOD_PREFERENCES = {
         dict: SerializationMethod.MSGPACK,
         list: SerializationMethod.MSGPACK,
@@ -45,271 +42,235 @@ class OptimizedSerializer:
         type(None): SerializationMethod.JSON,
     }
 
-    # SECURITY: Disable pickle for new serializations
-    PICKLE_DISABLED = True
-    
     def __init__(self, compression_level: int = 6):
-        """
-        Initialize serializer
-        compression_level: 1-9, higher = better compression but slower
-        """
         self.compression_level = compression_level
         self._stats = {
-            'serializations': 0,
-            'compressions': 0,
-            'bytes_saved': 0,
-            'method_usage': {}
+            "serializations": 0, "compressions": 0,
+            "bytes_saved": 0, "method_usage": {},
+            "rejected_unsafe": 0, "rejected_invalid": 0,
         }
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Get serialization statistics"""
-        return self._stats.copy()
-    
-    def _choose_method(self, data: Any, hint: Optional[SerializationMethod] = None) -> SerializationMethod:
-        """Choose optimal serialization method based on data type and size"""
-        if hint:
-            # If pickle is disabled, redirect pickle hints to msgpack
-            if self.PICKLE_DISABLED and hint in (SerializationMethod.PICKLE, SerializationMethod.COMPRESSED_PICKLE):
-                return SerializationMethod.MSGPACK
-            return hint
 
-        data_type = type(data)
-        default = SerializationMethod.MSGPACK if self.PICKLE_DISABLED else SerializationMethod.PICKLE
-        return self.METHOD_PREFERENCES.get(data_type, default)
-    
+    def get_stats(self) -> Dict[str, Any]:
+        return {**self._stats, "method_usage": dict(self._stats["method_usage"])}
+
+    def _choose_method(self, data: Any,
+                       hint: Optional[SerializationMethod] = None) -> SerializationMethod:
+        if hint == SerializationMethod.PICKLE:
+            return SerializationMethod.MSGPACK
+        if hint == SerializationMethod.COMPRESSED_PICKLE:
+            return SerializationMethod.COMPRESSED_MSGPACK
+        if hint is not None:
+            if not isinstance(hint, SerializationMethod):
+                raise TypeError("Unknown serialization method hint")
+            return hint
+        return self.METHOD_PREFERENCES.get(type(data), SerializationMethod.MSGPACK)
+
     def _serialize_json(self, data: Any) -> bytes:
-        """Serialize using JSON with datetime support"""
-        def json_encoder(obj):
+        def encode(obj):
             if isinstance(obj, datetime):
                 return obj.isoformat()
-            elif isinstance(obj, Enum):
+            if isinstance(obj, Enum):
                 return obj.value
-            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-        
-        return json.dumps(data, default=json_encoder, separators=(',', ':')).encode('utf-8')
-    
-    def _serialize_msgpack(self, data: Any) -> bytes:
-        """Serialize using MessagePack (more efficient than JSON)"""
-        def msgpack_encoder(obj):
-            if isinstance(obj, datetime):
-                return {'__datetime__': obj.isoformat()}
-            elif isinstance(obj, Enum):
-                return obj.value
-            raise TypeError(f"Object of type {type(obj)} is not MessagePack serializable")
-        
-        return msgpack.packb(data, default=msgpack_encoder, use_bin_type=True)
-    
-    def _serialize_pickle(self, data: Any) -> bytes:
-        """Serialize using pickle (most compatible)"""
-        return pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
-    
-    def serialize(self, data: Any, method_hint: Optional[SerializationMethod] = None) -> bytes:
-        """
-        Serialize data with optimal method and compression
-        Returns: serialized bytes with method prefix
-        """
-        try:
-            # Choose serialization method
-            method = self._choose_method(data, method_hint)
-            
-            # Serialize based on method
-            if method == SerializationMethod.JSON or method == SerializationMethod.COMPRESSED_JSON:
-                serialized = self._serialize_json(data)
-            elif method == SerializationMethod.MSGPACK or method == SerializationMethod.COMPRESSED_MSGPACK:
-                serialized = self._serialize_msgpack(data)
-            else:  # PICKLE or COMPRESSED_PICKLE
-                serialized = self._serialize_pickle(data)
-            
-            original_size = len(serialized)
-            
-            base_method = {
-                SerializationMethod.JSON: SerializationMethod.JSON,
-                SerializationMethod.COMPRESSED_JSON: SerializationMethod.JSON,
-                SerializationMethod.PICKLE: SerializationMethod.PICKLE,
-                SerializationMethod.COMPRESSED_PICKLE: SerializationMethod.PICKLE,
-                SerializationMethod.MSGPACK: SerializationMethod.MSGPACK,
-                SerializationMethod.COMPRESSED_MSGPACK: SerializationMethod.MSGPACK,
-            }[method]
+            raise TypeError("Unsupported cache JSON value")
+        return json.dumps(
+            data, default=encode, separators=(",", ":")
+        ).encode("utf-8")
 
-            # Apply compression if beneficial
-            if (method.value.startswith('compressed') or 
-                original_size >= self.COMPRESSION_THRESHOLD):
-                
-                compressed = zlib.compress(serialized, self.compression_level)
-                
-                # Only use compression if it actually saves space
-                if len(compressed) < original_size * 0.9:  # At least 10% savings
-                    method_prefix = f"c{base_method.value[:1]}".encode('ascii')
-                    result = method_prefix + compressed
-                    self._stats['compressions'] += 1
-                    self._stats['bytes_saved'] += original_size - len(result)
-                else:
-                    # Compression not beneficial
-                    method_prefix = base_method.value[:1].encode('ascii')
-                    result = method_prefix + serialized
-            else:
-                method_prefix = base_method.value[:1].encode('ascii')
-                result = method_prefix + serialized
-            
-            # Update stats
-            self._stats['serializations'] += 1
-            method_name = method.value
-            self._stats['method_usage'][method_name] = self._stats['method_usage'].get(method_name, 0) + 1
-            
+    def _serialize_msgpack(self, data: Any) -> bytes:
+        def encode(obj):
+            if isinstance(obj, datetime):
+                return {"__datetime__": obj.isoformat()}
+            if isinstance(obj, Enum):
+                return obj.value
+            raise TypeError("Unsupported cache MessagePack value")
+        return msgpack.packb(data, default=encode, use_bin_type=True)
+
+    def _serialize_pickle(self, data: Any) -> bytes:
+        raise TypeError("Pickle is permanently disabled for cache serialization")
+
+    def serialize(self, data: Any,
+                  method_hint: Optional[SerializationMethod] = None) -> bytes:
+        try:
+            method = self._choose_method(data, method_hint)
+            is_json = method in (
+                SerializationMethod.JSON, SerializationMethod.COMPRESSED_JSON
+            )
+            raw = self._serialize_json(data) if is_json else self._serialize_msgpack(data)
+            if len(raw) > self.MAX_DECODED_BYTES:
+                raise ValueError("Decoded cache payload exceeds limit")
+            prefix = b"j" if is_json else b"m"
+            wants_compression = (
+                method in (SerializationMethod.COMPRESSED_JSON,
+                           SerializationMethod.COMPRESSED_MSGPACK)
+                or len(raw) >= self.COMPRESSION_THRESHOLD
+            )
+            result = prefix + raw
+            if wants_compression:
+                compressed = zlib.compress(raw, self.compression_level)
+                if len(compressed) < len(raw) * 0.9:
+                    result = b"c" + prefix + compressed
+                    self._stats["compressions"] += 1
+                    self._stats["bytes_saved"] += len(raw) - len(result)
+            if len(result) > self.MAX_ENCODED_BYTES:
+                raise ValueError("Encoded cache payload exceeds limit")
+            self._stats["serializations"] += 1
+            name = method.value
+            methods = self._stats["method_usage"]
+            methods[name] = methods.get(name, 0) + 1
             return result
-            
-        except Exception as e:
-            logger.error(f"Serialization failed: {e}")
-            # A cache miss is safe; storing a stringified replacement is not.
-            # Let CacheManager reject this write so authoritative storage keeps
-            # the original value and type.
-            raise TypeError(f"Cache value is not serializable: {type(data)}") from e
-    
+        except Exception as exc:
+            logger.warning(f"Refused cache value that cannot be encoded safely: {exc}")
+            raise TypeError("Cache value is not safely serializable") from exc
+
     def _deserialize_json(self, data: bytes) -> Any:
-        """Deserialize JSON with datetime parsing"""
-        return json.loads(data.decode('utf-8'))
-    
+        return json.loads(data.decode("utf-8"))
+
     def _deserialize_msgpack(self, data: bytes) -> Any:
-        """Deserialize MessagePack with datetime parsing"""
-        def msgpack_decoder(obj):
-            if isinstance(obj, dict) and '__datetime__' in obj:
-                return datetime.fromisoformat(obj['__datetime__'])
+        def hook(obj):
+            if isinstance(obj, dict) and "__datetime__" in obj:
+                return datetime.fromisoformat(obj["__datetime__"])
             return obj
-        
-        return msgpack.unpackb(data, object_hook=msgpack_decoder, raw=False)
-    
+        # unpackb does not accept Unpacker(max_buffer_size=...). Limit
+        # individual values/collections using its supported max_* options.
+        return msgpack.unpackb(
+            data, object_hook=hook, raw=False,
+            max_str_len=self.MAX_DECODED_BYTES,
+            max_bin_len=self.MAX_DECODED_BYTES,
+            max_array_len=1_000_000,
+            max_map_len=1_000_000,
+            max_ext_len=self.MAX_DECODED_BYTES,
+        )
+
     def _deserialize_pickle(self, data: bytes) -> Any:
-        """Deserialize pickle data (legacy support only - security warning)"""
-        # SECURITY WARNING: pickle can execute arbitrary code
-        # This is only kept for backward compatibility with existing cache data
-        logger.warning("Deserializing pickle data - this format is deprecated for security reasons")
-        return pickle.loads(data)
-    
+        """Legacy API, deliberately fails closed instead of calling pickle."""
+        self._stats["rejected_unsafe"] += 1
+        logger.warning("Ignored unsafe legacy pickle Redis cache entry")
+        return None
+
+    def _safe_decompress(self, data: bytes) -> bytes:
+        inflater = zlib.decompressobj()
+        raw = inflater.decompress(data, self.MAX_DECODED_BYTES + 1)
+        if (len(raw) > self.MAX_DECODED_BYTES or inflater.unconsumed_tail
+                or not inflater.eof or inflater.unused_data):
+            raise ValueError("Invalid or oversized compressed Redis cache value")
+        remaining = self.MAX_DECODED_BYTES + 1 - len(raw)
+        tail = inflater.flush(remaining)
+        if len(raw) + len(tail) > self.MAX_DECODED_BYTES:
+            raise ValueError("Inflated Redis cache value exceeds limit")
+        return raw + tail
+
     def deserialize(self, data: bytes) -> Any:
-        """
-        Deserialize data based on method prefix with robust fallback handling
-        """
-        if not data or len(data) < 1:
+        """Return cache miss for unsafe/corrupt values, never execute pickle."""
+        if not isinstance(data, (bytes, bytearray, memoryview)):
             return None
-        
+        data = bytes(data)
+        if not data:
+            return None
+        if len(data) > self.MAX_ENCODED_BYTES:
+            self._stats["rejected_invalid"] += 1
+            return None
+
+        # Historic wire tags. Pickled values are intentionally not migrated
+        # on a live Redis read. Existing keys are not deleted or overwritten.
+        if data[:1] == b"p" or data[:2] == b"cp":
+            return self._deserialize_pickle(data)
+
         try:
-            # Handle legacy data first (no method prefix)
-            # If first byte is not one of our method prefixes, it's legacy data
-            first_byte = data[:1]
-            if first_byte not in [b'j', b'p', b'm', b'c']:
-                return self._deserialize_legacy_data(data)
-            
-            # Extract method from prefix
-            method_prefix = data[:1]
-            serialized_data = data[1:]
-            
-            # Handle compression - check for compressed methods
-            is_compressed = False
-            method_char = method_prefix
-            
-            if method_prefix == b'c' and len(data) >= 2:
-                # Compressed format - next byte is the actual method
-                method_char = data[1:2]
-                serialized_data = data[2:]
-                is_compressed = True
-            
-            # Decompress if needed
-            if is_compressed:
+            if data[:2] in (b"cj", b"cm"):
+                inflated = self._safe_decompress(data[2:])
+                if data[:2] == b"cj":
+                    return self._deserialize_json(inflated)
+                return self._deserialize_msgpack(inflated)
+            if data[:1] == b"j":
                 try:
-                    serialized_data = zlib.decompress(serialized_data)
-                except zlib.error as e:
-                    logger.warning(f"Failed to decompress data: {e}, trying legacy fallback")
+                    return self._deserialize_json(data[1:])
+                except (ValueError, UnicodeError, TypeError):
                     return self._deserialize_legacy_data(data)
-            
-            # Deserialize based on method
-            if method_char == b'j':  # JSON
-                return self._deserialize_json(serialized_data)
-            elif method_char == b'm':  # MessagePack
-                return self._deserialize_msgpack(serialized_data)
-            elif method_char == b'p':  # Pickle
-                return self._deserialize_pickle(serialized_data)
-            else:
-                # Unknown method, try legacy fallback
-                return self._deserialize_legacy_data(data)
-        
-        except Exception as e:
-            logger.debug(f"Deserialization failed, trying legacy fallback: {e}")
-            return self._deserialize_legacy_data(data)
-    
-    def _deserialize_legacy_data(self, data: bytes) -> Any:
-        """Fallback deserialization for legacy data without method prefixes"""
-        try:
-            # Try JSON first (most common legacy format)
-            return json.loads(data.decode('utf-8'))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            try:
-                # Try msgpack (binary format, safer than pickle)
-                return msgpack.unpackb(data, raw=False)
-            except Exception:
+            if data[:1] == b"m":
                 try:
-                    # Try pickle as last binary option (legacy support with warning)
-                    logger.warning("Deserializing legacy pickle data - this format is deprecated")
-                    return pickle.loads(data)
+                    return self._deserialize_msgpack(data[1:])
                 except Exception:
-                    try:
-                        # Try as plain string
-                        return data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        # Last resort - return None for corrupted data
-                        logger.warning(f"Could not deserialize data of length {len(data)}")
-                        return None
-    
-    def estimate_memory_usage(self, data: Any) -> Dict[str, int]:
-        """Estimate memory usage for different serialization methods"""
-        estimates = {}
-        
+                    return self._deserialize_legacy_data(data)
+            return self._deserialize_legacy_data(data)
+        except Exception as exc:
+            self._stats["rejected_invalid"] += 1
+            logger.warning(f"Ignored malformed Redis cache entry: {exc}")
+            return None
+
+    @staticmethod
+    def _looks_like_ascii_pickle(data: bytes) -> bool:
+        """Identify complete *text-protocol* pickle safely, without loading.
+
+        pickletools disassembles opcodes but never invokes their referenced
+        functions. Only suspicious short legacy values are examined.
+        """
+        if (len(data) > 65536 or len(data) < 2
+                or data[:1] not in (b"(", b"c", b"d", b"l", b"I", b"N", b"V", b"S")
+                or not data.endswith(b".")):
+            return False
         try:
-            # JSON
-            json_size = len(self._serialize_json(data))
-            estimates['json'] = json_size
-            estimates['compressed_json'] = len(zlib.compress(
-                self._serialize_json(data), self.compression_level
-            ))
-            
-            # MessagePack
-            msgpack_size = len(self._serialize_msgpack(data))
-            estimates['msgpack'] = msgpack_size
-            estimates['compressed_msgpack'] = len(zlib.compress(
-                self._serialize_msgpack(data), self.compression_level
-            ))
-            
-            # Pickle
-            pickle_size = len(self._serialize_pickle(data))
-            estimates['pickle'] = pickle_size
-            estimates['compressed_pickle'] = len(zlib.compress(
-                self._serialize_pickle(data), self.compression_level
-            ))
-            
-        except Exception as e:
-            logger.warning(f"Error estimating memory usage: {e}")
-        
+            from pickletools import genops
+            for opcode, _argument, position in genops(data):
+                if opcode.name == "STOP":
+                    return position == len(data) - 1
+        except (ValueError, UnicodeError, IndexError, EOFError):
+            return False
+        return False
+
+    def _deserialize_legacy_data(self, data: bytes) -> Any:
+        """Safely decode unprefixed JSON/MessagePack/UTF-8, not pickle."""
+        if len(data) > self.MAX_ENCODED_BYTES:
+            return None
+        if self._looks_like_ascii_pickle(data):
+            return self._deserialize_pickle(data)
+        try:
+            return self._deserialize_json(data)
+        except (ValueError, UnicodeError, TypeError):
+            pass
+        try:
+            return self._deserialize_msgpack(data)
+        except Exception as exc:
+            logger.warning(f"Failed to deserialize MessagePack data: {exc}")
+            pass
+        try:
+            # ASCII pickle bytecode stays inert text if it reaches here.
+            return data.decode("utf-8")
+        except UnicodeError as exc:
+            logger.warning(f"Failed to decode UTF-8 data: {exc}")
+            return None
+
+    def estimate_memory_usage(self, data: Any) -> Dict[str, int]:
+        """Estimate safe codecs only. Never invoke pickle for measurements."""
+        estimates = {}
+        for name, encoder in (
+            ("json", self._serialize_json),
+            ("msgpack", self._serialize_msgpack),
+        ):
+            try:
+                encoded = encoder(data)
+                estimates[name] = len(encoded)
+                estimates[f"compressed_{name}"] = len(
+                    zlib.compress(encoded, self.compression_level)
+                )
+            except (TypeError, ValueError):
+                continue
         return estimates
 
 
-# Global serializer instance
 _serializer = OptimizedSerializer()
 
 
 def serialize(data: Any, method_hint: Optional[SerializationMethod] = None) -> bytes:
-    """Serialize data using optimized method"""
     return _serializer.serialize(data, method_hint)
 
 
 def deserialize(data: bytes) -> Any:
-    """Deserialize data"""
     return _serializer.deserialize(data)
 
 
 def get_serialization_stats() -> Dict[str, Any]:
-    """Get serialization statistics"""
     return _serializer.get_stats()
 
 
 def estimate_memory_usage(data: Any) -> Dict[str, int]:
-    """Estimate memory usage for different methods"""
     return _serializer.estimate_memory_usage(data)

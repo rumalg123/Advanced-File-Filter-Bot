@@ -1,16 +1,18 @@
 from pyrogram import Client
 from pyrogram.types import CallbackQuery
+from pyrogram.types import InlineKeyboardMarkup
 
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.helpers import MessageProxy
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.validators import extract_user_id, skip_subscription_check
 from handlers.commands_handlers.base import BaseCommandHandler
 
 logger = get_logger(__name__)
 
 
-class _CallbackQueryProxy:
+class _CallbackQueryProxy(CallbackQuery):
     """Minimal callback query proxy that replays the original callback data."""
 
     def __init__(self, query: CallbackQuery, data: str):
@@ -28,29 +30,37 @@ class _CallbackQueryProxy:
 class SubscriptionCallbackHandler(BaseCommandHandler):
     """Handler for subscription-related callbacks"""
 
+    @check_ban()
     async def handle_checksub_callback(self, client: Client, query: CallbackQuery):
         """Handle 'Try Again' subscription check callback"""
         current_user_id = extract_user_id(query)
 
         # Parse callback data
         parts = query.data.split('#', 2)
+        session_key = None
 
         # Check if it's a deeplink subscription check
         if len(parts) >= 3 and parts[1] == 'dl':
             # It's a deeplink with cached parameter
             session_key = parts[2]
 
+            if not session_key.startswith(('deeplink_', 'checksub_session:')):
+                await query.answer("Session expired. Please use your original link again.", show_alert=True)
+                return
+
             # Retrieve the cached deeplink
             cached_data = await self.bot.cache.get(session_key)
-            if not cached_data:
+            if (
+                not isinstance(cached_data, dict)
+                or type(cached_data.get('user_id')) is not int
+                or not isinstance(cached_data.get('deeplink'), str)
+                or not cached_data['deeplink']
+            ):
                 await query.answer(ErrorMessageFormatter.format_error("Session expired. Please try again.", plain_text=True), show_alert=True)
                 return
 
-            original_user_id = cached_data.get('user_id', current_user_id)
-            param = cached_data.get('deeplink', 'start')
-
-            # Clear the cache
-            await self.bot.cache_invalidator.invalidate_subscription_session(session_key)
+            original_user_id = cached_data['user_id']
+            param = cached_data['deeplink']
 
         elif len(parts) == 2:
             # Old format: checksub#param
@@ -101,7 +111,20 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
                         ErrorMessageFormatter.format_access_denied("You still need to join the required channel(s)!", plain_text=True),
                         show_alert=True
                     )
+                    # A previous invite may have expired or filled its limit.
+                    # Keep the original owned action, but offer fresh links.
+                    try:
+                        buttons = await self.bot.subscription_manager.build_subscription_buttons(
+                            client, current_user_id, custom_callback_data=query.data
+                        )
+                        await query.message.edit_reply_markup(InlineKeyboardMarkup(buttons))
+                    except Exception:
+                        logger.warning("Could not refresh subscription invite buttons", exc_info=True)
                     return
+
+        # Keep retries usable until their owner has satisfied every membership.
+        if session_key:
+            await self.bot.cache_invalidator.invalidate_subscription_session(session_key)
 
         # Handle the original command
         if param == "start":
@@ -145,6 +168,11 @@ class SubscriptionCallbackHandler(BaseCommandHandler):
             original_callback = param[3:]
             callback_query = _CallbackQueryProxy(query, original_callback)
             should_delete_message = False
+
+            if original_callback.startswith('search#'):
+                from handlers.callbacks_handlers.pagination import PaginationCallbackHandler
+                await PaginationCallbackHandler(self.bot).handle_search_pagination(client, callback_query)
+                return
 
             from handlers.callbacks_handlers.user import UserCallbackHandler
             user_handler = UserCallbackHandler(self.bot)

@@ -60,8 +60,8 @@ class UserCommandHandler(BaseCommandHandler):
                 except Exception as e:
                     logger.error(f"Failed to log new user: {e}")
 
-        # Handle deep link
-        if len(message.command) > 1:
+        # Gate the first welcome as well as file/inline deep links.
+        if self.bot.config.AUTH_CHANNEL or getattr(self.bot.config, 'AUTH_GROUPS', []):
             # Check subscription for deeplinks using validator
             skip_sub = skip_subscription_check(
                 user_id,
@@ -78,14 +78,15 @@ class UserCommandHandler(BaseCommandHandler):
                 if not is_subscribed:
                     # Send subscription message with the deeplink parameter
                     await self._send_subscription_message_for_deeplink(
-                        client, message, message.command[1]
+                        client, message, ('start' if len(message.command) < 2 or message.command[1] == 'subscribe'
+                                          else message.command[1])
                     )
                     return
 
-            # User is subscribed or doesn't need subscription, handle deeplink
+        # The inline switch-to-PM entry is a membership gate, not a file ID.
+        if len(message.command) > 1 and message.command[1] != 'subscribe':
             from handlers.deeplink import DeepLinkHandler
             deeplink_handler = DeepLinkHandler(self.bot)
-            # Remove the decorator from handle_deep_link since we're checking here
             await deeplink_handler.handle_deep_link_internal(client, message, message.command[1])
             return
 
@@ -511,9 +512,22 @@ class UserCommandHandler(BaseCommandHandler):
             
             text_parts = ["💡 <b>Personalized Recommendations</b>\n"]
             buttons = []
+            has_visible_content = False
+            shown_file_ids = set()
+
+            async def ranked_files(file_ids):
+                files_by_id = await self.bot.media_repo.find_files_batch(file_ids)
+                files = []
+                for file_id in file_ids:
+                    file = files_by_id.get(file_id)
+                    if file is not None and file.file_unique_id not in shown_file_ids:
+                        files.append(file)
+                        shown_file_ids.add(file.file_unique_id)
+                return files
             
             # Similar queries section
             if recommendations.get('similar_queries'):
+                has_visible_content = True
                 text_parts.append("<b>🔍 Similar Searches:</b>")
                 query_buttons = []
                 for query in recommendations['similar_queries'][:6]:  # Show up to 6 queries
@@ -535,7 +549,7 @@ class UserCommandHandler(BaseCommandHandler):
                     for i in range(0, len(query_buttons), 2):
                         buttons.append(query_buttons[i:i+2])
                     # Show query list in text
-                    query_list = ", ".join([f"<code>{q[:20]}...</code>" if len(q) > 20 else f"<code>{q}</code>" 
+                    query_list = ", ".join([f"<code>{html.escape(q[:20])}...</code>" if len(q) > 20 else f"<code>{html.escape(q)}</code>"
                                            for q in recommendations['similar_queries'][:4]])
                     text_parts.append(f"  {query_list}\n")
             
@@ -543,10 +557,10 @@ class UserCommandHandler(BaseCommandHandler):
             if recommendations.get('based_on_history'):
                 file_ids = recommendations['based_on_history'][:5]  # Limit to 5 files
                 # Fetch files using batch lookup (efficient)
-                files_dict = await self.bot.media_repo.find_files_batch(file_ids)
-                files = [f for f in files_dict.values() if f is not None]  # Filter out None values
+                files = await ranked_files(file_ids)
                 
                 if files:
+                    has_visible_content = True
                     text_parts.append(f"\n<b>📚 Based on Your History:</b> {len(files)} files")
                     # Show file names in text
                     from core.utils.file_emoji import get_file_emoji
@@ -580,10 +594,10 @@ class UserCommandHandler(BaseCommandHandler):
             if recommendations.get('trending_files'):
                 file_ids = recommendations['trending_files'][:5]  # Limit to 5 files
                 # Fetch files using batch lookup (efficient)
-                files_dict = await self.bot.media_repo.find_files_batch(file_ids)
-                files = [f for f in files_dict.values() if f is not None]  # Filter out None values
+                files = await ranked_files(file_ids)
                 
                 if files:
+                    has_visible_content = True
                     text_parts.append(f"\n<b>🔥 Trending:</b> {len(files)} files")
                     # Show file names in text
                     from core.utils.file_emoji import get_file_emoji
@@ -613,7 +627,7 @@ class UserCommandHandler(BaseCommandHandler):
                         for i in range(0, len(file_buttons), 2):
                             buttons.append(file_buttons[i:i+2])
             
-            if not recommendations.get('similar_queries') and not recommendations.get('based_on_history') and not recommendations.get('trending_files'):
+            if not has_visible_content:
                 text_parts.append(
                     "\n" + ErrorMessageFormatter.format_info(
                         "Start searching to get personalized recommendations!",

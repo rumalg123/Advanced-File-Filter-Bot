@@ -13,15 +13,15 @@ def test_negative_channel_ids_are_preserved():
     assert config.get_channel_list() == [-1001234567890, 123]
 
 
-def test_dependency_manifests_use_same_pinned_wzgram_commit():
-    expected_commit = "1b3dd187c448d6d9daca0a2d3b131ad1323fcb8e"
+def test_dependency_manifests_use_latest_published_wzgram():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = project["project"]["dependencies"]
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 
-    assert any("wzgram" in dependency and expected_commit in dependency for dependency in dependencies)
+    assert "wzgram" in dependencies
     assert not any(dependency.lower() == "pyrofork" for dependency in dependencies)
-    assert expected_commit in requirements
+    assert "wzgram" in requirements.splitlines()
+    assert "git+https://github.com/rjriajul/wzgram" not in requirements
 
 
 def test_published_filter_commands_have_registered_aliases():
@@ -84,3 +84,35 @@ def test_handlers_use_application_rate_limiter_namespace():
     assert "self.bot.rate_limiter" not in admin_source
     assert "self.bot.app_rate_limiter" in search_source
     assert "self.bot.app_rate_limiter" in admin_source
+
+
+def test_database_sync_preserves_disabled_and_numeric_auth_channel():
+    from bot import BotConfig
+    from config.settings import settings
+    import copy
+
+    config=object.__new__(BotConfig)
+    config._settings=copy.deepcopy(settings)
+    config.AUTH_CHANNEL=None
+    for raw, expected in [('0',None), ('',None), (None,None),
+                          ('-1001234567890',-1001234567890), ('@qa_channel','@qa_channel')]:
+        config.sync_settings_from_db({'AUTH_CHANNEL':{'value':raw}})
+        assert config.AUTH_CHANNEL==expected
+
+
+def test_startup_service_constructors_accept_the_wired_arguments():
+    import ast
+    import inspect
+    import textwrap
+    import bot
+
+    tree=ast.parse(textwrap.dedent(inspect.getsource(bot.MediaSearchBot.start)))
+    checked=[]
+    for node in ast.walk(tree):
+        if isinstance(node,ast.Call) and isinstance(node.func,ast.Name):
+            cls=getattr(bot,node.func.id,None)
+            if inspect.isclass(cls) and node.func.id.endswith('Service'):
+                inspect.signature(cls).bind(*[None for _ in node.args],
+                    **{k.arg:None for k in node.keywords})
+                checked.append(node.func.id)
+    assert {'MaintenanceService','FileStoreService'} <= set(checked)

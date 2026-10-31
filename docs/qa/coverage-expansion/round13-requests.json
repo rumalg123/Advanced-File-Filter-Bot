@@ -1,0 +1,499 @@
+{
+  "date": "2026-10-31",
+  "round": 13,
+  "scope": [
+    "request-tracking",
+    "admin-request-transitions",
+    "notification-fallback",
+    "replay-and-ownership"
+  ],
+  "application_and_tests_commit": "d994af74b4c23c94a6136c54e03dc199ca3ff0bc",
+  "source_manifest_sha256": "c048939f7a7dac7c56c56dda7b23ddf281afbee2200e5649c5f4808b801b9eb1",
+  "fixes": {
+    "BUG-115": "19225a3",
+    "BUG-116": "4b40341",
+    "BUG-117": "29e8095",
+    "BUG-118": "d994af7"
+  },
+  "tests": {
+    "passed": 1388,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 53,
+    "seconds": 46.47,
+    "focused_related_passed": 105,
+    "outcome_cases": 7,
+    "rendering_cases": 5,
+    "callback_cases": 15,
+    "transition_cases": 26,
+    "real_mongo_transition_cases": 12
+  },
+  "before_fixes": {
+    "outcomes": {
+      "failed": 4,
+      "passed": 3
+    },
+    "rendering": {
+      "failed": 5,
+      "passed": 0
+    },
+    "callback_validation": {
+      "failed": 10,
+      "passed": 5
+    },
+    "initial_transition_regressions": {
+      "failed": 17,
+      "passed": 6
+    },
+    "three_additional_disabled_tracking_cases_in_final_suite": true
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "all_four_new_process_shards_match_start_end_current_source": true,
+  "automated": {
+    "covered_lines": 11369,
+    "num_statements": 18056,
+    "percent_covered": 59.93016875883282,
+    "percent_covered_display": "60",
+    "missing_lines": 6687,
+    "excluded_lines": 41,
+    "percent_statements_covered": 62.96521931767833,
+    "percent_statements_covered_display": "63",
+    "num_branches": 6002,
+    "num_partial_branches": 913,
+    "covered_branches": 3049,
+    "missing_branches": 2953,
+    "percent_branches_covered": 50.7997334221926,
+    "percent_branches_covered_display": "51"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12978,
+    "num_statements": 18056,
+    "percent_covered": 68.80455565716186,
+    "percent_covered_display": "69",
+    "missing_lines": 5078,
+    "excluded_lines": 41,
+    "percent_statements_covered": 71.87638458130262,
+    "percent_statements_covered_display": "72",
+    "num_branches": 6002,
+    "num_partial_branches": 1025,
+    "covered_branches": 3575,
+    "missing_branches": 2427,
+    "percent_branches_covered": 59.56347884038654,
+    "percent_branches_covered_display": "60"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 64,
+        "changed_files_discarded": 54
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 53,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 54,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 51,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round10-phase1-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round10-phase2-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round10-phase3-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round10-unit",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round11-phase1-live",
+        "matching_files": 118,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round11-phase2-live",
+        "matching_files": 118,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round11-phase3-live",
+        "matching_files": 118,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round11-unit",
+        "matching_files": 118,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round12-phase1-live",
+        "matching_files": 119,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round12-phase2-live",
+        "matching_files": 119,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round12-phase3-live",
+        "matching_files": 119,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round12-unit",
+        "matching_files": 119,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round13-phase1-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round13-phase2-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round13-phase3-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round13-unit",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 101,
+        "changed_files_discarded": 20
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 101,
+        "changed_files_discarded": 20
+      },
+      {
+        "shard": ".coverage.round8-unit",
+        "matching_files": 108,
+        "changed_files_discarded": 14
+      },
+      {
+        "shard": ".coverage.round8-validated-aggregate",
+        "matching_files": 108,
+        "changed_files_discarded": 14,
+        "kind": "validated historical aggregate, not a process shard",
+        "verification": {
+          "source_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+          "source_manifest_matches_committed_round8": true,
+          "all_file_execution_and_totals_equal_original_report": true,
+          "data_sha256": "5df644e3b3eb8117cd170969198e937bbbc68dfb7a65ca76aaebace6badb7018"
+        }
+      },
+      {
+        "shard": ".coverage.round9-phase1-live",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round9-phase2-live",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round9-phase3-live",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round9-unit",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      }
+    ],
+    "combined_percent": 68.80455565716186,
+    "policy": "Raw process files require identical start/end/current SHA256. The labelled historical aggregate reproduces its recorded-source report and contributes only unchanged files. No line/arc remapping; no failed round13 live runs are included."
+  },
+  "runtime": {
+    "image_tag": "file-filter-bot:qa-multisub-20261030",
+    "image_id": "sha256:8ea67dde9ec1d7fbc27647ef52e427ae5b43c50d6d462fd517ae11fa3775873e",
+    "bundled_application_source": "b2fcb38",
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "pymongo": "4.19.0",
+    "motor": "3.7.1",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "new_deployment_image_built": false
+  },
+  "preflight": {
+    "updated_qa_targets_resolved": true,
+    "bot_admin_access_verified": true,
+    "three_distinct_human_accounts_authenticated": true,
+    "second_normal_session_key": "normal_user_2"
+  },
+  "live": {
+    "scope": "request-tracking-and-admin-transitions",
+    "checks": {
+      "both_normal_accounts_start_with_empty_owned_request_history": true,
+      "missing_content_creates_one_pending_record_and_a_literal_html_safe_admin_card": true,
+      "case_and_whitespace_duplicate_is_suppressed_without_consuming_a_second_request_slot": true,
+      "same_title_from_second_normal_account_is_a_separate_owned_request": true,
+      "both_normal_accounts_denied_admin_actions_on_a_qa_copy_of_the_real_request_card": true,
+      "upload_completion_notifies_once_and_replayed_admin_action_is_rejected": true,
+      "admin_unavailable_action_persists_correct_status_and_notifies_only_the_requester": true,
+      "admin_available_action_persists_correct_status_and_notifies_only_the_requester": true,
+      "admin_rejected_action_persists_correct_status_and_notifies_only_the_requester": true,
+      "private_request_history_is_owned_and_displays_all_four_terminal_statuses": true,
+      "blocked_requester_receives_group_reply_and_request_is_finalized_then_unblocked": true,
+      "request_for_indexed_content_returns_owned_file_results_without_missing_content_record": true,
+      "seeded_inflight_claim_blocks_duplicate_admission_and_reports_honest_user_progress": true,
+      "empty_redis_restart_preserves_mongo_history_and_terminal_callback_guards": true,
+      "known_unsent_fixture_claim_can_be_rolled_back_then_completed_once_after_restart": true,
+      "tracking_off_removes_user_command_but_preserves_guards_for_preexisting_tracked_cards": true,
+      "tracking_off_keeps_legacy_request_actions_and_log_channel_fallback_without_new_tracking_rows": true
+    },
+    "fixture_documents": 1,
+    "human_accounts": 3,
+    "passed": true,
+    "tracked_requests": 6,
+    "normal_request_slots": {
+      "first": 6,
+      "second": 2
+    },
+    "configuration": {
+      "tracking_phases": [
+        true,
+        true,
+        false
+      ],
+      "request_channel_phases": [
+        "QA request channel",
+        "QA request channel",
+        "fallback to QA log channel"
+      ],
+      "redis": "both local Redis databases cleared before phase 2; retained before phase 3",
+      "mongo": "disposable local MongoDB retained across phases",
+      "free_mode": true,
+      "request_only_for_premium": false,
+      "temporary_request_per_day": 20,
+      "temporary_request_warning_limit": 10,
+      "indexed_search": true,
+      "other_optional_features": false,
+      "auto_delete_seconds": 0,
+      "three_authenticated_human_accounts": true,
+      "private_and_declared_qa_targets_only": true
+    }
+  },
+  "live_fixture_boundaries": {
+    "authorization_card": "Bot copied the first real request card into the QA group so both normal accounts could exercise its admin-only controls without joining the request channel",
+    "inflight_state": "A local MongoDB claim was seeded without sending a notification; rollback was applied only to that known-unsent fixture",
+    "blocked_pm": "Real normal-user bot block, real group fallback, then unblock and independent state verification",
+    "source_update_replay": "Deterministic handler test; live action replay uses the retained QA card copy"
+  },
+  "request_contract": {
+    "only_successful_empty_search_can_create_missing_content": true,
+    "keyword_html_display_max_characters": 500,
+    "normalized_duplicate_scope": "user plus query while pending or in flight",
+    "tracked_source_replays_do_not_consume_extra_request_slots": true,
+    "claim_preserves_pending_unique_index": true,
+    "legacy_processing_records_supported": true,
+    "existing_tracked_callbacks_guarded_when_new_tracking_off": true,
+    "admin_actions_read_authoritative_tracking_state": true,
+    "read_or_claim_failure_stops_notification": true,
+    "finalization_failure_does_not_present_finished_card": true,
+    "interrupted_or_ambiguous_delivery_requires_manual_review": true,
+    "automatic_stale_claim_replay_added": false,
+    "untracked_legacy_actions_preserved": true,
+    "claim_fields": [
+      "target_status",
+      "handled_by"
+    ],
+    "stored_display_query_existing_max_characters": 100
+  },
+  "cleanup": {
+    "final_run": {
+      "messages_removed": {
+        "r13-admin": 5,
+        "r13-normal": 16,
+        "r13-normal2": 9,
+        "log_channel": 7,
+        "qa_group": 22,
+        "request_channel": 6
+      },
+      "errors": []
+    },
+    "membership": {
+      "membership_restored": true,
+      "owned_invite_revoked": true,
+      "service_messages_removed": 2,
+      "errors": []
+    },
+    "block_state": {
+      "original_unblocked_state_restored": true,
+      "errors": []
+    },
+    "post_cleanup": {
+      "tracked_target_posts_removed_or_already_deleted": 25,
+      "errors": []
+    },
+    "final_recorded_messages_including_membership_service_messages": 67,
+    "cleanup_verifier_peer_resolution_corrected": true,
+    "owned_containers_anonymous_volumes_networks_removed": true,
+    "original_two_services_running_untouched": true,
+    "permissions_unchanged": true
+  },
+  "policy": {
+    "admin_owner_bypasses_preserved": true,
+    "operator_diagnostic_lines_unchanged": 405,
+    "operator_diagnostic_lines_context_updates_from_round8": 2,
+    "operator_diagnostics_removed": 0,
+    "new_product_features_or_flags_added": false,
+    "production_defaults_or_limits_changed": false,
+    "production_server_accessed": false,
+    "remote_atlas_accessed": false,
+    "deployment_environment_changed": false,
+    "mongo_migration_or_new_index_required": false,
+    "mixed_old_new_request_writers_supported": false
+  },
+  "validation": {
+    "python_compilation": true,
+    "ruff_F821_F822_F823": true,
+    "pip_check": true,
+    "markdown_links_anchors": true,
+    "json_privacy": true,
+    "git_diff_check": true,
+    "live_unhandled_error_or_traceback": false,
+    "live_error_log_entries": 0,
+    "local_markdown_links_checked": 271
+  },
+  "limitations": [
+    "Whole-bot 100% remains open",
+    "Small local fixture does not certify Atlas/multidatabase latency or production load",
+    "Injected storage/delivery failures and source-update replays use deterministic tests; the live inflight claim is explicitly seeded",
+    "A crash after notification send can leave an ambiguous claim; inspect before reconciliation, without blindly resetting or replaying",
+    "Admitted requests consume request allowance before lookup, including existing-content searches; this quota policy is unchanged",
+    "A disabled-tracking legacy card has no durable record and keeps legacy behavior; stored cards keep their guards",
+    "One configured support group; moving historical request identity between groups was not an acceptance claim",
+    "Stop old writers before cutover; older binaries do not honor the new pending target guard",
+    "Runtime image bundles older application; deployment must build the committed branch source"
+  ],
+  "next_bounded_scope": [
+    "admin content dashboard",
+    "zero-result search analytics"
+  ]
+}

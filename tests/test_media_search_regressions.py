@@ -211,7 +211,7 @@ def test_only_existing_database_fields_are_used():
     })
     allowed = {
         "$and", "$or", "file_name", "caption", "season", "episode",
-        "resolution", "file_type", "file_size",
+        "resolution", "quality", "file_type", "file_size",
     }
 
     def collect_keys(value):

@@ -12,6 +12,7 @@ from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
 from core.cache.invalidation import CacheInvalidator
+from core.database.base import expired_premium_filter
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.logger import get_logger
 
@@ -57,10 +58,9 @@ class BatchOptimizations:
             {"$match": {"_id": {"$in": user_ids}}},
             {"$addFields": {
                 "expiry_date_normalized": {
-                    "$cond": {
-                        "if": {"$eq": [{"$type": "$premium_expiry_date"}, "string"]},
-                        "then": {"$toDate": "$premium_expiry_date"},
-                        "else": "$premium_expiry_date"
+                    "$convert": {
+                        "input": "$premium_expiry_date", "to": "date",
+                        "onError": None, "onNull": None,
                     }
                 }
             }},
@@ -113,7 +113,7 @@ class BatchOptimizations:
                 user_id = result["_id"]
                 computed = result["computed_status"]
                 
-                if result["is_premium"]:
+                if result.get("is_premium", False):
                     if computed["is_active"]:
                         days_remaining = max(
                             0, math.ceil(computed["days_remaining"])
@@ -308,7 +308,7 @@ class BatchOptimizations:
         try:
             operations = [
                 UpdateOne(
-                    {"_id": user_id},
+                    expired_premium_filter([user_id]),
                     {"$set": {
                         "is_premium": False,
                         "premium_activation_date": None,

@@ -13,6 +13,7 @@ import re
 from typing import Any, Dict, Optional
 
 from core.utils.helpers import build_typo_tolerant_pattern, parse_search_query
+from core.utils.search_tokens import indexed_title_candidates
 
 
 def _text_pattern(text: str) -> str:
@@ -23,7 +24,10 @@ def _text_pattern(text: str) -> str:
     variants with different word order. It also preserves existing common typo
     aliases (e.g. this/thus).
     """
-    tokens = text.split()
+    # Duplicate lookaheads do not enforce token multiplicity; the old
+    # matcher only required existence. Removing duplicates preserves those
+    # semantics while reducing worst-case regex evaluation work.
+    tokens = list(dict.fromkeys(text.split()))
     if len(tokens) == 1:
         return build_typo_tolerant_pattern(tokens[0])
     return (
@@ -122,12 +126,20 @@ def _season_episode_match(
 
 def _resolution_match(resolution: str, use_caption: bool) -> Dict[str, Any]:
     value = str(resolution).lower()
-    return _sources_match(
+    matched = _sources_match(
         "resolution",
         {"$regex": rf"^{re.escape(value)}$", "$options": "i"},
         _word_pattern(value),
         use_caption,
     )
+    # PH-015: newly indexed media may carry an explicit quality field,
+    # while older documents retain label/dimension variants in resolution.
+    # Never infer a 540p label merely from 960x540 pixel dimensions.
+    if re.fullmatch(r"\d{3,4}p", value):
+        matched["$or"].insert(
+            0, {"quality": {"$regex": rf"^{re.escape(value)}$", "$options": "i"}}
+        )
+    return matched
 
 
 def build_media_search_filter(
@@ -135,6 +147,7 @@ def build_media_search_filter(
     file_type: Optional[Any] = None,
     use_caption: bool = True,
     advanced_filters: Optional[Dict[str, Any]] = None,
+    *, indexed_tokens: bool = False,
 ) -> Dict[str, Any]:
     """Compile user search and explicit advanced filters into Mongo predicates.
 
@@ -144,6 +157,10 @@ def build_media_search_filter(
     """
     title, season, episode, resolution = parse_search_query(query)
     clauses = []
+    if indexed_tokens and title:
+        candidate = indexed_title_candidates(title)
+        if candidate is not None:
+            clauses.append(candidate)
 
     # Do not reinsert the whole query when parsing consumes every token:
     # "S01E03 540p" is a legitimate metadata-only search.

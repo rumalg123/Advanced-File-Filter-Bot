@@ -22,6 +22,15 @@ class ParsedTelegramLink:
 
 class TelegramLinkParser:
     """Robust parser for Telegram message links"""
+
+    @staticmethod
+    def is_valid_batch_range(first_id: int, last_id: int, max_messages: int) -> bool:
+        """Validate inclusive bounds, including legacy single-message batches."""
+        return (
+            all(type(value) is int for value in (first_id, last_id, max_messages))
+            and 0 < first_id <= last_id
+            and last_id - first_id + 1 <= max_messages
+        )
     
     # Comprehensive regex pattern for Telegram links
     LINK_PATTERN = re.compile(

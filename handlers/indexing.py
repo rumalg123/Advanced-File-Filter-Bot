@@ -1,7 +1,7 @@
 import asyncio
 import re
 
-from pyrogram import Client, filters, enums
+from pyrogram import Client, filters, enums, StopPropagation
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -113,6 +113,11 @@ class IndexingHandler:
         self._handlers.clear()
         logger.info("IndexingHandler cleanup complete")
     async def handle_index_request(self, client: Client, message: Message):
+        """Consume indexing input before the lower-priority text-search group."""
+        await self._process_index_request(client, message)
+        raise StopPropagation
+
+    async def _process_index_request(self, client: Client, message: Message):
         """Handle index request from forwarded message or link"""
         user_id = extract_user_id(message)
         if not user_id:
@@ -274,7 +279,8 @@ class IndexingHandler:
                         reply_to_message_id=int(param),
                         chat_id=int(from_user)
                     )
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Failed to notify requester {from_user} about rejection: {e}")
                     pass
 
                 return await query.answer("Request rejected")
@@ -316,7 +322,8 @@ class IndexingHandler:
                     reply_to_message_id=last_msg_id,
                     chat_id=int(requested_by)
                 )
-            except Exception:
+            except Exception as e:
+                logger.error(f"Failed to notify requester {requested_by}: {e}")
                 pass
 
         # Update message with progress
@@ -346,7 +353,8 @@ class IndexingHandler:
                         [ButtonBuilder.action_button("❌ Cancel", callback_data="index#cancel")]
                     ])
                 )
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error updating progress message: {e}")
                 pass
 
         # Start indexing

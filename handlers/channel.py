@@ -17,6 +17,7 @@ from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
 from repositories.channel import ChannelRepository
+from repositories.channel_index_jobs import ChannelIndexJobRepository
 from repositories.media import MediaFile, FileType
 
 logger = get_logger(__name__)
@@ -34,6 +35,15 @@ class ChannelHandler:
         self._update_lock = asyncio.Lock()
         # Add rate limiting for bulk messages - use config values
         self.processing_config = settings.processing
+        # Off by default. When enabled, store every accepted update in a new
+        # MongoDB queue collection before returning from this handler.
+        self.durable_jobs = (
+            ChannelIndexJobRepository(
+                bot.db_pool,
+                lease_seconds=self.processing_config.durable_indexing_lease_seconds
+            )
+            if self.processing_config.durable_indexing else None
+        )
         self.message_queue = asyncio.Queue(maxsize=self.processing_config.message_queue_size)
         self.overflow_queue = []  # Backup queue for overflow
         self.max_overflow_size = self.processing_config.overflow_queue_size
@@ -64,11 +74,18 @@ class ChannelHandler:
     def _create_background_tasks(self):
         """Create all background tasks through handler_manager"""
         tasks_config = [
-            (self._process_message_queue(), "channel_message_queue"),
-            (self._process_overflow_queue(), "channel_overflow_queue"),
             (self._periodic_handler_update(), "channel_handler_update"),
-            (self._cleanup_user_counts(), "channel_user_cleanup")
+            (self._cleanup_user_counts(), "channel_user_cleanup"),
         ]
+        if self.durable_jobs is not None:
+            tasks_config.append(
+                (self._process_durable_queue(), "channel_durable_indexing")
+            )
+        else:
+            tasks_config.extend([
+                (self._process_message_queue(), "channel_message_queue"),
+                (self._process_overflow_queue(), "channel_overflow_queue"),
+            ])
 
         for coro, name in tasks_config:
             task = self.bot.handler_manager.create_background_task(coro, name=name)
@@ -149,11 +166,9 @@ class ChannelHandler:
                 if users_to_clean:
                     logger.info(f"Cleaned up message counts for {len(users_to_clean)} users")
 
-                # Limit overflow queue size
-                if len(self.overflow_queue) > self.max_overflow_size:
-                    removed = len(self.overflow_queue) - self.max_overflow_size
-                    self.overflow_queue = self.overflow_queue[-self.max_overflow_size:]
-                    logger.warning(f"Trimmed {removed} old items from overflow queue")
+                # PH-005: never silently trim pending messages. When both
+                # bounded queues are full the handler now awaits backpressure
+                # rather than dropping accepted messages.
 
             except asyncio.CancelledError:
                 logger.info("User count cleanup task cancelled")
@@ -224,9 +239,11 @@ class ChannelHandler:
                 break  # Shutdown requested
             except asyncio.TimeoutError:
                 # Continue processing
-                if self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 10:
+                # PH-005: the previous "-10" / "-5" limits prevented any
+                # draining when a queue had <= 10 slots.
+                if self.overflow_queue and not self.message_queue.full():
                     moved = 0
-                    while self.overflow_queue and self.message_queue.qsize() < self.message_queue.maxsize - 5:
+                    while self.overflow_queue and not self.message_queue.full():
                         item = self.overflow_queue.pop(0)
                         try:
                             self.message_queue.put_nowait(item)
@@ -276,12 +293,31 @@ class ChannelHandler:
         if message.from_user and message.from_user.is_bot:
             return
 
+        if getattr(self, "durable_jobs", None) is not None:
+            # The snapshot is persisted before acknowledging the Telegram
+            # update. Never queue a live Pyrogram Message object in MongoDB.
+            from core.utils.media_extractor import extract_media_from_message
+            result = extract_media_from_message(
+                message, supported_types=["document", "video", "audio"]
+            )
+            if not result:
+                return
+            media, file_type, _ = result
+            media_file = MediaFileFactory.from_pyrogram_media(
+                media=media, message=message, file_type=file_type
+            )
+            # An enqueue exception is deliberately propagated and logged by
+            # the handler framework. We cannot claim durability on DB outage.
+            await self.durable_jobs.enqueue(
+                message.chat.id,
+                message.id,
+                self.bot.media_repo._entity_to_dict(media_file),
+            )
+            return
+
+        item = {'message': message, 'timestamp': time.time()}
         try:
-            # Add to queue instead of processing directly
-            self.message_queue.put_nowait({
-                'message': message,
-                'timestamp': time.time()
-            })
+            self.message_queue.put_nowait(item)
         except asyncio.QueueFull:
             if len(self.overflow_queue) < self.max_overflow_size:
                 self.overflow_queue.append({
@@ -290,37 +326,100 @@ class ChannelHandler:
                 })
                 logger.debug(f"Message added to overflow queue. Overflow size: {len(self.overflow_queue)}")
             else:
-                # Drop oldest message from overflow if at max capacity
-                dropped = self.overflow_queue.pop(0)
-                self.overflow_queue.append({
-                    'message': message,
-                    'timestamp': time.time()
-                })
-
-                # Rate limit warnings
-                current_time = time.time()
-                if current_time - self.last_warning_time > 60:  # One warning per minute
-                    logger.warning(f"Message queue overflow! Dropped message from {dropped['timestamp']}")
-                    self.last_warning_time = current_time
-                    self.queue_full_warnings += 1
-
-                    # Send alert to log channel if too many warnings
-                    if self.queue_full_warnings % 10 == 0 and self.bot.config.LOG_CHANNEL:
-                        try:
-                            await telegram_api.call_api(
-                                self.bot.send_message,
-                                self.bot.config.LOG_CHANNEL,
-                                ErrorMessageFormatter.format_warning("Queue Overflow Alert", title="Queue Overflow Alert") + "\n"
-                                f"The message queue has overflowed {self.queue_full_warnings} times.\n"
-                                f"Current queue size: {self.message_queue.qsize()}/{self.message_queue.maxsize}\n"
-                                f"Overflow queue size: {len(self.overflow_queue)}/{self.max_overflow_size}\n"
-                                f"Consider reducing the indexing rate or increasing queue size.",
-                                chat_id=self.bot.config.LOG_CHANNEL
-                            )
-                        except Exception:
-                            pass
+                # Never evict the oldest unprocessed message. Backpressure
+                # awaits a free main-queue slot instead. For crash recovery
+                # use PROCESSING_DURABLE_INDEXING=true on staging first.
+                self.queue_full_warnings += 1
+                if time.time() - self.last_warning_time > 60:
+                    logger.warning(
+                        "Indexing queues full; waiting for capacity "
+                        "(main=%d, overflow=%d). No item discarded.",
+                        self.message_queue.qsize(), len(self.overflow_queue),
+                    )
+                    self.last_warning_time = time.time()
+                await self.message_queue.put(item)
         except Exception as e:
             logger.error(f"Error adding message to queue: {e}")
+
+    async def _process_durable_queue(self):
+        """At-least-once indexing worker with crash recovery and dead letters."""
+        while not self._shutdown.is_set():
+            try:
+                await self.durable_jobs.ensure_indexes()
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.exception("Cannot initialize durable index queue; retrying: %s", e)
+                try:
+                    await asyncio.wait_for(self._shutdown.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
+
+        while not self._shutdown.is_set():
+            try:
+                job = await self.durable_jobs.claim()
+                if job is None:
+                    try:
+                        await asyncio.wait_for(self._shutdown.wait(), timeout=1)
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
+
+                try:
+                    media_file = self.bot.media_repo._dict_to_entity(
+                        dict(job["media"])
+                    )
+                    success, status, _ = await self.bot.media_repo.save_media(media_file)
+                    if status not in (0, 1):
+                        raise RuntimeError("Media repository did not accept indexed file")
+
+                    # The Mongo record exists before the job is acknowledged.
+                    acked = await self.durable_jobs.acknowledge(job)
+                    if not acked:
+                        logger.warning("Lost lease while acknowledging indexing job %s", job["_id"])
+                        continue
+
+                    if status == 1:
+                        try:
+                            await self.channel_repo.update_indexed_count(job["chat_id"])
+                        except Exception as e:
+                            logger.exception("Indexed file but channel counter update failed: %s", e)
+                        feature_service = getattr(self.bot, "feature_service", None)
+                        if feature_service:
+                            try:
+                                if hasattr(feature_service, "persist_new_media"):
+                                    await feature_service.persist_new_media(media_file)
+                                else:
+                                    feature_service.schedule_new_media(media_file)
+                            except Exception as e:
+                                # Media has already been saved and indexing job
+                                # acknowledged; surface the cross-write gap.
+                                logger.exception("Indexed file but durable alert enqueue failed: %s", e)
+                        # Admin summaries are independent of saved-search alerts.
+                        # Notify only for a newly saved, acknowledged job: replayed
+                        # duplicates and workers that lost their lease stay quiet.
+                        await self._send_index_summary(
+                            {'indexed': 1, 'duplicate': 0, 'errors': 0}, 1
+                        )
+                    await asyncio.sleep(self.processing_config.inter_message_delay)
+
+                except asyncio.CancelledError:
+                    # Leave current job leased; a replacement worker can reclaim
+                    # it after lease_until. Never acknowledge on cancellation.
+                    raise
+                except Exception as error:
+                    logger.exception("Durable indexing job %s failed", job["_id"])
+                    await self.durable_jobs.fail(job, error)
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                logger.exception("Durable channel indexing worker error: %s", error)
+                try:
+                    await asyncio.wait_for(self._shutdown.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    pass
 
     async def _process_message_batch(self, batch: List[Dict]):
         """Process a batch of messages"""
@@ -355,25 +454,31 @@ class ChannelHandler:
                 logger.error(f"Error processing message: {e}")
                 stats['errors'] += 1
 
-        # Log batch results if significant
-        if stats['indexed'] > 0 and self.bot.config.LOG_CHANNEL:
-            try:
-                summary = (
-                    f"📊 <b>Auto-Index Batch Summary</b>\n"
-                    f"✅ Indexed: {stats['indexed']}\n"
-                    f"🔄 Duplicates: {stats['duplicate']}\n"
-                    f"❌ Errors: {stats['errors']}\n"
-                    f"📦 Total Processed: {len(batch)}"
-                )
+        await self._send_index_summary(stats, len(batch))
 
-                await telegram_api.call_api(
-                    self.bot.send_message,
-                    self.bot.config.LOG_CHANNEL,
-                    summary,
-                    chat_id=self.bot.config.LOG_CHANNEL
-                )
-            except Exception:
-                pass
+    async def _send_index_summary(self, stats: Dict[str, int], total_processed: int):
+        """Best-effort admin notification, shared by memory and durable workers."""
+        log_channel = getattr(getattr(self.bot, 'config', None), 'LOG_CHANNEL', 0)
+        if stats['indexed'] <= 0 or not log_channel:
+            return
+        summary = (
+            f"📊 <b>Auto-Index Batch Summary</b>\n"
+            f"✅ Indexed: {stats['indexed']}\n"
+            f"🔄 Duplicates: {stats['duplicate']}\n"
+            f"❌ Errors: {stats['errors']}\n"
+            f"📦 Total Processed: {total_processed}"
+        )
+        try:
+            await telegram_api.call_api(
+                self.bot.send_message,
+                log_channel,
+                summary,
+                chat_id=log_channel,
+            )
+        except Exception:
+            # The file/job is already saved. A logging failure must never put
+            # indexed media back into the work queue or repeat user alerts.
+            logger.warning('Failed to send auto-index summary to LOG_CHANNEL', exc_info=True)
 
     async def _process_single_message(self, message: Message) -> str:
         """Process a single message"""
@@ -402,7 +507,10 @@ class ChannelHandler:
                 await self.channel_repo.update_indexed_count(message.chat.id)
                 feature_service = getattr(self.bot, 'feature_service', None)
                 if feature_service:
-                    feature_service.schedule_new_media(media_file)
+                    if hasattr(feature_service, "persist_new_media"):
+                        await feature_service.persist_new_media(media_file)
+                    else:
+                        feature_service.schedule_new_media(media_file)
                 return "indexed"
             elif status_code == 0:
                 logger.debug(f"Duplicate file: {media_file.file_name}")
@@ -446,7 +554,10 @@ class ChannelHandler:
             # Remove existing handlers
             for handler in self._handlers:
                 try:
-                    self.bot.remove_handler(handler)
+                    if self.bot.handler_manager:
+                        self.bot.handler_manager.remove_handler(handler)
+                    else:
+                        self.bot.remove_handler(handler)
                 except Exception as e:
                     logger.error(f"Error removing handler: {e}")
             self._handlers.clear()

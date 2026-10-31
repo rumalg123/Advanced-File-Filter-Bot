@@ -7,6 +7,7 @@ from pyrogram.types import Message
 
 from repositories.media import MediaFile, FileType
 from core.utils.helpers import extract_file_ref, parse_media_metadata
+from core.utils.media_metadata import extract_explicit_quality, extract_telegram_dimensions
 from core.utils.validators import normalize_filename_for_search
 from core.utils.file_type import get_file_type_from_pyrogram, get_file_type_from_string
 
@@ -129,6 +130,11 @@ class MediaFileFactory:
         elif parsed_resolution:
             resolution = parsed_resolution
 
+        # PH-015: source quality tags and actual pixel dimensions are
+        # separate. Preserve legacy resolution exactly for old clients.
+        pixel_width, pixel_height = extract_telegram_dimensions(media)
+        quality = extract_explicit_quality(raw_file_name, caption_html)
+
         # Extract file reference
         file_ref = extract_file_ref(media.file_id)
 
@@ -141,6 +147,9 @@ class MediaFileFactory:
             file_size=media.file_size,
             file_type=file_type_enum,
             resolution=resolution,
+            width=pixel_width,
+            height=pixel_height,
+            quality=quality,
             episode=episode,
             season=season,
             mime_type=getattr(media, 'mime_type', None),

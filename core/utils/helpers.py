@@ -165,11 +165,14 @@ def extract_file_ref(file_id: str) -> str:
     """
     try:
         decoded = FileId.decode(file_id)
+        if not decoded.file_reference:
+            raise ValueError("No file reference bytes")
         file_ref = base64.urlsafe_b64encode(
             decoded.file_reference
         ).decode().rstrip("=")
         return file_ref
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to extract file reference from file_id: %s; using fallback hash: %s", e, file_id)
         # Generate a fallback ref using hash
         return hashlib.md5(file_id.encode()).hexdigest()[:20]
 

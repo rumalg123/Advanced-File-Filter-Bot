@@ -1,0 +1,364 @@
+{
+  "date": "2026-10-30",
+  "round": 9,
+  "scope": [
+    "premium-grants",
+    "premium-removal",
+    "premium-expiration",
+    "daily-download-quotas"
+  ],
+  "application_and_tests_commit": "9b45806aa80cfde404d2a37dc239f78ed5b9c9ac",
+  "source_manifest_sha256": "8105bf6d6d2e096c2d3a3102f41701bc234f4bf4136e276721fb5209324ef4d8",
+  "fixes": {
+    "BUG-101": "6382ba1",
+    "BUG-102": "98cf8f3",
+    "BUG-103 / CACHE-025": "6b21eec"
+  },
+  "quota_acceptance_tests_commit": "9b45806",
+  "tests": {
+    "passed": 1199,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 36,
+    "seconds": 40.63,
+    "mutation_cases": 12,
+    "expiration_cases": 8,
+    "decision_cache_cases": 8,
+    "quota_acceptance_cases": 8
+  },
+  "before_fixes": {
+    "initial_mutations": {
+      "failed": 6,
+      "passed": 0
+    },
+    "expiration": {
+      "failed": 6,
+      "passed": 2
+    },
+    "decision_cache": {
+      "failed": 8,
+      "passed": 0
+    }
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "all_four_new_process_shards_match_start_end_current_source": true,
+  "automated": {
+    "covered_lines": 11004,
+    "num_statements": 17941,
+    "percent_covered": 58.210204679586454,
+    "percent_covered_display": "58",
+    "missing_lines": 6937,
+    "excluded_lines": 41,
+    "percent_statements_covered": 61.33437378072571,
+    "percent_statements_covered_display": "61",
+    "num_branches": 5950,
+    "num_partial_branches": 893,
+    "covered_branches": 2903,
+    "missing_branches": 3047,
+    "percent_branches_covered": 48.78991596638655,
+    "percent_branches_covered_display": "49"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12703,
+    "num_statements": 17941,
+    "percent_covered": 67.6196057092629,
+    "percent_covered_display": "68",
+    "missing_lines": 5238,
+    "excluded_lines": 41,
+    "percent_statements_covered": 70.80430299314419,
+    "percent_statements_covered_display": "71",
+    "num_branches": 5950,
+    "num_partial_branches": 1042,
+    "covered_branches": 3452,
+    "missing_branches": 2498,
+    "percent_branches_covered": 58.016806722689076,
+    "percent_branches_covered_display": "58"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 68,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 57,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 65,
+        "changed_files_discarded": 53
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 67,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 65,
+        "changed_files_discarded": 53
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 58,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 67,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 55,
+        "changed_files_discarded": 53
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 76,
+        "changed_files_discarded": 45
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 76,
+        "changed_files_discarded": 45
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 77,
+        "changed_files_discarded": 44
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 77,
+        "changed_files_discarded": 44
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 77,
+        "changed_files_discarded": 44
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 77,
+        "changed_files_discarded": 44
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 109,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 109,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 109,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 109,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 109,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 109,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 110,
+        "changed_files_discarded": 11
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 110,
+        "changed_files_discarded": 11
+      },
+      {
+        "shard": ".coverage.round8-unit",
+        "matching_files": 118,
+        "changed_files_discarded": 4
+      },
+      {
+        "shard": ".coverage.round8-validated-aggregate",
+        "matching_files": 118,
+        "changed_files_discarded": 4,
+        "kind": "validated historical aggregate, not a process shard",
+        "verification": {
+          "source_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+          "source_manifest_matches_committed_round8": true,
+          "all_file_execution_and_totals_equal_original_report": true,
+          "data_sha256": "5df644e3b3eb8117cd170969198e937bbbc68dfb7a65ca76aaebace6badb7018"
+        }
+      },
+      {
+        "shard": ".coverage.round9-phase1-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round9-phase2-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round9-phase3-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round9-unit",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 67.6196057092629,
+    "policy": "Raw process files require identical start/end/current SHA256. The validated historical aggregate must reproduce its recorded-source report exactly, and only unchanged current files contribute. No line/arc remapping."
+  },
+  "private_harness_coverage_filename_recovery": {
+    "kind": "validated historical aggregate, not a process shard",
+    "verification": {
+      "source_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+      "source_manifest_matches_committed_round8": true,
+      "all_file_execution_and_totals_equal_original_report": true,
+      "data_sha256": "5df644e3b3eb8117cd170969198e937bbbc68dfb7a65ca76aaebace6badb7018"
+    },
+    "note": "Private round9 driver reused round8 phase output names. Current live shards were renamed to round9. The intact round8 aggregate was reverified against its recorded source and original per-file report; no lost process shard was fabricated."
+  },
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "pymongo": "4.19.0",
+    "motor": "3.7.1",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "image": "file-filter-bot:qa-multisub-20261030",
+    "tested_application": "current source snapshot mounted into the retained runtime image",
+    "image_bundled_application": "b2fcb38, not rebuilt for this round",
+    "deployment_image_build_claimed": false
+  },
+  "configuration": {
+    "database": "disposable-local-mongodb",
+    "cache": "disposable-local-dual-redis",
+    "destinations": "two provided QA accounts and declared QA log channel",
+    "fixture_documents": 1,
+    "default_premium_days": 7,
+    "override_days": 2,
+    "free_daily_limit": 3,
+    "shortened_expiry_seconds": 12,
+    "premium_disabled": false,
+    "quota_delivery_ledger": true,
+    "quota_integration_tests_also_cover_ledger_disabled": true,
+    "bot_phases": 3,
+    "empty_redis_restarts": 2,
+    "force_subscription": false,
+    "durable_workers": false,
+    "auto_delete_seconds": 0
+  },
+  "live": {
+    "scope": "premium-grants-removal-expiry-and-daily-quotas",
+    "checks": {
+      "free_plan_shows_configured_three_file_limit": true,
+      "ordinary_user_cannot_self_grant_premium": true,
+      "malformed_and_unknown_target_grants_do_not_mutate_normal_user": true,
+      "three_confirmed_free_deliveries_charge_three_and_fourth_is_denied": true,
+      "exhausted_plan_display_matches_persisted_quota": true,
+      "default_seven_day_grant_persists_and_notifies_user_and_log_channel": true,
+      "duplicate_active_grant_does_not_shorten_stored_expiry": true,
+      "ordinary_user_cannot_remove_premium": true,
+      "premium_downloads_succeed_at_free_limit_without_extra_quota_charge": true,
+      "manual_removal_notifies_and_keeps_existing_free_quota_reset_policy": true,
+      "per_grant_duration_override_does_not_change_default": true,
+      "wall_clock_expiry_revokes_premium_and_preserves_consumed_free_quota": true,
+      "unswept_expired_raw_flag_can_receive_a_new_grant": true,
+      "blocked_user_notification_failure_does_not_undo_grant_and_is_logged": true,
+      "premium_grant_quota_and_settings_survive_empty_redis_restart": true,
+      "configured_admin_owner_keeps_quota_bypass_without_premium": true,
+      "free_quota_exhaustion_survives_second_empty_redis_restart": true
+    },
+    "fixture_documents": 1,
+    "passed": true,
+    "confirmed_free_deliveries": 10,
+    "confirmed_premium_deliveries": 3,
+    "confirmed_admin_bypass_deliveries": 1
+  },
+  "cleanup": {
+    "normal_user_unblocked": true,
+    "messages_removed": {
+      "round9-admin": 39,
+      "round9-normal": 60,
+      "log_channel": 14
+    },
+    "errors": [],
+    "recorded_messages_removed_total": 113,
+    "memberships_or_permissions_changed": false,
+    "owned_containers_anonymous_volumes_networks_removed": true,
+    "original_two_services_running_untouched": true
+  },
+  "policy": {
+    "admin_owner_access_and_quota_bypasses_preserved": true,
+    "automatic_expiration_preserves_consumed_quota": true,
+    "explicit_manual_removal_existing_zero_count_policy_preserved": true,
+    "operator_diagnostic_lines_unchanged": 405,
+    "operator_diagnostic_lines_context_updates_from_round8": 2,
+    "operator_diagnostics_removed": 0,
+    "production_limits_or_flags_changed": false,
+    "production_server_accessed": false,
+    "remote_atlas_accessed": false,
+    "system_clock_changed": false,
+    "manual_schema_migration_needed": false
+  },
+  "validation": {
+    "python_compilation": true,
+    "ruff_F821_F822_F823": true,
+    "pip_check": true,
+    "markdown_links_anchors": true,
+    "json_privacy": true,
+    "git_diff_check": true,
+    "live_unhandled_error_or_traceback": false,
+    "expected_live_warnings": [
+      "quota exhausted denials",
+      "deliberately blocked user notification"
+    ],
+    "sdk_handled_floodwait_seconds": 37,
+    "local_markdown_links_checked": 257
+  },
+  "limitations": [
+    "Whole-bot 100% remains open",
+    "Mutation races, malformed legacy data, write outages, partial refunds and UTC rollover are deterministic unit/local-Mongo acceptance",
+    "Live expiry used a shortened local grant, not full default-duration waiting",
+    "No full hourly scheduler interval, actual UTC midnight, Telegram load or ambiguous-send recovery acceptance",
+    "Every premium-only bulk/deep-link variant was not rerun; earlier evidence is historical",
+    "Runtime image contains prior code; deployment must build the newly committed branch source"
+  ],
+  "next_bounded_scope": [
+    "recommendations",
+    "recommendation feedback"
+  ]
+}

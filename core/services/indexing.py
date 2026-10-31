@@ -101,7 +101,8 @@ class IndexingService:
                         enums.ChatMemberStatus.OWNER
                     ]:
                         return None, "I need to be an admin in the channel to index files."
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error occurred while checking channel admin status for chat {chat_id}: {e}")
                     return None, "Make sure I'm an admin in the channel."
 
             return chat.id, None
@@ -319,7 +320,10 @@ class IndexingService:
                 if status_code == 1:
                     feature_service = getattr(self, 'feature_service', None)
                     if feature_service:
-                        feature_service.schedule_new_media(media_file)
+                        if hasattr(feature_service, "persist_new_media"):
+                            await feature_service.persist_new_media(media_file)
+                        else:
+                            feature_service.schedule_new_media(media_file)
                     return "saved"
                 elif status_code == 0:
                     return "duplicate"
@@ -355,7 +359,10 @@ class IndexingService:
                                 saved_count += 1
                                 feature_service = getattr(self, 'feature_service', None)
                                 if feature_service:
-                                    feature_service.schedule_new_media(media_file)
+                                    if hasattr(feature_service, "persist_new_media"):
+                                        await feature_service.persist_new_media(media_file)
+                                    else:
+                                        feature_service.schedule_new_media(media_file)
                                 # Cache invalidation handled by repository
                             else:
                                 error_count += 1
@@ -405,7 +412,8 @@ class IndexRequestService:
                         chat_id=chat_id
                     )
                     link = invite.invite_link
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error creating invite link for chat {chat_id}: {e}")
                     pass
 
             # Create request message

@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""PH-006: read-only MongoDB media search plan profiler.
+
+Reads DATABASE_URI and DATABASE_NAME from the process environment, not CLI
+arguments or an automatically loaded .env file. Never prints credentials,
+raw filenames, captions, query strings or Mongo documents. Only invokes
+"explain", "listIndexes" (implicitly via index_information), and optionally
+"$indexStats". No collection writes, index creation, or data migrations.
+
+By default it only accepts localhost. An operator must explicitly pass
+--allow-remote to inspect a remote/staging/production deployment.
+"""
+import argparse
+import hashlib
+import json
+import os
+from urllib.parse import urlsplit
+
+from pymongo import MongoClient
+
+from core.utils.search_matcher import build_media_search_filter
+from core.utils.validators import normalize_query
+from core.utils.search_tokens import SEARCH_DEEP_PAGE_THRESHOLD, SEARCH_PAGE_INDEX
+
+MAX_PROFILE_OFFSETS = 6
+MAX_PROFILE_OPERATIONS = 24
+
+DEFAULT_QUERIES = (
+    "doctor x mafia",
+    "doctor x mafia s01e03 540p",
+    "s01e03",
+    "540p",
+)
+
+
+def is_local(uri: str) -> bool:
+    """Avoid accidental remote probing without an explicit operator flag."""
+    # SRV parsing may trigger DNS requests even before a database query.
+    if uri.startswith("mongodb+srv://"):
+        return False
+    from pymongo.uri_parser import parse_uri
+
+    try:
+        parsed = parse_uri(uri)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Invalid DATABASE_URI") from exc
+    return bool(parsed["nodelist"]) and all(
+        host.strip("[]").lower() in ("127.0.0.1", "localhost", "::1")
+        for host, _ in parsed["nodelist"]
+    )
+
+
+def concise_plan(explanation: dict) -> dict:
+    execution = explanation.get("executionStats", {})
+    planner = explanation.get("queryPlanner", {})
+    stages = set()
+    indexes = set()
+
+    def visit(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("stage"), str):
+                stages.add(node["stage"])
+            if isinstance(node.get("indexName"), str):
+                indexes.add(node["indexName"])
+            for v in node.values():
+                visit(v)
+        elif isinstance(node, list):
+            for v in node:
+                visit(v)
+
+    visit(planner.get("winningPlan", {}))
+    return {
+        # MongoDB can return an explain document with executionSuccess=false
+        # instead of raising ExecutionTimeout. Its counters describe partial
+        # work, so nReturned=0 must not be interpreted as a completed search.
+        "executionSuccess": execution.get("executionSuccess"),
+        "errorCode": execution.get("errorCode"),
+        "nReturned": execution.get("nReturned"),
+        "totalDocsExamined": execution.get("totalDocsExamined"),
+        "totalKeysExamined": execution.get("totalKeysExamined"),
+        "executionTimeMillis": execution.get("executionTimeMillis"),
+        "stages": sorted(stages),
+        "indexesUsed": sorted(indexes),
+    }
+
+
+def profile(
+    database,
+    queries: tuple[str, ...],
+    *,
+    limit: int = 10,
+    max_time_ms: int = 3000,
+    use_caption: bool = True,
+    include_counts: bool = False,
+    include_index_stats: bool = False,
+    offsets: tuple[int, ...] = (0,),
+    compare_legacy_sort: bool = False,
+    indexed_tokens: bool = False,
+) -> dict:
+    """Perform bounded, explain-only reads for stable and legacy page plans."""
+    if (not offsets or len(set(offsets)) > MAX_PROFILE_OFFSETS
+            or any(type(offset) is not int or not 0 <= offset <= 1_000_000
+                   for offset in offsets)):
+        raise ValueError("Offsets must be 0..1000000, with at most 6 distinct values")
+    offsets = tuple(dict.fromkeys(offsets))
+    operations = len(queries) * len(offsets) * (2 if compare_legacy_sort else 1)
+    if operations > MAX_PROFILE_OPERATIONS:
+        raise ValueError("Too many page explain operations; maximum is 24")
+    output = {
+        "collection": "media_files",
+        "document_count": database.media_files.estimated_document_count(
+            maxTimeMS=max_time_ms
+        ),
+        "indexes": sorted(database.media_files.index_information()),
+        "limit": limit,
+        "offsets": list(offsets),
+        "sort": {"indexed_at": -1, "_id": -1},
+        "max_time_ms": max_time_ms,
+        "indexed_tokens": indexed_tokens,
+        "queries": [],
+    }
+    if include_index_stats:
+        output["index_usage"] = sorted(
+            (
+                {
+                    "name": d.get("name"),
+                    "access_ops": d.get("accesses", {}).get("ops"),
+                }
+                for d in database.media_files.aggregate(
+                    [{"$indexStats": {}}], maxTimeMS=max_time_ms
+                )
+            ),
+            key=lambda d: d["name"] or "",
+        )
+
+    for query in queries:
+        normalized = normalize_query(query)
+        # Exactly the same filter compiler used by the Telegram media search.
+        predicate = build_media_search_filter(normalized, use_caption=use_caption,
+                                             indexed_tokens=indexed_tokens)
+        row = {
+            "query_id": hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12],
+            "token_count": len(normalized.split()),
+            "pages": [],
+        }
+        if compare_legacy_sort:
+            row["legacy_pages"] = []
+        for offset in offsets:
+            find_command = {
+                "find": "media_files",
+                "filter": predicate,
+                "sort": {"indexed_at": -1, "_id": -1},
+                "skip": offset,
+                "limit": limit,
+                "maxTimeMS": max_time_ms,
+            }
+            if indexed_tokens and offset + limit >= SEARCH_DEEP_PAGE_THRESHOLD:
+                find_command['hint'] = SEARCH_PAGE_INDEX['name']
+            explanation = database.command(
+                "explain", find_command, verbosity="executionStats",
+                maxTimeMS=max_time_ms,
+            )
+            page = {"offset": offset, **concise_plan(explanation)}
+            row["pages"].append(page)
+            # Preserve the PH-006 output contract for the default offset 0.
+            if offset == 0:
+                row["page"] = concise_plan(explanation)
+            if compare_legacy_sort:
+                legacy_command = dict(find_command, sort={"indexed_at": -1})
+                legacy_explanation = database.command(
+                    "explain", legacy_command, verbosity="executionStats",
+                    maxTimeMS=max_time_ms,
+                )
+                row["legacy_pages"].append({
+                    "offset": offset, **concise_plan(legacy_explanation),
+                })
+
+        if include_counts:
+            count_command = {
+                "aggregate": "media_files",
+                "pipeline": [{"$match": predicate}, {"$count": "total"}],
+                "cursor": {},
+                "maxTimeMS": max_time_ms,
+            }
+            count_explanation = database.command(
+                "explain", count_command,
+                verbosity="executionStats", maxTimeMS=max_time_ms,
+            )
+            # Aggregate explain can have a "stages" wrapper and different
+            # structure. Record only the subset that is actually available.
+            if "queryPlanner" not in count_explanation:
+                stages = count_explanation.get("stages", [])
+                source = next((stage.get("$cursor") for stage in stages
+                               if isinstance(stage, dict) and "$cursor" in stage), {})
+            else:
+                source = count_explanation
+            row["count"] = concise_plan(source)
+        output["queries"].append(row)
+    return output
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--query", action="append", dest="queries", default=None,
+                        help="Repeatable query; never printed, only a short digest")
+    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--max-time-ms", type=int, default=3000)
+    parser.add_argument("--no-caption", action="store_true")
+    parser.add_argument("--include-counts", action="store_true",
+                        help="Explain the potentially expensive exact match count")
+    parser.add_argument("--offset", type=int, action="append", default=None,
+                        help="Repeatable offset (0..1000000, up to 6); default 0")
+    parser.add_argument("--compare-legacy-sort", action="store_true",
+                        help="Also explain the previous indexed_at-only ordering")
+    parser.add_argument("--index-stats", action="store_true",
+                        help="Read index usage counters without modifying indexes")
+    parser.add_argument("--allow-remote", action="store_true",
+                        help="Explicit acknowledgement to profile a remote MongoDB")
+    parser.add_argument("--indexed-tokens", action="store_true",
+                        help="Profile the optional versioned candidate prefilter")
+    args = parser.parse_args()
+
+    offsets = tuple(args.offset or (0,))
+    if (len(set(offsets)) > MAX_PROFILE_OFFSETS
+            or any(offset < 0 or offset > 1_000_000 for offset in offsets)):
+        parser.error("--offset must be 0..1000000, with at most 6 distinct offsets")
+    query_count = len(args.queries or DEFAULT_QUERIES)
+    if query_count * len(set(offsets)) * (2 if args.compare_legacy_sort else 1) > MAX_PROFILE_OPERATIONS:
+        parser.error("Too many explain operations; reduce queries or offsets (max 24)")
+    if not 1 <= args.limit <= 100:
+        parser.error("--limit must be between 1 and 100")
+    if not 100 <= args.max_time_ms <= 10000:
+        parser.error("--max-time-ms must be 100..10000")
+
+    uri = os.getenv("DATABASE_URI")
+    name = os.getenv("DATABASE_NAME")
+    if not uri or not name:
+        parser.error("DATABASE_URI and DATABASE_NAME must be set in the environment")
+    if not args.allow_remote and not is_local(uri):
+        parser.error("Remote MongoDB requires explicit --allow-remote")
+
+    with MongoClient(
+        uri, appname="PH006-PH014-ReadOnlySearchProfiler",
+        serverSelectionTimeoutMS=5000, socketTimeoutMS=args.max_time_ms + 3000,
+    ) as client:
+        # Client is read-only by contract: all methods in profile() are read
+        # methods. No authentication credentials are logged.
+        report = profile(
+            client[name], tuple(args.queries or DEFAULT_QUERIES),
+            limit=args.limit, max_time_ms=args.max_time_ms,
+            use_caption=not args.no_caption,
+            include_counts=args.include_counts,
+            include_index_stats=args.index_stats,
+            offsets=offsets, compare_legacy_sort=args.compare_legacy_sort,
+            indexed_tokens=args.indexed_tokens,
+        )
+        print(json.dumps(report, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

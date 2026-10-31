@@ -9,6 +9,8 @@ services:
       # System Configuration
       - PYTHONPATH=/usr/src/app
       - REDIS_URI=redis://redis:6379/0
+      # Optional, enable only after cutover/migration has been planned.
+      - REDIS_STATE_URI=${REDIS_STATE_URI:-}
       - TZ=${TZ:-UTC}
       
       # Auto-Update Configuration
@@ -38,6 +40,7 @@ services:
         condition: service_healthy
     networks:
       - bot-network
+      - state-network
     ports:
       - "8000:8000"
     healthcheck:
@@ -75,7 +78,30 @@ services:
     labels:
       - "com.filefilterbot.service=redis"
 
+  # Opt-in protected state service. Start explicitly with:
+  # docker compose --profile protected-state up -d redis-state
+  # then set REDIS_STATE_URI=redis://redis-state:6379/0 for the bot.
+  redis-state:
+    profiles: ["protected-state"]
+    image: redis:7-alpine
+    container_name: file-filter-redis-state
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/state.conf
+    volumes:
+      - ./redis-state.conf:/usr/local/etc/redis/state.conf:ro
+      - redis-state-data:/data
+    networks:
+      - state-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
 volumes:
+  redis-state-data:
+    driver: local
   # Redis data volume
   redis-data:
     driver: local
@@ -99,6 +125,9 @@ volumes:
       - "com.filefilterbot.volume=data"
 
 networks:
+  state-network:
+    driver: bridge
+    internal: true
   bot-network:
     driver: bridge
     labels:
