@@ -11,13 +11,14 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-10-31
 
-The latest bounded round passed **1,388 tests with zero failures or skips** and
-**17 live request-lifecycle checks** using three QA accounts on wzgram 3.1.6.
-BUG-115–118 fix failed-search forwarding, request HTML/length handling, callback
-validation and notification/replay guards. All four admin outcomes, owned
-history, blocked-PM group fallback, empty-Redis recovery and tracking-off behavior
-passed. Admin/owner bypasses and operator diagnostics are preserved.
-Source-matched coverage is **71.88% lines, 59.56% branches, 68.80% combined**.
+The latest bounded round passed **1,425 tests with zero failures or skips** and
+**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
+BUG-119–122 fix complete query identity, unavailable verification/statistics,
+concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
+payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
+persistence and handled failure recovery passed. Admin/owner bypasses and
+operator diagnostics remain. Source-matched coverage is **71.94% lines,
+59.71% branches, 68.89% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
@@ -60,7 +61,7 @@ counts remain historical; no feature defaults or production limits changed.
 | FEAT-008 | Implemented (off) | User request tracking | `FEATURE_REQUEST_TRACKING` | Users see owned request history; pending/in-flight duplicates and source replays are suppressed. Stored admin transitions retain notification guards through restarts and tracking-off changes. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31), including all four outcomes and blocked-PM fallback. Ambiguous interrupted notifications require review before reconciliation. |
 | FEAT-009 | Implemented (off) | Recently viewed/downloaded history | `FEATURE_RECENT_FILES` | Successful deliveries append bounded history; users can list and clear it; failed deliveries never appear. |
 | FEAT-010 | Implemented (off) | Recommendation explanations | `FEATURE_RECOMMENDATION_EXPLANATIONS` | Recommendation results include a safe reason such as search history, related file, or trending without exposing another user's behavior. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30), including safe rendered reasons and feature-toggle cache recovery. |
-| FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins can view currently unresolved zero-result searches, popular searches, report counts, request demand, and index/file-health summaries; successful/later-indexed matches self-heal through bounded current-search validation. |
+| FEAT-011 | Implemented (off) | Admin content dashboard | `FEATURE_CONTENT_DASHBOARD` | Admins view bounded current unmet searches, historical popularity, open-report/active-request totals and aggregate file/feature counts. Full query identities and effective filters/caption settings drive reconciliation; failures show retry feedback and snapshot cleanup preserves newer demand. [Bounded QA passed](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31). Total file size means referenced Telegram bytes, not database storage. |
 | FEAT-012 | Implemented (configured) | Multiple force-subscription channels and limited invites | Existing `AUTH_CHANNEL` / `AUTH_GROUPS` configuration | Accept comma-separated channels with legacy single-value compatibility; validate bot admin/Invite Users rights before settings writes; generate expiring, member-limited links for missing memberships and refresh them on retry. Defaults: 15 minutes and one member, editable through `/bsetting`. QA passed: 55 new automated cases and 18 live checks; see [round 8](docs/qa/coverage-expansion/STATUS.md#feature-round-8--multiple-force-sub-channels-and-limited-invites-2026-10-30). |
 
 ## Delivery order

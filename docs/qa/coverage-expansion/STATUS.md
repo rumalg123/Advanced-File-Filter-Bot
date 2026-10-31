@@ -1,8 +1,8 @@
 # QA evidence and remaining coverage
 
-Latest continuation: [request tracking and admin transitions](#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31),
-**1,388 tests passed**, **71.88% lines / 59.56% branches / 68.80% combined**.
-Next bounded round: admin content dashboard and zero-result search analytics.
+Latest continuation: [content dashboard and zero-result analytics](#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31),
+**1,425 tests passed**, **71.94% lines / 59.71% branches / 68.89% combined**.
+Next bounded round: group filters and connections.
 Configured admin/owner bypasses, public group previews and operator logging are
 preserved. Whole-bot 100% remains open. This round is complete; wait for the
 operator's next `continue` before starting another feature.
@@ -1531,3 +1531,104 @@ unchanged. Owned containers, anonymous volumes and networks were removed, and
 the two original server services remain running untouched. Final bot logs show
 zero errors or unhandled tracebacks. Stop here until `continue`.
 **Next bounded scope: admin content dashboard and zero-result search analytics.**
+
+
+## Bounded QA round 14 — content dashboard and zero-result analytics (2026-10-31)
+
+**Completed:** 1,425 tests passed, zero failures/errors/skips, with the same 22
+existing warnings. The 37 new cases cover complete query identity, display
+compatibility, availability/cancellation, cache validity, analytics races, count
+semantics, real SDK access filters and bounded concurrency. Five new cases use
+real MongoDB. All 98 related tests passed. Compilation, undefined-name Ruff and
+dependency consistency passed. Application/tests source: `49d9fc5`;
+[sanitized evidence](round14-dashboard.json).
+
+| Fix | Commit | Regression evidence |
+|---|---|---|
+| BUG-119 | `9d961c3` | Reconcile the full query identity, preserving trailing filters and safe legacy display fallbacks. Before: 6 failed, 2 passed. After: all 8 passed. |
+| BUG-120 / CACHE-028 | `85eb09d` | Unavailable verification/statistics returns retry feedback; malformed stats caches recompute; cancellation propagates. Before: 13 failed, 2 passed. After: all 15 passed. |
+| BUG-121 | `39a9e13` | Guard snapshot cleanup with observed count/time so newer demand survives. Before: 3 failed, 1 passed. After: all 4 real-Mongo cases passed. |
+| BUG-122 | `49d9fc5` | Include supported legacy in-flight requests and label referenced bytes as Total file size. Corrected fixture before: 2 failed, 8 passed. After: all 10 count/access/bounds cases passed. |
+
+The refreshed read-only preflight authenticated all three supplied human accounts,
+including `normal_user_2`, resolved updated QA chats and verified bot admin access.
+Live QA used one disposable local MongoDB and dual local Redis. Delivery was
+limited to the three private account chats and declared QA group/log channel.
+No remote Atlas, production server, deployment `.env`, production limit or feature
+default changed. No memberships, permissions, invites or block states changed.
+
+**16 live checks passed across three bot phases.** The admin empty dashboard
+reported genuine zero totals without fabricated rankings. Both normal accounts
+could not invoke it. Private misses from two users normalized case/whitespace
+into one global demand count without a persisted user ID. A group miss recorded
+demand without sending a noisy no-result reply. Invalid advanced syntax created
+no analytics record.
+
+Indexing a real matching file removed the old unmet query through the dashboard
+without another user search. A later successful search populated historical
+popularity. A query over 100 characters kept its terminal size constraint even
+though its display prefix matched an existing file; the real unmet record stayed
+visible. Successful caption matching resolved prior caption-only demand. Local
+aggregate fixtures represented eleven request states, three report states, two
+saved searches and two collections. The dashboard correctly showed six active
+requests (including legacy processing), two open reports, both saved searches and
+both collections, alongside two indexed files totaling 3 KB. Those fixture
+inserts are count-classification checks, not repeated CRUD-workflow claims.
+
+A malformed real Redis stats dictionary was invalidated and rebuilt from MongoDB.
+Literal HTML/ampersands appeared safely as text. A seeded historical literal query
+invalid under current advanced syntax remained stored but was omitted. One
+explicit QA probe failure, triggered through the real admin command, produced
+safe retry feedback without exposing the injected details. The next dashboard
+recovered. One local file was then directly deleted with generation advanced and
+stats invalidated; real search recorded new unmet demand and the dashboard showed
+the remaining file/size. This did not test the delete command itself.
+
+Phase two disabled the dashboard with Redis retained. Its admin command was
+unregistered and normal searches stopped adding unmet analytics. Phase three
+re-enabled it with caption matching off after clearing both QA Redis databases.
+MongoDB analytics and aggregate fixtures survived; caption-only demand remained
+unmet under the new setting and popular history was empty after the reset.
+
+Coverage includes **18,082 statements, 6,016 branches
+and all 122 tracked application/operator Python files**, including unimported modules:
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 63.29% | 51.26% | 60.29% |
+| Source-matched automated + live | 71.94% | 59.71% | 68.89% |
+
+All four new process shards match start/end/final application hashes. Historical
+execution contributes only unchanged files. The labelled round-8 validated
+aggregate retains its recorded-source/report verification. No line/arc remapping
+was used. Runtime is Python 3.13.7 / wzgram 3.1.6 with current source mounted into
+the retained image; its bundled application remains older `b2fcb38`. No new
+deployment image build is claimed. All 405 exact operator diagnostic lines and
+the two earlier context substitutions remain, with none removed. Existing
+admin/owner bypasses were preserved.
+
+The identity test initially asserted inside a callback whose exceptions are
+collected; those assertions now check the received call afterward. SDK filter
+fixtures needed a username attribute and boolean truthiness. The first live
+harness start imported local modules before adding its source path; its one
+startup log post was cleaned, and coverage archived outside accepted inputs.
+The corrected complete live run used unchanged application source.
+
+**Whole-bot 100% remains open.** No actual infrastructure outage was induced;
+the handled lookup failure was explicitly injected. Dashboard reads are bounded
+and are not a transactionally consistent snapshot across writers. Only thirty
+candidates are validated, so fewer than ten may be returned despite demand below
+that window; the UI displays five. Valid stats retain their existing cache TTL.
+Total file size is not Atlas storage, and historical popularity is not current
+availability. Snapshot guards apply to dashboard cleanup; the existing direct
+successful-search resolver remains compatible. Representative Atlas/multidatabase
+latency/load, review/merge, backup/restore and production rollout remain gates.
+No data rewrite or new index is needed.
+
+All **73 final recorded messages**, including six log posts and one group query,
+were removed; the earlier startup post was also cleaned without errors. Owned
+containers, anonymous volumes and networks were removed, and the two original
+server services remain running untouched. Final logs contain one expected handled
+injected error with a chained traceback; retry and recovery passed, with no
+unhandled exception. Stop here until `continue`.
+**Next bounded scope: group filters and connections.**

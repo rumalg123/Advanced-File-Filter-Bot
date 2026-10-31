@@ -128,7 +128,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-116 | Medium | Fixed | Request card HTML and length | User keywords are inserted raw into forwarded/warning HTML, can exceed the admin-card size budget, and become raw HTML again when a handled card is edited. | Escape and bound displayed keywords, preserving the full search/tracking input; escape rendered card text before adding the handled marker. |
 | BUG-117 | Medium | Fixed | Request callback validation | Extra fields, malformed IDs, out-of-range IDs and the wrong callback prefix can raise handler errors or notify a user for invalid request data. | Validate the exact callback structure and positive bounded identifiers before database/Telegram work; keep configured-admin authorization. |
 | BUG-118 | High | Fixed | Tracked request idempotency and in-flight state | Claiming removes the pending unique-index guard, replayed source IDs can return no record or consume another slot, and read/claim/finalization failures can notify without a claim or present false completion. | Keep claimed records in the pending index with a guarded target; retain legacy processing compatibility, resolve source-ID replays, stop unclaimed delivery, and report unresolved finalization honestly. Existing tracked cards remain guarded with new tracking disabled. |
-| BUG-119 | Medium | Fixed | Dashboard query identity | Reconciliation searches the 100-character display prefix instead of the complete analytics query, losing trailing filters and potentially deleting real unmet demand. Legacy display shapes can also fail rendering. | Validate and resolve by the full string identity, retain a legacy query fallback, and render escaped display text without eager missing-key access. |
+| BUG-119 | Medium | Fixed | Dashboard query identity | Reconciliation searches the 100-character display prefix instead of the complete analytics query, losing trailing filters, hiding unmet searches and selecting the wrong cleanup identity. Legacy display shapes can also fail rendering. | Validate and resolve by the full string identity, retain a legacy query fallback, and render escaped display text without eager missing-key access. |
 | BUG-120 | High | Fixed | Dashboard verification and statistics failures | Failed media verification can be presented as confirmed unmet demand, single-database aggregate errors can look like zero files, and malformed stats caches can supply invalid totals. Dashboard failures lack retry feedback. | Stop uncertain verification, propagate cancellation, skip invalid current filter syntax without deleting history, validate stats payloads, use strict statistics aggregation, and return safe retry feedback with actual exception logging. |
 | BUG-121 | Medium | Fixed | Concurrent demand cleanup | Dashboard reconciliation can delete a new zero-result search recorded after its earlier match check because cleanup deletes only by query identity. | Guard dashboard deletion with the observed count and timestamp, including absent legacy fields, so newer demand survives. Keep the direct successful-search resolver compatible. |
 | BUG-122 | Medium | Fixed | Dashboard count and size semantics | Pending-request totals omit supported legacy processing records, and the Storage label describes referenced Telegram file bytes rather than MongoDB storage. | Share the active-request status set with request admission and label the sum as Total file size. |
@@ -176,13 +176,14 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-10-31
 
-The latest bounded round passed **1,388 tests with zero failures or skips** and
-**17 live request-lifecycle checks** using three QA accounts on wzgram 3.1.6.
-BUG-115–118 fix failed-search forwarding, request HTML/length handling, callback
-validation and notification/replay guards. All four admin outcomes, owned
-history, blocked-PM group fallback, empty-Redis recovery and tracking-off behavior
-passed. Admin/owner bypasses and operator diagnostics are preserved.
-Source-matched coverage is **71.88% lines, 59.56% branches, 68.80% combined**.
+The latest bounded round passed **1,425 tests with zero failures or skips** and
+**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
+BUG-119–122 fix complete query identity, unavailable verification/statistics,
+concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
+payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
+persistence and handled failure recovery passed. Admin/owner bypasses and
+operator diagnostics remain. Source-matched coverage is **71.94% lines,
+59.71% branches, 68.89% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated

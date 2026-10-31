@@ -10,9 +10,9 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed 1,388 tests and 17 real-account request-lifecycle
-checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.88%
-lines / 59.56% branches. Sustained production load, cloud
+The latest bounded QA passed 1,425 tests and 16 real-account dashboard/analytics
+checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.94%
+lines / 59.71% branches. Sustained production load, cloud
 restore and production-specific configuration/index checks remain release
 gates; 100% coverage is not the sole definition of production readiness.
 See [the QA evidence](qa/coverage-expansion/STATUS.md).
@@ -33,14 +33,14 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application source is `d994af7`. Its complete suite and all
+The current QA application source is `49d9fc5`. Its complete suite and all
 three live phases used the wzgram 3.1.6 runtime from
 `file-filter-bot:qa-multisub-20261030` with the tested source snapshot mounted
 into the container. That image's bundled code remains the earlier `b2fcb38`;
 it is a runtime fixture for this round, not an updated deployment image.
 Build the new branch source for deployment and retain a validated rollback
 artifact. Historical image/archive checks certify their original source and
-dependencies. See the [current round evidence](qa/coverage-expansion/round13-requests.json).
+dependencies. See the [current round evidence](qa/coverage-expansion/round14-dashboard.json).
 
 For the exact two-service stack supplied by the operator, use the
 [production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including
@@ -116,6 +116,22 @@ replay notifications blindly. Preserve the record and delivery evidence, decide
 whether notification occurred, then reconcile that specific record while writers
 are stopped. This QA round does not add automatic stale-claim replay. See the
 [request lifecycle QA](qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31).
+
+Dashboard corrections need no data rewrite, new index or Redis clear. Analytics
+already retain the complete normalized query in the string `_id`; its 100-character
+display prefix stays compatible. Reconciliation uses that full identity and guards
+cleanup with its observed count/timestamp. Invalid current filter syntax is kept
+in MongoDB but omitted from the current view. Malformed media-statistics payloads
+are invalidated and recomputed; valid payloads retain their existing TTL. Failed
+verification/aggregation yields safe retry feedback. Other aggregation callers
+retain their existing compatibility default.
+
+`Total file size` is the sum of indexed Telegram file sizes, not Atlas storage
+consumption. Popular searches are historical Redis data and reset when Redis is
+cleared. Each dashboard checks at most 30 candidates with five concurrent media
+checks, returns up to ten valid unmet queries and renders five. This is a bounded
+read with cached statistics, not a transactionally consistent inventory or a
+production-load benchmark. See the [dashboard QA](qa/coverage-expansion/STATUS.md#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31).
 
 ### Single database, indexed search off
 

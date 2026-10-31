@@ -448,6 +448,31 @@ delivery outcome; automatic stale-claim replay is not implemented. Stop older
 writers before cutover because their claim predicate differs. See the
 [request lifecycle QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-13--request-tracking-and-admin-transitions-2026-10-31).
 
+### Content dashboard and unmet search demand
+
+The dashboard command is registered for configured admins only when enabled.
+Authorized empty results increment global query counts without storing a user ID;
+access/backend failures and invalid advanced queries do not create unmet demand.
+Successful searches resolve existing demand. Historical successful-query popularity
+comes from Redis and does not guarantee present media availability.
+
+Reconciliation reads at most 30 candidates and uses five concurrent media checks,
+the complete analytics string `_id`, and current advanced/caption settings.
+The stored display query remains capped at 100 characters. Invalid current syntax
+is retained but omitted; unavailable verification returns retry feedback rather
+than a confirmed unmet list. Confirmed matches are removed using their observed
+count/timestamp, so changed demand prevents deletion by that stale snapshot.
+Cleanup failure can leave a confirmed match for a later pass without listing it
+as unmet. The existing direct successful-search resolver stays compatible.
+
+The service returns at most ten unmet rows and the renderer shows five. Aggregate
+counts include current and legacy in-flight request states, open reports, both
+active/paused saved searches and empty/nonempty collections. Total file size is
+referenced Telegram bytes, not MongoDB storage. Stats reject malformed cache
+payloads and propagate single-database aggregation failure; valid cache entries
+keep their TTL. Reads are not one transaction across concurrent writes. See the
+[dashboard QA](../qa/coverage-expansion/STATUS.md#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31).
+
 ## 9. Cache ownership and invalidation
 
 ```mermaid

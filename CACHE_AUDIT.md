@@ -12,13 +12,14 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
 
 ## Current QA, 2026-10-31
 
-The latest bounded round passed **1,388 tests with zero failures or skips** and
-**17 live request-lifecycle checks** using three QA accounts on wzgram 3.1.6.
-BUG-115–118 fix failed-search forwarding, request HTML/length handling, callback
-validation and notification/replay guards. All four admin outcomes, owned
-history, blocked-PM group fallback, empty-Redis recovery and tracking-off behavior
-passed. Admin/owner bypasses and operator diagnostics are preserved.
-Source-matched coverage is **71.88% lines, 59.56% branches, 68.80% combined**.
+The latest bounded round passed **1,425 tests with zero failures or skips** and
+**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
+BUG-119–122 fix complete query identity, unavailable verification/statistics,
+concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
+payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
+persistence and handled failure recovery passed. Admin/owner bypasses and
+operator diagnostics remain. Source-matched coverage is **71.94% lines,
+59.71% branches, 68.89% combined**.
 The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
 configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
 100% coverage and production operational gates remain open. Earlier dated
@@ -69,7 +70,7 @@ counts remain historical; no feature defaults or production limits changed.
 | CACHE-025 | High | Fixed | Premium entitlement | A cached decision can conflict with the current flag/expiry after TTL rounding or an invalidation race; malformed values violate the status tuple contract. Validate shape and current entitlement before returning a hit. See BUG-103 and the bounded premium QA record. |
 | CACHE-026 | Medium | Fixed | Recommendation rankings | Cached rankings ignore requested limits and feature flags and accept arbitrary dictionary shapes. Bind a versioned payload to its options and validate file/query/reason fields before a hit; legacy entries recompute automatically. See BUG-105. |
 | CACHE-027 | Medium | Fixed | Autocomplete history | Successful historical queries can outlive matching media or caption/filter settings. Keep history as history, but validate suggestion candidates against current indexed media and effective settings before publishing buttons. See BUG-110. |
-| CACHE-028 | Medium | Fixed | Media statistics payload validation | Any cached dictionary can be returned as statistics, including missing, negative or incorrectly typed totals. | Validate nonnegative integer totals and the by-type map, invalidate malformed payloads and recompute from strict aggregation. BUG-120 records dashboard failure handling. |
+| CACHE-028 | Medium | Fixed | Media statistics payload validation | Any cached dictionary can be returned as statistics, including missing, negative or incorrectly typed totals. Validate nonnegative integer totals and the by-type map, invalidate malformed payloads and recompute from strict aggregation. BUG-120 records dashboard failure handling. |
 
 ## Remediation order
 
