@@ -129,6 +129,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-116 | Medium | Fixed | Request card HTML and length | User keywords are inserted raw into forwarded/warning HTML, can exceed the admin-card size budget, and become raw HTML again when a handled card is edited. | Escape and bound displayed keywords, preserving the full search/tracking input; escape rendered card text before adding the handled marker. |
 
+| BUG-117 | Medium | Fixed | Request callback validation | Extra fields, malformed IDs, out-of-range IDs and the wrong callback prefix can raise handler errors or notify a user for invalid request data. | Validate the exact callback structure and positive bounded identifiers before database/Telegram work; keep configured-admin authorization. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight

@@ -361,12 +361,20 @@ class RequestHandler(BaseHandler):
 
         # Validate callback data using validator
         is_valid, data = validate_callback_data(query, expected_parts=4)
-        if not is_valid:
+        if not is_valid or len(data) != 4 or data[0] != 'req_action':
             return await query.answer(ErrorMessageFormatter.format_invalid("data", plain_text=True), show_alert=True)
 
         _, action, user_id, msg_id = data
-        user_id = int(user_id)
-        msg_id = int(msg_id)
+        try:
+            user_id = int(user_id)
+            msg_id = int(msg_id)
+            if not (0 < user_id <= 9223372036854775807 and 0 < msg_id <= 2147483647):
+                raise ValueError('Request identifiers out of range')
+        except (ValueError, TypeError):
+            return await query.answer(
+                ErrorMessageFormatter.format_invalid("request identifiers", plain_text=True),
+                show_alert=True
+            )
 
         # Map actions to messages
         action_messages = {
