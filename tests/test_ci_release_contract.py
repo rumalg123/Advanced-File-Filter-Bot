@@ -23,7 +23,7 @@ def test_actions_are_sha_pinned_and_not_privileged_on_pull_request():
     # Check each trigger separately rather than relying on a literal list string.
     for trigger in ("pull_request", "push"):
         match = re.search(
-            rf"(?m)^  {trigger}:\\s*\\n    branches: \\[([^\\]]+)\\]\\s*$",
+            rf"(?m)^  {trigger}:\s*\n    branches: \[([^\]]+)\]\s*$",
             workflow,
         )
         assert match is not None, f"Missing branch filter for {trigger}"
