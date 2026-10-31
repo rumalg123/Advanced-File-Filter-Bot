@@ -122,6 +122,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-110 | Medium | Fixed | Autocomplete validity and failures | Historical suggestions can refer to deleted media, repeat normalized/exact queries, ignore effective filters and return silently or fail without feedback when lookup/button state is unavailable. | Validate a bounded candidate window against current media/filter/caption rules, deduplicate normalized text, cap concurrent checks, and show a retry response for lookup or callback-state outages. |
 | BUG-111 | Medium | Fixed | Autocomplete quoted query text | `/suggest` uses shell-style argument splitting, removing quotes required by multiword advanced-filter values and changing exact-query comparisons. | Preserve the command's raw query body; the shared search parser retains responsibility for quote syntax. |
 | BUG-112 | Medium | Fixed | Application-type search routing | Advanced syntax accepts `type:application`, but the string-to-enum helper falls back to DOCUMENT, returning the wrong category. | Map application explicitly and verify every declared type through both the helper and FileAccessService. |
+| BUG-113 | Medium | Fixed | Normalized variant formats | Indexed filenames have dots replaced by spaces, so MKV/MP4/etc. suffixes split related variants. Generic dotted-suffix removal also discards real title words or years. | Remove recognized terminal formats in raw/normalized filenames while preserving unknown dotted words, years and every original file. |
 
 ## Group search follow-up, 2026-10-30
 

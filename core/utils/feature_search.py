@@ -101,10 +101,21 @@ _VARIANT_NOISE = re.compile(
     re.IGNORECASE
 )
 
+_MEDIA_EXTENSION = re.compile(
+    r"(?:\.|\s+)(?:mkv|mp4|avi|mov|webm|m4v|ts|m2ts|flv|wmv|mpg|mpeg|vob|"
+    r"mp3|m4a|flac|ogg|wav|aac|opus|pdf|epub|mobi|txt|zip|rar|7z|"
+    r"srt|ass|vtt|jpg|jpeg|png|webp|gif|bmp|tif|tiff|heic|"
+    r"doc|docx|ppt|pptx|xls|xlsx|apk|exe|iso)\Z",
+    re.IGNORECASE,
+)
+
 
 def canonicalize_media_title(file_name: str) -> str:
     """Return a conservative title key that removes encode/quality noise."""
-    value = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", file_name or "")
+    # Indexed filenames have already had dots replaced by spaces. Recognize
+    # actual terminal formats in either representation, not arbitrary words
+    # or years after a dot (Doctor.No, Film.2025).
+    value = _MEDIA_EXTENSION.sub("", file_name or "")
     value = re.sub(r"[._+\-]+", " ", value)
     value = _VARIANT_NOISE.sub(" ", value)
     value = re.sub(r"\b\d{3,4}x\d{3,4}\b", " ", value, flags=re.IGNORECASE)
