@@ -1092,14 +1092,18 @@ class FeatureRepository:
         cursor = collection.find({}).sort([('count', -1), ('last_searched_at', -1)]).limit(limit)
         return await self.db_pool.execute_with_retry(cursor.to_list, length=limit)
 
-    async def resolve_zero_result(self, query: str) -> bool:
+    async def resolve_zero_result(self, query: str, *, observed: dict | None = None) -> bool:
         """Remove demand that now has an authoritative search result."""
         normalized_query = normalize_feature_text(query)
         if not normalized_query:
             return False
         collection = await self._collection("search_analytics")
+        predicate = {'_id': normalized_query}
+        if observed is not None:
+            for field in ('count', 'last_searched_at'):
+                predicate[field] = observed[field] if field in observed else {'$exists': False}
         result = await self.db_pool.execute_with_retry(
-            collection.delete_one, {'_id': normalized_query}
+            collection.delete_one, predicate
         )
         return bool(result.deleted_count)
 

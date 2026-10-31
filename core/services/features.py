@@ -533,7 +533,7 @@ class FeatureService:
         )
 
         unresolved = []
-        resolved_queries = []
+        resolved_rows = []
         for row, match_result in zip(rows, match_results):
             if isinstance(match_result, BaseException):
                 if not isinstance(match_result, Exception):
@@ -549,18 +549,17 @@ class FeatureService:
             elif match_result is None:
                 continue
             elif match_result:
-                resolved_queries.append(
-                    _analytics_query(row)
-                )
+                resolved_rows.append(row)
             else:
                 unresolved.append(row)
 
-        if resolver and resolved_queries:
+        if resolver and resolved_rows:
             cleanup_results = await asyncio.gather(
-                *(resolver(query) for query in resolved_queries),
+                *(resolver(_analytics_query(row), observed=row) for row in resolved_rows),
                 return_exceptions=True
             )
-            for query, cleanup_result in zip(resolved_queries, cleanup_results):
+            for row, cleanup_result in zip(resolved_rows, cleanup_results):
+                query = _analytics_query(row)
                 if isinstance(cleanup_result, asyncio.CancelledError):
                     raise cleanup_result
                 if isinstance(cleanup_result, Exception):
