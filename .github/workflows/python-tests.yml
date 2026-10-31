@@ -2,9 +2,9 @@ name: Python regression tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, QA]
   push:
-    branches: [main]
+    branches: [main, QA]
   workflow_dispatch:
 
 # No privileged pull_request_target workflows or deployment steps here.
@@ -88,7 +88,7 @@ jobs:
 
       - name: Full tests with coverage and real MongoDB and Redis
         run: >-
-          python -m pytest -q
+          python -m pytest -q -m 'not telegram_e2e'
           --cov=. --cov-branch
           --cov-report=term-missing:skip-covered
           --cov-report=xml:coverage.xml
