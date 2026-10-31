@@ -69,6 +69,7 @@ counts remain historical; no feature defaults or production limits changed.
 | CACHE-025 | High | Fixed | Premium entitlement | A cached decision can conflict with the current flag/expiry after TTL rounding or an invalidation race; malformed values violate the status tuple contract. Validate shape and current entitlement before returning a hit. See BUG-103 and the bounded premium QA record. |
 | CACHE-026 | Medium | Fixed | Recommendation rankings | Cached rankings ignore requested limits and feature flags and accept arbitrary dictionary shapes. Bind a versioned payload to its options and validate file/query/reason fields before a hit; legacy entries recompute automatically. See BUG-105. |
 | CACHE-027 | Medium | Fixed | Autocomplete history | Successful historical queries can outlive matching media or caption/filter settings. Keep history as history, but validate suggestion candidates against current indexed media and effective settings before publishing buttons. See BUG-110. |
+| CACHE-028 | Medium | Fixed | Media statistics payload validation | Any cached dictionary can be returned as statistics, including missing, negative or incorrectly typed totals. | Validate nonnegative integer totals and the by-type map, invalidate malformed payloads and recompute from strict aggregation. BUG-120 records dashboard failure handling. |
 
 ## Remediation order
 

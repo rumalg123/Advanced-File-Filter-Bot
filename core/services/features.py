@@ -498,7 +498,7 @@ class FeatureService:
         async def query_has_match(row: dict[str, Any]) -> bool:
             query = _analytics_query(row)
             if not query:
-                return False
+                return None
 
             search_query = query
             advanced_filters = None
@@ -507,7 +507,13 @@ class FeatureService:
                 from core.utils.feature_search import parse_advanced_search_query
                 from core.utils.file_type import get_file_type_from_string
 
-                search_query, advanced_filters = parse_advanced_search_query(query)
+                try:
+                    search_query, advanced_filters = parse_advanced_search_query(query)
+                except ValueError:
+                    # A historical literal query can be invalid with filters on.
+                    # Keep its record for a future flag change, without listing
+                    # it as a valid unmet search under the current settings.
+                    return None
                 if advanced_filters and advanced_filters.get('file_type'):
                     file_type = get_file_type_from_string(
                         str(advanced_filters['file_type'])
@@ -529,13 +535,19 @@ class FeatureService:
         unresolved = []
         resolved_queries = []
         for row, match_result in zip(rows, match_results):
-            if isinstance(match_result, Exception):
+            if isinstance(match_result, BaseException):
+                if not isinstance(match_result, Exception):
+                    raise match_result
                 logger.debug(
                     "Could not validate zero-result query %s: %s",
                     row.get('query', row.get('_id')),
                     match_result
                 )
-                unresolved.append(row)
+                raise SearchBackendUnavailableError(
+                    "Zero-result search verification unavailable"
+                ) from match_result
+            elif match_result is None:
+                continue
             elif match_result:
                 resolved_queries.append(
                     _analytics_query(row)
@@ -549,6 +561,8 @@ class FeatureService:
                 return_exceptions=True
             )
             for query, cleanup_result in zip(resolved_queries, cleanup_results):
+                if isinstance(cleanup_result, asyncio.CancelledError):
+                    raise cleanup_result
                 if isinstance(cleanup_result, Exception):
                     logger.debug(
                         "Could not resolve stale zero-result query %s: %s",

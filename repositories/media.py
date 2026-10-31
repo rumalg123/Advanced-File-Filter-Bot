@@ -857,7 +857,10 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """Get file statistics"""
         cache_key = CacheKeyGenerator.file_stats()
         cached = await self.cache.get(cache_key)
-        if isinstance(cached, dict):
+        if (isinstance(cached, dict)
+                and all(type(cached.get(key)) is int and cached[key] >= 0
+                        for key in ('total_files', 'total_size'))
+                and isinstance(cached.get('by_type'), dict)):
             return cached
         if cached is not None:
             await self.cache_invalidator.invalidate_file_stats()
@@ -887,7 +890,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 limit=None
             )
         else:
-            results = await self.aggregate(pipeline, limit=None)  # Stats need unlimited results
+            results = await self.aggregate(pipeline, limit=None, raise_on_error=True)
 
         if results:
             stats = {

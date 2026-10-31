@@ -1381,7 +1381,13 @@ class FeatureHandler(BaseHandler):
         )
 
     async def content_dashboard_command(self, client: Client, message: Message):
-        dashboard = await self.service.dashboard()
+        try:
+            dashboard = await self.service.dashboard()
+        except Exception:
+            logger.exception("Could not build content dashboard")
+            return await message.reply_text(
+                "Content dashboard is temporarily unavailable. Please try again."
+            )
         media = dashboard.get('media', {})
         lines = [
             "📊 <b>Content dashboard</b>",
