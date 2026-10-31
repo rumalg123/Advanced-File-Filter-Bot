@@ -1025,9 +1025,8 @@ async def test_content_dashboard_removes_queries_that_now_have_files():
     dashboard = await service.dashboard()
 
     assert [item['query'] for item in dashboard['zero_results']] == ['Missing title']
-    repository.resolve_zero_result.assert_awaited_once_with(
-        'Agent Kim reactivated'
-    )
+    repository.resolve_zero_result.assert_awaited_once()
+    assert repository.resolve_zero_result.await_args.args[0] == 'agent kim reactivated'
     repository.top_zero_results.assert_awaited_once_with(limit=30)
 
 

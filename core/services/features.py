@@ -21,6 +21,14 @@ from repositories.media import MediaFile
 logger = get_logger(__name__)
 
 
+def _analytics_query(row: dict[str, Any]) -> str:
+    """The string analytics ID retains the full query; display text is capped."""
+    identifier = row.get('_id')
+    if isinstance(identifier, str) and identifier.strip():
+        return identifier.strip()
+    return str(row.get('query') or '').strip()
+
+
 class FeatureService:
     """Safe façade that keeps every optional feature behind its rollout flag."""
 
@@ -488,7 +496,7 @@ class FeatureService:
         validation_limit = asyncio.Semaphore(5)
 
         async def query_has_match(row: dict[str, Any]) -> bool:
-            query = str(row.get('query') or row.get('_id') or '').strip()
+            query = _analytics_query(row)
             if not query:
                 return False
 
@@ -530,7 +538,7 @@ class FeatureService:
                 unresolved.append(row)
             elif match_result:
                 resolved_queries.append(
-                    str(row.get('query') or row.get('_id') or '')
+                    _analytics_query(row)
                 )
             else:
                 unresolved.append(row)

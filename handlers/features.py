@@ -1402,7 +1402,7 @@ class FeatureHandler(BaseHandler):
             lines.append("\n🔎 <b>Top zero-result searches</b>")
             for item in zero_results[:5]:
                 lines.append(
-                    f"• <code>{html.escape(item.get('query', item['_id']))}</code> "
+                    f"• <code>{html.escape(str(item.get('query') or item.get('_id') or ''))}</code> "
                     f"({item.get('count', 0)})"
                 )
         await message.reply_text("\n".join(lines))
