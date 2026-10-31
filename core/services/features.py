@@ -15,7 +15,9 @@ from core.utils.button_builder import ButtonBuilder
 from core.utils.helpers import find_similar_queries
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
-from repositories.features import FeatureRepository, normalize_feature_text
+from repositories.features import (
+    FeatureRepository, normalize_feature_text, ACTIVE_CONTENT_REQUEST_STATUSES,
+)
 from repositories.media import MediaFile
 
 logger = get_logger(__name__)
@@ -471,7 +473,9 @@ class FeatureService:
             self.search_history_service.get_global_top_searches(limit=10),
             self.media_repo.get_file_stats(),
             self.repository.count_documents('file_reports', {'status': 'open'}),
-            self.repository.count_documents('content_requests', {'status': 'pending'}),
+            self.repository.count_documents(
+                'content_requests', {'status': {'$in': list(ACTIVE_CONTENT_REQUEST_STATUSES)}}
+            ),
         )
         zero_results = await self._reconcile_zero_results(zero_results, limit=10)
         return {

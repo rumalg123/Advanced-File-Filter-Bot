@@ -1392,7 +1392,7 @@ class FeatureHandler(BaseHandler):
         lines = [
             "📊 <b>Content dashboard</b>",
             f"Files: <b>{media.get('total_files', 0):,}</b>",
-            f"Storage: <b>{format_file_size(media.get('total_size', 0))}</b>",
+            f"Total file size: <b>{format_file_size(media.get('total_size', 0))}</b>",
             f"Open reports: <b>{dashboard.get('open_reports', 0)}</b>",
             f"Pending requests: <b>{dashboard.get('pending_requests', 0)}</b>",
             f"Saved searches: <b>{dashboard.get('saved_searches', 0)}</b>",

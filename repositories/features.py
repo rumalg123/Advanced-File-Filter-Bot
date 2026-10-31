@@ -13,6 +13,11 @@ from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+ACTIVE_CONTENT_REQUEST_STATUSES = (
+    'pending', 'processing:completed', 'processing:rejected',
+    'processing:available', 'processing:unavailable',
+)
+
 
 def normalize_feature_text(value: str) -> str:
     """Normalize user-owned names and queries without changing display text."""
@@ -930,10 +935,7 @@ class FeatureRepository:
             {
                 'user_id': user_id,
                 'normalized_query': normalize_feature_text(query),
-                'status': {'$in': [
-                    'pending', 'processing:completed', 'processing:rejected',
-                    'processing:available', 'processing:unavailable',
-                ]},
+                'status': {'$in': list(ACTIVE_CONTENT_REQUEST_STATUSES)},
             }
         )
 
