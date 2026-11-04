@@ -7,6 +7,7 @@ import os
 from typing import List, Optional, Any
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from core.utils.subscription_config import parse_subscription_targets
 
 # Import moved to avoid circular dependency
 # from core.utils import default_messages
@@ -61,6 +62,7 @@ class DatabaseConfig(BaseSettings):
     # Multi-database support
     size_limit_gb: float = Field(default=0.5, description="Database size limit in GB")
     auto_switch: bool = Field(default=True, description="Enable automatic database switching")
+    global_owner_registry: bool = Field(default=False, description="Require activated immutable media ownership")
     uris: str = Field(default='', description="Additional database URIs (comma-separated)")
     names: str = Field(default='', description="Additional database names (comma-separated)")
     
@@ -83,6 +85,11 @@ class DatabaseConfig(BaseSettings):
         """Parse additional database names"""
         return [name.strip() for name in self.names.split(',') if name.strip()]
 
+    def get_sources(self) -> list[tuple[str, str]]:
+        from core.database.topology import paired_database_sources
+        return paired_database_sources(self.uri, self.name, self.get_additional_uris(),
+                                       self.get_additional_names())
+
 
 class RedisConfig(BaseSettings):
     """Redis configuration"""
@@ -96,7 +103,15 @@ class RedisConfig(BaseSettings):
     )
     
     uri: str = Field(default='', description="Redis connection URI")
-    
+    # Empty by default: existing single-Redis deployments are unchanged.
+    # Must target a separate Redis server, not merely another database number.
+    state_uri: str = Field(default='', description="Optional protected Redis state URI")
+    # PH-010 opt-in: file-backed ACL credentials. Both empty by default.
+    username: str = Field(default='', description="Optional Redis ACL username")
+    password_file: str = Field(default='', description="Absolute path to Redis password secret file")
+    state_username: str = Field(default='', description="Optional protected state ACL username")
+    state_password_file: str = Field(default='', description="Absolute path to protected state password file")
+
     @field_validator('uri')
     def validate_uri(cls, v):
         if not v:
@@ -151,6 +166,22 @@ class ProcessingLimitsConfig(BaseSettings):
     # Queue sizes
     message_queue_size: int = Field(default=1000, description="Maximum message queue size")
     overflow_queue_size: int = Field(default=500, description="Maximum overflow queue size")
+    # PH-005: opt-in durable MongoDB channel indexing. Creates only a NEW
+    # channel_index_jobs collection; existing media_files documents unchanged.
+    durable_indexing: bool = Field(
+        default=False, description="Enable recoverable automatic channel indexing"
+    )
+    durable_indexing_lease_seconds: int = Field(
+        default=180, ge=30, description="Recovery lease on channel indexing jobs"
+    )
+    # PH-018 opt-in durable saved-search notifications. BOTH this and
+    # FEATURE_SAVED_SEARCH_ALERTS must be true before any queue writes.
+    durable_saved_search_alerts: bool = Field(
+        default=False, description="Enable Mongo-backed alert scheduling and recovery"
+    )
+    saved_search_alert_workers: int = Field(
+        default=2, ge=1, le=4, description="Bound per-instance alert workers"
+    )
 
     # Processing delays
     inter_message_delay: float = Field(default=0.5, description="Delay between processing messages in seconds")
@@ -192,6 +223,10 @@ class FeatureConfig(BaseSettings):
     feature_recent_files: bool = Field(default=False, description="Enable recent successful-delivery history")
     feature_recommendation_explanations: bool = Field(default=False, description="Show recommendation reasons")
     feature_content_dashboard: bool = Field(default=False, description="Enable the admin content dashboard")
+    feature_canonical_media_metadata: bool = Field(default=False, description="PH-015: opt in to persisting quality, width and height on new media; disable until rollback compatibility approved")
+    feature_quota_delivery_ledger: bool = Field(default=False, description="PH-022: opt in to per-user durable quota reservation and delivery accounting")
+
+    feature_indexed_media_search: bool = Field(default=False, description="PH-006: opt-in indexed word candidates with legacy regex verification")
 
     # Premium system
     premium_duration_days: int = Field(
@@ -230,9 +265,13 @@ class ChannelConfig(BaseSettings):
     support_group_id: Optional[int] = Field(default=None, description="Support group ID")
     
     # Auth configuration
-    auth_channel: Optional[str] = Field(default=None, description="Auth channel")
+    auth_channel: Optional[str] = Field(default=None, description="Force-subscription channels (comma-separated)")
     auth_groups: str = Field(default='', description="Auth groups (comma-separated)")
     auth_users: str = Field(default='', description="Auth users (comma-separated)")
+    force_sub_invite_expire_minutes: int = Field(default=15, ge=1, le=525600,
+        description="Force-subscription invite lifetime in minutes")
+    force_sub_invite_member_limit: int = Field(default=1, ge=1, le=99999,
+        description="Maximum simultaneous members admitted through each invite")
     
     # Channel lists
     admins: str = Field(default='', description="Admin user IDs (comma-separated)")
@@ -283,11 +322,12 @@ class ChannelConfig(BaseSettings):
             return [str(pic).strip() for pic in self.pics if str(pic).strip()]
         return [pic.strip() for pic in self.pics.split(',') if pic.strip()]
 
-    def get_auth_groups_list(self) -> List[int]:
+    def get_auth_channel_list(self) -> List[int | str]:
+        return parse_subscription_targets(self.auth_channel)
+
+    def get_auth_groups_list(self) -> List[int | str]:
         """Parse auth group IDs - handles both string and list input"""
-        if isinstance(self.auth_groups, list):
-            return [int(x) for x in self.auth_groups if str(x).strip().lstrip('-').isdigit()]
-        return [int(x.strip()) for x in self.auth_groups.split(',') if x.strip().lstrip('-').isdigit()]
+        return parse_subscription_targets(self.auth_groups)
 
     def get_auth_users_list(self) -> List[int]:
         """Parse auth user IDs - handles both string and list input"""

@@ -227,7 +227,7 @@ async def test_refresh_callback_forces_recommendation_recomputation():
     )
 
     with patch.object(UserCommandHandler, "recommendations_command", new=AsyncMock()) as command:
-        await UserCallbackHandler.handle_refresh_recommendations_callback.__wrapped__(
+        await UserCallbackHandler.handle_refresh_recommendations_callback.__wrapped__.__wrapped__(
             handler, None, query
         )
 
@@ -307,6 +307,7 @@ async def test_near_duplicate_filter_is_shown_and_blocked():
         add_filter=AsyncMock()
     )
     handler = object.__new__(FilterHandler)
+    handler.bot = SimpleNamespace(config=SimpleNamespace(ADMINS=[1]))
     handler.filter_service = filter_service
     handler._check_admin_rights = AsyncMock(return_value=True)
     handler._extract_filter_data = AsyncMock()

@@ -19,6 +19,17 @@ logger = get_logger(__name__)
 T = TypeVar('T')
 
 
+def expired_premium_filter(user_ids):
+    """Recheck expiry at the write, accepting legacy ISO and BSON dates."""
+    return {
+        '_id': {'$in': user_ids}, 'is_premium': True,
+        '$expr': {'$lte': [{'$convert': {
+            'input': '$premium_expiry_date', 'to': 'date',
+            'onError': None, 'onNull': None,
+        }}, '$$NOW']},
+    }
+
+
 class BaseRepository(ABC, Generic[T]):
     """Base repository with common CRUD operations"""
 
@@ -115,12 +126,17 @@ class BaseRepository(ABC, Generic[T]):
             filter: Dict[str, Any],
             limit: Optional[int] = None,
             skip: int = 0,
-            sort: Optional[List[tuple]] = None
+            sort: Optional[List[tuple]] = None,
+            raise_on_error: bool = False,
+            sort_index_hint: Optional[str] = None,
     ) -> List[T]:
-        """Find multiple entities"""
+        """Find multiple entities; strict search callers may propagate read failures."""
         try:
             collection = await self.collection()
             cursor = collection.find(filter)
+
+            if sort_index_hint is not None:
+                cursor = cursor.hint(sort_index_hint)
 
             if sort:
                 cursor = cursor.sort(sort)
@@ -135,6 +151,8 @@ class BaseRepository(ABC, Generic[T]):
             return [self._dict_to_entity(data) for data in results]
         except Exception as e:
             logger.error(f"Error finding entities: {e}")
+            if raise_on_error:
+                raise
             return []
 
     async def create(self, entity: T) -> bool:
@@ -163,16 +181,20 @@ class BaseRepository(ABC, Generic[T]):
             self,
             id: Any,
             update_data: Dict[str, Any],
-            upsert: bool = False
+            upsert: bool = False,
+            *, unset_fields: Optional[List[str]] = None,
     ) -> bool:
         """Update entity"""
         try:
             collection = await self.collection()
 
+            operation = {"$set": update_data}
+            if unset_fields:
+                operation["$unset"] = {key: "" for key in unset_fields}
             result = await self.db_pool.execute_with_retry(
                 collection.update_one,
                 {"_id": id},
-                {"$set": update_data},
+                operation,
                 upsert=upsert
             )
 
@@ -180,7 +202,9 @@ class BaseRepository(ABC, Generic[T]):
             cache_key = self._get_cache_key(id)
             await self._base_cache_invalidator.invalidate_cache_key(cache_key)
 
-            return result.modified_count > 0 or (upsert and result.upserted_id)
+            # Matching an already-current entity is an idempotent success.
+            # Inserted identities can be falsey (for example integer zero).
+            return result.matched_count > 0 or result.upserted_id is not None
         except Exception as e:
             logger.error(f"Error updating entity {id}: {e}")
             return False
@@ -215,8 +239,10 @@ class BaseRepository(ABC, Generic[T]):
             logger.error(f"Error deleting entity {id}: {e}")
             return False
 
-    async def count(self, filter: Dict[str, Any] = None) -> int:
-        """Count entities"""
+    async def count(
+            self, filter: Dict[str, Any] = None, raise_on_error: bool = False
+    ) -> int:
+        """Count entities; strict search callers may propagate count failures."""
         try:
             collection = await self.collection()
             filter = filter or {}
@@ -226,6 +252,8 @@ class BaseRepository(ABC, Generic[T]):
             )
         except Exception as e:
             logger.error(f"Error counting entities: {e}")
+            if raise_on_error:
+                raise
             return 0
 
     async def bulk_write(self, operations: List[Any]) -> bool:
@@ -283,7 +311,8 @@ class AggregationMixin:
             return self._collection
         raise NotImplementedError("Collection method must be implemented")
 
-    async def aggregate(self, pipeline: List[Dict[str, Any]], limit: Optional[int] = 1000) -> List[Dict[str, Any]]:
+    async def aggregate(self, pipeline: List[Dict[str, Any]], limit: Optional[int] = 1000,
+                        *, raise_on_error: bool = False) -> List[Dict[str, Any]]:
         """Execute aggregation pipeline with memory protection"""
         try:
             collection = await self.collection()
@@ -292,6 +321,8 @@ class AggregationMixin:
             )
         except Exception as e:
             logger.error(f"Error in aggregation: {e}")
+            if raise_on_error:
+                raise
             return []
 
     async def distinct(self, field: str, filter: Dict[str, Any] = None) -> List[Any]:

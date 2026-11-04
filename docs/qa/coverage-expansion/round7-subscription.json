@@ -1,0 +1,297 @@
+{
+  "date": "2026-10-30",
+  "round": 7,
+  "scope": [
+    "force-subscription",
+    "membership-changes",
+    "subscription-retry-actions",
+    "public-group-previews"
+  ],
+  "application_commit": "815ea27505c91d029ec0f3f3710ccfab996c0daa",
+  "source_manifest_sha256": "ca9cee28be9a1563a294f5705b8b6fbb61c5f7160bd006f576a417aba1a9409a",
+  "fixes": {
+    "BUG-094": "e24147a",
+    "BUG-095": "a638e10",
+    "BUG-096": "7c78213",
+    "BUG-097": "026c177",
+    "BUG-098": "9abca15",
+    "BUG-099": "a1dfc1e"
+  },
+  "pagination_followups": [
+    "dddbbb9",
+    "fd04956"
+  ],
+  "test_maintenance": [
+    "23e2037",
+    "815ea27"
+  ],
+  "tests": {
+    "passed": 1108,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 58,
+    "initial_focused_before_fixes": {
+      "cases": 45,
+      "failed": 21,
+      "passed": 24
+    },
+    "supplemental_before_pagination_inline_fixes": {
+      "cases": 8,
+      "failed": 8
+    },
+    "additional_pagination_boundaries": 5,
+    "strengthened_existing_pagination_regressions": 4,
+    "shell_fixture_readiness": "child PID published atomically to prevent a partial-file race"
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10815,
+    "num_statements": 17851,
+    "percent_covered": 57.365874184725435,
+    "percent_covered_display": "57",
+    "missing_lines": 7036,
+    "excluded_lines": 41,
+    "percent_statements_covered": 60.584841185367765,
+    "percent_statements_covered_display": "61",
+    "num_branches": 5914,
+    "num_partial_branches": 898,
+    "covered_branches": 2818,
+    "missing_branches": 3096,
+    "percent_branches_covered": 47.64964491038214,
+    "percent_branches_covered_display": "48"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12539,
+    "num_statements": 17851,
+    "percent_covered": 66.98085419734905,
+    "percent_covered_display": "67",
+    "missing_lines": 5312,
+    "excluded_lines": 41,
+    "percent_statements_covered": 70.24256344182399,
+    "percent_statements_covered_display": "70",
+    "num_branches": 5914,
+    "num_partial_branches": 1063,
+    "covered_branches": 3379,
+    "missing_branches": 2535,
+    "percent_branches_covered": 57.13561041596213,
+    "percent_branches_covered_display": "57"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 71,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 60,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 68,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 70,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 68,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 61,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 70,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 57,
+        "changed_files_discarded": 51
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 79,
+        "changed_files_discarded": 42
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 80,
+        "changed_files_discarded": 41
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 80,
+        "changed_files_discarded": 41
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 80,
+        "changed_files_discarded": 41
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 80,
+        "changed_files_discarded": 41
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 115,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 115,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 115,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 116,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 116,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 116,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 66.98085419734905,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "new_shards_match_start_end_current_source": true,
+  "policy": {
+    "admin_owner_and_authorized_subscription_bypasses_preserved": true,
+    "ordinary_authorized_users_still_subject_to_bans": true,
+    "unverifiable_memberships_deny_ordinary_access": true,
+    "restricted_member_allowed_only_when_is_member_true": true,
+    "public_group_previews_and_pagination_preserved": true,
+    "retry_ownership_applies_even_to_foreign_admin_clicks": true,
+    "operator_logger_lines_preserved": 407
+  },
+  "live": {
+    "scope": "force-subscription",
+    "checks": {
+      "member_private_group_and_inline_search_baseline": true,
+      "configured_admin_owner_bypasses_injected_membership_lookup_failure": true,
+      "leaving_channel_blocks_old_file_sendall_and_pagination_buttons": true,
+      "repeated_not_joined_deeplink_checks_preserve_original_session": true,
+      "foreign_admin_click_cannot_consume_normal_users_group_retry": true,
+      "group_previews_and_pagination_remain_public_before_subscription": true,
+      "missing_channel_blocks_fresh_private_and_inline_search": true,
+      "joining_channel_resumes_file_callback_delivery": true,
+      "joining_channel_resumes_sendall_callback_delivery": true,
+      "joining_channel_resumes_original_pagination_action": true,
+      "joining_channel_resumes_user_menu_callback": true,
+      "successful_deeplink_retry_delivers_original_file_and_consumes_session": true,
+      "original_user_can_resume_group_deeplink_after_foreign_click": true,
+      "inline_subscribe_retry_opens_welcome_and_fresh_inline_search_recovers": true,
+      "required_group_is_enforced_even_when_channel_membership_is_valid": true,
+      "joining_required_group_restores_delivery": true,
+      "restricted_user_still_in_required_group_retains_membership_access": true,
+      "missing_retry_state_returns_safe_expiry_response": true,
+      "original_file_link_recovers_after_retry_state_expiry": true,
+      "qa_memberships_and_group_permissions_restored": true
+    },
+    "fixture_documents": 2,
+    "passed": true,
+    "configuration": {
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis",
+      "delivery_targets": "two supplied QA accounts and declared QA group/log channel",
+      "required_channels": 1,
+      "required_groups": 1,
+      "premium_disabled": true,
+      "page_size": 1,
+      "indexed_media_search": true,
+      "quota_delivery_ledger": true,
+      "durable_workers": false,
+      "auto_delete_seconds": 0,
+      "admin_membership_lookup": "injected failure sentinel, not invoked due preserved bypass",
+      "invite_provider": "two real expiring bot invite links reused within the private QA harness and revoked at shutdown"
+    }
+  },
+  "cleanup": {
+    "successful_run": {
+      "memberships_restored": true,
+      "admin": 11,
+      "normal": 31,
+      "qa_chat_0": 8,
+      "qa_chat_1": 3
+    },
+    "bot_fixture_invites": {
+      "created": 2,
+      "revoked": 2
+    },
+    "admin_restore_invites_revoked": 2,
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true,
+    "production_untouched": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check",
+    "Markdown local file links and anchors"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Live membership changes used one QA channel, one QA supergroup, two accounts and two tiny indexed documents",
+    "Actual leave/join and a restricted member were tested live; required-chat outages, unknown statuses, malformed state, unavailable retry storage and authorized-user exemption use injected regression checks",
+    "The admin owner stayed in the chats; its lookup-failure sentinel verifies the application bypass without removing owner privileges",
+    "The private harness reuses two real temporary bot invite links; production invite-creation load and invite caching were not benchmarked",
+    "An early live expectation was corrected to preserve intentional public group previews; another harness correction used all permissions to lift the temporary individual restriction, followed by independent member-status verification",
+    "A new test reference and the old shell fixture readiness race were corrected; final complete suite rerun passed",
+    "Memberships and individual restrictions are restored, invite links revoked, and attempt-owned messages/resources cleaned",
+    "Live retry expiry was simulated by deleting one owned operational-state key; no full production Redis clearing or wall-clock TTL waiting occurred",
+    "A verified owner consumes its retry session before replay; no exactly-once guarantee or recovery from a crash between consumption and delivery was introduced",
+    "Production load, multi-process callbacks, long FloodWait/expiry interactions, join-request-only chats and every legacy deep-link variant remain open",
+    "No production server, remote Atlas database, deployment environment or production limits were changed"
+  ],
+  "next_round": "Stop after this bounded round and wait for operator continue."
+}

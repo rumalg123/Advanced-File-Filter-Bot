@@ -3,6 +3,8 @@ Multi-database pool manager for handling multiple MongoDB connections
 """
 
 import asyncio
+import hashlib
+import heapq
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Any
@@ -14,6 +16,32 @@ from core.database.pool import DatabaseConnectionPool
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class MultiDatabaseReadError(RuntimeError):
+    """PH-027: a multi-DB read was not complete; never cache partial results."""
+
+    def __init__(self, operation: str, database: str, cause: Exception | str):
+        self.operation = operation
+        self.database = database
+        # The external exception may contain connection URIs. Keep messages
+        # limited to the operation and configured database name.
+        super().__init__(
+            f"Incomplete multi-database {operation}; unavailable source: {database}"
+        )
+
+
+class _DescendingKey:
+    """Reverse one comparable Mongo sort component for a min-heap."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def __lt__(self, other):
+        return self.value > other.value
+
+    def __eq__(self, other):
+        return isinstance(other, _DescendingKey) and self.value == other.value
 
 
 class CircuitBreakerState(Enum):
@@ -66,6 +94,7 @@ class MultiDatabaseManager:
         if not hasattr(self, '_initialized'):
             self._initialized = True
             self.databases: List[DatabaseInfo] = []
+            self.media_owners = None
             self.current_write_db_index: int = 0
             self.size_limit_gb: float = 0.5
             self.auto_switch: bool = True
@@ -87,7 +116,8 @@ class MultiDatabaseManager:
         uris: List[str],
         names: List[str],
         size_limit_gb: float = 0.5,
-        auto_switch: bool = True
+        auto_switch: bool = True,
+        global_owner_registry: bool = False,
     ) -> None:
         """Initialize multiple database connections"""
         async with self._init_lock:
@@ -100,25 +130,38 @@ class MultiDatabaseManager:
             if len(uris) != len(names):
                 raise ValueError("Number of URIs and names must match")
 
-            # Initialize database connections
-            for i, (uri, name) in enumerate(zip(uris, names)):
-                pool = DatabaseConnectionPool.create_isolated()
-                
-                await pool.initialize(uri, name)
-                
-                db_info = DatabaseInfo(
-                    uri=uri,
-                    name=name,
-                    pool=pool,
-                    is_active=True
+            # Publish the topology only after every configured pool is ready.
+            # A retry must never accept a leftover primary as a complete setup.
+            opened_pools = []
+            topology = []
+            try:
+                for i, (uri, name) in enumerate(zip(uris, names)):
+                    pool = DatabaseConnectionPool.create_isolated()
+                    opened_pools.append(pool)
+                    await pool.initialize(uri, name)
+                    topology.append(DatabaseInfo(
+                        uri=uri, name=name, pool=pool, is_active=True,
+                    ))
+                    logger.info(
+                        f"Initialized database {i+1}: {name} "
+                        f"({'Primary' if i == 0 else 'Secondary'})"
+                    )
+                self.databases = topology
+                if global_owner_registry:
+                    from core.database.media_owners import GlobalMediaOwners
+                    self.media_owners = GlobalMediaOwners(topology)
+                    await self.media_owners.attach()
+                await self._update_database_stats_with_circuit_breaker()
+            except BaseException:
+                self.databases = []
+                self.media_owners = None
+                self.current_write_db_index = 0
+                await asyncio.gather(
+                    *(pool.close() for pool in opened_pools),
+                    return_exceptions=True,
                 )
-                
-                self.databases.append(db_info)
-                logger.info(f"Initialized database {i+1}: {name} ({'Primary' if i == 0 else 'Secondary'})")
+                raise
 
-            # Update database statistics with circuit breaker protection
-            await self._update_database_stats_with_circuit_breaker()
-            
             logger.info(f"Multi-database manager initialized with {len(self.databases)} databases")
 
     def apply_runtime_settings(
@@ -368,60 +411,69 @@ class MultiDatabaseManager:
             
         return round(composite_score, 3)
 
+    def _require_all_databases(self, operation: str) -> None:
+        """Configured sources are mandatory, even after a circuit opens."""
+        if not self.databases:
+            raise MultiDatabaseReadError(operation, "none", "not configured")
+        for info in self.databases:
+            if not info.is_active or info.pool is None:
+                raise MultiDatabaseReadError(
+                    operation, info.name, "source inactive or unavailable"
+                )
+
     async def get_all_databases(self) -> List[DatabaseConnectionPool]:
-        """Get all active database pools"""
-        return [db.pool for db in self.databases if db.is_active and db.pool]
+        """Return all configured pools; never hide an inactive replica."""
+        self._require_all_databases("get_all_databases")
+        return [info.pool for info in self.databases]
 
     async def get_database_by_index(self, index: int) -> Optional[DatabaseConnectionPool]:
-        """Get database by index"""
+        """Get database by index; missing indices are still not found."""
         if 0 <= index < len(self.databases) and self.databases[index].is_active:
             return self.databases[index].pool
         return None
 
     async def get_collection_from_all(self, collection_name: str) -> List[AsyncIOMotorCollection]:
-        """Get collection from all active databases"""
+        """Require a collection handle from every configured source."""
+        self._require_all_databases("get_collection_from_all")
         collections = []
-        for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                try:
-                    collection = await db_info.pool.get_collection(collection_name)
-                    collections.append(collection)
-                except Exception as e:
-                    logger.error(f"Error getting collection from {db_info.name}: {e}")
-                    await self._mark_database_inactive(db_info, f"get_collection failed: {e}")
+        for info in self.databases:
+            try:
+                collections.append(await info.pool.get_collection(collection_name))
+            except Exception as exc:
+                raise MultiDatabaseReadError(
+                    "get_collection_from_all", info.name, exc
+                ) from exc
         return collections
 
     async def find_file_in_all_databases(
-        self, 
-        collection_name: str, 
+        self,
+        collection_name: str,
         query: Dict[str, Any]
     ) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
-        """
-        Find a file in all databases with circuit breaker protection
-        Returns: (document, database_index) or (None, None)
-        """
-        for i, db_info in enumerate(self.databases):
-            if not db_info.is_active or not db_info.pool:
-                continue
-                
-            try:
-                # Use circuit breaker for find operations
-                async def find_operation():
-                    collection = await db_info.pool.get_collection(collection_name)
-                    return await db_info.pool.execute_with_retry(
-                        collection.find_one, query
-                    )
+        """Return the unique match only after every database responds.
 
+        A missing record and an incomplete lookup are distinct outcomes.
+        Duplicate matching records are rejected pending PH-028 ownership.
+        """
+        self._require_all_databases("find_file")
+        found = []
+        for index, info in enumerate(self.databases):
+            async def do_find():
+                collection = await info.pool.get_collection(collection_name)
+                return await info.pool.execute_with_retry(collection.find_one, query)
+            try:
                 document = await self._execute_with_circuit_breaker(
-                    db_info, "find_file", find_operation
+                    info, "find_file", do_find
                 )
-                if document:
-                    return document, i
-            except Exception as e:
-                logger.error(f"Error searching in database {db_info.name}: {e}")
-                # Circuit breaker will handle marking database as inactive
-                
-        return None, None
+            except Exception as exc:
+                raise MultiDatabaseReadError("find_file", info.name, exc) from exc
+            if document is not None:
+                found.append((document, index))
+                if len(found) > 1:
+                    raise MultiDatabaseReadError(
+                        "find_file_duplicate_owner", info.name, "ambiguous owners"
+                    )
+        return found[0] if found else (None, None)
 
     async def find_many_in_all_databases(
         self,
@@ -430,21 +482,23 @@ class MultiDatabaseManager:
         projection: Optional[Dict[str, Any]] = None,
         sort: Optional[List[Tuple[str, int]]] = None
     ) -> List[Dict[str, Any]]:
-        """Find matching documents across all active databases."""
-        tasks = []
-        for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                tasks.append(self._find_many_in_database(db_info, collection_name, query, projection, sort))
-
-        documents: List[Dict[str, Any]] = []
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, list):
-                    documents.extend(result)
-                elif isinstance(result, Exception):
-                    logger.error(f"Error finding documents across databases: {result}")
-
+        """No partial list is returned or cached when any source fails."""
+        self._require_all_databases("find_many")
+        tasks = [
+            self._find_many_in_database(info, collection_name, query, projection, sort)
+            for info in self.databases
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        documents = []
+        failures = []
+        for info, result in zip(self.databases, results):
+            if isinstance(result, BaseException):
+                failures.append((info, result))
+            else:
+                documents.extend(result)
+        if failures:
+            info, exc = failures[0]
+            raise MultiDatabaseReadError("find_many", info.name, exc) from exc
         return documents
 
     async def _find_many_in_database(
@@ -455,23 +509,77 @@ class MultiDatabaseManager:
         projection: Optional[Dict[str, Any]] = None,
         sort: Optional[List[Tuple[str, int]]] = None
     ) -> List[Dict[str, Any]]:
-        """Find matching documents in a specific database with circuit breaker protection."""
-        try:
-            async def find_many_operation():
-                collection = await db_info.pool.get_collection(collection_name)
-                cursor = collection.find(query, projection) if projection is not None else collection.find(query)
-                if sort:
-                    cursor = cursor.sort(sort)
-                return await db_info.pool.execute_with_retry(
-                    cursor.to_list, length=None
-                )
+        """Cascading failure is intentional: PH-027 needs complete reads."""
+        async def do_find():
+            collection = await db_info.pool.get_collection(collection_name)
+            cursor = collection.find(query, projection) if projection is not None else collection.find(query)
+            if sort:
+                cursor = cursor.sort(sort)
+            return await db_info.pool.execute_with_retry(cursor.to_list, length=None)
 
-            return await self._execute_with_circuit_breaker(
-                db_info, "find_many", find_many_operation
-            )
-        except Exception as e:
-            logger.error(f"Error finding documents in database {db_info.name}: {e}")
-            return []
+        return await self._execute_with_circuit_breaker(
+            db_info, "find_many", do_find
+        )
+
+    async def audit_media_identity_uniqueness(
+        self, collection_name: str, *, max_docs_per_db: int = 50000
+    ) -> Dict[str, Any]:
+        """PH-028 read-only bounded cross-DB identity audit.
+
+        Exhaustion and unavailable sources fail visibly. The aggregate
+        result is not proof of uniqueness under concurrent writers.
+        """
+        if type(max_docs_per_db) is not int or not 1 <= max_docs_per_db <= 100000:
+            raise ValueError("Audit cap must be between 1 and 100000 per database")
+        self._require_all_databases("identity_audit")
+        fields = ("_id", "file_unique_id", "file_ref")
+        seen = {field: {} for field in fields}
+        duplicates = {field: 0 for field in fields}
+        inspected = {}
+        for db_index, info in enumerate(self.databases):
+            cursor = None
+            count = 0
+            try:
+                collection = await info.pool.get_collection(collection_name)
+                cursor = collection.find(
+                    {}, {"_id": 1, "file_unique_id": 1, "file_ref": 1}
+                ).batch_size(200)
+                while count <= max_docs_per_db:
+                    batch = await cursor.to_list(
+                        length=min(200, max_docs_per_db + 1 - count)
+                    )
+                    if not batch:
+                        break
+                    count += len(batch)
+                    if count > max_docs_per_db:
+                        raise RuntimeError("Identity audit capacity exceeded")
+                    for doc in batch:
+                        for field in fields:
+                            value = doc.get(field)
+                            if value is None or value == "":
+                                continue
+                            digest = hashlib.sha256(
+                                (type(value).__name__ + ":" + str(value)).encode()
+                            ).digest()
+                            previous = seen[field].setdefault(digest, db_index)
+                            if previous != db_index:
+                                duplicates[field] += 1
+                inspected[info.name] = count
+            except Exception as exc:
+                raise MultiDatabaseReadError(
+                    "identity_audit", info.name, exc
+                ) from exc
+            finally:
+                if cursor is not None:
+                    await cursor.close()
+        return {
+            "complete": True,
+            "databases_checked": len(self.databases),
+            "documents_scanned": inspected,
+            "cross_database_duplicates": duplicates,
+            "global_uniqueness_proven": False,
+            "status": "requires_authoritative_ownership",
+        }
 
     async def update_one_across_databases(
         self,
@@ -480,46 +588,60 @@ class MultiDatabaseManager:
         update: Dict[str, Any],
         upsert: bool = False
     ) -> bool:
-        """Update the first matching document in active databases."""
-        tasks = []
+        """PH-025: locate exactly one owner before issuing a single write.
+
+        A multi-DB setup has no global uniqueness/ownership registry yet
+        (PH-028). Fail closed when a configured DB is unavailable or if
+        multiple DBs contain a match. Multi-DB creation of a new identity
+        remains forbidden until ownership and global uniqueness exist.
+        """
+        if not self.databases:
+            return False
+        if any(not db.is_active or db.pool is None for db in self.databases):
+            raise RuntimeError("Cannot verify write owner: configured database unavailable")
+
+        owners = []
         for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                tasks.append(self._update_one_in_database(db_info, collection_name, query, update, upsert))
-
-        if not tasks:
-            return False
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if result is True:
-                return True
-            if isinstance(result, Exception):
-                logger.error(f"Error updating document across databases: {result}")
-        return False
-
-    async def _update_one_in_database(
-        self,
-        db_info: DatabaseInfo,
-        collection_name: str,
-        query: Dict[str, Any],
-        update: Dict[str, Any],
-        upsert: bool = False
-    ) -> bool:
-        """Update one document in a specific database with circuit breaker protection."""
-        try:
-            async def update_operation():
+            async def find_owner():
                 collection = await db_info.pool.get_collection(collection_name)
-                result = await db_info.pool.execute_with_retry(
-                    collection.update_one, query, update, upsert=upsert
+                return await db_info.pool.execute_with_retry(
+                    collection.find_one, query, {"_id": 1}
                 )
-                return result.modified_count > 0 or (upsert and result.upserted_id)
 
-            return await self._execute_with_circuit_breaker(
-                db_info, "update_one", update_operation
+            # No broad exception handling: uncertain owner != no match.
+            found = await self._execute_with_circuit_breaker(
+                db_info, "locate_update_owner", find_owner
             )
-        except Exception as e:
-            logger.error(f"Error updating document in database {db_info.name}: {e}")
-            return False
+            if found is not None:
+                owners.append(db_info)
+                if len(owners) > 1:
+                    raise RuntimeError(
+                        "Ambiguous multi-database owner; no update was issued"
+                    )
+
+        if not owners:
+            if len(self.databases) > 1 and upsert:
+                raise RuntimeError(
+                    "Multi-database upsert needs a global owner/uniqueness strategy (PH-028)"
+                )
+            if not upsert:
+                return False
+            owner = self.databases[0]
+        else:
+            owner = owners[0]
+
+        async def apply_one_update():
+            collection = await owner.pool.get_collection(collection_name)
+            # Existing owner can be updated without inserting in another DB.
+            result = await owner.pool.execute_with_retry(
+                collection.update_one, query, update,
+                upsert=upsert and len(self.databases) == 1
+            )
+            return result.matched_count > 0 or result.upserted_id is not None
+
+        return bool(await self._execute_with_circuit_breaker(
+            owner, "update_single_owner", apply_one_update
+        ))
 
     async def delete_one_across_databases(
         self,
@@ -615,21 +737,17 @@ class MultiDatabaseManager:
         pipeline: List[Dict[str, Any]],
         limit: Optional[int] = 1000
     ) -> List[Dict[str, Any]]:
-        """Run an aggregation pipeline across all active databases."""
-        tasks = []
-        for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                tasks.append(self._aggregate_in_database(db_info, collection_name, pipeline, limit))
-
-        documents: List[Dict[str, Any]] = []
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, list):
-                    documents.extend(result)
-                elif isinstance(result, Exception):
-                    logger.error(f"Error aggregating across databases: {result}")
-
+        """PH-027: aggregate all sources or raise; no partial successes."""
+        self._require_all_databases("aggregate")
+        results = await asyncio.gather(*[
+            self._aggregate_in_database(info, collection_name, pipeline, limit)
+            for info in self.databases
+        ], return_exceptions=True)
+        documents = []
+        for info, result in zip(self.databases, results):
+            if isinstance(result, BaseException):
+                raise MultiDatabaseReadError("aggregate", info.name, result) from result
+            documents.extend(result)
         return documents
 
     async def _aggregate_in_database(
@@ -639,113 +757,175 @@ class MultiDatabaseManager:
         pipeline: List[Dict[str, Any]],
         limit: Optional[int] = 1000
     ) -> List[Dict[str, Any]]:
-        """Run an aggregation pipeline in a specific database with circuit breaker protection."""
-        try:
-            async def aggregate_operation():
-                collection = await db_info.pool.get_collection(collection_name)
-                return await db_info.pool.execute_with_retry(
-                    collection.aggregate(pipeline).to_list, length=limit
-                )
-
-            return await self._execute_with_circuit_breaker(
-                db_info, "aggregate", aggregate_operation
+        async def do_aggregate():
+            collection = await db_info.pool.get_collection(collection_name)
+            return await db_info.pool.execute_with_retry(
+                collection.aggregate(pipeline).to_list, length=limit
             )
-        except Exception as e:
-            logger.error(f"Error aggregating in database {db_info.name}: {e}")
-            return []
+        return await self._execute_with_circuit_breaker(
+            db_info, "aggregate", do_aggregate
+        )
 
     async def count_across_all_databases(
-        self, 
-        collection_name: str, 
-        query: Dict[str, Any]
+        self, collection_name: str, query: Dict[str, Any]
     ) -> int:
-        """Count documents across all databases"""
-        total_count = 0
-        
-        tasks = []
-        for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                task = self._count_in_database(db_info, collection_name, query)
-                tasks.append(task)
-        
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, int):
-                    total_count += result
-                elif isinstance(result, Exception):
-                    logger.error(f"Error counting documents: {result}")
-        
-        return total_count
+        """PH-027: counts are complete or explicitly unavailable, never zero."""
+        return sum(await self._counts_by_source(collection_name, query))
+
+    async def _counts_by_source(self, collection_name, query) -> List[int]:
+        self._require_all_databases("count")
+        results = await asyncio.gather(*[
+            self._count_in_database(info, collection_name, query)
+            for info in self.databases
+        ], return_exceptions=True)
+        for info, result in zip(self.databases, results):
+            if isinstance(result, BaseException):
+                raise MultiDatabaseReadError("count", info.name, result) from result
+            if type(result) is not int or result < 0:
+                raise MultiDatabaseReadError("count", info.name, "invalid count")
+        return results
 
     async def _count_in_database(
-        self,
-        db_info: DatabaseInfo,
-        collection_name: str,
-        query: Dict[str, Any]
+        self, db_info: DatabaseInfo, collection_name: str, query: Dict[str, Any]
     ) -> int:
-        """Count documents in a specific database with circuit breaker protection"""
-        try:
-            # Use circuit breaker for count operations
-            async def count_operation():
-                collection = await db_info.pool.get_collection(collection_name)
-                return await db_info.pool.execute_with_retry(
-                    collection.count_documents, query
-                )
-
-            return await self._execute_with_circuit_breaker(
-                db_info, "count_documents", count_operation
+        async def do_count():
+            collection = await db_info.pool.get_collection(collection_name)
+            return await db_info.pool.execute_with_retry(
+                collection.count_documents, query
             )
-        except Exception as e:
-            logger.error(f"Error counting in database {db_info.name}: {e}")
-            # Circuit breaker will handle marking database as inactive
-            return 0
+        return await self._execute_with_circuit_breaker(
+            db_info, "count_documents", do_count
+        )
+
+    @staticmethod
+    def _bounded_merge_sort(
+        sort: Optional[List[Tuple[str, int]]]
+    ) -> List[Tuple[str, int]]:
+        """Ensure deterministic ties before entering the distributed merge."""
+        fields = list(sort or [("_id", 1)])
+        if any(direction not in (-1, 1) for _, direction in fields):
+            raise ValueError("Multi-DB sort directions must be ascending or descending")
+        if not any(field == "_id" for field, _ in fields):
+            fields.append(("_id", -1))
+        return fields
+
+    def _bounded_merge_key(
+        self, document: Dict[str, Any], sort: List[Tuple[str, int]],
+        database_index: int
+    ) -> tuple:
+        key = []
+        for field, direction in sort:
+            value = document.get(field)
+            if value is None:
+                key.append((1, 0))
+            else:
+                comparable = self._normalize_sort_value(value)
+                key.append((0, _DescendingKey(comparable) if direction == -1
+                            else comparable))
+        # If the same _id exists on two DBs, this still gives stable ordering
+        # but does NOT solve PH-028's global uniqueness requirement.
+        key.append(database_index)
+        return tuple(key)
+
+    @staticmethod
+    def _guaranteed_prefix_skips(counts, skip):
+        """Discard only rows guaranteed to precede this global offset.
+
+        Other sources can contribute at most total-count[i] rows to the first
+        skip results. Thus at least skip-(total-count[i]) rows from source i
+        precede the page, regardless of sort values or interleaving.
+        """
+        total = sum(counts)
+        skips = [min(count, max(0, skip - (total - count))) for count in counts]
+        return skips, max(0, skip - sum(skips))
 
     async def search_across_all_databases(
-        self, 
-        collection_name: str, 
-        query: Dict[str, Any], 
-        limit: int = 10, 
+        self,
+        collection_name: str,
+        query: Dict[str, Any],
+        limit: int = 10,
         skip: int = 0,
-        sort: Optional[List[Tuple[str, int]]] = None
+        sort: Optional[List[Tuple[str, int]]] = None,
+        sort_index_hint: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """PH-026: k-way sorted stream, bounded app memory per database.
+
+        Retains the existing offset/limit API and Telegram button semantics.
+        Never materializes skip+limit rows from *every* database. Only the
+        documents required to reach this global page are iterated, with a
+        fixed small cursor buffer per DB. Offset scanning is still O(skip)
+        and deep-page performance requires cursor pagination before enabling
+        a second production database.
         """
-        Search across all databases and return properly paginated combined results
-        
-        FIXED: This method now correctly handles cross-database pagination by:
-        1. Getting enough sorted results from each database to satisfy the requested page
-        2. Combining and sorting those results together
-        3. THEN applying skip/limit to the final sorted list
-        """
-        all_results = []
-        query_limit = skip + limit if sort else None
-        
-        tasks = []
-        for db_info in self.databases:
-            if db_info.is_active and db_info.pool:
-                task = self._get_all_matching_from_database(
-                    db_info,
-                    collection_name,
-                    query,
-                    sort,
-                    query_limit
+        if type(limit) is not int or type(skip) is not int or limit < 0 or skip < 0:
+            raise ValueError("Multi-DB pagination needs nonnegative integer skip/limit")
+        if limit == 0:
+            return []
+        if not self.databases:
+            return []
+        self._require_all_databases("search")
+
+        merge_sort = self._bounded_merge_sort(sort)
+        source_skips = [0] * len(self.databases)
+        remaining_skip = skip
+        if sort_index_hint is not None and skip:
+            counts = await self._counts_by_source(collection_name, query)
+            source_skips, remaining_skip = self._guaranteed_prefix_skips(counts, skip)
+        batch_size = 64
+        # A Motor cursor is a stream; do NOT call to_list(length=None).
+        cursors = []
+        buffers = []
+        indices = []
+        heap = []
+        result = []
+        try:
+            for db_index, info in enumerate(self.databases):
+                collection = await info.pool.get_collection(collection_name)
+                # No source can contribute a row below its own top skip+limit
+                # to this global page. Push that bound to MongoDB too: batch
+                # size alone limits client reads, not server-side sort memory.
+                cursor = (collection.find(query).sort(merge_sort)
+                          .limit(remaining_skip + limit).batch_size(batch_size))
+                if sort_index_hint is not None:
+                    cursor = cursor.hint(sort_index_hint)
+                if source_skips[db_index]:
+                    cursor = cursor.skip(source_skips[db_index])
+                cursors.append(cursor)
+                buffers.append([])
+                indices.append(0)
+            async def load_next(db_index):
+                if indices[db_index] >= len(buffers[db_index]):
+                    buffers[db_index] = await cursors[db_index].to_list(length=batch_size)
+                    indices[db_index] = 0
+                if indices[db_index] >= len(buffers[db_index]):
+                    return False
+                item = buffers[db_index][indices[db_index]]
+                indices[db_index] += 1
+                heapq.heappush(
+                    heap, (self._bounded_merge_key(item, merge_sort, db_index),
+                           db_index, item)
                 )
-                tasks.append(task)
-        
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, list):
-                    all_results.extend(result)
-                elif isinstance(result, Exception):
-                    logger.error(f"Error searching databases: {result}")
-        
-        # Sort the COMBINED results properly
-        if sort and all_results:
-            self._sort_documents(all_results, sort)
-        
-        # NOW apply pagination to the final sorted results  
-        return all_results[skip:skip + limit]
+                return True
+
+            await asyncio.gather(*[
+                load_next(db_index) for db_index in range(len(cursors))
+            ])
+            seen = 0
+            while heap and len(result) < limit:
+                _, db_index, item = heapq.heappop(heap)
+                if seen >= remaining_skip:
+                    result.append(item)
+                seen += 1
+                if seen < remaining_skip + limit:
+                    await load_next(db_index)
+            return result
+        finally:
+            # Close server-side cursors on errors, cancellation and early
+            # exit. This avoids leaking iterators on deep-page requests.
+            await asyncio.gather(
+                *(cursor.close() for cursor in cursors),
+                return_exceptions=True
+            )
 
     @staticmethod
     def _normalize_sort_value(value: Any) -> Tuple[int, Any]:
@@ -795,9 +975,8 @@ class MultiDatabaseManager:
             )
 
         except Exception as e:
-            logger.error(f"Error getting all matching from database {db_info.name}: {e}")
-            await self._mark_database_inactive(db_info, f"search query failed: {e}")
-            return []
+            await self._mark_database_inactive(db_info, "search query failed")
+            raise MultiDatabaseReadError("search", db_info.name, e) from e
 
 
     async def get_database_stats(self) -> List[Dict[str, Any]]:
@@ -973,7 +1152,9 @@ class MultiDatabaseManager:
                 )
                 
                 # Update database info
-                db_info.size_gb = stats.get('dataSize', 0) / (1024 ** 3)  # Convert to GB
+                # Logical capacity includes indexes, including the coordinator
+                # registry's indexes; compressed physical allocation differs.
+                db_info.size_gb = (stats.get('dataSize', 0) + stats.get('indexSize', 0)) / (1024 ** 3)
                 db_info.files_count = files_count
                 
                 # If database was inactive due to circuit breaker, mark as active
@@ -998,6 +1179,7 @@ class MultiDatabaseManager:
                     logger.error(f"Error closing database {db_info.name}: {e}")
         
         self.databases.clear()
+        self.media_owners = None
         logger.info("Multi-database manager closed")
 
     @property

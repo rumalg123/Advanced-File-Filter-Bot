@@ -10,7 +10,7 @@ import core.utils.messages as config_messages
 from core.utils.messages import MessageHelper
 from repositories.media import FileType
 from handlers.commands_handlers.base import BaseCommandHandler
-from handlers.decorators import require_subscription
+from handlers.decorators import require_subscription, check_ban
 
 from core.utils.logger import get_logger
 logger = get_logger(__name__)
@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 class UserCallbackHandler(BaseCommandHandler):
     """Handler for user-related callbacks"""
 
+    @check_ban()
     @require_subscription()
     async def handle_help_callback(self, client: Client, query: CallbackQuery):
         """Handle help button callback"""
@@ -48,6 +49,7 @@ class UserCallbackHandler(BaseCommandHandler):
         await query.message.edit_text(help_text, reply_markup=back_button)
         await query.answer()
 
+    @check_ban()
     @require_subscription()
     async def handle_about_callback(self, client: Client, query: CallbackQuery):
         """Handle about button callback"""
@@ -60,6 +62,7 @@ class UserCallbackHandler(BaseCommandHandler):
         await query.message.edit_text(about_text, reply_markup=back_button)
         await query.answer()
 
+    @check_ban()
     @require_subscription()
     async def handle_stats_callback(self, client: Client, query: CallbackQuery):
         """Handle stats button callback"""
@@ -98,6 +101,7 @@ class UserCallbackHandler(BaseCommandHandler):
         await query.message.edit_text(text, reply_markup=back_button)
         await query.answer()
 
+    @check_ban()
     @require_subscription()
     async def handle_plans_callback(self, client: Client, query: CallbackQuery):
         """Handle plans button callback"""
@@ -148,6 +152,7 @@ class UserCallbackHandler(BaseCommandHandler):
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
         await query.answer()
 
+    @check_ban()
     async def handle_start_menu_callback(self, client: Client, query: CallbackQuery):
         """Handle back to start menu"""
         user_id = query.from_user.id
@@ -208,6 +213,7 @@ class UserCallbackHandler(BaseCommandHandler):
         )
         await query.answer()
 
+    @check_ban()
     @require_subscription()
     async def handle_refresh_recommendations_callback(self, client: Client, query: CallbackQuery):
         """Handle refresh recommendations callback"""
@@ -226,6 +232,7 @@ class UserCallbackHandler(BaseCommandHandler):
         )
         await user_handler.recommendations_command(client, fake_message)
 
+    @check_ban()
     @require_subscription()
     async def handle_close_recommendations_callback(self, client: Client, query: CallbackQuery):
         """Handle close recommendations callback"""

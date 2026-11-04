@@ -78,6 +78,8 @@ async def test_start_response_is_scheduled_for_auto_delete():
         config=SimpleNamespace(
             MESSAGE_DELETE_SECONDS=45,
             LOG_CHANNEL=None,
+            AUTH_CHANNEL=None,
+            AUTH_GROUPS=[],
             PICS=[],
             SUPPORT_GROUP_URL=None,
             SUPPORT_GROUP_NAME=None,
@@ -173,3 +175,15 @@ def test_user_feature_commands_all_use_tracked_cleanup_helpers():
     ]
 
     assert all(_direct_message_reply_calls(method) == [] for method in methods)
+
+
+@pytest.mark.parametrize('seconds,duration',[(4,'4 seconds'),(60,'1 minute'),(65,'1 minute 5 seconds'),(0,None)])
+def test_search_caption_reports_the_actual_deletion_interval(seconds,duration):
+    from core.utils.caption import CaptionFormatter
+    pagination=SimpleNamespace(current_page=1,total_pages=1)
+    text=CaptionFormatter.format_search_results_caption('qa',2,pagination,delete_time=seconds,is_private=True)
+    if duration is None:
+        assert 'auto-deleted' not in text
+    else:
+        assert 'auto-deleted after '+duration in text
+        assert 'after 0 minutes' not in text

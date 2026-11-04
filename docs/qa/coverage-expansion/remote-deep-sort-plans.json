@@ -1,0 +1,89 @@
+[
+  {
+    "offset": 0,
+    "seconds": 0.0739,
+    "returned": 10,
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 19,
+      "totalKeysExamined": 19,
+      "executionTimeMillis": 0,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "LIMIT"
+      ],
+      "indexesUsed": [
+        "media_stable_page_v1"
+      ]
+    }
+  },
+  {
+    "offset": 10,
+    "seconds": 0.0594,
+    "returned": 10,
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 36,
+      "totalKeysExamined": 36,
+      "executionTimeMillis": 0,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "LIMIT",
+        "SKIP"
+      ],
+      "indexesUsed": [
+        "media_stable_page_v1"
+      ]
+    }
+  },
+  {
+    "offset": 1000,
+    "seconds": 0.0732,
+    "returned": 10,
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 2910,
+      "totalKeysExamined": 2910,
+      "executionTimeMillis": 14,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "LIMIT",
+        "SKIP"
+      ],
+      "indexesUsed": [
+        "media_stable_page_v1"
+      ]
+    }
+  },
+  {
+    "offset": 36550,
+    "seconds": 0.4997,
+    "returned": 10,
+    "plan": {
+      "executionSuccess": true,
+      "errorCode": null,
+      "nReturned": 10,
+      "totalDocsExamined": 96905,
+      "totalKeysExamined": 96905,
+      "executionTimeMillis": 444,
+      "stages": [
+        "FETCH",
+        "IXSCAN",
+        "LIMIT",
+        "SKIP"
+      ],
+      "indexesUsed": [
+        "media_stable_page_v1"
+      ]
+    }
+  }
+]

@@ -56,8 +56,27 @@ class CacheMonitor:
             )
             keyspace = info.get(f'db{database_number}', {})
 
+            # PH-003: report the protected state store separately.
+            # Never merge memory/eviction counters from different instances.
+            protected_state = None
+            state_client = getattr(self.cache, "state_redis", None)
+            if state_client is not None:
+                try:
+                    state_info = await state_client.info()
+                    protected_state = {
+                        "connected": True,
+                        "used_memory": state_info.get("used_memory", 0),
+                        "maxmemory": state_info.get("maxmemory", 0),
+                        "maxmemory_policy": state_info.get("maxmemory_policy"),
+                        "evicted_keys": state_info.get("evicted_keys", 0),
+                    }
+                except Exception as state_error:
+                    logger.warning("Protected Redis monitoring unavailable: %s", state_error)
+                    protected_state = {"connected": False}
+
             return {
                 "status": "connected",
+                "protected_state": protected_state,
                 "memory": {
                     "used_memory_human": memory_info.get('used_memory_human', 'N/A'),
                     "used_memory_rss_human": memory_info.get('used_memory_rss_human', 'N/A'),

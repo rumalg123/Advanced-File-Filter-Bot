@@ -1,7 +1,10 @@
 import asyncio
+import html
+from pathlib import Path
 
 from pyrogram import Client
 from pyrogram import StopPropagation
+from pyrogram.errors import MessageNotModified
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
@@ -52,11 +55,18 @@ class BotSettingsHandler(BaseHandler):
         await self.bot.cache_invalidator.invalidate_settings_cache(key)
         logger.info(f"Invalidated caches for setting: {key}")
 
+    async def _cancel_captured_edit(self, user_id: int, session):
+        """A completed older input must not cancel a newer owner dialog."""
+        session_id = getattr(session, 'session_id', None)
+        if session_id is None:
+            return await self.session_manager.cancel_edit_session(user_id)
+        return await self.session_manager.cancel_edit_session(user_id, session_id=session_id)
+
     async def bsetting_command(self, client: Client, message: Message):
         """Handle /bsetting command"""
-        await self.show_settings_menu(message, page=0)
+        await self.show_settings_menu(message, page=0, edit=False)
 
-    async def show_settings_menu(self, message: Message, page: int = 0):
+    async def show_settings_menu(self, message: Message, page: int = 0, *, edit: bool = True):
         """Show settings menu with numbered page navigation"""
         settings = await self.settings_service.get_all_settings()
 
@@ -64,7 +74,8 @@ class BotSettingsHandler(BaseHandler):
         all_keys = list(settings.keys())
         total_settings = len(all_keys)
         settings_per_page = 8
-        total_pages = (total_settings + settings_per_page - 1) // settings_per_page
+        total_pages = max(1, (total_settings + settings_per_page - 1) // settings_per_page)
+        page = min(max(0, page), total_pages - 1)
 
         # Get settings for current page
         start = page * settings_per_page
@@ -167,10 +178,14 @@ class BotSettingsHandler(BaseHandler):
             f"Page {page + 1} of {total_pages} • Total Settings: {total_settings}"
         )
 
-        if hasattr(message, 'edit_text') and hasattr(message, 'id') and message.chat:
+        if edit:
             try:
                 await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-            except Exception:
+            except MessageNotModified:
+                # Repeated navigation should keep the existing menu.
+                pass
+            except Exception as e:
+                logger.error(f"Failed to edit settings menu message: {e}")
                 # If edit fails, send a new message
                 await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
         else:
@@ -189,21 +204,36 @@ class BotSettingsHandler(BaseHandler):
         data = query.data
 
         if data == "bset_close":
-            await query.message.delete()
-            # Clear any active edit session
+            await query.answer()
+            session = None
             if self.session_manager:
-                await self.session_manager.cancel_edit_session(user_id)
+                candidate = await self.session_manager.get_edit_session(user_id)
+                if candidate and (
+                    candidate.data.get('message_id') == query.message.id
+                    and candidate.data.get('chat_id') == query.message.chat.id
+                ):
+                    session = candidate
+            try:
+                await query.message.delete()
+            finally:
+                if session:
+                    await self._cancel_captured_edit(user_id, session)
             return
 
         elif data == "bset_noop":
             await query.answer()
 
         elif data.startswith("bset_page_"):
-            page = int(data.split("_")[2])
+            try:
+                page = int(data.removeprefix("bset_page_"))
+            except ValueError:
+                await query.answer("Invalid settings page. Open /bsetting again.", show_alert=True)
+                return
+            await query.answer(f"Loading page {page + 1}")
             await self.show_settings_menu(query.message, page)
-            await query.answer(f"Page {page + 1}")
 
         elif data.startswith("bset_view_"):
+            await query.answer()
             # Extract key and page number from callback data
             parts = data.replace("bset_view_", "").rsplit("_", 1)
             if len(parts) == 2 and parts[1].isdigit():
@@ -215,6 +245,7 @@ class BotSettingsHandler(BaseHandler):
             await self.show_setting_details(query.message, key)
 
         elif data.startswith("bset_edit_"):
+            await query.answer()
             key = data.replace("bset_edit_", "")
             await self.start_edit_session(query.message, key, user_id)
 
@@ -223,12 +254,19 @@ class BotSettingsHandler(BaseHandler):
             await self.reset_to_default(query, key)
 
         elif data.startswith("bset_bool_"):
-            parts = data.split("_")
-            key = "_".join(parts[2:-1])  # Handle keys with underscores
-            value = parts[-1] == "true"
+            key, _, raw_value = data.removeprefix("bset_bool_").rpartition("_")
+            if raw_value not in {'true', 'false'}:
+                await query.answer("Invalid settings value. Open /bsetting again.", show_alert=True)
+                return
+            setting = (await self.settings_service.get_all_settings()).get(key)
+            if not setting or setting['type'] != 'bool':
+                await query.answer("This control is not available for this setting.", show_alert=True)
+                return
+            value = raw_value == "true"
             await self.update_boolean_setting(query, key, value)
 
         elif data == "bset_back":
+            await query.answer()
             # Go back to the correct page
             page = getattr(self, 'current_page', 0)
             await self.show_settings_menu(query.message, page)
@@ -258,9 +296,16 @@ class BotSettingsHandler(BaseHandler):
             current_display = str(current_value)
             default_display = str(default_value)
 
+        current_display = html.escape(current_display)
+        default_display = html.escape(default_display)
+        description = html.escape(str(description))
+
         protection_status = ""
+        editable = key not in self.PROTECTED_SETTINGS and setting.get('editable', True)
         if key in self.PROTECTED_SETTINGS:
             protection_status = "\n🔒 <b>Protected:</b> This setting cannot be changed via bot"
+        if setting.get('edit_note'):
+            protection_status += f"\n{'ℹ️' if editable else '🔒'} {html.escape(setting['edit_note'])}"
 
         text = (
             f"⚙️ <b>Setting: {self._get_display_name(key)}</b>\n\n"
@@ -272,7 +317,7 @@ class BotSettingsHandler(BaseHandler):
         )
 
         buttons = []
-        if key not in self.PROTECTED_SETTINGS:
+        if editable:
             if setting_type == 'bool':
                 # Boolean settings get True/False buttons
                 buttons.append([
@@ -303,10 +348,24 @@ class BotSettingsHandler(BaseHandler):
             ButtonBuilder.action_button("❌ Close", callback_data="bset_close")
         ])
 
-        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        except MessageNotModified:
+            # A retried callback may save the value already displayed.
+            pass
 
     async def start_edit_session(self, message: Message, key: str, user_id: int):
         """Start an edit session for a setting using unified session manager"""
+        if key in self.PROTECTED_SETTINGS:
+            await message.reply_text("This setting is protected and cannot be changed via bot.")
+            return
+        setting = (await self.settings_service.get_all_settings()).get(key)
+        if not setting:
+            await message.reply_text("This setting is no longer available. Open /bsetting again.")
+            return
+        if not setting.get('editable', True):
+            await message.reply_text(setting.get('edit_note', 'This setting is locked.'))
+            return
         if not self.session_manager:
             await message.reply(ErrorMessageFormatter.format_error("Session management not available"))
             return
@@ -318,16 +377,11 @@ class BotSettingsHandler(BaseHandler):
         }
         
         # Create session using unified session manager
-        await self.session_manager.create_edit_session(user_id, session_data)
-
-        settings = await self.settings_service.get_all_settings()
-        setting = settings.get(key)
-
-        if not setting:
-            return
+        session_id = await self.session_manager.create_edit_session(user_id, session_data)
 
         setting_type = setting['type']
         current_value = setting['value']
+        current_display = html.escape(str(current_value))
 
         # Session is now managed by unified session manager
 
@@ -335,7 +389,7 @@ class BotSettingsHandler(BaseHandler):
         if key == 'AUTO_DELETE_MESSAGE':
             text = (
                 f"✏️ <b>Editing: Auto Delete Message</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"<b>Available placeholders:</b>\n"
                 f"• `{{content_type}}` - Type of content (file, message, etc.)\n"
                 f"• `{{minutes}}` - Minutes until deletion\n\n"
@@ -383,7 +437,7 @@ class BotSettingsHandler(BaseHandler):
 
             text = (
                 f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
                 f"Send /cancel to cancel."
@@ -394,7 +448,7 @@ class BotSettingsHandler(BaseHandler):
 
             text = (
                 f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
                 f"Send /cancel to cancel."
@@ -405,13 +459,23 @@ class BotSettingsHandler(BaseHandler):
 
             text = (
                 f"✏️ <b>Editing: {self._get_display_name(key)}</b>\n\n"
-                f"Current: `{current_value}`\n\n"
+                f"Current: <code>{current_display}</code>\n\n"
                 f"{instruction}\n{example}\n\n"
                 f"⏱ You have 60 seconds to respond.\n"
                 f"Send /cancel to cancel."
             )
 
-        await message.edit_text(text)
+        try:
+            await message.edit_text(text)
+        except MessageNotModified:
+            pass
+        except (Exception, asyncio.CancelledError):
+            # Do not capture the owner's next text if the prompt never appeared.
+            # A newer dialog opened during the failed send must remain intact.
+            await asyncio.shield(self.session_manager.cancel_edit_session(
+                user_id, session_id=session_id
+            ))
+            raise
 
         # Timeout is now handled automatically by unified session manager
 
@@ -444,12 +508,13 @@ class BotSettingsHandler(BaseHandler):
             logger.warning(f"Could not delete editing message: {e}")
             
         # Cancel the session
-        await self.session_manager.cancel_edit_session(user_id)
+        await self._cancel_captured_edit(user_id, session)
             
         # Delete the cancel message itself
         try:
             await message.delete()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not delete cancel message: {e}")
             pass
 
         logger.info(f"Cancelled edit session for user {user_id}")
@@ -483,6 +548,20 @@ class BotSettingsHandler(BaseHandler):
         # This handler should ONLY process messages when user is actively in edit session
         logger.info(f"[EDIT_SESSION] Processing input for user {user_id}: {message.text}")
         
+        try:
+            return await self._process_edit_session_input(client, message, session)
+        except asyncio.CancelledError:
+            # Finish cancellation before shutdown closes the operational Redis
+            # connection. Fence cleanup to the session this input captured.
+            cleanup = asyncio.create_task(self._cancel_captured_edit(user_id, session))
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                await cleanup
+            raise
+
+    async def _process_edit_session_input(self, client, message, session):
+        user_id = message.from_user.id
         # Set a temporary flag to prevent search processing of this message
         await self.bot.cache.set(
             CacheKeyGenerator.recent_settings_edit(user_id),
@@ -508,11 +587,12 @@ class BotSettingsHandler(BaseHandler):
             # Delete the cancel message itself
             try:
                 await message.delete()
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Could not delete cancel message: {e}")
                 pass
 
             # Clean up session
-            await self.session_manager.cancel_edit_session(user_id)
+            await self._cancel_captured_edit(user_id, session)
             raise StopPropagation  # Prevent any other handlers from processing this message
 
         # Update the setting
@@ -531,7 +611,7 @@ class BotSettingsHandler(BaseHandler):
                         title="Security Warning"
                     )
                 )
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
                 raise StopPropagation  # Prevent other handlers from processing this message
             success = await self.settings_service.update_setting(key, new_value)
 
@@ -543,7 +623,10 @@ class BotSettingsHandler(BaseHandler):
                     expire=CacheTTLConfig.OPERATION_LOCK
                 )
                 # Delete the message containing the value for security
-                await message.delete()
+                try:
+                    await message.delete()
+                except Exception as error:
+                    logger.warning("Could not delete saved settings input: %s", error)
                 
                 # Also delete the editing message
                 try:
@@ -569,16 +652,16 @@ class BotSettingsHandler(BaseHandler):
                 )
 
                 # Clean up session immediately to prevent search triggers
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
                 
                 # Schedule auto-delete of success message
-                asyncio.create_task(self._auto_delete_message(success_msg, 10))
+                self._schedule_auto_delete(success_msg, 10)
                 
                 # Prevent any other handlers from processing this message
                 raise StopPropagation
             else:
                 # Clean up session on failure too
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
                 await message.reply_text(ErrorMessageFormatter.format_failed("to update setting"))
                 raise StopPropagation  # Prevent search trigger even on failure
         except StopPropagation:
@@ -587,7 +670,7 @@ class BotSettingsHandler(BaseHandler):
         except Exception as e:
             # Clean up session on error
             if self.session_manager:
-                await self.session_manager.cancel_edit_session(user_id)
+                await self._cancel_captured_edit(user_id, session)
             
             # Better error message handling
             error_msg = str(e).strip() if str(e).strip() else "Unknown error occurred"
@@ -600,6 +683,9 @@ class BotSettingsHandler(BaseHandler):
     async def update_boolean_setting(self, query: CallbackQuery, key: str, value: bool):
 
         """Update a boolean setting"""
+        if key in self.PROTECTED_SETTINGS:
+            await query.answer("This setting is protected and cannot be changed via bot.", show_alert=True)
+            return
         try:
             success = await self.settings_service.update_setting(key, value)
 
@@ -612,9 +698,12 @@ class BotSettingsHandler(BaseHandler):
                     else:
                         logger.info("Enabling filter handlers")
                 await self.show_setting_details(query.message, key)
+                notice = "Setting updated! Restart bot for changes to take effect."
+                if key == 'DATABASE_GLOBAL_OWNER_REGISTRY' and value:
+                    notice = "Setting saved. Ownership activation must be complete before restarting the bot."
                 await query.answer(
                     ErrorMessageFormatter.format_success(
-                        "Setting updated! Restart bot for changes to take effect.",
+                        notice,
                         plain_text=True
                     ),
                     show_alert=True
@@ -626,6 +715,9 @@ class BotSettingsHandler(BaseHandler):
 
     async def reset_to_default(self, query: CallbackQuery, key: str):
         """Reset a setting to default value"""
+        if key in self.PROTECTED_SETTINGS:
+            await query.answer("This setting is protected and cannot be changed via bot.", show_alert=True)
+            return
         try:
             success = await self.settings_service.reset_to_default(key)
 
@@ -641,106 +733,71 @@ class BotSettingsHandler(BaseHandler):
             await query.answer(ErrorMessageFormatter.format_error(str(e), plain_text=True), show_alert=True)
 
     def _get_git_info(self):
-        """Get current git information"""
-        import subprocess
-        try:
-            # Get current commit hash
-            hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
-                                       capture_output=True, text=True, check=True)
-            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
-            
-            # Get commit date and message
-            commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
-                                       capture_output=True, text=True, check=True)
-            commit_date, commit_message = commit_info.stdout.strip().split('|', 1)
-            
-            # Check for uncommitted changes
-            status_result = subprocess.run(['git', 'status', '--porcelain'], 
-                                         capture_output=True, text=True, check=True)
-            has_changes = bool(status_result.stdout.strip())
-            
-            return {
-                'hash': commit_hash,
-                'date': commit_date,
-                'message': commit_message,
-                'has_changes': has_changes,
-                'full_hash': hash_result.stdout.strip()
-            }
-        except Exception as e:
-            logger.error(f"Failed to get git info: {e}")
-            return None
+        """Get the Git checkout or last successfully applied update revision."""
+        from core.utils.runtime_version import get_runtime_version
+        return get_runtime_version()
 
     async def restart_command(self, client: Client, message: Message):
-        """Handle /restart command"""
+        """Update from the configured upstream, then restart the bot process."""
+        import json
         import os
         import sys
         import subprocess
         import platform
-        import shutil
+        import signal
+        from update import SecureUpdater
 
-        # Get current git info before restart
-        git_info_before = self._get_git_info()
-        
-        restart_msg = await message.reply_text("🔄 <b>Restarting bot...</b>")
+        if getattr(self, '_restart_in_progress', False):
+            await message.reply_text("🔄 An update and restart is already in progress.")
+            return
+        self._restart_in_progress = True
+        restart_msg = None
+        try:
+            restart_msg = await message.reply_text("🔄 <b>Fetching and validating bot updates...</b>")
+            upstream_repo = await self.settings_service.get_setting('UPSTREAM_REPO')
+            upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
+            if not upstream_repo or not upstream_branch:
+                raise ValueError('UPSTREAM_REPO and UPSTREAM_BRANCH must be configured')
 
-        # Save restart message info and git info
-        restart_data = {
-            'chat_id': restart_msg.chat.id,
-            'message_id': restart_msg.id,
-            'git_before': git_info_before
-        }
-        
-        with open("restart_msg.txt", "w") as f:
-            import json
-            f.write(json.dumps(restart_data))
+            git_info_before = self._get_git_info()
+            updater = SecureUpdater(upstream_repo, upstream_branch)
+            # Clone into a temporary checkout: source-only Docker images do not
+            # have .git. Back up and validate before changing the running source.
+            updated = await asyncio.to_thread(updater.update, install_dependencies=True)
+            if not updated:
+                raise RuntimeError('Upstream update failed; see the update log and backups')
 
-        # Get upstream settings
-        upstream_repo = await self.settings_service.get_setting('UPSTREAM_REPO')
-        upstream_branch = await self.settings_service.get_setting('UPSTREAM_BRANCH')
+            restart_data = {
+                'chat_id': restart_msg.chat.id,
+                'message_id': restart_msg.id,
+                'git_before': git_info_before,
+            }
+            Path('restart_msg.txt').write_text(json.dumps(restart_data), encoding='utf-8')
+        except Exception as e:
+            self._restart_in_progress = False
+            logger.error(f"Error occurred while preparing restart: {e}")
+            if restart_msg is not None:
+                await restart_msg.edit_text(
+                    "❌ <b>Update failed; restart cancelled.</b> Check the update log and backups. "
+                    "Confirm UPSTREAM_REPO and UPSTREAM_BRANCH in /bsetting.")
+            return
 
-        if upstream_repo and upstream_branch:
-            await restart_msg.edit_text("🔄 <b>Force pulling updates from upstream...</b>")
+        # A deleted Telegram status message must not strand already updated code.
+        try:
+            await restart_msg.edit_text("✅ <b>Bot code updated. Restarting...</b>")
+        except Exception:
+            logger.warning('Cannot edit update status; continuing restart', exc_info=True)
 
-            try:
-                # Force pull from upstream (overwrites local changes)
-                subprocess.run(["git", "fetch", upstream_repo, upstream_branch], capture_output=True, text=True, check=True)
-                subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], capture_output=True, text=True, check=True)
-                
-                # Try git clean with error handling for Docker environments
-                try:
-                    subprocess.run(["git", "clean", "-fd"], capture_output=True, text=True, check=True)
-                except subprocess.CalledProcessError as clean_error:
-                    logger.warning(f"Git clean failed (likely permission issue in Docker): {clean_error}")
-                    # Try alternative cleanup for Docker environments
-                    try:
-                        # Clean only files that git can access
-                        subprocess.run(["git", "clean", "-f"], capture_output=True, text=True, check=False)
-                    except Exception:
-                        logger.info("Git clean alternative also failed, continuing anyway")
-                
-                shutil.rmtree("logs", ignore_errors=True)
-                
-                # Get updated git info
-                git_info_after = self._get_git_info()
-                
-                if git_info_before and git_info_after:
-                    if git_info_before['full_hash'] != git_info_after['full_hash']:
-                        update_msg = (
-                            ErrorMessageFormatter.format_success("Updates pulled!", title="Updates") + "\n\n"
-                            f"📝 <b>Latest Commit:</b>\n"
-                            f"🔗 `{git_info_after['hash']}` - {git_info_after['date']}\n"
-                            f"💬 {git_info_after['message']}\n\n"
-                            f"🔄 <b>Restarting...</b>"
-                        )
-                    else:
-                        update_msg = ErrorMessageFormatter.format_info("No new updates available. Restarting...", include_prefix=False)
-                else:
-                    update_msg = ErrorMessageFormatter.format_success("Updates pulled! Restarting...", include_prefix=False)
-                    
-                await restart_msg.edit_text(update_msg)
-            except Exception as e:
-                logger.error(f"Failed to force pull updates: {e}")
-                await restart_msg.edit_text(ErrorMessageFormatter.format_warning("Failed to force pull updates. Restarting anyway...", include_prefix=False))
+        in_container = (
+            Path('/.dockerenv').exists()
+            or os.environ.get('IN_DOCKER', '').lower() in ('1', 'true', 'yes')
+            or bool(os.environ.get('KUBERNETES_SERVICE_HOST'))
+        )
+        if in_container:
+            # idle() handles SIGTERM, Client.run() awaits stop(), and Compose's
+            # unless-stopped policy restarts this container with the updated files.
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
 
         # Platform-specific restart
         if platform.system() == "Windows":
@@ -776,6 +833,7 @@ class BotSettingsHandler(BaseHandler):
             'FEATURE_SAVED_SEARCH_ALERTS': 'Saved Alerts',
             'FEATURE_FAVORITES': 'Favorites',
             'FEATURE_ADVANCED_SEARCH': 'Advanced Search',
+            'FEATURE_INDEXED_MEDIA_SEARCH': 'Indexed Search',
             'FEATURE_RECOMMENDATION_FEEDBACK': 'Rec Feedback',
             'FEATURE_FILE_REPORTS': 'File Reports',
             'FEATURE_SEARCH_AUTOCOMPLETE': 'Autocomplete',
@@ -784,6 +842,11 @@ class BotSettingsHandler(BaseHandler):
             'FEATURE_RECENT_FILES': 'Recent Files',
             'FEATURE_RECOMMENDATION_EXPLANATIONS': 'Rec Reasons',
             'FEATURE_CONTENT_DASHBOARD': 'Content Dashboard',
+            'FEATURE_CANONICAL_MEDIA_METADATA': 'Canonical Metadata',
+            'FEATURE_QUOTA_DELIVERY_LEDGER': 'Quota Ledger',
+            'PROCESSING_DURABLE_INDEXING': 'Durable Indexing',
+            'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': 'Durable Alerts',
+            'DATABASE_GLOBAL_OWNER_REGISTRY': 'Media Owners',
             'DISABLE_PREMIUM': 'Disable Premium',
             'DISABLE_FILTER': 'Disable Filter',
             'PUBLIC_FILE_STORE': 'Public Store',
@@ -797,8 +860,10 @@ class BotSettingsHandler(BaseHandler):
             'SUPPORT_GROUP_USERNAME': 'Support User',
             'INDEX_REQ_CHANNEL': 'Index Channel',
             'DELETE_CHANNEL': 'Delete Channel',
-            'AUTH_CHANNEL': 'Auth Channel',
-            'AUTH_GROUPS': 'Auth Groups',
+            'AUTH_CHANNEL': 'Force Sub Channels',
+            'AUTH_GROUPS': 'Force Sub Groups',
+            'FORCE_SUB_INVITE_EXPIRE_MINUTES': 'Invite Expiry (min)',
+            'FORCE_SUB_INVITE_MEMBER_LIMIT': 'Invite Member Limit',
             'MAX_BTN_SIZE': 'Max Buttons',
             'UPSTREAM_REPO': 'Upstream Repo',
             'UPSTREAM_BRANCH': 'Upstream Branch',

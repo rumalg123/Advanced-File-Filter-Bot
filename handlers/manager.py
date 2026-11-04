@@ -4,7 +4,7 @@ Enhanced Handler Manager with comprehensive resource tracking and cleanup
 import asyncio
 import gc
 from typing import Dict, List, Set, Optional, Any
-from weakref import WeakSet, WeakValueDictionary
+from weakref import WeakValueDictionary
 
 from core.utils.logger import get_logger
 
@@ -25,7 +25,7 @@ class HandlerManager:
 
         # Task tracking with different strategies
         self.background_tasks: Set[asyncio.Task] = set()  # Long-running tasks
-        self.auto_delete_tasks: WeakSet = WeakSet()  # Auto-cleanup tasks
+        self.auto_delete_tasks: Set[asyncio.Task] = set()  # Retain until completion
         self.named_tasks: Dict[str, asyncio.Task] = {}  # Named tasks for easy access
 
         # Memory management
@@ -51,6 +51,9 @@ class HandlerManager:
             else:
                 self.bot.add_handler(handler)
             self.handlers.append(handler)
+            # Dispatcher registrations can be re-added, and Python can reuse
+            # identities after a dynamic handler is released.
+            self.removed_handlers.discard(id(handler))
             self.handler_groups[id(handler)] = group
             self.stats['handlers_registered'] += 1
             logger.debug(
@@ -138,6 +141,7 @@ class HandlerManager:
             if name and name in self.named_tasks and self.named_tasks[name] == t:
                 del self.named_tasks[name]
             self.stats['tasks_completed'] += 1
+            self._report_task_failure(t)
             logger.debug(f"Background task '{name or 'unnamed'}' completed")
 
         task.add_done_callback(cleanup_callback)
@@ -152,13 +156,28 @@ class HandlerManager:
             return None
 
         task = asyncio.create_task(coro)
-        self.auto_delete_tasks.add(task)  # WeakSet auto-removes when done
+        self.auto_delete_tasks.add(task)
         self.stats['tasks_created'] += 1
 
-        # Light cleanup callback
-        task.add_done_callback(lambda t: self.stats.__setitem__('tasks_completed',
-                                                                  self.stats['tasks_completed'] + 1))
+        def cleanup_callback(t):
+            self.auto_delete_tasks.discard(t)
+            self.stats['tasks_completed'] += 1
+            self._report_task_failure(t)
+
+        task.add_done_callback(cleanup_callback)
         return task
+
+    @staticmethod
+    def _report_task_failure(task):
+        """Retrieve task errors so background failures are logged exactly once."""
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None:
+            logger.error(
+                "Managed task %s failed", task.get_name(),
+                exc_info=(type(error), error, error.__traceback__),
+            )
 
     def get_task(self, name: str) -> Optional[asyncio.Task]:
         """Get a named task if it exists"""
@@ -206,7 +225,7 @@ class HandlerManager:
             # Step 2: Cancel background tasks
             background_tasks = list(self.background_tasks)
             for task in background_tasks:
-                if not task.done():
+                if not task.done() and not task.cancelling():
                     task.cancel()
                     self.stats['tasks_cancelled'] += 1
 
@@ -251,7 +270,7 @@ class HandlerManager:
             self.background_tasks.clear()
             self.named_tasks.clear()
             self.removed_handlers.clear()  # Clear the removed handlers set
-            # auto_delete_tasks clears itself (WeakSet)
+            # Completion callbacks release auto-delete task references.
 
             # Force garbage collection
             gc.collect()

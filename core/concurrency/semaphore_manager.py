@@ -38,6 +38,57 @@ class ConcurrencyMetrics:
         }
 
 
+class ResizableSemaphore(asyncio.Semaphore):
+    """A single stable permit budget across live concurrency-limit changes.
+
+    The available-permit balance may temporarily be negative after a limit
+    reduction. A negative balance represents running operations that must
+    finish before another waiter can enter. Unlike a new Semaphore object,
+    existing holders and waiters remain part of the SAME permit budget.
+
+    asyncio.Semaphore's FIFO waiting and cancellation handling are retained.
+    Only the predicates and release/resize wake-up decisions differ. The
+    implementation intentionally uses asyncio's documented single-loop
+    synchronization model and its private _wake_up_next hook. Test each
+    supported Python version before upgrading the runtime (PH-020).
+    """
+
+    def __init__(self, limit: int):
+        super().__init__(limit)
+        self._limit = limit
+
+    @property
+    def limit(self) -> int:
+        return self._limit
+
+    def locked(self) -> bool:
+        # asyncio.Semaphore.locked() checks for == 0. A downsized domain can
+        # have negative debt, which MUST still block new acquisitions.
+        return self._value <= 0 or any(
+            not waiter.cancelled() for waiter in (self._waiters or ())
+        )
+
+    def _wake_available(self) -> None:
+        # Never wake a waiter while the domain still owes old permits.
+        while self._value > 0 and self._wake_up_next():
+            pass
+
+    def release(self) -> None:
+        # The stdlib release() wakes a waiter unconditionally; that is
+        # incorrect when downsizing left outstanding negative permit debt.
+        self._value += 1
+        self._wake_available()
+
+    def resize(self, limit: int) -> None:
+        if type(limit) is not int or limit < 1:
+            raise ValueError("Semaphore limit must be a positive integer")
+        # No await here: updates and releases cannot interleave halfway
+        # through the arithmetic on a single asyncio event loop.
+        self._value += limit - self._limit
+        self._limit = limit
+        self._wake_available()
+
+
 class SemaphoreManager:
     """Manages asyncio.Semaphore instances for different operation domains"""
     
@@ -62,23 +113,23 @@ class SemaphoreManager:
         if custom_limits:
             self.limits.update(custom_limits)
         
-        self._semaphores: Dict[str, asyncio.Semaphore] = {}
+        self._semaphores: Dict[str, ResizableSemaphore] = {}
         self._metrics: Dict[str, ConcurrencyMetrics] = {}
         self._lock = asyncio.Lock()
         
         # Initialize semaphores and metrics
         for domain, limit in self.limits.items():
-            self._semaphores[domain] = asyncio.Semaphore(limit)
+            self._semaphores[domain] = ResizableSemaphore(limit)
             self._metrics[domain] = ConcurrencyMetrics(
                 domain=domain,
                 max_concurrent=limit
             )
     
-    def get_semaphore(self, domain: str) -> asyncio.Semaphore:
+    def get_semaphore(self, domain: str) -> ResizableSemaphore:
         """Get semaphore for domain, create if doesn't exist"""
         if domain not in self._semaphores:
             limit = self.limits.get(domain, 10)  # Default limit
-            self._semaphores[domain] = asyncio.Semaphore(limit)
+            self._semaphores[domain] = ResizableSemaphore(limit)
             self._metrics[domain] = ConcurrencyMetrics(
                 domain=domain,
                 max_concurrent=limit
@@ -96,62 +147,72 @@ class SemaphoreManager:
         """
         semaphore = self.get_semaphore(domain)
         metrics = self._metrics[domain]
-        
-        # Track queue length and wait time
-        start_wait = time.time()
-        operation_id = operation_id or f"op_{int(time.time() * 1000)}"
-        
-        # Update queue length (approximate)
+        # asyncio primitives are used on the owning event loop only. A waiter
+        # is not an active operation until __aenter__ actually succeeds.
+        started_waiting = time.monotonic()
+        operation_id = operation_id or f"op_{time.time_ns()}"
+        waiting = False
+        acquired = False
+
         async with self._lock:
-            metrics.queue_length = max(0, metrics.total_requests - metrics.current_active)
-        
+            metrics.queue_length += 1
+            waiting = True
+
         try:
-            # Acquire semaphore (this may block if at limit)
+            # If a task is cancelled while this waits for a permit, the
+            # semaphore does not enter its body and no active count is added.
             async with semaphore:
-                wait_time = time.time() - start_wait
-                
-                # Update metrics on acquire
+                waited = time.monotonic() - started_waiting
+
+                # This lock acquisition is also cancellable. It must not
+                # falsely mark a waiter as active or leave a stale waiter.
                 async with self._lock:
+                    metrics.queue_length -= 1
+                    waiting = False
                     metrics.current_active += 1
+                    acquired = True
                     metrics.total_requests += 1
-                    metrics.peak_concurrent = max(metrics.peak_concurrent, metrics.current_active)
-                    
-                    # Update average wait time
-                    if metrics.total_requests > 1:
-                        metrics.avg_wait_time = (
-                            (metrics.avg_wait_time * (metrics.total_requests - 1) + wait_time) /
-                            metrics.total_requests
-                        )
-                    else:
-                        metrics.avg_wait_time = wait_time
-                    
-                    metrics.start_times[operation_id] = time.time()
-                    metrics.queue_length = max(0, metrics.queue_length - 1)
-                
+                    metrics.peak_concurrent = max(
+                        metrics.peak_concurrent, metrics.current_active
+                    )
+                    metrics.avg_wait_time += (
+                        waited - metrics.avg_wait_time
+                    ) / metrics.total_requests
+                    metrics.start_times[operation_id] = time.monotonic()
+
                 logger.debug(f"Acquired {domain} semaphore", extra={
                     "domain": domain,
                     "operation_id": operation_id,
                     "current_active": metrics.current_active,
-                    "wait_time": wait_time
+                    "wait_time": waited
                 })
-                
-                yield
-                
+
+                try:
+                    yield
+                finally:
+                    # Runs only after successful semaphore admission and
+                    # metric registration, including body errors/cancellation.
+                    if acquired:
+                        async with self._lock:
+                            metrics.current_active -= 1
+                            started = metrics.start_times.pop(operation_id, None)
+                            duration = (
+                                time.monotonic() - started
+                                if started is not None else None
+                            )
+                        logger.debug(f"Released {domain} semaphore", extra={
+                            "domain": domain,
+                            "operation_id": operation_id,
+                            "current_active": metrics.current_active,
+                            "operation_duration": duration
+                        })
         finally:
-            # Update metrics on release
-            async with self._lock:
-                metrics.current_active -= 1
-                if operation_id in metrics.start_times:
-                    operation_duration = time.time() - metrics.start_times[operation_id]
-                    del metrics.start_times[operation_id]
-                    
-                    logger.debug(f"Released {domain} semaphore", extra={
-                        "domain": domain,
-                        "operation_id": operation_id,
-                        "current_active": metrics.current_active,
-                        "operation_duration": operation_duration
-                    })
-    
+            if waiting:
+                # Cancelled/error before acquisition: remove only the queue
+                # reservation. Do not release or decrement an unheld permit.
+                async with self._lock:
+                    metrics.queue_length -= 1
+
     async def get_metrics(self, domain: Optional[str] = None) -> Dict[str, Any]:
         """Get concurrency metrics for domain or all domains"""
         async with self._lock:
@@ -166,41 +227,33 @@ class SemaphoreManager:
                 }
     
     async def update_limit(self, domain: str, new_limit: int) -> bool:
+        """Resize one domain without abandoning old holders or pending waiters.
+
+        Shrinking below the active count creates permit debt. No new waiter
+        is admitted until old holders release enough permits. Raising the
+        budget wakes pending waiters up to the new available capacity.
+        Domain metrics and configured limit change in the same manager lock.
         """
-        Update concurrency limit for domain
-        
-        Args:
-            domain: Operation domain
-            new_limit: New concurrency limit
-            
-        Returns:
-            True if updated successfully
-        """
-        if new_limit <= 0:
+        if type(new_limit) is not int or new_limit < 1:
             return False
-        
+
         async with self._lock:
             try:
-                # Create new semaphore with updated limit
-                self._semaphores[domain] = asyncio.Semaphore(new_limit)
+                semaphore = self.get_semaphore(domain)
+                # Preserve stable identity: all previously admitted or
+                # queued tasks must keep using this same semaphore.
+                semaphore.resize(new_limit)
                 self.limits[domain] = new_limit
-                
-                # Update metrics
-                if domain in self._metrics:
-                    self._metrics[domain].max_concurrent = new_limit
-                else:
-                    self._metrics[domain] = ConcurrencyMetrics(
-                        domain=domain,
-                        max_concurrent=new_limit
-                    )
-                
-                logger.info(f"Updated {domain} concurrency limit to {new_limit}")
+                self._metrics[domain].max_concurrent = new_limit
+                logger.info(
+                    "Updated %s concurrency limit to %s without replacing permits",
+                    domain, new_limit
+                )
                 return True
-                
-            except Exception as e:
-                logger.error(f"Failed to update {domain} concurrency limit: {e}")
+            except Exception as error:
+                logger.error("Failed to resize %s semaphore: %s", domain, error)
                 return False
-    
+
     async def reset_metrics(self, domain: Optional[str] = None):
         """Reset metrics for domain or all domains"""
         async with self._lock:

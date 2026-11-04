@@ -4,7 +4,9 @@ Provides compound indexes for frequent query patterns
 """
 
 from typing import Dict
+from config.settings import settings
 
+from core.database.media_indexes import media_index_manifest, compare_index_definition
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,124 +41,62 @@ class IndexOptimizer:
         return results
     
     async def _create_media_indexes(self) -> Dict[str, bool]:
-        """Create indexes for media_files collection"""
-        results = {}
-        collection = await self.db_pool.get_collection('media_files')
-        
-        indexes = [
-            # Search optimization: file_type + file_size for filtered searches
-            {
-                'keys': [('file_type', 1), ('file_size', -1)],
-                'name': 'file_type_size_idx',
-                'background': True
-            },
-            
-            # Search optimization: file_type + indexed_at for recent files by type
-            {
-                'keys': [('file_type', 1), ('indexed_at', -1)],
-                'name': 'file_type_time_idx', 
-                'background': True
-            },
-            
-            # Text search optimization: file_name with text index
-            {
-                'keys': [('file_name', 'text'), ('caption', 'text')],
-                'name': 'text_search_idx',
-                'background': True,
-                'default_language': 'english',
-                'language_override': 'language'
-            },
-            
-            # Channel-based queries: channel_id + indexed_at
-            {
-                'keys': [('channel_id', 1), ('indexed_at', -1)],
-                'name': 'channel_time_idx',
-                'background': True
-            },
-            
-            # File cleanup queries: indexed_at for old file deletion
-            {
-                'keys': [('indexed_at', 1)],
-                'name': 'cleanup_time_idx',
-                'background': True
-            },
-            
-            # Ensure unique constraint on file_unique_id
-            {
-                'keys': [('file_unique_id', 1)],
-                'name': 'unique_file_id_idx',
-                'unique': True,
-                'background': True
-            },
-            
-            # Season + Episode compound index (most common query pattern)
-            {
-                'keys': [('season', 1), ('episode', 1)],
-                'name': 'season_episode_idx',
-                'sparse': True,  # Only index documents where these fields exist
-                'background': True
-            },
-            
-            # Season + Episode + Resolution (complete metadata filter)
-            {
-                'keys': [('season', 1), ('episode', 1), ('resolution', 1)],
-                'name': 'season_episode_resolution_idx',
-                'sparse': True,
-                'background': True
-            },
-            
-            # Resolution index (for resolution-only queries)
-            {
-                'keys': [('resolution', 1)],
-                'name': 'resolution_idx',
-                'sparse': True,
-                'background': True
-            },
-            
-            # Resolution + File Type (e.g., "1080p videos")
-            {
-                'keys': [('resolution', 1), ('file_type', 1)],
-                'name': 'resolution_type_idx',
-                'sparse': True,
-                'background': True
-            },
-            
-            # Episode only (for queries without season)
-            {
-                'keys': [('episode', 1)],
-                'name': 'episode_idx',
-                'sparse': True,
-                'background': True
-            },
-            
-            # Resolution + Date (for "latest 1080p files")
-            {
-                'keys': [('resolution', 1), ('indexed_at', -1)],
-                'name': 'resolution_date_idx',
-                'sparse': True,
-                'background': True
-            }
-        ]
-        
-        for index in indexes:
-            try:
-                keys = index.pop('keys')
-                await self.db_pool.execute_with_retry(
-                    collection.create_index, keys, **index
-                )
-                results[f"media_{index['name']}"] = True
-                logger.info(f"Created index: {index['name']} on media_files")
-            except Exception as e:
-                error_msg = str(e)
-                if "Index already exists" in error_msg or "IndexOptionsConflict" in error_msg:
-                    logger.debug(f"Index {index['name']} already exists with different name - skipping")
-                    results[f"media_{index['name']}"] = True
-                else:
-                    logger.error(f"Failed to create index {index['name']}: {e}")
-                    results[f"media_{index['name']}"] = False
+        """Single owner of media index DDL, backed by the PH-016 manifest.
 
+        Existing startup still creates missing legacy indexes, as before.
+        Never drop/replace an index or hide a definition conflict as success.
+        A separate auditor provides read-only inventory before changes.
+        """
+        collection = await self.db_pool.get_collection("media_files")
+        manifest = media_index_manifest(include_search_tokens=settings.features.feature_indexed_media_search)
+        results: Dict[str, bool] = {}
+        try:
+            existing_list = await self.db_pool.execute_with_retry(
+                collection.list_indexes().to_list, length=None
+            )
+        except Exception as e:
+            logger.error(f"Media index inventory unavailable; refusing blind index DDL: {e}")
+            return {f"media_{spec['name']}": False for spec in manifest}
+
+        existing = {doc["name"]: dict(doc) for doc in existing_list}
+        for spec in manifest:
+            name = spec["name"]
+            key = f"media_{name}"
+            current = existing.get(name)
+            if current is not None:
+                ok = compare_index_definition(spec, current)
+                results[key] = ok
+                if not ok:
+                    logger.error("Media index definition mismatch: %s; manual review needed", name)
+                continue
+
+            # An equivalent key definition under a different name is
+            # not a signal that we can blindly create/rename it.
+            if any(compare_index_definition(spec, doc) for doc in existing.values()):
+                logger.warning("Media index %s has an equivalent existing definition under another name", name)
+                results[key] = False
+                continue
+
+            try:
+                await self.db_pool.execute_with_retry(
+                    collection.create_index,
+                    spec["keys"],
+                    name=name,
+                    **spec["options"],
+                )
+                results[key] = True
+                logger.info("Created missing legacy media index: %s", name)
+                # Track our own successful DDL for subsequent comparisons.
+                existing[name] = {
+                    "name": name, "key": dict(spec["keys"]), **spec["options"],
+                }
+            except Exception as e:
+                # Do not claim an IndexOptionsConflict or any other failure
+                # represents a successful index build. No automatic drops.
+                logger.error(f"Could not create media index {name}; manual review needed: {e}")
+                results[key] = False
         return results
-    
+
     async def _create_user_indexes(self) -> Dict[str, bool]:
         """Create indexes for users collection"""
         results = {}

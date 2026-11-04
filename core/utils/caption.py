@@ -1,5 +1,6 @@
 # core/utils/caption.py
 
+import html
 from typing import Optional
 from pyrogram import enums
 
@@ -170,16 +171,22 @@ class CaptionFormatter:
             Formatted search results caption with HTML
         """
         caption = (
-            f"🔍 <b>Search Results for:</b> {query}\n"
+            f"🔍 <b>Search Results for:</b> {html.escape(query)}\n"
             f"📁 Found {total} files\n"
             f"📊 Page {pagination.current_page} of {pagination.total_pages}"
         )
 
         # Add auto-delete note if enabled
         if delete_time > 0:
-            delete_minutes = delete_time // 60
+            minutes, seconds = divmod(delete_time, 60)
+            parts = []
+            if minutes:
+                parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+            if seconds:
+                parts.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+            duration = " ".join(parts)
             # Show delete note in private always, in groups only if enabled
             if is_private or delete_time > 0:
-                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {delete_minutes} minutes"
+                caption += f"\n⏱ <b>Note:</b> Results will be auto-deleted after {duration}"
 
         return caption

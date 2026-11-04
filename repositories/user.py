@@ -1,6 +1,8 @@
+import html
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, date, timedelta, UTC
 from dataclasses import dataclass, asdict
+from uuid import uuid4
 from enum import Enum
 
 from pymongo import UpdateOne
@@ -9,11 +11,13 @@ from config.settings import settings
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import cache_premium_status
 from core.concurrency.semaphore_manager import semaphore_manager
-from core.database.base import BaseRepository, AggregationMixin
+from core.database.base import BaseRepository, AggregationMixin, expired_premium_filter
+from core.database.errors import USER_ACCESS_RETRY_MESSAGE
 
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.validators import normalize_expiry_date, is_premium_valid, get_days_remaining, is_admin
+from core.utils.quota_calendar import QuotaReservation, quota_day_utc
 
 logger = get_logger(__name__)
 
@@ -106,6 +110,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         """Convert dictionary to User entity"""
         data['id'] = data.pop('_id')
         data['status'] = UserStatus(data.get('status', 'active'))
+        # PH-022 internal, bounded quota ledger is not part of public User DTO.
+        data.pop('quota_delivery_ledger', None)
 
         # Parse dates
         if data.get('premium_activation_date'):
@@ -127,6 +133,9 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if data.get('last_warning_date'):
             if isinstance(data['last_warning_date'], str):
                 data['last_warning_date'] = datetime.fromisoformat(data['last_warning_date'])
+            # BSON defaults to naive UTC; legacy ISO dates can be naive too.
+            # Both request escalation and warning stats compare against UTC now.
+            data['last_warning_date'] = normalize_expiry_date(data['last_warning_date'])
 
         if data.get('created_at'):
             if isinstance(data['created_at'], str):
@@ -173,8 +182,16 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             logger.error(f"Error creating user {user_id}: {e}")
             return False
 
-    async def get_user(self, user_id: int) -> Optional[User]:
-        """Get user by ID with proper TTL"""
+    async def get_user(self, user_id: int, *, use_cache: bool = True) -> Optional[User]:
+        """Read cached profile data or authoritative state for authorization.
+
+        Strict reads bypass Redis and propagate database failures, so callers
+        can distinguish a missing user from unavailable authorization state.
+        """
+        if not use_cache:
+            collection = await self.get_collection()
+            data = await self.db_pool.execute_with_retry(collection.find_one, {'_id': user_id})
+            return self._dict_to_entity(data) if data is not None else None
         cache_key = CacheKeyGenerator.user(user_id)
 
         # Try cache first
@@ -204,7 +221,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def ban_user(self, user_id: int, reason: str = "No reason") -> Tuple[bool, str, Optional[User]]:
         """Ban a user"""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, ErrorMessageFormatter.format_not_found("User") + " in database. User must have used the bot before.", None
             # Check if already banned
@@ -213,8 +230,8 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return False, (
                 ErrorMessageFormatter.format_error("User is already banned!", title="Already Banned") + "\n\n"
                 f"<b>User ID:</b> <code>{user_id}</code>\n"
-                f"<b>Name:</b> {user.name}\n"
-                f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
+                f"<b>Name:</b> {html.escape(str(user.name))}\n"
+                f"<b>Reason:</b> {html.escape(str(user.ban_reason or 'No reason provided'))}\n"
                 f"<b>Banned on:</b> {ban_date}"
             ), user
         update_data = {
@@ -238,7 +255,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def unban_user(self, user_id: int) -> Tuple[bool, str, Optional[User]]:
         """Unban a user"""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, ErrorMessageFormatter.format_not_found("User") + " in database.", None
 
@@ -303,14 +320,18 @@ class UserRepository(BaseRepository[User], AggregationMixin):
     ) -> Tuple[bool, str, Optional[User]]:
         """Update premium status, optionally overriding the configured duration."""
         # Check if user exists
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, ErrorMessageFormatter.format_not_found("User") + " in database.", None
 
-        # Check if already has the same premium status
-        if user.is_premium == is_premium:
+        # A stale raw flag does not make an expired grant active. Never use
+        # a cached profile to decide whether a grant/removal is a no-op.
+        if (is_premium and is_premium_valid(user.is_premium, user.premium_expiry_date)) or (
+            not is_premium and not user.is_premium
+        ):
             # Clear decisions cached by an older process/deployment even when
             # the database already has the requested value.
+            await self.cache_invalidator.invalidate_user_data(user_id)
             await self.cache_invalidator.invalidate_premium_status(user_id)
             status_text = "premium" if is_premium else "non-premium"
             return False, ErrorMessageFormatter.format_error(f"User is already {status_text}!"), user
@@ -346,17 +367,40 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         if not is_premium:
             update_data['daily_retrieval_count'] = 0
-        success = await self.update(user_id, update_data)
+        selector: Dict[str, Any] = {'_id': user_id}
+        if is_premium:
+            # Recheck at the write: concurrent grants must have one winner,
+            # and must not shorten/overwrite an already active subscription.
+            selector['$or'] = [
+                {'is_premium': {'$ne': True}},
+                {'$expr': {'$lte': [{'$convert': {
+                    'input': '$premium_expiry_date', 'to': 'date',
+                    'onError': None, 'onNull': None,
+                }}, '$$NOW']}},
+            ]
+        else:
+            selector['is_premium'] = True
+        collection = await self.get_collection()
+        try:
+            result = await self.db_pool.execute_with_retry(
+                collection.find_one_and_update, selector, {'$set': update_data},
+                return_document=True,
+            )
+        except Exception:
+            logger.error("Premium mutation failed for user %s", user_id, exc_info=True)
+            result = None
+        success = result is not None
+        # Also evict after a guarded no-op: another writer may have changed
+        # the state while this process still holds an older cached profile.
+        await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_premium_status(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
         if success:
-            # Update user object
-            user.is_premium = is_premium
-            user.premium_activation_date = activation_date
-            user.updated_at = datetime.now(UTC)
-            user.premium_expiry_date = expiry_date
-            if not is_premium:
-                user.daily_retrieval_count = 0
-            await self.cache_invalidator.invalidate_user_data(user_id)
-            await self.cache_invalidator.invalidate_premium_status(user_id)
+            # Return the actual persisted values, including MongoDB's date
+            # precision and any concurrent changes to unrelated user fields.
+            user = self._dict_to_entity(result)
+            user.premium_activation_date = normalize_expiry_date(user.premium_activation_date)
+            user.premium_expiry_date = normalize_expiry_date(user.premium_expiry_date)
 
         action = "added" if is_premium else "removed"
         return success, ErrorMessageFormatter.format_success(f"Premium status {action} successfully!") if success else ErrorMessageFormatter.format_failed(f"to {action.replace('ed', '')} premium status"), user
@@ -371,7 +415,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         # activation date, but a future expiry still represents valid access.
         if not is_premium_valid(user.is_premium, user.premium_expiry_date):
             # Premium expired
-            await self.update_premium_status(user.id, False)
+            # Automatic expiry must not reset consumed quota or revoke a
+            # new grant issued after this caller read its old snapshot.
+            await self._batch_expire_premium([user.id])
+            current = await self.get_user(user.id, use_cache=False)
+            if current and is_premium_valid(current.is_premium, current.premium_expiry_date):
+                return True, f"Premium active ({get_days_remaining(current.premium_expiry_date)} days remaining)"
             return False, "Premium subscription expired"
 
         days_remaining = get_days_remaining(user.premium_expiry_date)
@@ -431,7 +480,12 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 expiry_date = doc.get("premium_expiry_date")
                 # Parse expiry date if needed
                 if isinstance(expiry_date, str):
-                    expiry_date = datetime.fromisoformat(expiry_date)
+                    try:
+                        expiry_date = datetime.fromisoformat(expiry_date)
+                    except ValueError:
+                        expiry_date = None
+                if not isinstance(expiry_date, datetime):
+                    expiry_date = None
 
                 # Use validator utility for premium check
                 if not is_premium_valid(True, expiry_date):
@@ -471,7 +525,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             async with semaphore_manager.acquire('database_write'):
                 await self.db_pool.execute_with_retry(
                     collection.update_many,
-                    {"_id": {"$in": user_ids}},
+                    expired_premium_filter(user_ids),
                     {"$set": {
                         "is_premium": False,
                         "premium_activation_date": None,
@@ -491,123 +545,52 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             logger.error(f"Batch premium expiration failed: {e}")
 
     async def increment_retrieval_count(self, user_id: int) -> int:
-        """Increment daily retrieval count using atomic operation to prevent race conditions"""
-        today = date.today()
-        today_str = today.isoformat()
-
-        # First check if we need to reset the count (new day)
-        user = await self.get_user(user_id)
-        if not user:
-            # Create the user if they don't exist
-            await self.create_user(user_id, "User")
-            user = await self.get_user(user_id)
-            if not user:
-                logger.error(f"Failed to create user {user_id}")
-                return 0
-
-        # If it's a new day, reset the count first
-        if user.last_retrieval_date != today:
-            # Reset count for new day
-            collection = await self.collection()
-            await self.db_pool.execute_with_retry(
-                collection.update_one,
-                {'_id': user_id},
-                {
-                    '$set': {
-                        'daily_retrieval_count': 1,
-                        'last_retrieval_date': today_str,
-                        'updated_at': datetime.now(UTC)
-                    }
-                }
-            )
-            await self.cache_invalidator.invalidate_user_data(user_id)
-            await self.cache_invalidator.invalidate_user_stats()
-            return 1
-
-        # Use atomic increment for same day to prevent race conditions
-        collection = await self.collection()
-        result = await self.db_pool.execute_with_retry(
-            collection.find_one_and_update,
-            {'_id': user_id},
-            {
-                '$inc': {'daily_retrieval_count': 1},
-                '$set': {
-                    'last_retrieval_date': today_str,
-                    'updated_at': datetime.now(UTC)
-                }
-            },
-            return_document=True
-        )
-
-        await self.cache_invalidator.invalidate_user_data(user_id)
-        await self.cache_invalidator.invalidate_user_stats()
-
-        if result:
-            return result.get('daily_retrieval_count', 0)
-        else:
-            logger.error(f"Failed to increment count for user {user_id}")
-        return 0
+        """Increment with atomic UTC-day rollover (legacy unbounded counter API)."""
+        return await self.increment_retrieval_count_batch(user_id, 1)
 
     async def increment_retrieval_count_batch(self, user_id: int, count: int) -> int:
-        """Increment daily retrieval count by specific amount (for batch operations)"""
-        if count <= 0:
+        """Atomically reset on UTC-day change and add a batch count.
+
+        The old read-then-reset path could lose concurrent increments after
+        midnight. A single MongoDB aggregation pipeline uses document state
+        inside one find_one_and_update, like reserve_quota_atomic.
+        """
+        if type(count) is not int or count <= 0:
             return 0
 
-        today = date.today()
-        today_str = today.isoformat()
-
-        # First check if we need to reset the count (new day)
+        today_str = quota_day_utc().isoformat()
         user = await self.get_user(user_id)
         if not user:
-            # Create the user if they don't exist
             await self.create_user(user_id, "User")
-            user = await self.get_user(user_id)
-            if not user:
-                logger.error(f"Failed to create user {user_id}")
+            if not await self.get_user(user_id):
+                logger.error("Failed to create user %s for daily retrieval tracking", user_id)
                 return 0
 
-        # If it's a new day, reset the count first
-        if user.last_retrieval_date != today:
-            # Reset count for new day and add the batch count
-            collection = await self.collection()
-            await self.db_pool.execute_with_retry(
-                collection.update_one,
-                {'_id': user_id},
-                {
-                    '$set': {
-                        'daily_retrieval_count': count,
-                        'last_retrieval_date': today_str,
-                        'updated_at': datetime.now(UTC)
-                    }
-                }
-            )
-            await self.cache_invalidator.invalidate_user_data(user_id)
-            await self.cache_invalidator.invalidate_user_stats()
-            return count
-
-        # Use atomic increment for same day with batch count
-        collection = await self.collection()
+        collection = await self.get_collection()
         result = await self.db_pool.execute_with_retry(
             collection.find_one_and_update,
             {'_id': user_id},
-            {
-                '$inc': {'daily_retrieval_count': count},
+            [{
                 '$set': {
+                    'daily_retrieval_count': {
+                        '$cond': [
+                            {'$eq': ['$last_retrieval_date', today_str]},
+                            {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, count]},
+                            count
+                        ]
+                    },
                     'last_retrieval_date': today_str,
                     'updated_at': datetime.now(UTC)
                 }
-            },
+            }],
             return_document=True
         )
-
+        if not result:
+            logger.error("Could not increment retrieval counter for user %s", user_id)
+            return 0
         await self.cache_invalidator.invalidate_user_data(user_id)
         await self.cache_invalidator.invalidate_user_stats()
-
-        if result:
-            return result.get('daily_retrieval_count', 0)
-        else:
-            logger.error(f"Failed to batch increment count for user {user_id}")
-        return 0
+        return result.get('daily_retrieval_count', 0)
 
     async def reserve_quota_atomic(self, user_id: int, requested_count: int, daily_limit: int) -> Tuple[bool, int, str]:
         """
@@ -624,114 +607,294 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         if requested_count > daily_limit:
             return False, 0, f"Requested {requested_count} exceeds daily limit of {daily_limit}"
 
-        today_str = date.today().isoformat()
+        today_str = quota_day_utc().isoformat()
+        ledger_enabled = settings.features.feature_quota_delivery_ledger
+        reservation_id = uuid4().hex if ledger_enabled else None
 
         # Get user to check current state
-        user = await self.get_user(user_id)
+        try:
+            user = await self.get_user(user_id, use_cache=False)
+        except Exception:
+            logger.warning("Quota authorization unavailable for %s", user_id, exc_info=True)
+            return False, 0, USER_ACCESS_RETRY_MESSAGE
         if not user:
             await self.create_user(user_id, "User")
             user = await self.get_user(user_id)
             if not user:
                 return False, 0, "Failed to create user"
 
+        privileged = is_admin(user_id, _channel_config.get_admin_list() or [])
+        if user.status == UserStatus.BANNED and not privileged:
+            return False, 0, "User banned"
         collection = await self.get_collection()
 
         # A single guarded update handles both the first request of a new day
         # and same-day increments.  The conditional update is evaluated against
         # the current document, so concurrent callers cannot overwrite/reset one
         # another or reserve beyond the limit.
-        result = await self.db_pool.execute_with_retry(
-            collection.find_one_and_update,
-            {
-                '_id': user_id,
-                '$or': [
-                    {'last_retrieval_date': {'$ne': today_str}},
-                    {
-                        'last_retrieval_date': today_str,
-                        'daily_retrieval_count': {'$lte': daily_limit - requested_count}
-                    }
+        selector = {
+            '_id': user_id,
+            '$or': [
+                {'last_retrieval_date': {'$ne': today_str}},
+                {
+                    'last_retrieval_date': today_str,
+                    'daily_retrieval_count': {'$lte': daily_limit - requested_count}
+                }
+            ]
+        }
+        if not privileged:
+            selector['status'] = {'$ne': UserStatus.BANNED.value}
+        update_fields = {
+            'daily_retrieval_count': {
+                '$cond': [
+                    {'$eq': ['$last_retrieval_date', today_str]},
+                    {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, requested_count]},
+                    requested_count
                 ]
             },
-            [{
-                '$set': {
-                    'daily_retrieval_count': {
-                        '$cond': [
-                            {'$eq': ['$last_retrieval_date', today_str]},
-                            {'$add': [{'$ifNull': ['$daily_retrieval_count', 0]}, requested_count]},
-                            requested_count
-                        ]
-                    },
-                    'last_retrieval_date': today_str,
-                    'updated_at': datetime.now(UTC)
+            'last_retrieval_date': today_str,
+            'updated_at': datetime.now(UTC)
+        }
+        if ledger_enabled:
+            # Keep unresolved entries for operator inspection, but prune old
+            # resolved entries on *new* reservations. A missing token always
+            # fails closed, so pruning cannot create a duplicate refund.
+            unresolved = {
+                '$filter': {
+                    'input': {'$ifNull': ['$quota_delivery_ledger', []]},
+                    'as': 'item',
+                    'cond': {'$in': ['$$item.status', ['reserved', 'uncertain']]}
                 }
-            }],
+            }
+            selector['$expr'] = {'$lt': [{'$size': unresolved}, 256]}
+            selector['quota_delivery_ledger.id'] = {'$ne': reservation_id}
+            update_fields['quota_delivery_ledger'] = {
+                '$concatArrays': [
+                    unresolved,
+                    [{
+                        'id': reservation_id,
+                        'day': today_str,
+                        'amount': requested_count,
+                        'status': 'reserved',
+                        'created_at': datetime.now(UTC)
+                    }]
+                ]
+            }
+
+        result = await self.db_pool.execute_with_retry(
+            collection.find_one_and_update,
+            selector, [{'$set': update_fields}],
             return_document=True
         )
 
+        if not result and ledger_enabled:
+            # If a wrapper retried after an ambiguous successful write, the
+            # stable per-call token recovers the prior result without re-debit.
+            current = await collection.find_one(
+                {'_id': user_id, 'quota_delivery_ledger.id': reservation_id},
+                {'quota_delivery_ledger': 1, 'daily_retrieval_count': 1}
+            )
+            if current:
+                result = current
+
         if result:
-            new_count = result.get('daily_retrieval_count', 0)
             await self.cache_invalidator.invalidate_user_data(user_id)
             await self.cache_invalidator.invalidate_user_stats()
-            logger.info(f"Reserved {requested_count} quota for user {user_id}, new total: {new_count}")
-            return True, requested_count, f"Reserved {requested_count} quota"
+            logger.info("Reserved %s quota for user %s", requested_count, user_id)
+            return (True,
+                    QuotaReservation(requested_count, today_str, reservation_id),
+                    f"Reserved {requested_count} quota")
+
+        if ledger_enabled:
+            current = await collection.find_one(
+                {'_id': user_id},
+                {'quota_delivery_ledger': 1}
+            )
+            unresolved_count = sum(
+                item.get('status') in ('reserved', 'uncertain')
+                for item in (current or {}).get('quota_delivery_ledger', [])
+            )
+            if unresolved_count >= 256:
+                logger.error("Quota reconciliation ledger full for user %s", user_id)
+                return False, 0, "Quota delivery history needs operator review"
 
         # The guard failed because another caller consumed the remaining quota.
         fresh_user = await self.find_by_id(user_id, use_cache=False)
+        if fresh_user and fresh_user.status == UserStatus.BANNED and not privileged:
+            return False, 0, "User banned"
         current_count = fresh_user.daily_retrieval_count if fresh_user else daily_limit
         remaining = max(0, daily_limit - current_count)
         if remaining == 0:
             return False, 0, "Daily limit reached"
         return False, 0, f"Can only retrieve {remaining} more files today"
 
-    async def release_quota(self, user_id: int, count: int) -> bool:
+    async def settle_quota_delivery(
+        self, user_id: int, reservation: QuotaReservation,
+        delivered_count: int, *, uncertain: bool = False
+    ) -> bool:
+        """One-shot, atomic reservation settlement on the same user document.
+
+        A confirmed result releases only undelivered slots. An uncertain
+        Telegram outcome stores the observed count but does not refund any
+        slot: operators must reconcile the unknown external side effect.
+        A repeated settlement/refund cannot match the 'reserved' state again.
         """
-        Release previously reserved quota (e.g., when files fail to send).
-        This decrements the count to give back unused quota.
+        token = reservation.reservation_id
+        if not token:
+            raise ValueError("Delivery settlement requires a token")
+        total = reservation.original_amount
+        if type(delivered_count) is not int or not 0 <= delivered_count <= total:
+            raise ValueError("Confirmed delivery count is out of range")
+        refunded = 0 if uncertain else total - delivered_count
+        collection = await self.get_collection()
+        selector = {
+            '_id': user_id,
+            'quota_delivery_ledger': {'$elemMatch': {
+                'id': token, 'day': reservation.quota_day,
+                'status': 'reserved', 'amount': total
+            }}
+        }
+        update = {
+            '$set': {
+                'quota_delivery_ledger.$.status': 'uncertain' if uncertain else 'settled',
+                'quota_delivery_ledger.$.confirmed_count': delivered_count,
+                'quota_delivery_ledger.$.refund_count': refunded,
+                'quota_delivery_ledger.$.settled_at': datetime.now(UTC)
+            }
+        }
+        if refunded:
+            # This day guard must remain in the *same atomic user update*.
+            selector['last_retrieval_date'] = reservation.quota_day
+            selector['daily_retrieval_count'] = {'$gte': refunded}
+            update['$inc'] = {'daily_retrieval_count': -refunded}
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one, selector, update
+        )
+        if not result.modified_count:
+            logger.warning(
+                "Quota settlement skipped (duplicate, stale day or missing token), user=%s",
+                user_id
+            )
+            return False
+        await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
+        return True
+
+    async def resolve_uncertain_quota(
+        self, user_id: int, reservation_id: str, refund_count: int
+    ) -> bool:
+        """Operator-only explicit reconciliation; no automatic Telegram guess.
+
+        A human must review delivery evidence first. This cannot refund
+        against a different UTC day and can run successfully only once.
+        """
+        if not reservation_id or type(refund_count) is not int or refund_count < 0:
+            raise ValueError("Invalid manual quota reconciliation input")
+        collection = await self.get_collection()
+        record = await collection.find_one(
+            {'_id': user_id, 'quota_delivery_ledger': {
+                '$elemMatch': {'id': reservation_id, 'status': 'uncertain'}
+            }},
+            {'quota_delivery_ledger': 1}
+        )
+        if not record:
+            return False
+        entry = next((
+            item for item in record.get('quota_delivery_ledger', [])
+            if item.get('id') == reservation_id and item.get('status') == 'uncertain'
+        ), None)
+        if not entry or refund_count > entry['amount'] - entry.get('confirmed_count', 0):
+            return False
+        selector = {
+            '_id': user_id,
+            'quota_delivery_ledger': {'$elemMatch': {
+                'id': reservation_id, 'day': entry['day'], 'status': 'uncertain'
+            }}
+        }
+        update = {'$set': {
+            'quota_delivery_ledger.$.status': 'settled',
+            'quota_delivery_ledger.$.refund_count': refund_count,
+            'quota_delivery_ledger.$.manually_resolved_at': datetime.now(UTC),
+        }}
+        if refund_count:
+            selector['last_retrieval_date'] = entry['day']
+            selector['daily_retrieval_count'] = {'$gte': refund_count}
+            update['$inc'] = {'daily_retrieval_count': -refund_count}
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one, selector, update
+        )
+        if not result.modified_count:
+            return False
+        await self.cache_invalidator.invalidate_user_data(user_id)
+        await self.cache_invalidator.invalidate_user_stats()
+        return True
+
+    async def release_quota(self, user_id: int, count: int) -> bool:
+        """Refund only once for ledger-enabled reservations.
+
+        Legacy plain integers and PH-021 day-tagged values without tokens
+        retain their old guarded update. New tokenized values mark a
+        reservation settled and refund in one MongoDB user-document write.
         """
         if count <= 0:
             return True
-
+        token = getattr(count, 'reservation_id', None)
+        if token:
+            original = getattr(count, 'original_amount', int(count))
+            if int(count) > original:
+                return False
+            return await self.settle_quota_delivery(
+                user_id, count, original - int(count)
+            )
+        day_key = getattr(count, 'quota_day', None) or quota_day_utc().isoformat()
         collection = await self.get_collection()
         result = await self.db_pool.execute_with_retry(
             collection.update_one,
             {
                 '_id': user_id,
-                'last_retrieval_date': date.today().isoformat(),
-                'daily_retrieval_count': {'$gte': count}
+                'last_retrieval_date': day_key,
+                'daily_retrieval_count': {'$gte': int(count)}
             },
-            {'$inc': {'daily_retrieval_count': -count}}
+            {'$inc': {'daily_retrieval_count': -int(count)}}
         )
-
         if result.modified_count > 0:
             await self.cache_invalidator.invalidate_user_data(user_id)
-            logger.info(f"Released {count} quota for user {user_id}")
+            await self.cache_invalidator.invalidate_user_stats()
             return True
-
-        logger.warning(f"Failed to release {count} quota for user {user_id}")
+        logger.warning("Could not refund %s quota for user %s on %s",
+                       count, user_id, day_key)
         return False
+
+    async def can_receive_content(self, user_id: int, owner_id: Optional[int] = None) -> bool:
+        """Check status while preserving configured admin/owner exemptions."""
+        if is_admin(user_id, _channel_config.get_admin_list() or []) or user_id == owner_id:
+            return True
+        user = await self.get_user(user_id, use_cache=False)
+        return user is not None and user.status != UserStatus.BANNED
 
     async def can_retrieve_file(self, user_id: int, owner_id: Optional[int] = None) -> Tuple[bool, str]:
         """Check if user can retrieve a file"""
-        # Check if premium is disabled - use settings to avoid circular import
+        # Operator policy: configured admins and the explicit owner retain
+        # their access bypass. Free/premium mode never exempts ordinary bans.
+        if is_admin(user_id, _channel_config.get_admin_list() or []):
+            return True, "Admin access"
+        if owner_id is not None and user_id == owner_id:
+            return True, "Owner access"
+        try:
+            user = await self.get_user(user_id, use_cache=False)
+        except Exception:
+            logger.warning("User access check unavailable for %s", user_id, exc_info=True)
+            return False, USER_ACCESS_RETRY_MESSAGE
+        if user is None:
+            # Fail closed on missing/unavailable user state, even when premium
+            # is disabled. /start creates the user before delivering links.
+            return False, "User not found or unavailable. Please start the bot again."
+        if user.status == UserStatus.BANNED:
+            return False, f"User banned: {user.ban_reason or 'No reason provided'}"
+
+        # Disabling premium removes quota enforcement, never status checks.
         if _feature_config.disable_premium:
             return True, "Unlimited access (Premium disabled)"
-
-        # Check if user is admin
-        admin_list = _channel_config.get_admin_list()
-        if is_admin(user_id, admin_list or []):
-            return True, "Admin access"
-
-        # Check if user is owner
-        if owner_id and user_id == owner_id:
-            return True, "Owner access"
-
-        user = await self.get_user(user_id)
-        if not user:
-            return False, "User not found"
-
-        # Check ban status
-        if user.status == UserStatus.BANNED:
-            return False, f"User banned: {user.ban_reason}"
 
         # Check premium status
         is_premium, premium_msg = await self.check_and_update_premium_status(user)
@@ -739,7 +902,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             return True, premium_msg
 
         # Check daily limit for non-premium users
-        today = date.today()
+        today = quota_day_utc()
         if user.last_retrieval_date != today:
             # New day, reset count
             return True, f"Daily limit: 0/{self.daily_limit}"
@@ -796,7 +959,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 ],
                 "active_today": [
                     {"$match": {
-                        "last_retrieval_date": date.today().isoformat()
+                        "last_retrieval_date": quota_day_utc().isoformat()
                     }},
                     {"$count": "count"}
                 ]
@@ -813,6 +976,17 @@ class UserRepository(BaseRepository[User], AggregationMixin):
                 'active_today': facets['active_today'][0]['count'] if facets['active_today'] else 0,
             }
             cache_ttl = self.ttl.USER_STATS
+            # active_today is a UTC-day scoped facet. Do not serve it from
+            # yesterday's cache after the UTC rollover, even if the normal
+            # stats TTL has not elapsed.
+            now_utc = datetime.now(UTC)
+            next_utc_midnight = datetime.combine(
+                quota_day_utc(now_utc) + timedelta(days=1),
+                datetime.min.time(), tzinfo=UTC
+            )
+            cache_ttl = min(
+                cache_ttl, max(1, int((next_utc_midnight - now_utc).total_seconds()))
+            )
             next_expiries = facets.get('next_premium_expiry') or []
             if next_expiries:
                 next_expiry = next_expiries[0].get(
@@ -845,11 +1019,17 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
         try:
             # Get all premium users
-            premium_users = await self.find_many({'is_premium': True})
+            # Read IDs without constructing User DTOs: one malformed legacy
+            # expiry must not prevent cleanup for every other subscriber.
+            collection = await self.get_collection()
+            premium_users = await self.db_pool.execute_with_retry(
+                collection.find({'is_premium': True}, {'_id': 1}).to_list,
+                length=None,
+            )
             if not premium_users:
                 return result
 
-            user_ids = [u.id for u in premium_users]
+            user_ids = [u['_id'] for u in premium_users]
             result['checked_count'] = len(user_ids)
 
             # Use batch_check_premium_status for consistent validation
@@ -879,17 +1059,19 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         Track a user request and apply limits
         Returns: (is_allowed, message, should_ban, should_log_warning)
         """
-        user = await self.get_user(user_id)
+        if is_admin(user_id, _channel_config.get_admin_list() or []):
+            return True, "Admin access", False, False
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             # Create user if doesn't exist
             await self.create_user(user_id, user_name)
-            user = await self.get_user(user_id)
+            user = await self.get_user(user_id, use_cache=False)
 
         if user and user.status == UserStatus.BANNED:
             return (
                 False,
                 ErrorMessageFormatter.format_access_denied(
-                    user.ban_reason or "You have been banned from using this bot."
+                    html.escape(user.ban_reason or "You have been banned from using this bot.")
                 ),
                 False,
                 False
@@ -899,7 +1081,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_PER_DAY = _feature_config.request_per_day
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
-        today = date.today()
+        today = quota_day_utc()
         today_str = today.isoformat()
 
         # Use validator utility for premium check
@@ -1050,7 +1232,7 @@ class UserRepository(BaseRepository[User], AggregationMixin):
         REQUEST_PER_DAY = _feature_config.request_per_day
         REQUEST_WARNING_LIMIT = _feature_config.request_warning_limit
 
-        today = date.today()
+        today = quota_day_utc()
         daily_count = user.daily_request_count if user.last_request_date == today else 0
 
         # Calculate warning reset time
@@ -1077,9 +1259,13 @@ class UserRepository(BaseRepository[User], AggregationMixin):
 
     async def auto_ban_for_request_abuse(self, user_id: int) -> Tuple[bool, Optional[User]]:
         """Auto-ban user for request abuse"""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, use_cache=False)
         if not user:
             return False, None
+        if (is_admin(user_id, _channel_config.get_admin_list() or [])
+                or user.status == UserStatus.BANNED
+                or user.warning_count < _feature_config.request_warning_limit):
+            return False, user
 
         update_data = {
             'status': UserStatus.BANNED.value,
@@ -1087,48 +1273,34 @@ class UserRepository(BaseRepository[User], AggregationMixin):
             'updated_at': datetime.now(UTC)
         }
 
-        success = await self.update(user_id, update_data)
+        collection = await self.get_collection()
+        result = await self.db_pool.execute_with_retry(
+            collection.update_one,
+            {'_id': user_id, 'status': {'$ne': UserStatus.BANNED.value},
+             'warning_count': {'$gte': _feature_config.request_warning_limit}},
+            {'$set': update_data},
+        )
+        success = result.matched_count > 0
 
         if success:
-            await self.cache_invalidator.invalidate_user_data(user_id)
+            await self.cache_invalidator.invalidate_user_and_banned(user_id)
+            await self.cache_invalidator.invalidate_user_stats()
             await self.refresh_banned_users_cache()
             user.status = UserStatus.BANNED
             user.ban_reason = 'Over request warning limit'
+            user.updated_at = update_data['updated_at']
             logger.info(f"User {user_id} auto-banned for request abuse")
 
         return success, user
 
     async def reset_daily_counters(self) -> int:
-        """
-        Reset daily counters for all users (for scheduled maintenance)
-        Returns: Number of users updated
-        """
-        try:
-            collection = await self.collection()
+        """Deprecated compatibility API: daily quota rollover is lazy and atomic.
 
-            # Update all users to reset daily counters
-            # This is typically run once per day via a scheduled task
-            # Use semaphore to control concurrent database write operations
-            async with semaphore_manager.acquire('database_write'):
-                update_result = await self.db_pool.execute_with_retry(
-                    collection.update_many,
-                    {},  # Update all users
-                    {
-                        '$set': {
-                            'daily_retrieval_count': 0,
-                            'daily_request_count': 0,
-                            'updated_at': datetime.now(UTC)
-                        }
-                    }
-                )
-
-            # Clear all user caches since we've updated all users
-            await self.cache_invalidator.invalidate_all_users_cache()
-            
-            updated_count = update_result.modified_count if update_result else 0
-            logger.info(f"Reset daily counters for {updated_count} users")
-            return updated_count
-            
-        except Exception as e:
-            logger.error(f"Error resetting daily counters: {e}")
-            return 0
+        PH-021: Never bulk-zero the entire users collection. Doing so after
+        some requests have already reserved quota for the new UTC day allows
+        extra usage and can erase in-flight reservations. The read/consume
+        paths compare last_*_date against UTC today and reset *per user*
+        atomically on the next guarded update. No migration required.
+        """
+        logger.debug("Daily quota counters roll over per user; bulk reset skipped")
+        return 0

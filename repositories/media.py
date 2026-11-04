@@ -1,21 +1,40 @@
-from dataclasses import dataclass, asdict
+import asyncio
+from dataclasses import dataclass, asdict, replace
 from datetime import datetime, UTC
 from enum import Enum
 import json
 import re
+import time
 from typing import Dict, Any, Optional, List, Tuple
 
-from pymongo import DeleteOne
 from pymongo.errors import DuplicateKeyError
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.invalidation import CacheInvalidator
 from core.database.base import BaseRepository, AggregationMixin
+from core.database.errors import SearchBackendUnavailableError
+from core.services.bulk_media_deletion import MediaBulkDeletion
 from core.utils.validators import normalize_query
+from core.utils.helpers import extract_file_ref
 from core.utils.search_matcher import build_media_search_filter
+from core.utils.search_observability import search_telemetry
+from core.utils.media_metadata import effective_quality
+from core.utils.search_tokens import (media_search_tokens, SEARCH_TOKEN_FIELD,
+    SEARCH_TOKEN_VERSION_FIELD, SEARCH_TOKEN_VERSION, SEARCH_PAGE_INDEX,
+    SEARCH_DEEP_PAGE_THRESHOLD)
+from config.settings import settings
 from core.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# PH-014: unique _id makes equal-timestamp offset pages deterministic.
+# Do not change the multi-database merge path before PH-025..PH-028.
+SINGLE_DB_SEARCH_SORT = [("indexed_at", -1), ("_id", -1)]
+
+class SearchGenerationChanged(RuntimeError):
+    """A concurrent media mutation invalidated this search attempt."""
+
+
 
 # Import batch optimizations
 try:
@@ -51,7 +70,15 @@ class MediaFile:
     resolution: Optional[str] = None
     episode: Optional[str] = None
     season: Optional[str] = None
+    # PH-015 additive fields. Legacy media_files documents need not have them.
+    width: Optional[int] = None
+    height: Optional[int] = None
+    quality: Optional[str] = None
 
+    @property
+    def display_quality(self) -> Optional[str]:
+        """Read old and new quality labels without writing inferred values."""
+        return effective_quality(self.quality, self.resolution, self.file_name, self.caption)
 
     def __post_init__(self):
         if self.indexed_at is None:
@@ -98,6 +125,15 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         data = asdict(media)
         data['_id'] = data.pop('file_id')
         data['file_type'] = media.file_type.value
+        # Optional canonical fields are absent, not null, on media without
+        # authoritative metadata. Avoid inflating existing document formats.
+        for field in ('width', 'height', 'quality'):
+            if (not settings.features.feature_canonical_media_metadata
+                    or data[field] is None):
+                del data[field]
+        if settings.features.feature_indexed_media_search:
+            data[SEARCH_TOKEN_FIELD] = media_search_tokens(media.file_name, media.caption)
+            data[SEARCH_TOKEN_VERSION_FIELD] = SEARCH_TOKEN_VERSION
         data['indexed_at'] = data['indexed_at'].isoformat()
         if data.get('updated_at'):
             data['updated_at'] = data['updated_at'].isoformat()
@@ -107,6 +143,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         """Convert dictionary to MediaFile entity"""
         if isinstance(data, MediaFile):
             return data  # Already the correct type
+
+        data.pop(SEARCH_TOKEN_FIELD, None)
+        data.pop(SEARCH_TOKEN_VERSION_FIELD, None)
 
         # Handle _id to file_id conversion safely
         if '_id' in data:
@@ -140,6 +179,9 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
     async def find_file(self, identifier: str) -> Optional[MediaFile]:
         """Find file by identifier, supporting multi-database mode"""
+        if self.is_multi_db and getattr(self.multi_db_manager, 'media_owners', None) is not None:
+            data = await self.multi_db_manager.media_owners.find(identifier)
+            return self._dict_to_entity(data) if data is not None else None
         # Try cache first
         cache_key = CacheKeyGenerator.media(identifier)
         cached = await self.cache.get(cache_key)
@@ -201,6 +243,33 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         if not file_unique_ids:
             return {}
 
+        if self.is_multi_db:
+            try:
+                identifiers = list(dict.fromkeys(file_unique_ids))
+                owners = getattr(self.multi_db_manager, 'media_owners', None)
+                result = {uid: None for uid in identifiers}
+                if owners is not None:
+                    documents = await asyncio.gather(
+                        *(owners.find(uid) for uid in identifiers), return_exceptions=True)
+                    for uid, document in zip(identifiers, documents):
+                        if isinstance(document, BaseException):
+                            raise document
+                        if document is not None:
+                            result[uid] = self._dict_to_entity(document)
+                else:
+                    documents = await self.multi_db_manager.find_many_in_all_databases(
+                        self.collection_name, {'file_unique_id': {'$in': identifiers}})
+                    for document in documents:
+                        uid = document['file_unique_id']
+                        if result[uid] is not None:
+                            raise ValueError('Multiple canonical media owners in batch')
+                        result[uid] = self._dict_to_entity(document)
+                # Publish only a complete batch. Positive cache entries alone
+                # cannot prove owner identity or availability across sources.
+                return result
+            except Exception as exc:
+                raise SearchBackendUnavailableError('Media batch lookup is temporarily unavailable') from exc
+
         result: Dict[str, Optional[MediaFile]] = {uid: None for uid in file_unique_ids}
 
         # First, check cache for all files
@@ -227,54 +296,26 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
         # Batch fetch from database for cache misses
         try:
-            if self.is_multi_db:
-                # Search across all databases using $in
-                for db_pool in await self.multi_db_manager.get_all_databases():
-                    if not cache_misses:
-                        break
-                    collection = await db_pool.get_collection(self.collection_name)
-                    docs = await db_pool.execute_with_retry(
-                        collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
-                        length=len(cache_misses)
+            # Single database mode
+            collection = await self.collection()
+            docs = await self.db_pool.execute_with_retry(
+                collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
+                length=len(cache_misses)
+            )
+            for data in docs:
+                try:
+                    file = self._dict_to_entity(data)
+                    uid = file.file_unique_id
+                    result[uid] = file
+                    # Cache the found file
+                    cache_key = CacheKeyGenerator.media(uid)
+                    await self.cache.set(
+                        cache_key,
+                        self._entity_to_dict(file),
+                        expire=self.ttl.MEDIA_FILE
                     )
-                    for data in docs:
-                        try:
-                            file = self._dict_to_entity(data)
-                            uid = file.file_unique_id
-                            result[uid] = file
-                            # Cache the found file
-                            cache_key = CacheKeyGenerator.media(uid)
-                            await self.cache.set(
-                                cache_key,
-                                self._entity_to_dict(file),
-                                expire=self.ttl.MEDIA_FILE
-                            )
-                            # Remove from cache_misses
-                            if uid in cache_misses:
-                                cache_misses.remove(uid)
-                        except Exception as e:
-                            logger.warning(f"Error processing batch result: {e}")
-            else:
-                # Single database mode
-                collection = await self.collection()
-                docs = await self.db_pool.execute_with_retry(
-                    collection.find({"file_unique_id": {"$in": cache_misses}}).to_list,
-                    length=len(cache_misses)
-                )
-                for data in docs:
-                    try:
-                        file = self._dict_to_entity(data)
-                        uid = file.file_unique_id
-                        result[uid] = file
-                        # Cache the found file
-                        cache_key = CacheKeyGenerator.media(uid)
-                        await self.cache.set(
-                            cache_key,
-                            self._entity_to_dict(file),
-                            expire=self.ttl.MEDIA_FILE
-                        )
-                    except Exception as e:
-                        logger.warning(f"Error processing batch result: {e}")
+                except Exception as e:
+                    logger.warning(f"Error processing batch result: {e}")
 
             logger.debug(
                 f"Batch file lookup: {len(cache_hits)} cache hits, "
@@ -296,10 +337,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 return False
 
             if self.is_multi_db:
-                deleted_count = await self.multi_db_manager.delete_one_across_databases(
-                    self.collection_name,
-                    {"file_unique_id": file.file_unique_id}
-                )
+                if getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                    deleted_count = await self.multi_db_manager.media_owners.delete(file.file_unique_id)
+                else:
+                    deleted_count = await self.multi_db_manager.delete_one_across_databases(
+                        self.collection_name,
+                        {"file_unique_id": file.file_unique_id}
+                    )
             else:
                 collection = await self.collection()
 
@@ -326,13 +370,46 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         existing_file: The existing file if it's a duplicate
         """
         try:
+            if self.is_multi_db and getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                media = self._prepare_insert_reference(media)
+                pool = await self.multi_db_manager.get_optimal_write_database()
+                from core.database.media_owners import source_key
+                proposed = next(source_key(db.uri, db.name)
+                                for db in self.multi_db_manager.databases if db.pool is pool)
+                try:
+                    inserted, stored = await self.multi_db_manager.media_owners.create(
+                        self._entity_to_dict(media), proposed)
+                finally:
+                    # A write acknowledgment may be lost after the owner
+                    # accepted the insert. Invalidate even on uncertain writes
+                    # and duplicate retries so search caches cannot hide it.
+                    await self.cache_invalidator.invalidate_all_search_results()
+                    await self.cache_invalidator.invalidate_file_stats()
+                if inserted:
+                    return True, 1, None
+                return False, 0, self._dict_to_entity(stored)
             # Check for duplicate by file_unique_id across all databases
             existing = await self.find_file(media.file_unique_id)
             if existing:
+                if existing.file_unique_id != media.file_unique_id:
+                    logger.error("Media canonical identity conflicts with an existing alias")
+                    return False, 2, None
                 logger.debug(f"Duplicate file found: {media.file_name}")
                 return False, 0, existing
 
             if self.is_multi_db:
+                # PH-028: independent MongoDBs have no globally unique
+                # file identity / owner registry. A pre-insert duplicate read
+                # alone can race another writer on a different DB. Do NOT
+                # create more records until a central reservation protocol
+                # with unique ownership and recovery has been deployed.
+                if self.multi_db_manager.is_multi_database:
+                    logger.error(
+                        "Multi-DB media creation disabled until global "
+                        "identity and ownership are implemented (PH-028)"
+                    )
+                    return False, 2, None
+                media = self._prepare_insert_reference(media)
                 # Use smart database selection for optimal write performance
                 write_db_pool = await self.multi_db_manager.get_optimal_write_database()
                 collection = await write_db_pool.get_collection(self.collection_name)
@@ -354,6 +431,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                     return False, 2, None
             else:
                 # Single database mode - use existing create method
+                media = self._prepare_insert_reference(media)
                 success = await self.create(media)
                 if success:
                     await self.cache_invalidator.invalidate_all_search_results()
@@ -372,10 +450,19 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         except DuplicateKeyError as e:
             logger.warning(f"Duplicate key error for file: {media.file_name}")
             existing = await self.find_file(media.file_unique_id)
-            return False, 0, existing
+            if existing and existing.file_unique_id == media.file_unique_id:
+                return False, 0, existing
+            return False, 2, None
         except Exception as e:
             logger.error(f"Error saving media: {e}")
             return False, 2, None
+
+    @staticmethod
+    def _prepare_insert_reference(media: MediaFile) -> MediaFile:
+        """Normalize new writes without inventing aliases on legacy reads."""
+        if not media.file_ref:
+            return replace(media, file_ref=extract_file_ref(media.file_id))
+        return media
 
     async def batch_check_duplicates(
         self,
@@ -475,12 +562,60 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             use_caption: bool = True,
             advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Tuple[List[MediaFile], int, int]:
+        """Bounded retry if a concurrent write changes search generation.
+
+        Each search attempt takes a fresh generation, including after a
+        cache hit. Never return a known-stale cached/DB result. Continuous
+        writes cause a retryable error instead of unbounded spinning.
+        """
+        for attempt in range(3):
+            try:
+                return await self._search_files_once(
+                    query, file_type, offset, limit, use_caption,
+                    advanced_filters
+                )
+            except SearchGenerationChanged:
+                logger.debug(
+                    "Search generation changed during attempt %s/3", attempt + 1
+                )
+        raise SearchBackendUnavailableError(
+            "Search index changed repeatedly while reading; please retry"
+        )
+
+    async def _read_search_generation(self) -> int:
+        try:
+            return await self.cache_invalidator.get_search_cache_version()
+        except (RuntimeError, ValueError, TypeError) as exc:
+            raise SearchBackendUnavailableError(
+                "Search cache generation unavailable"
+            ) from exc
+
+    async def _search_files_once(
+            self,
+            query: str,
+            file_type: Optional[FileType] = None,
+            offset: int = 0,
+            limit: int = 10,
+            use_caption: bool = True,
+            advanced_filters: Optional[Dict[str, Any]] = None
+    ) -> Tuple[List[MediaFile], int, int]:
         """
         Search for files across all databases
         Returns: (files, next_offset, total_count)
         """
-        # Get current cache version for versioned cache keys
-        cache_version = await self.cache_invalidator.get_search_cache_version()
+        # PH-006: instrument stage latency, never raw user queries.
+        search_started = time.perf_counter()
+        # PH-003: if protected Redis state is unavailable we cannot trust
+        # cached pages, because the generation may have been reset.
+        try:
+            cache_version = await self.cache_invalidator.get_search_cache_version()
+        except RuntimeError as exc:
+            search_telemetry.observe(
+                "generation_error", (time.perf_counter() - search_started) * 1000
+            )
+            raise SearchBackendUnavailableError(
+                "Protected search cache generation unavailable"
+            ) from exc
 
         # Generate versioned cache key
         normalized_query = normalize_query(query)
@@ -492,6 +627,14 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 f"{normalized_query}|advanced:"
                 f"{json.dumps(advanced_filters, sort_keys=True, separators=(',', ':'))}"
             )
+        # PH-003: a split-state cutover must not accidentally reuse an older
+        # ":v1" search page produced with the legacy counter on cache Redis.
+        # A new cache namespace avoids mixing pre-PH-014 pages with pages
+        # ordered by the unique _id tie-breaker after a rolling deployment.
+        if not self.is_multi_db:
+            cache_query += "|sort:indexed-at-id-desc-v1"
+        if getattr(self.cache, "protected_state_enabled", False):
+            cache_query += "|state:split-v1"
         cache_key = CacheKeyGenerator.search_results_versioned(
             cache_query,
             file_type.value if file_type else None,
@@ -504,44 +647,86 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
         cached = await self.cache.get(cache_key)
         if cached is not None:
             try:
-                return (
+                result = (
                     [self._dict_to_entity(f) for f in cached['files']],
                     cached['next_offset'],
                     cached['total']
                 )
+                # A mutation may occur while fetching the cached page.
+                # Recheck on both single and split Redis deployments.
+                current_version = await self._read_search_generation()
+                if current_version != cache_version:
+                    raise SearchGenerationChanged()
+                elapsed_ms = (time.perf_counter() - search_started) * 1000
+                search_telemetry.observe("cache_hit", elapsed_ms)
+                search_telemetry.observe("search", elapsed_ms)
+                return result
             except (KeyError, TypeError, ValueError) as e:
                 logger.warning(f"Invalid search cache entry {cache_key}: {e}")
                 await self.cache.delete(cache_key)
+
+        # Cache misses are counted separately from completed MongoDB reads.
+        search_telemetry.observe("cache_miss", (time.perf_counter() - search_started) * 1000)
 
         # Build search filter
         search_filter = self._build_search_filter(
             normalized_query, file_type, use_caption, advanced_filters
         )
 
-        if self.is_multi_db:
-            # Multi-database search
-            total = await self.multi_db_manager.count_across_all_databases(
-                self.collection_name, search_filter
+        # PH-002: a MongoDB failure is NOT a successful zero-result search.
+        # Only completed queries can populate Redis or drive zero-result
+        # analytics. Existing optional multi-DB partial-result semantics are
+        # separately tracked as PH-027 and must be fixed before enabling it.
+        try:
+            page_options = {}
+            if (settings.features.feature_indexed_media_search
+                    and offset + limit >= SEARCH_DEEP_PAGE_THRESHOLD):
+                page_options['sort_index_hint'] = SEARCH_PAGE_INDEX['name']
+            if self.is_multi_db:
+                count_started = time.perf_counter()
+                total = await self.multi_db_manager.count_across_all_databases(
+                    self.collection_name, search_filter
+                )
+                search_telemetry.observe("count", (time.perf_counter() - count_started) * 1000)
+                page_started = time.perf_counter()
+                files_data = await self.multi_db_manager.search_across_all_databases(
+                    self.collection_name,
+                    search_filter,
+                    limit=limit,
+                    skip=offset,
+                    sort=[('indexed_at', -1)],
+                    **page_options,
+                )
+                files = [self._dict_to_entity(f) for f in files_data]
+                search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
+            else:
+                count_started = time.perf_counter()
+                total = await self.count(search_filter, raise_on_error=True)
+                search_telemetry.observe("count", (time.perf_counter() - count_started) * 1000)
+                page_started = time.perf_counter()
+                files = await self.find_many(
+                    search_filter,
+                    limit=limit,
+                    skip=offset,
+                    sort=SINGLE_DB_SEARCH_SORT,
+                    raise_on_error=True,
+                    **page_options,
+                )
+                search_telemetry.observe("page", (time.perf_counter() - page_started) * 1000)
+        except Exception as exc:
+            search_telemetry.observe(
+                "backend_error", (time.perf_counter() - search_started) * 1000
             )
-            
-            # Get files from all databases
-            files_data = await self.multi_db_manager.search_across_all_databases(
-                self.collection_name,
-                search_filter,
-                limit=limit,
-                skip=offset,
-                sort=[('indexed_at', -1)]
-            )
-            files = [self._dict_to_entity(f) for f in files_data]
-        else:
-            # Single database search
-            total = await self.count(search_filter)
-            files = await self.find_many(
-                search_filter,
-                limit=limit,
-                skip=offset,
-                sort=[('indexed_at', -1)]
-            )
+            logger.error("Media search failed before cache storage: %s", exc, exc_info=True)
+            raise SearchBackendUnavailableError(
+                "Unable to complete the MongoDB media search"
+            ) from exc
+
+        # DB count/page reads span multiple awaits. When indexing,
+        # deletion or import changes the generation mid-read, discard this
+        # attempt instead of showing/cache-writing a known-stale page.
+        if await self._read_search_generation() != cache_version:
+            raise SearchGenerationChanged()
 
         # Calculate next offset
         next_offset = offset + limit if offset + limit < total else 0
@@ -560,6 +745,11 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             if total == 0 else self.ttl.SEARCH_RESULTS
         )
         await self.cache.set(cache_key, cache_data, expire=ttl)
+        # Even if an invalidation races the cache SET, the stale entry stays
+        # under its old generation. Retry rather than serve the old result.
+        if await self._read_search_generation() != cache_version:
+            raise SearchGenerationChanged()
+        search_telemetry.observe("search", (time.perf_counter() - search_started) * 1000)
         return files, next_offset, total
 
     async def has_matching_file(
@@ -598,28 +788,47 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
             advanced_filters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Build a backward-compatible MongoDB search predicate."""
-        return build_media_search_filter(query, file_type, use_caption, advanced_filters)
+        return build_media_search_filter(
+            query, file_type, use_caption, advanced_filters,
+            indexed_tokens=settings.features.feature_indexed_media_search,
+        )
 
     async def update(self, id: Any, update_data: Dict[str, Any], upsert: bool = False) -> bool:
         """Update entity and invalidate cache properly"""
+        update_data = dict(update_data)
+        unset_fields = None
+        if {'file_name', 'caption'} & update_data.keys():
+            # Invalidate the candidate metadata atomically with any text edit,
+            # even after flag-off rollback. Backfill can refresh it later.
+            unset_fields = [SEARCH_TOKEN_FIELD, SEARCH_TOKEN_VERSION_FIELD]
+            for key in unset_fields:
+                update_data.pop(key, None)
+        operation = {"$set": update_data}
+        if unset_fields:
+            operation["$unset"] = {key: "" for key in unset_fields}
         old_file = await self.find_file(id)
         if self.is_multi_db:
-            success = await self.multi_db_manager.update_one_across_databases(
-                self.collection_name,
-                {"_id": id},
-                {"$set": update_data},
-                upsert=upsert
-            )
+            if getattr(self.multi_db_manager, 'media_owners', None) is not None:
+                success = await self.multi_db_manager.media_owners.update(id, update_data)
+            else:
+                success = await self.multi_db_manager.update_one_across_databases(
+                    self.collection_name,
+                    {"_id": id},
+                    operation,
+                    upsert=upsert
+                )
             if success:
                 if old_file:
                     await self.cache_invalidator.invalidate_file_cache(old_file)
                 else:
                     await self.cache_invalidator.invalidate_media_entry(id)
+                if update_data.get('file_ref'):
+                    await self.cache_invalidator.invalidate_media_entry(update_data['file_ref'])
                 await self.cache_invalidator.invalidate_file_stats()
                 await self.cache_invalidator.invalidate_all_search_results()
             return success
 
-        success = await super().update(id, update_data, upsert)
+        success = await super().update(id, update_data, upsert, unset_fields=unset_fields)
 
         if success:
             if old_file:
@@ -632,50 +841,26 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
         return success
 
-    async def delete_files_by_keyword(self, keyword: str) -> int:
-        """Delete all files matching keyword"""
-        search_filter = self._build_search_filter(keyword, None, True)
+    async def preview_delete_files_by_keyword(self, keyword: str):
+        """Strict read-only preview for an administrator-confirmed deletion."""
+        return await MediaBulkDeletion(self).preview(keyword)
 
-        # Get files to delete
-        if self.is_multi_db:
-            files_data = await self.multi_db_manager.find_many_in_all_databases(
-                self.collection_name,
-                search_filter
-            )
-            files = [self._dict_to_entity(data) for data in files_data]
-        else:
-            files = await self.find_many(search_filter)
-
-        if not files:
-            return 0
-
-        if self.is_multi_db:
-            deleted_count = await self.multi_db_manager.delete_many_across_databases(
-                self.collection_name,
-                search_filter
-            )
-            success = deleted_count > 0
-        else:
-            # Build bulk delete operations
-            operations = [DeleteOne({'file_unique_id': f.file_unique_id}) for f in files]
-
-            # Execute bulk delete
-            success = await self.bulk_write(operations)
-            deleted_count = len(files) if success else 0
-
-        # Clear cache for deleted files
-        for file in files:
-            await self.cache_invalidator.invalidate_file_cache(file)
-        if success:
-            await self.cache_invalidator.invalidate_all_search_results()
-
-        return deleted_count if success else 0
+    async def delete_files_by_keyword(
+        self, keyword: str, *, expected_count=None, stop_requested=None
+    ) -> int:
+        """Delete in bounded batches only after the preview is confirmed."""
+        return await MediaBulkDeletion(self).execute(
+            keyword, expected_count=expected_count, stop_requested=stop_requested
+        )
 
     async def get_file_stats(self) -> Dict[str, Any]:
         """Get file statistics"""
         cache_key = CacheKeyGenerator.file_stats()
         cached = await self.cache.get(cache_key)
-        if isinstance(cached, dict):
+        if (isinstance(cached, dict)
+                and all(type(cached.get(key)) is int and cached[key] >= 0
+                        for key in ('total_files', 'total_size'))
+                and isinstance(cached.get('by_type'), dict)):
             return cached
         if cached is not None:
             await self.cache_invalidator.invalidate_file_stats()
@@ -705,7 +890,7 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
                 limit=None
             )
         else:
-            results = await self.aggregate(pipeline, limit=None)  # Stats need unlimited results
+            results = await self.aggregate(pipeline, limit=None, raise_on_error=True)
 
         if results:
             stats = {
@@ -735,31 +920,13 @@ class MediaRepository(BaseRepository[MediaFile], AggregationMixin):
 
 
     async def create_indexes(self) -> None:
-        """Create necessary indexes for optimal performance"""
-        # Names must match indexes.py to avoid IndexOptionsConflict errors
-        indexes = [
-            ([('file_name', 'text'), ('caption', 'text')], {'name': 'text_search_idx', 'default_language': 'english'}),
-            ([('file_type', 1), ('indexed_at', -1)], {'name': 'file_type_time_idx'}),
-            ([('file_size', 1)], {'name': 'size_index'}),
-            ([('indexed_at', -1)], {'name': 'date_index'}),
-            ([('file_ref', 1)], {'name': 'file_ref_index', 'unique': True, 'sparse': True}),
-            ([('file_type', 1), ('file_name', 1)], {'name': 'type_name_index'}),
-            ([('file_unique_id', 1)], {'name': 'unique_file_id_idx', 'unique': True}),
-            # New indexes for season/episode/resolution fields
-            ([('season', 1), ('episode', 1)], {'name': 'season_episode_idx', 'sparse': True}),
-            ([('season', 1), ('episode', 1), ('resolution', 1)], {'name': 'season_episode_resolution_idx', 'sparse': True}),
-            ([('resolution', 1)], {'name': 'resolution_idx', 'sparse': True}),
-            ([('resolution', 1), ('file_type', 1)], {'name': 'resolution_type_idx', 'sparse': True}),
-            ([('episode', 1)], {'name': 'episode_idx', 'sparse': True}),
-        ]
+        """Deprecated compatibility wrapper: media DDL is owned by IndexOptimizer.
 
-        for keys, kwargs in indexes:
-            try:
-                await self.create_index(keys, **kwargs)
-            except Exception as e:
-                error_str = str(e)
-                # Index conflicts are expected if indexes.py already created them
-                if "IndexOptionsConflict" in error_str or "Index already exists" in error_str:
-                    logger.debug(f"Index {kwargs.get('name', '')} already exists")
-                else:
-                    logger.warning(f"Error creating index {kwargs.get('name', '')}: {e}")
+        Keep for callers outside bot startup, with one canonical manifest.
+        The bot invokes IndexOptimizer only once per connected database.
+        """
+        from core.database.indexes import IndexOptimizer
+
+        outcomes = await IndexOptimizer(self.db_pool).create_media_indexes()
+        if not all(outcomes.values()):
+            logger.warning("Some media indexes need operator review; no index was dropped")

@@ -1,0 +1,9 @@
+{
+  "source_2_write_and_delivery": true,
+  "source_3_write_and_delivery": true,
+  "channel_indexing": true,
+  "distributed_search_three_files": true,
+  "send_all_callback_three_documents": true,
+  "write_source_restored_to_primary": true,
+  "harness_caption_read_corrected": true
+}

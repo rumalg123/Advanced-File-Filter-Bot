@@ -1,0 +1,194 @@
+{
+  "date": "2026-10-30",
+  "round": 3,
+  "scope": [
+    "settings-label",
+    "favorites",
+    "recent-files"
+  ],
+  "application_commit": "124fcd6efd8db6792960794aeea0bdc6a45c459b",
+  "source_manifest_sha256": "106d059fce024e3b0d926b68c4c1301998b06c00d4b44dbf6d8a7f4c7e066fb3",
+  "fixes": {
+    "BUG-072": "56241ba",
+    "BUG-073": "4525d59",
+    "BUG-074": "9c63812",
+    "BUG-075": "124fcd6"
+  },
+  "tests": {
+    "passed": 936,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 9,
+    "before_feature_fixes": {
+      "failed": 7,
+      "passed": 2
+    }
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10183,
+    "num_statements": 17605,
+    "percent_covered": 54.4849648112604,
+    "percent_covered_display": "54",
+    "missing_lines": 7422,
+    "excluded_lines": 41,
+    "percent_statements_covered": 57.841522294802616,
+    "percent_statements_covered_display": "58",
+    "num_branches": 5840,
+    "num_partial_branches": 853,
+    "covered_branches": 2591,
+    "missing_branches": 3249,
+    "percent_branches_covered": 44.36643835616438,
+    "percent_branches_covered_display": "44"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12284,
+    "num_statements": 17605,
+    "percent_covered": 66.43207506931115,
+    "percent_covered_display": "66",
+    "missing_lines": 5321,
+    "excluded_lines": 41,
+    "percent_statements_covered": 69.77563192274921,
+    "percent_statements_covered_display": "70",
+    "num_branches": 5840,
+    "num_partial_branches": 1075,
+    "covered_branches": 3291,
+    "missing_branches": 2549,
+    "percent_branches_covered": 56.352739726027394,
+    "percent_branches_covered_display": "56"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 101,
+        "changed_files_discarded": 17
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 86,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 95,
+        "changed_files_discarded": 23
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 100,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 97,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 88,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 100,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 83,
+        "changed_files_discarded": 25
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 114,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 114,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 118,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 118,
+        "changed_files_discarded": 3
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 66.43207506931115,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "live": {
+    "scope": [
+      "settings-label",
+      "favorites",
+      "recent-files"
+    ],
+    "checks": {
+      "indexed_search_friendly_menu_and_detail_label": true,
+      "delivered_favorite_button_and_duplicate_idempotence": true,
+      "favorite_retrieval_and_recent_deduplication": true,
+      "long_unicode_collection_has_remove_control": true,
+      "old_menu_removal_after_rename_is_owner_scoped": true,
+      "named_collection_clear_and_delete": true,
+      "repeat_download_moves_to_front_without_duplicates": true,
+      "recent_individual_remove": true,
+      "clear_recent_preserves_other_user_history": true,
+      "empty_recent_menu": true,
+      "deleted_catalogue_favorite_can_be_removed_but_not_added": true
+    },
+    "fixture_documents": 3,
+    "passed": true,
+    "configuration": {
+      "favorites": true,
+      "recent_files": true,
+      "premium_enabled": true,
+      "non_premium_daily_limit": 20,
+      "quota_delivery_ledger": true,
+      "indexed_media_search": true,
+      "auto_delete_seconds": 0,
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis"
+    }
+  },
+  "cleanup": {
+    "successful_run_messages": {
+      "admin": 17,
+      "normal": 32
+    },
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true,
+    "failed_harness_attempt_messages_also_removed": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Live tests used three documents; large-collection navigation and sustained concurrent load remain open",
+    "Recent pruning interleaving, deduplication and return to 50 entries were tested against real disposable MongoDB",
+    "Pruning is best-effort during racing updates; a guarded refresh can temporarily leave more than 50 entries until a later write trims them",
+    "Missing collection tokens are filled lazily using the existing metadata field; old name-based removal callbacks remain supported",
+    "No production server or remote database accessed"
+  ],
+  "next_round": "Stop after this bounded round and wait for the operator to say continue."
+}

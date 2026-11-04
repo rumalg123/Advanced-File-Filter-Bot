@@ -3,6 +3,7 @@ from pyrogram.types import CallbackQuery
 
 from handlers.commands_handlers import BaseCommandHandler
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.telegram_api import telegram_api
 from core.utils.validators import extract_user_id, is_admin, is_group_owner
 
@@ -10,6 +11,7 @@ logger = get_logger(__name__)
 
 class FilterCallBackHandler(BaseCommandHandler):
 
+    @check_ban()
     async def handle_filter_alert_callback(self, client: Client, query: CallbackQuery):
         """Handle filter alert callbacks"""
         try:
@@ -47,6 +49,7 @@ class FilterCallBackHandler(BaseCommandHandler):
         else:
             await query.answer("Alert not found", show_alert=True)
 
+    @check_ban()
     async def handle_delall_confirm_callback(self, client: Client, query: CallbackQuery):
         """Handle delete all filters confirmation"""
         user_id = extract_user_id(query)
@@ -88,6 +91,7 @@ class FilterCallBackHandler(BaseCommandHandler):
         else:
             await query.message.edit_text("Couldn't remove all filters from group!")
 
+    @check_ban()
     async def handle_delall_cancel_callback(self, client: Client, query: CallbackQuery):
         """Handle delete all filters cancellation"""
         await query.message.delete()

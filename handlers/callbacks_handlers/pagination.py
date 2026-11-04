@@ -1,9 +1,12 @@
+import asyncio
 import uuid
 
 from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.cache.errors import STATE_RETRY_MESSAGE
+from core.database.errors import SEARCH_RETRY_MESSAGE
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
@@ -16,6 +19,7 @@ from core.utils.pagination import (
 )
 from core.utils.validators import is_private_chat
 from handlers.commands_handlers.base import BaseCommandHandler
+from handlers.decorators import check_ban, require_subscription
 
 logger = get_logger(__name__)
 
@@ -23,8 +27,21 @@ logger = get_logger(__name__)
 class PaginationCallbackHandler(BaseCommandHandler):
     """Handler for search pagination callbacks"""
 
+    PAGE_READ_TIMEOUT_SECONDS = 8.0
+
+    @check_ban()
     async def handle_search_pagination(self, client: Client, query: CallbackQuery):
         """Handle search pagination callbacks"""
+        if is_private_chat(query):
+            return await self._paginate_with_subscription(client, query)
+        # Group search intentionally permits previews before subscription.
+        return await self._paginate(client, query)
+
+    @require_subscription()
+    async def _paginate_with_subscription(self, client: Client, query: CallbackQuery):
+        return await self._paginate(client, query)
+
+    async def _paginate(self, client: Client, query: CallbackQuery):
         callback_user_id = query.from_user.id
 
         # Parse callback data using helper
@@ -59,15 +76,19 @@ class PaginationCallbackHandler(BaseCommandHandler):
 
         new_offset = current_offset
         # Search for files
-        files, next_offset, total, has_access, access_reason = await self.bot.file_service.search_files_with_access_check(
-            user_id=user_id,
-            query=search_query,
-            chat_id=user_id,
-            offset=new_offset,
-            limit=page_size
-        )
+        try:
+            files, next_offset, total, has_access, access_reason = await asyncio.wait_for(
+                self.bot.file_service.search_files_with_access_check(
+                    user_id=user_id, query=search_query, chat_id=user_id,
+                    offset=new_offset, limit=page_size),
+                timeout=self.PAGE_READ_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return await query.answer(SEARCH_RETRY_MESSAGE, show_alert=True)
 
         if not has_access:
+            if access_reason == SEARCH_RETRY_MESSAGE:
+                return await query.answer(SEARCH_RETRY_MESSAGE, show_alert=True)
             # Check if it's daily limit or ban
             if access_reason and "Daily limit reached" in access_reason:
                 # Show proper daily limit message
@@ -113,11 +134,13 @@ class PaginationCallbackHandler(BaseCommandHandler):
             for f in files
         ]
 
-        await self.bot.cache.set(
+        stored = await self.bot.cache.set(
             search_key,
             {'files': files_data, 'query': search_query, 'user_id': result_owner_id},
             expire=CacheTTLConfig.SEARCH_SESSION  # 1 hour expiry
         )
+        if not stored:
+            return await query.answer(STATE_RETRY_MESSAGE, show_alert=True)
         query_reference = make_search_query_reference(session_id)
 
         # Build response with new pagination builder

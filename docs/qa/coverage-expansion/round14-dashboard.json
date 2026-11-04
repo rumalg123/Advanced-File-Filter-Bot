@@ -1,0 +1,525 @@
+{
+  "date": "2026-10-31",
+  "round": 14,
+  "scope": [
+    "content-dashboard",
+    "zero-result-analytics",
+    "admin-access",
+    "current-media-validation"
+  ],
+  "application_and_tests_commit": "49d9fc5f320110bbdc631bc97580cec64b5e5ecb",
+  "source_manifest_sha256": "e03c7870ed3eb995915de800ae443c87da4a1df7b78f7d4056aeed4fd4d51a8e",
+  "fixes": {
+    "BUG-119": "9d961c3",
+    "BUG-120 / CACHE-028": "85eb09d",
+    "BUG-121": "39a9e13",
+    "BUG-122": "49d9fc5"
+  },
+  "tests": {
+    "passed": 1425,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 37,
+    "seconds": 44.91,
+    "focused_related_passed": 98,
+    "identity_and_rendering_cases": 8,
+    "availability_and_cache_cases": 15,
+    "analytics_concurrency_cases": 4,
+    "counts_access_and_bounds_cases": 10,
+    "real_mongo_cases": 5
+  },
+  "before_fixes": {
+    "identity": {
+      "failed": 6,
+      "passed": 2
+    },
+    "availability": {
+      "failed": 13,
+      "passed": 2
+    },
+    "analytics_race": {
+      "failed": 3,
+      "passed": 1
+    },
+    "counts_and_access_corrected_fixture": {
+      "failed": 2,
+      "passed": 8
+    }
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "all_four_new_process_shards_match_start_end_current_source": true,
+  "automated": {
+    "covered_lines": 11444,
+    "num_statements": 18082,
+    "percent_covered": 60.287160760229064,
+    "percent_covered_display": "60",
+    "missing_lines": 6638,
+    "excluded_lines": 41,
+    "percent_statements_covered": 63.289459130627144,
+    "percent_statements_covered_display": "63",
+    "num_branches": 6016,
+    "num_partial_branches": 914,
+    "covered_branches": 3084,
+    "missing_branches": 2932,
+    "percent_branches_covered": 51.263297872340424,
+    "percent_branches_covered_display": "51"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 13008,
+    "num_statements": 18082,
+    "percent_covered": 68.88538467922649,
+    "percent_covered_display": "69",
+    "missing_lines": 5074,
+    "excluded_lines": 41,
+    "percent_statements_covered": 71.93894480699038,
+    "percent_statements_covered_display": "72",
+    "num_branches": 6016,
+    "num_partial_branches": 1024,
+    "covered_branches": 3592,
+    "missing_branches": 2424,
+    "percent_branches_covered": 59.70744680851064,
+    "percent_branches_covered_display": "60"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 53,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 62,
+        "changed_files_discarded": 56
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 54,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 62,
+        "changed_files_discarded": 56
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 51,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 71,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 71,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.round10-phase1-live",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round10-phase2-live",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round10-phase3-live",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round10-unit",
+        "matching_files": 112,
+        "changed_files_discarded": 10
+      },
+      {
+        "shard": ".coverage.round11-phase1-live",
+        "matching_files": 115,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round11-phase2-live",
+        "matching_files": 115,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round11-phase3-live",
+        "matching_files": 115,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round11-unit",
+        "matching_files": 115,
+        "changed_files_discarded": 7
+      },
+      {
+        "shard": ".coverage.round12-phase1-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round12-phase2-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round12-phase3-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round12-unit",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round13-phase1-live",
+        "matching_files": 117,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round13-phase2-live",
+        "matching_files": 117,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round13-phase3-live",
+        "matching_files": 117,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round13-unit",
+        "matching_files": 117,
+        "changed_files_discarded": 5
+      },
+      {
+        "shard": ".coverage.round14-phase1-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round14-phase2-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round14-phase3-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round14-unit",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 99,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 99,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 99,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 99,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 99,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 99,
+        "changed_files_discarded": 22
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 100,
+        "changed_files_discarded": 21
+      },
+      {
+        "shard": ".coverage.round8-unit",
+        "matching_files": 107,
+        "changed_files_discarded": 15
+      },
+      {
+        "shard": ".coverage.round8-validated-aggregate",
+        "matching_files": 107,
+        "changed_files_discarded": 15,
+        "kind": "validated historical aggregate, not a process shard",
+        "verification": {
+          "source_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+          "source_manifest_matches_committed_round8": true,
+          "all_file_execution_and_totals_equal_original_report": true,
+          "data_sha256": "5df644e3b3eb8117cd170969198e937bbbc68dfb7a65ca76aaebace6badb7018"
+        }
+      },
+      {
+        "shard": ".coverage.round9-phase1-live",
+        "matching_files": 110,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round9-phase2-live",
+        "matching_files": 110,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round9-phase3-live",
+        "matching_files": 110,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round9-unit",
+        "matching_files": 110,
+        "changed_files_discarded": 12
+      }
+    ],
+    "combined_percent": 68.88538467922649,
+    "policy": "Raw process files require identical start/end/current SHA256. The labelled historical aggregate reproduces its recorded-source report and contributes only unchanged files. No line/arc remapping; the initial round14 harness-start attempt is outside accepted inputs."
+  },
+  "runtime": {
+    "image_tag": "file-filter-bot:qa-multisub-20261030",
+    "image_id": "sha256:8ea67dde9ec1d7fbc27647ef52e427ae5b43c50d6d462fd517ae11fa3775873e",
+    "bundled_application_source": "b2fcb38",
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "pymongo": "4.19.0",
+    "motor": "3.7.1",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "new_deployment_image_built": false
+  },
+  "preflight": {
+    "three_distinct_human_accounts_authenticated": true,
+    "updated_qa_chats_resolved": true,
+    "bot_admin_access_verified": true,
+    "second_normal_session_key": "normal_user_2"
+  },
+  "live": {
+    "scope": "content-dashboard-and-zero-result-analytics",
+    "checks": {
+      "admin_empty_dashboard_has_correct_zero_totals_and_no_fabricated_rankings": true,
+      "both_normal_accounts_cannot_invoke_admin_dashboard": true,
+      "private_and_group_misses_record_normalized_global_demand_without_group_reply_noise": true,
+      "invalid_advanced_query_does_not_pollute_zero_result_analytics": true,
+      "dashboard_reconciles_previously_missing_title_after_real_indexing_without_a_repeat_user_search": true,
+      "successful_real_search_populates_historical_popular_searches": true,
+      "long_query_with_trailing_size_filter_remains_unmet_despite_a_matching_display_prefix": true,
+      "successful_caption_match_resolves_its_previous_zero_result_record": true,
+      "real_mongo_fixture_counts_include_legacy_inflight_requests_paused_searches_and_empty_collections": true,
+      "malformed_real_redis_statistics_payload_is_invalidated_and_recomputed": true,
+      "dashboard_renders_missing_query_html_as_literal_text": true,
+      "legacy_invalid_filter_demand_is_retained_but_omitted_under_current_advanced_syntax": true,
+      "injected_lookup_failure_returns_safe_retry_feedback_and_next_dashboard_recovers": true,
+      "missing_demand_returns_after_direct_fixture_deletion_with_search_generation_advanced": true,
+      "dashboard_off_removes_admin_command_and_stops_new_zero_result_tracking": true,
+      "empty_redis_restart_preserves_mongo_totals_and_caption_off_keeps_caption_only_demand": true
+    },
+    "fixture_documents": 2,
+    "human_accounts": 3,
+    "passed": true,
+    "local_fixture_counts": {
+      "requests": 11,
+      "active_requests": 6,
+      "reports": 3,
+      "open_reports": 2,
+      "saved_searches": 2,
+      "collections": 2
+    },
+    "configuration": {
+      "dashboard_phases": [
+        true,
+        false,
+        true
+      ],
+      "caption_phases": [
+        true,
+        true,
+        false
+      ],
+      "advanced_search": true,
+      "indexed_search": true,
+      "other_optional_features": false,
+      "free_mode": true,
+      "auto_delete_seconds": 0,
+      "mongo": "disposable local MongoDB retained across phases",
+      "redis": "retained before phase 2; both owned Redis databases cleared before phase 3",
+      "delivery_targets": "three authenticated QA accounts plus declared QA group/log channel",
+      "memberships_permissions_and_block_states_changed": false
+    }
+  },
+  "fixture_boundaries": {
+    "real_telegram_paths": [
+      "private/group miss recording",
+      "real uploads and indexing",
+      "successful private/caption searches",
+      "admin dashboard rendering",
+      "feature/caption changes across restarts"
+    ],
+    "aggregate_counts": "Local-only MongoDB fixtures represent 11 request states, 3 report states, 2 saved searches and 2 collections; prior CRUD workflows were not repeated",
+    "legacy_invalid_query": "Seeded local historical literal query, retained but omitted with advanced syntax enabled",
+    "file_deletion": "Direct deletion of one owned local fixture, with search generation advanced and stats invalidated; not a delete-command acceptance claim",
+    "injected_failure": "One QA-only has_matching_file failure triggered through a real Telegram admin command; retry feedback and subsequent recovery checked"
+  },
+  "dashboard_contract": {
+    "full_query_identity": "string analytics _id; legacy query fallback",
+    "display_query_existing_max_chars": 100,
+    "candidate_limit": 30,
+    "concurrent_checks": 5,
+    "service_unresolved_limit": 10,
+    "rendered_unresolved_limit": 5,
+    "popular": "historical successful searches in Redis, not an availability guarantee",
+    "global_zero_counts_have_no_persisted_user_id": true,
+    "lookup_failures_do_not_become_confirmed_unmet_queries": true,
+    "invalid_current_filter_syntax_retained_but_not_listed": true,
+    "cleanup_guards": [
+      "observed count",
+      "observed last_searched_at"
+    ],
+    "direct_successful_search_resolver_compatible": true,
+    "pending_counts_include_legacy_processing": true,
+    "file_size_label": "sum of referenced Telegram file sizes, not MongoDB storage",
+    "malformed_stats_cache_recomputed": true,
+    "single_db_stats_errors_propagate": true,
+    "other_aggregation_callers_keep_legacy_default": true
+  },
+  "fixture_corrections": [
+    "Identity test assertions moved outside a callback whose exceptions are collected",
+    "SDK user-filter fixtures include username and compare boolean truthiness",
+    "Initial actor harness moved source-path setup before local imports; its startup log post was cleaned and coverage excluded"
+  ],
+  "cleanup": {
+    "final_run": {
+      "messages_removed": {
+        "r14-admin": 35,
+        "r14-normal": 17,
+        "r14-normal2": 14,
+        "log_channel": 6,
+        "qa_group": 1
+      },
+      "errors": []
+    },
+    "post_cleanup": {
+      "tracked_target_posts_removed_or_already_deleted": 6,
+      "errors": []
+    },
+    "final_recorded_messages_removed": 73,
+    "earlier_startup_post_cleanup": {
+      "tracked_target_posts_removed_or_already_deleted": 1,
+      "errors": []
+    },
+    "earlier_coverage_excluded": true,
+    "memberships_permissions_block_states_unchanged": true,
+    "owned_containers_anonymous_volumes_networks_removed": true,
+    "original_two_services_running_untouched": true
+  },
+  "policy": {
+    "admin_owner_bypasses_preserved": true,
+    "operator_diagnostic_lines_unchanged": 405,
+    "operator_diagnostic_lines_context_updates_from_round8": 2,
+    "operator_diagnostics_removed": 0,
+    "new_product_features_or_flags_added": false,
+    "production_defaults_or_limits_changed": false,
+    "production_server_accessed": false,
+    "remote_atlas_accessed": false,
+    "deployment_environment_changed": false,
+    "mongo_migration_or_new_index_required": false
+  },
+  "validation": {
+    "python_compilation": true,
+    "ruff_F821_F822_F823": true,
+    "pip_check": true,
+    "markdown_links_anchors": true,
+    "json_privacy": true,
+    "git_diff_check": true,
+    "live_unhandled_error_or_traceback": false,
+    "expected_live_error_log_entries": 1,
+    "expected_error": "one handled injected media-verification failure with a chained exception traceback; retry and recovery passed",
+    "local_markdown_links_checked": 275
+  },
+  "limitations": [
+    "Whole-bot 100% remains open",
+    "Small local fixture does not certify Atlas/multidatabase latency or production load",
+    "No real infrastructure outage was induced; live failure was explicitly injected",
+    "Dashboard reads are bounded and not one transactional snapshot across concurrent writes",
+    "Only the top 30 candidates are checked; fewer than ten valid unmet searches can be returned despite demand below that window",
+    "Valid file-statistics payloads retain their existing cache TTL; total file size is not Atlas storage",
+    "Popularity is Redis history and clears on Redis reset; it need not imply current file availability",
+    "Snapshot guards apply to dashboard cleanup; the existing direct successful-search resolver remains compatible",
+    "New deployment must build the current branch; retained image bundles older application"
+  ],
+  "next_bounded_scope": [
+    "group filters",
+    "group connections"
+  ]
+}

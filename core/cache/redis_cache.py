@@ -7,6 +7,7 @@ import redis.asyncio as aioredis
 from datetime import UTC, datetime, timedelta
 
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
+from core.cache.auth import redis_auth_kwargs
 from core.cache.serialization import serialize, deserialize, get_serialization_stats
 from core.utils.logger import get_logger
 
@@ -24,6 +25,36 @@ class CacheManager:
     return count
     """
 
+    # PH-011: atomic and non-expiring search-cache generations.
+    # Redis pattern matching operates on strings, never Lua numbers (large
+    # counters may exceed Lua double integer precision).
+    _ENSURE_GENERATION_SCRIPT = """
+    local current = redis.call('GET', KEYS[1])
+    if not current then
+        redis.call('SET', KEYS[1], ARGV[1])
+        return ARGV[1]
+    end
+    if not string.match(current, '^[1-9][0-9]*$') then
+        return redis.error_reply('Invalid search generation')
+    end
+    redis.call('PERSIST', KEYS[1])
+    return current
+    """
+
+    _ADVANCE_GENERATION_SCRIPT = """
+    local current = redis.call('GET', KEYS[1])
+    if not current then
+        redis.call('SET', KEYS[1], ARGV[1])
+    elseif not string.match(current, '^[1-9][0-9]*$') then
+        return redis.error_reply('Invalid search generation')
+    end
+    redis.call('PERSIST', KEYS[1])
+    redis.call('INCR', KEYS[1])
+    -- Redis Lua numbers use floating point. Reading the raw string avoids
+    -- losing precision for 60-bit search generations.
+    return redis.call('GET', KEYS[1])
+    """
+
     _DELETE_IF_VALUE_SCRIPT = """
     if redis.call('GET', KEYS[1]) == ARGV[1] then
         return redis.call('DEL', KEYS[1])
@@ -31,8 +62,11 @@ class CacheManager:
     return 0
     """
 
-    def __init__(self, redis_url: str = "redis://localhost:6379"):
+    def __init__(self, redis_url: str = "redis://localhost:6379", *,
+                 username: str = "", password_file: str = ""):
         self.redis_url = redis_url
+        self.username = username
+        self.password_file = password_file
         self.redis: Optional[aioredis.Redis] = None
         self._lock = asyncio.Lock()
         self._max_connections = 40 if 'uvloop' in sys.modules else 20
@@ -49,6 +83,10 @@ class CacheManager:
                     max_connections=self._max_connections,
                     socket_timeout=30.0,  # Timeout for socket operations
                     socket_connect_timeout=10.0,  # Timeout for initial connection
+                    **redis_auth_kwargs(
+                        self.redis_url, username=self.username,
+                        password_file=self.password_file,
+                    ),
                 )
 
                 try:
@@ -188,6 +226,48 @@ class CacheManager:
             logger.error(f"Cache increment error for key {key}: {e}")
             return None
 
+    async def ensure_counter_initialized(self, key: str, initial: int) -> Optional[int]:
+        """Atomically initialize a raw Redis integer counter, preserving old values.
+
+        Used for a unique search-cache generation on the dedicated state
+        instance. SET NX and GET are distinct commands, but simultaneous
+        initializers cannot overwrite the winner's value.
+        """
+        if not self.redis or initial < 1:
+            return None
+        try:
+            await self.redis.set(key, int(initial), nx=True)
+            return int(await self.redis.get(key))
+        except Exception as e:
+            logger.error("Unable to initialize protected counter %s: %s", key, e)
+            return None
+
+    async def ensure_search_generation(self, key: str, random_initial: int) -> Optional[int]:
+        """Atomically get or initialize a non-expiring raw Redis integer."""
+        if not self.redis or not 1 <= random_initial < 2**62:
+            return None
+        try:
+            value = await self.redis.eval(
+                self._ENSURE_GENERATION_SCRIPT, 1, key, str(random_initial)
+            )
+            return int(value)
+        except Exception as e:
+            logger.error(f"Unable to read/init search cache generation: {e}")
+            return None
+
+    async def advance_search_generation(self, key: str, random_initial: int) -> Optional[int]:
+        """Atomically initialize if missing and increment once."""
+        if not self.redis or not 1 <= random_initial < 2**62:
+            return None
+        try:
+            value = await self.redis.eval(
+                self._ADVANCE_GENERATION_SCRIPT, 1, key, str(random_initial)
+            )
+            return int(value)
+        except Exception as e:
+            logger.error(f"Unable to advance search cache generation: {e}")
+            return None
+
     async def increment_with_expiry(
             self,
             key: str,
@@ -320,6 +400,9 @@ class CacheManager:
                 stats['redis_info'] = {
                     'used_memory': redis_info.get('used_memory', 0),
                     'used_memory_human': redis_info.get('used_memory_human', '0B'),
+                    'maxmemory': redis_info.get('maxmemory', 0),
+                    'maxmemory_policy': redis_info.get('maxmemory_policy', 'unknown'),
+                    'evicted_keys': redis_info.get('evicted_keys', 0),
                     'keyspace_hits': redis_info.get('keyspace_hits', 0),
                     'keyspace_misses': redis_info.get('keyspace_misses', 0),
                     'connected_clients': redis_info.get('connected_clients', 0),
@@ -401,6 +484,23 @@ def cache_premium_status(ttl: int = 600) -> Callable:
             try:
                 if hasattr(self, 'cache') and self.cache:
                     cached_result = await self.cache.get(cache_key)
+                    if (
+                        isinstance(cached_result, (tuple, list))
+                        and len(cached_result) == 2
+                        and type(cached_result[0]) is bool
+                        and (cached_result[1] is None or isinstance(cached_result[1], str))
+                    ):
+                        # TTLs are rounded to seconds and an old writer may
+                        # race invalidation. Current flag/expiry always wins
+                        # over either a stale positive or negative decision.
+                        from core.utils.validators import is_premium_valid
+                        state_matches = not hasattr(user, 'is_premium') or cached_result[0] == is_premium_valid(
+                            user.is_premium, getattr(user, 'premium_expiry_date', None)
+                        )
+                        if not state_matches:
+                            cached_result = None
+                    else:
+                        cached_result = None
                     if cached_result is not None:
                         # MessagePack represents tuples as arrays. Restore the
                         # decorated method's tuple contract on cache hits.

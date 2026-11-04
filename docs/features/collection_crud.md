@@ -4,7 +4,10 @@ This document is the source of truth for user-managed collection CRUD and the
 related optional-feature CRUD audit. All mutations are scoped by the clicking or
 commanding Telegram user, and all feature flags remain authoritative.
 
-Implementation status: verified on 2026-07-18 with 86 passing tests.
+Current feedback acceptance: **QA passed, 2026-10-30** — 1,232 automated tests
+and 20 live recommendation/feedback checks. See the [bounded QA record](../qa/coverage-expansion/STATUS.md#bounded-qa-round-10--recommendations-and-feedback-2026-10-30).
+The earlier collection baseline used 86 tests on 2026-07-18 and remains
+historical; other bounded CRUD rounds are recorded in the same QA report.
 
 ## CRUD coverage matrix
 
@@ -47,6 +50,15 @@ Implementation status: verified on 2026-07-18 with 86 passing tests.
   and expose Reset actions. Delivered file controls also expose Reset.
 - Resetting recommendation feedback invalidates the user's cached personalized
   recommendations.
+- Negative feedback stops the selected file from seeding related suggestions;
+  reset restores its implicit click-history influence. More/less replaces one
+  user/file record rather than appending duplicates. One user's preferences and
+  reset actions do not change another user's records.
+- Favorite and recommendation marker updates affect only their own control
+  group. Stored preferences remain available after Redis clearing and feature
+  re-enablement; related suggestions need fresh Redis relationships afterward.
+- Old feedback buttons cannot mutate preferences while feedback is disabled.
+  A preference for a deleted file remains resettable from the list.
 - Saved-search rows include a Run action using the existing user-owned search
   reference and pagination flow.
 

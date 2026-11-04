@@ -1,0 +1,61 @@
+# PH-012: independent, opt-in staging stack; do NOT use base production Compose.
+# Launch only after offline staging_preflight.py --production-env/--staging-env.
+# The bot is profile-gated. No host-published ports or fixed container names.
+name: advanced-file-filter-staging
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: "no"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - staging-redis-data:/data
+    networks: [staging-network]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  file-filter-bot:
+    profiles: ["staging-bot"]
+    build: .
+    restart: "no"
+    env_file:
+      - .env.staging
+    environment:
+      REDIS_URI: redis://redis:6379/0
+      REDIS_STATE_URI: ""
+      ENVIRONMENT: staging
+      AUTO_UPDATE: "false"
+      UPDATE_ON_START: "false"
+      PUBLIC_FILE_STORE: "false"
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - python scripts/staging_preflight.py --runtime && exec bash start.sh
+    volumes:
+      - staging-bot-data:/usr/src/app/data
+      - staging-bot-logs:/usr/src/app/logs
+      - staging-bot-backups:/usr/src/app/backups
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [staging-network]
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8000/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  staging-redis-data:
+  staging-bot-data:
+  staging-bot-logs:
+  staging-bot-backups:
+
+networks:
+  staging-network:
+    driver: bridge

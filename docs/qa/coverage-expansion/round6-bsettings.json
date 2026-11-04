@@ -1,0 +1,255 @@
+{
+  "date": "2026-10-30",
+  "round": 6,
+  "scope": [
+    "bot-settings",
+    "settings-permissions",
+    "edit-dialog-lifecycle",
+    "restart-persistence"
+  ],
+  "application_commit": "3c676f2c2c6a3775404c69a96bae08e92faa58d7",
+  "source_manifest_sha256": "4df43cd6b532740b742cfa542b6eab849ba1d284f0ab9e1c20b23f120cca9595",
+  "fixes": {
+    "BUG-090": "9624114",
+    "BUG-091": "04c1d3a",
+    "BUG-092": "a8330a0",
+    "BUG-093": "3c676f2"
+  },
+  "tests": {
+    "passed": 1050,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 34,
+    "initial_focused_before_fixes": {
+      "cases": 31,
+      "failed": 22,
+      "passed": 9
+    },
+    "additional_session_cases_after_initial_reproduction": 3
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10569,
+    "num_statements": 17813,
+    "percent_covered": 56.03459185825775,
+    "percent_covered_display": "56",
+    "missing_lines": 7244,
+    "excluded_lines": 41,
+    "percent_statements_covered": 59.333071352383094,
+    "percent_statements_covered_display": "59",
+    "num_branches": 5892,
+    "num_partial_branches": 880,
+    "covered_branches": 2714,
+    "missing_branches": 3178,
+    "percent_branches_covered": 46.06245756958588,
+    "percent_branches_covered_display": "46"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12385,
+    "num_statements": 17813,
+    "percent_covered": 66.2645011600928,
+    "percent_covered_display": "66",
+    "missing_lines": 5428,
+    "excluded_lines": 41,
+    "percent_statements_covered": 69.52787290181328,
+    "percent_statements_covered_display": "70",
+    "num_branches": 5892,
+    "num_partial_branches": 1059,
+    "covered_branches": 3323,
+    "missing_branches": 2569,
+    "percent_branches_covered": 56.398506449422946,
+    "percent_branches_covered_display": "56"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 46
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 61,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 69,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 71,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 69,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 62,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 71,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 58,
+        "changed_files_discarded": 50
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 81,
+        "changed_files_discarded": 40
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 81,
+        "changed_files_discarded": 40
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 82,
+        "changed_files_discarded": 39
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 84,
+        "changed_files_discarded": 37
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 84,
+        "changed_files_discarded": 37
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 120,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 120,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 120,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 66.2645011600928,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "new_shards_match_start_end_current_source": true,
+  "policy": {
+    "settings_primary_admin_only": true,
+    "ban_admin_and_owner_bypasses_preserved": true,
+    "protected_connection_settings_no_bot_edit_or_reset": true,
+    "existing_mongo_settings_override_environment_seed_on_restart": true,
+    "operator_logging_additions_preserved": true
+  },
+  "live": {
+    "scope": "bsettings",
+    "checks": {
+      "ordinary_user_cannot_open_settings": true,
+      "owner_command_replies_without_editing_incoming_message": true,
+      "repeat_menu_navigation_does_not_duplicate_messages": true,
+      "ordinary_user_cannot_operate_owner_group_menu": true,
+      "protected_connection_setting_has_no_mutation_controls": true,
+      "single_source_owner_registry_remains_locked": true,
+      "boolean_setting_persists_with_restart_reminder": true,
+      "invalid_integer_does_not_persist": true,
+      "valid_integer_persists_and_input_is_deleted": true,
+      "cancel_removes_dialog_without_saving": true,
+      "closing_old_menu_preserves_new_edit_session": true,
+      "saved_template_markup_displays_literally_in_details_and_edit_prompt": true,
+      "special_template_edit_prompts_render": true,
+      "admin_list_persists_as_integer_ids": true,
+      "saved_integer_boolean_template_and_admins_apply_after_empty_redis_restart": true,
+      "unsaved_edit_does_not_change_mongodb_across_restart": true,
+      "secondary_admin_cannot_open_or_operate_primary_owner_settings": true,
+      "reset_to_default_persists_and_owner_access_recovers_after_restart": true
+    },
+    "passed": true,
+    "configuration": {
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis",
+      "delivery_targets": "two supplied QA accounts and declared QA group/log channel",
+      "initial_bot_admin_count": 1,
+      "admin_count_after_restart": 2,
+      "feature_favorites_initial": false,
+      "feature_favorites_saved_and_loaded": true,
+      "auto_delete_seconds": 0,
+      "durable_workers": false,
+      "single_media_source": true,
+      "test_caption": "literal markup/ampersands/quotes with existing filename placeholder"
+    }
+  },
+  "cleanup": {
+    "successful_run_messages": {
+      "admin": 50,
+      "normal": 4,
+      "qa_chat_0": 4,
+      "qa_chat_1": 4
+    },
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true,
+    "production_untouched": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check",
+    "Markdown local file links and anchors"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Live editing used the owner private chat; group menus were exercised for ordinary-user and secondary-admin callback denial",
+    "Protected forged controls, malformed payloads, prompt failure/cancellation, unchanged-menu responses and session token races were checked through injected automated tests; live tests used controls Telegram actually issued",
+    "One early harness attempt requested a page callback absent from the keyboard and Telegram rejected it before bot dispatch; the harness was corrected and all owned messages/resources cleaned",
+    "The live invalid integer intentionally logged its validation exception; no routine Failed to edit settings menu error occurred",
+    "Live restart clears both isolated Redis instances; saved Mongo-backed values survive, but unfinished Redis dialogs are discarded",
+    "Long-duration 60-second dialog expiry, all 67 setting types/values, cross-chat owner edits, multi-process timing and production load are outside this bounded live round",
+    "Existing admin/owner ban and quota exemptions and operator-added logging remain preserved",
+    "No production server, remote Atlas database, deployment environment or production limits were changed"
+  ],
+  "next_round": "Stop after this bounded round and wait for operator continue."
+}

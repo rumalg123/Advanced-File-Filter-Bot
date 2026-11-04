@@ -1,0 +1,19 @@
+{
+  "inventory": {
+    "complete": true,
+    "sources": 3,
+    "documents": 96909,
+    "identity_conflicts": 0,
+    "eligible": true
+  },
+  "activation": {
+    "ready": true,
+    "already_active": true,
+    "adopted": 0
+  },
+  "writers": 100,
+  "unique_records": 1,
+  "outage": true,
+  "restart": true,
+  "update_delete": true
+}

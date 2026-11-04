@@ -34,6 +34,21 @@ class MemoryCache:
         self.expirations = {}
         self.set_calls = []
 
+    async def ensure_search_generation(self, key, initial):
+        current = self.values.setdefault(key, int(initial))
+        try:
+            value = int(current)
+            return value if value > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    async def advance_search_generation(self, key, initial):
+        current = await self.ensure_search_generation(key, initial)
+        if current is None:
+            return None
+        self.values[key] = current + 1
+        return self.values[key]
+
     async def get(self, key):
         return copy.deepcopy(self.values.get(key))
 
@@ -207,7 +222,7 @@ async def test_default_session_ids_do_not_collide_within_the_same_second():
 
 
 @pytest.mark.asyncio
-async def test_each_search_invalidation_advances_version_and_corruption_self_heals():
+async def test_each_search_invalidation_advances_version_and_corruption_fails_closed():
     cache = MemoryCache()
     invalidator = CacheInvalidator(cache)
 
@@ -215,11 +230,12 @@ async def test_each_search_invalidation_advances_version_and_corruption_self_hea
     first = cache.values[CacheKeyGenerator.search_cache_version()]
     assert await invalidator.invalidate_all_search_results()
     second = cache.values[CacheKeyGenerator.search_cache_version()]
-    assert (first, second) == (2, 3)
+    assert first > 1 and second == first + 1
 
     cache.values[CacheKeyGenerator.search_cache_version()] = "broken"
-    assert await invalidator.get_search_cache_version() == 1
-    assert CacheKeyGenerator.search_cache_version() not in cache.values
+    with pytest.raises(RuntimeError, match="generation"):
+        await invalidator.get_search_cache_version()
+    assert cache.values[CacheKeyGenerator.search_cache_version()] == "broken"
 
 
 @pytest.mark.asyncio
@@ -261,7 +277,7 @@ async def test_single_database_media_create_invalidates_search_and_file_stats():
     success, status, existing = await repository.save_media(make_media())
 
     assert (success, status, existing) == (True, 1, None)
-    assert cache.values[CacheKeyGenerator.search_cache_version()] == 2
+    assert cache.values[CacheKeyGenerator.search_cache_version()] > 1
     assert CacheKeyGenerator.file_stats() in cache.deleted
     assert CacheKeyGenerator.media("unique-1") in cache.values
 
@@ -277,7 +293,7 @@ async def test_media_update_invalidates_version_in_multi_database_mode():
     repository.find_file = AsyncMock(return_value=make_media())
 
     assert await repository.update("telegram-file-1", {"caption": "Updated"})
-    assert cache.values[CacheKeyGenerator.search_cache_version()] == 2
+    assert cache.values[CacheKeyGenerator.search_cache_version()] > 1
 
 
 @pytest.mark.asyncio

@@ -131,7 +131,7 @@ class CacheKeyGenerator:
 
     # Bump whenever the Mongo query matching semantics change. Redis data
     # from earlier releases then expires naturally instead of being re-used.
-    SEARCH_ALGORITHM_REVISION = 2
+    SEARCH_ALGORITHM_REVISION = 3
 
     @staticmethod
     def search_results_versioned(query: str, file_type: Optional[str], offset: int,

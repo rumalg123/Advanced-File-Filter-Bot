@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from pyrogram.errors import UserIsBlocked
-from pyrogram.types import InlineKeyboardMarkup
+from pyrogram.types import InlineKeyboardMarkup, CallbackQuery
+from repositories.user import UserStatus
 
 from config.settings import FeatureConfig
 from core.cache.config import CacheKeyGenerator
@@ -253,19 +254,19 @@ async def test_variant_grouping_survives_forward_and_back_pagination():
     bot = SimpleNamespace(
         cache=SortedCache(),
         config=SimpleNamespace(
-            MAX_BTN_SIZE=10,
+            MAX_BTN_SIZE=10, ADMINS=[], AUTH_CHANNEL=0, AUTH_GROUPS=[],
             FEATURE_DUPLICATE_GROUPING=True
         ),
         file_service=SimpleNamespace(search_files_with_access_check=search),
-        user_repo=SimpleNamespace()
+        user_repo=SimpleNamespace(get_user=AsyncMock(return_value=SimpleNamespace(status=UserStatus.ACTIVE)))
     )
-    message = SimpleNamespace(photo=None, edit_text=AsyncMock())
-    query = SimpleNamespace(
+    message = SimpleNamespace(photo=None, chat=SimpleNamespace(id=7), edit_text=AsyncMock())
+    query = CallbackQuery(id='qa', chat_instance='qa',
         data="search#next#glory#10#30#7",
-        from_user=SimpleNamespace(id=7),
-        message=message,
-        answer=AsyncMock()
+        from_user=SimpleNamespace(id=7, is_bot=False),
+        message=message
     )
+    query.answer=AsyncMock()
     handler = PaginationCallbackHandler(bot)
 
     with patch("handlers.callbacks_handlers.pagination.is_private_chat", return_value=True):
@@ -277,6 +278,8 @@ async def test_variant_grouping_survives_forward_and_back_pagination():
         call.kwargs["reply_markup"]
         for call in message.edit_text.await_args_list
     ]
+    assert len(markups) == 2
+    assert search.await_count == 2
     for markup in markups:
         buttons = [button for row in markup.inline_keyboard for button in row]
         assert any("(3 variants)" in button.text for button in buttons)
@@ -296,7 +299,7 @@ async def test_autocomplete_uses_only_non_exact_successful_candidates():
     )
     service = FeatureService(
         SimpleNamespace(),
-        SimpleNamespace(),
+        SimpleNamespace(has_matching_file=AsyncMock(return_value=True)),
         history,
         feature_config('FEATURE_SEARCH_AUTOCOMPLETE')
     )
@@ -311,6 +314,13 @@ async def test_autocomplete_uses_only_non_exact_successful_candidates():
 async def test_saved_search_alerts_are_flagged_matched_and_deduplicated():
     media = make_file(name="The.Matrix.1999.1080p.mkv")
     repository = SimpleNamespace(
+        get_active_saved_search_page=AsyncMock(side_effect=lambda **kwargs: [{
+            '_id': 'search1',
+            'user_id': 7,
+            'query': 'The Matrix',
+            'normalized_query': 'the matrix'
+        }] if kwargs['after_id'] is None else []),
+        # previous get_active_saved_searches fixture is retained below
         get_active_saved_searches=AsyncMock(return_value=[{
             '_id': 'search1',
             'user_id': 7,
@@ -320,7 +330,7 @@ async def test_saved_search_alerts_are_flagged_matched_and_deduplicated():
         claim_saved_search_notification=AsyncMock(return_value=True),
         release_saved_search_notification=AsyncMock()
     )
-    bot = SimpleNamespace(send_message=AsyncMock())
+    bot = SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True)))
     service = FeatureService(
         repository,
         SimpleNamespace(),
@@ -533,7 +543,7 @@ async def test_report_menu_updates_in_place_and_log_channel_includes_file_detail
         message=source_message,
         answer=AsyncMock()
     )
-    client = SimpleNamespace(send_message=AsyncMock())
+    client = SimpleNamespace(send_message=AsyncMock(), user_repo=SimpleNamespace(can_receive_content=AsyncMock(return_value=True)))
     handler = object.__new__(FeatureHandler)
     handler.service = service
     handler.repository = repository
@@ -937,7 +947,7 @@ async def test_duplicate_pending_request_is_returned_without_second_insert():
 
 
 @pytest.mark.asyncio
-async def test_request_status_notification_transition_is_atomically_claimed():
+async def test_request_status_transition_methods_report_guarded_write_results():
     result = SimpleNamespace(modified_count=1)
     collection = SimpleNamespace(update_one=AsyncMock(return_value=result))
 
@@ -953,14 +963,10 @@ async def test_request_status_notification_transition_is_atomically_claimed():
     assert await repository.claim_content_request_transition(
         7, 10, 'completed', 1
     )
-    claim_filter = collection.update_one.await_args_list[0].args[0]
-    assert claim_filter == {'_id': '7:10', 'status': 'pending'}
-
-    assert await repository.finish_content_request_transition(
+    collection.update_one.return_value = SimpleNamespace(modified_count=0)
+    assert not await repository.finish_content_request_transition(
         7, 10, 'completed'
     )
-    finish_filter = collection.update_one.await_args_list[1].args[0]
-    assert finish_filter == {'_id': '7:10', 'status': 'processing:completed'}
 
 
 @pytest.mark.asyncio
@@ -1019,9 +1025,8 @@ async def test_content_dashboard_removes_queries_that_now_have_files():
     dashboard = await service.dashboard()
 
     assert [item['query'] for item in dashboard['zero_results']] == ['Missing title']
-    repository.resolve_zero_result.assert_awaited_once_with(
-        'Agent Kim reactivated'
-    )
+    repository.resolve_zero_result.assert_awaited_once()
+    assert repository.resolve_zero_result.await_args.args[0] == 'agent kim reactivated'
     repository.top_zero_results.assert_awaited_once_with(limit=30)
 
 

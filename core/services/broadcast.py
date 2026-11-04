@@ -2,6 +2,7 @@ import asyncio
 import re
 from typing import Dict, List, Tuple
 
+from config.settings import settings
 from core.cache.redis_cache import CacheManager
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.utils.caption import CaptionFormatter
@@ -35,10 +36,21 @@ class BroadcastService:
         self.delay_between_batches = 2  # seconds
         self.progress_update_interval = 10
 
+    @staticmethod
+    def recipient_filter(admins=None):
+        if admins is None:
+            admins = settings.channels.get_admin_list()
+        return {'$or': [
+            {'status': {'$ne': UserStatus.BANNED.value}},
+            {'_id': {'$in': list(admins or [])}},
+        ]}
+
     async def _send_to_user(self, client, message, user_id: int) -> Tuple[str, int]:
         """Deliver the broadcast to a single user under the broadcast semaphore."""
         try:
             async with semaphore_manager.acquire('broadcast', f"broadcast_{user_id}"):
+                if not await self.user_repo.can_receive_content(user_id):
+                    return 'blocked', user_id
                 text_payload = getattr(message, 'text', None)
                 caption_payload = getattr(message, 'caption', None)
 
@@ -120,7 +132,7 @@ class BroadcastService:
         if target_users:
             total_users = len(target_users)
         else:
-            total_users = await self.user_repo.count({'status': {'$ne': UserStatus.BANNED.value}})
+            total_users = await self.user_repo.count(self.recipient_filter())
         
         stats = {
             'total': total_users,
@@ -145,7 +157,7 @@ class BroadcastService:
                     break
                 users = target_users[offset:offset + self.batch_size]
             else:
-                user_filter = {'status': {'$ne': UserStatus.BANNED.value}}
+                user_filter = self.recipient_filter()
                 if last_user_id is not None:
                     user_filter['_id'] = {'$gt': last_user_id}
 

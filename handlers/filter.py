@@ -9,6 +9,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
+from handlers.decorators import check_ban
 from core.utils.validators import extract_user_id, has_admin_rights, is_owner_or_bot_admin
 from handlers.base import BaseHandler
 
@@ -51,6 +52,7 @@ class FilterHandler(BaseHandler):
         except ValueError:
             return text.split(None, 1)
 
+    @check_ban()
     async def add_filter_command(self, client: Client, message: Message):
         """Handle add filter command"""
         user_id = extract_user_id(message)
@@ -131,6 +133,7 @@ class FilterHandler(BaseHandler):
         else:
             return await message.reply_text("Failed to add filter!", quote=True)
 
+    @check_ban()
     async def view_filters_command(self, client: Client, message: Message):
         """Handle view filters command"""
         user_id = extract_user_id(message)
@@ -181,6 +184,7 @@ class FilterHandler(BaseHandler):
             parse_mode=CaptionFormatter.get_parse_mode()
         )
 
+    @check_ban()
     async def delete_filter_command(self, client: Client, message: Message):
         """Handle delete filter command"""
         user_id = extract_user_id(message)
@@ -262,6 +266,7 @@ class FilterHandler(BaseHandler):
             # Only show if we didn't delete anything and no suggestions were shown
             pass  # Already handled above with suggestions
 
+    @check_ban()
     async def delete_all_command(self, client: Client, message: Message):
         """Handle delete all filters command"""
         user_id = extract_user_id(message)

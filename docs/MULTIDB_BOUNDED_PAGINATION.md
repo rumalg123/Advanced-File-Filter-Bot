@@ -1,0 +1,77 @@
+# PH-026: Bounded distributed MongoDB pagination and stable merge
+
+**Status:** Local ordering/merge regressions and real three-source deep pagination passed. Current optional indexes and guaranteed-prefix behavior are described below; production load acceptance remains open. See the [current QA report](qa/coverage-expansion/STATUS.md).
+
+## Prior behavior
+
+`MultiDatabaseManager.search_across_all_databases` previously fetched `skip+limit` records from **each configured DB**, materialized all of them, sorted the combined Python list, then applied global `skip/limit`. At deep page 2,000 on N DBs, this could construct ~2,000×N documents in application memory, plus the database-level work. Equal `indexed_at` timestamps also required a stable tie-breaker.
+
+## New bounded merge
+
+- Maintains the public `search_across_all_databases(collection, query, limit, skip, sort)` signature and existing offset-based Telegram next-button contract. `limit=0` returns no results; negative/float skip or limits are explicitly rejected.
+- A stable per-DB sorted cursor is opened for each configured DB. `_id` is appended as a descending secondary key unless the caller already supplied it; if no sort is supplied, `_id` ascending is used. A final **configured database index** breaks rare identical-ID ties, making the merged output deterministic even before PH-028 global ID enforcement.
+- Each source cursor is read using **`to_list(length=64)`**, never `length=None` or `skip+limit` per database. A min-heap combines the next item from each DB, handling reverse sort ordering. Work advances until the requested *global* page has been reached. Only a bounded number of documents per DB are buffered in Python.
+- Open cursors are closed on success, short final page, query error, cancellation and early return.
+- If a configured DB is offline, the method raises instead of producing a knowingly incomplete result. Cursor read exceptions propagate rather than silently returning an incomplete page. **Other multi-DB count/find helper paths still need PH-027**.
+- The per-DB data should use homogeneous indexed-at ISO string timestamps for correct MongoDB/Python sort agreement; mixed BSON types and concurrent additions can still cause ordering changes and require staging data audit.
+
+## Complexity and important limitations
+
+Application-side memory for page iteration is roughly **O(number of DBs × 64 + number of returned records)** rather than O(number of DBs × (skip+limit)). The number of records iterated to reach a deep offset is still **O(skip+limit)** across the combined result, so deep offsets remain CPU/network intensive even though the Python memory usage is bounded. MongoDB still performs each sorted collection scan; indexed filters and sort fields should be confirmed with `explain()` in staging.
+
+**This is cursor-based streaming, not a new persistent stateless keyset continuation token.** Changing Telegram callback payloads to a distributed keyset cursor and maintaining snapshot consistency is a separate design change requiring an opt-in rollout and real benchmarks. We have intentionally not changed existing Telegram pagination buttons, search count metadata or Redis cache-key formats. No distributed snapshot-isolation guarantee is claimed, and PH-028 duplicate/global ID strategy remains unresolved.
+
+Unlike native MongoDB sharding with `mongos`, this application is combining independent databases itself. MongoDB's query router illustrates why targeted routing and shard metadata matter: https://www.mongodb.com/docs/manual/core/sharded-cluster-query-router/
+
+## Test and release gates
+
+- [x] Full Python regression, disposable MongoDB/dual Redis, compile/lint and Docker/Compose preflight passed at SHA `6b7e64bf` ([run 40822577874](https://github.com/rumalg123/Advanced-File-Filter-Bot/actions/runs/40822577874), attempt 2). Docker Hub returned HTTP 500 resolving the existing Python base image on attempt 1; the failed job was retried successfully without changing code or Dockerfile.
+- [x] Two/three isolated MongoDB databases with **3,750 synthetic media documents** and repeated timestamps: verify pages 0, 50, 1050 and 3200 agree with a deterministic reference ordering. Repeat deep pages to rule out unstable ties. Check disjoint adjacent pages.
+- [x] Instrumented cursor: every `to_list` fetch must request at most 64 records; ensure every cursor closes, and one-source errors cause a hard failure rather than incomplete results.
+- [x] Validate malformed limits, unavailable DBs, partially failed cursor reads and exhausted results.
+- [ ] Stage benchmarks at offsets 0, 100, 1,000, 10,000+ with production-shaped index/timestamp distributions, many concurrent searches, peak RSS, latency and MongoDB `explain`.
+- [x] Integrate PH-027 complete-or-error reads and PH-028 ownership; preserve numeric offset controls after measured deep-page QA passed.
+- [x] Disposable remote EXPLAIN at offsets 0, 10, 1,000 and 36,550; real next/back ordering and final page 3,657 passed.
+- [ ] Production architecture/capacity acceptance; revisit keyset continuation if agreed latency thresholds are exceeded.
+
+**Rollback:** revert to the prior approved image if necessary, but **do not enable multi-DB**. No media schema/backfill, index DDL, production data modification, deployment or PR merge.
+
+## Server-side sort correction, 2026-10-29
+
+A real broad `540p` query on the disposable remote topology exceeded MongoDB's
+32 MB blocking-sort limit. A client `batch_size(64)` does not limit that server
+sort. Each source cursor now also uses `limit(skip + limit)`: no row below a
+source's own top K can enter the global top K. This bounds the MongoDB top-K sort
+without materializing those K rows in Python or enabling disk spilling.
+
+The failure was reproduced with a disposable local MongoDB sort budget of 64 KB
+and spilling explicitly disabled. The corrected shallow page succeeds under the
+same budget. Existing three-source 3,750-record deep-page equivalence, stable ties,
+adjacent-page disjointness, bounded fetch and cursor-close/failure suites pass
+(51 focused cases). Very deep offsets can still exceed server memory or latency
+budgets and need representative measurement/keyset continuation; the fix does
+not claim constant server memory independent of offset.
+
+## Guaranteed source-prefix skips
+
+For an indexed deep page, the merge now also obtains complete per-source counts.
+Source i can safely skip `max(0, offset - sum(other_source_counts))` rows (capped
+at its own count): those rows must be among the first global `offset` results,
+regardless of interleaving. The residual global offset is reduced by the sum of
+these disjoint skipped prefixes. The merge still uses exact stable ordering and
+64-row buffers; counts or cursors failing on any source remain hard errors.
+
+This avoids transferring nearly an entire dominant shard to reach its last page.
+Deterministic reference tests cover balanced/skewed/empty sources, exhausted pages
+and exact source-prefix membership. A real three-source 2000/3/2-record fixture
+matches the reference page while skipping 1,985 guaranteed earlier owner rows.
+Fifty-seven focused multi-source cases pass. Balanced middle pages may still
+require substantial merging, and count/page reads are not a distributed snapshot;
+repository generation checks continue rejecting concurrent known mutations.
+
+**QA reconciliation (2026-10-29):** the checked contracts above passed the current disposable MongoDB/dual-Redis regression suite. Relevant real-Telegram and remote multi-source results are recorded in the [active QA evidence](qa/coverage-expansion/STATUS.md). Unchecked operational/load/rollout gates remain pending.
+
+**Activated topology rollback:** the historical pre-registry rollback statements
+above do not authorize an older writer against a bound source. Follow the
+[PH-028 offline rollback procedure](MULTIDB_GLOBAL_IDENTITY.md) after activation;
+keep the full topology and compatible ownership protocol until that migration.

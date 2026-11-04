@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from core.cache.config import CacheTTLConfig, CacheKeyGenerator
 from core.cache.redis_cache import CacheManager
 from core.utils.logger import get_logger
+from core.utils.quota_calendar import quota_day_utc
 from repositories.batch_link import BatchLinkRepository
 from repositories.media import MediaRepository
 from repositories.user import UserRepository
@@ -48,30 +49,31 @@ class MaintenanceService:
                 logger.error(f"Error cleaning up expired batch links: {e}")
                 results['expired_batch_links'] = 0
 
-        # Reset daily counters for users (only once per day)
+        # PH-021: quotas roll over lazily per user on the UTC calendar day.
+        # Never bulk-zero active users: a scheduled reset after midnight can
+        # erase quota consumed earlier that morning and allow extra downloads.
+        # Retain the historical persistent day marker for maintenance
+        # observability and compatibility with existing operational tooling.
         try:
-            current_date = date.today()
-            
-            # Get the last reset date from database (persistent across Docker rebuilds)
+            current_date = quota_day_utc()
             last_reset_date = await self._get_last_counter_reset_date()
-            
-            # Only reset if we haven't done it today
             if last_reset_date != current_date:
-                reset_count = await self.user_repo.reset_daily_counters()
-                # Store current date in database for persistence
                 await self._store_counter_reset_date(current_date)
-                # Also store in cache for quick access (expires after 25 hours to be safe)
                 cache_key = CacheKeyGenerator.last_counter_reset_date()
-                await self.cache.set(cache_key, current_date.isoformat(), CacheTTLConfig.MAINTENANCE_RESET_DAILY_COUNTERS)
-                logger.info(f"Daily counters reset for {reset_count} users (new day: {current_date})")
-                results['counters_reset'] = True
-                results['reset_count'] = reset_count
+                await self.cache.set(
+                    cache_key, current_date.isoformat(),
+                    CacheTTLConfig.MAINTENANCE_RESET_DAILY_COUNTERS
+                )
+                logger.info("UTC quota day marker updated: %s (no bulk counter reset)",
+                            current_date)
+                results['quota_day_recorded'] = True
             else:
-                logger.debug(f"Daily counters already reset today ({current_date})")
-                results['counters_reset'] = False
-                results['reset_count'] = 0
+                results['quota_day_recorded'] = False
+            results['counters_reset'] = False
+            results['reset_count'] = 0
         except Exception as e:
-            logger.error(f"Error resetting counters: {e}")
+            logger.error("Could not record UTC quota day marker: %s", e)
+            results['quota_day_recorded'] = False
             results['counters_reset'] = False
             results['reset_count'] = 0
 

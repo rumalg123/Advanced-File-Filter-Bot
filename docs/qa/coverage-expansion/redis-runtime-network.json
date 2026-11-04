@@ -1,0 +1,9 @@
+{
+  "actual_runtime_client": true,
+  "separate_container_network": true,
+  "cache_and_state_initialized": true,
+  "operational_keys_on_state_only": true,
+  "disposable_keys_on_cache_only": true,
+  "serialized_roundtrip": true,
+  "host_ports_published": false
+}

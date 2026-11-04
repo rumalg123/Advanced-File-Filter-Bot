@@ -1,0 +1,10 @@
+{
+  "secondary_partition": true,
+  "ready_503": true,
+  "liveness_200": true,
+  "safe_search_retry": true,
+  "no_partial_cache": true,
+  "ready_recovered_200": true,
+  "search_recovered": true,
+  "rules_removed": true
+}

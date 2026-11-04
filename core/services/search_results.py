@@ -7,7 +7,9 @@ from typing import List, Optional, Callable, Any
 from pyrogram import Client
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 
+from core.utils.service_tasks import ServiceTasks
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
+from core.cache.errors import OperationalStateUnavailableError
 from core.utils.button_builder import ButtonBuilder
 from core.utils.caption import CaptionFormatter
 from core.utils.logger import get_logger
@@ -24,7 +26,7 @@ logger = get_logger(__name__)
 class SearchResultsService:
     """Service for sending search results with unified formatting and pagination"""
 
-    def __init__(self, cache_manager, config, recommendation_service=None, media_repo=None):
+    def __init__(self, cache_manager, config, recommendation_service=None, media_repo=None, task_manager=None):
         """
         Initialize SearchResultsService
         
@@ -34,6 +36,7 @@ class SearchResultsService:
             recommendation_service: Optional recommendation service for tracking
             media_repo: Optional media repository used to resolve recommended files
         """
+        self.tasks = ServiceTasks(task_manager)
         self.cache = cache_manager
         self.config = config
         self.ttl = CacheTTLConfig()
@@ -109,11 +112,17 @@ class SearchResultsService:
 
             # Store search results in cache
             search_data = {'files': files_data, 'query': query, 'user_id': user_id}
-            await self.cache.set(
+            stored = await self.cache.set(
                 search_key,
                 search_data,
                 expire=self.ttl.SEARCH_SESSION
             )
+            if not stored:
+                # Do not display unusable file/send-all buttons when the
+                # protected state store is full or offline.
+                raise OperationalStateUnavailableError(
+                    "Unable to store Telegram search button session"
+                )
             query_reference = make_search_query_reference(session_id)
             
             # Track files shown for this query (for recommendations)
@@ -192,8 +201,7 @@ class SearchResultsService:
                     if recommended_file_ids or similar_queries:
                         # This will be sent as a separate message (non-blocking)
                         # We'll create a background task for this
-                        import asyncio
-                        asyncio.create_task(
+                        self.tasks.create(
                             self._send_recommendations(
                                 client, message, query, recommended_file_ids, similar_queries,
                                 user_id, query_reference, auto_delete_callback
@@ -204,6 +212,9 @@ class SearchResultsService:
 
             return True
 
+        except OperationalStateUnavailableError:
+            # Let handler show retryable error instead of "No Results Found".
+            raise
         except Exception as e:
             logger.error(f"Error sending search results: {e}", exc_info=True)
             return False

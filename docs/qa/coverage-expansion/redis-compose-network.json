@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-29",
+  "issue": "BUG-059",
+  "separate_container_client": true,
+  "before": {
+    "cache_ping": true,
+    "state_ping": false,
+    "state_error": "Protected mode denied a non-loopback unauthenticated connection"
+  },
+  "after": {
+    "cache_ping": true,
+    "state_ping": true
+  },
+  "internal_network": true,
+  "host_ports_published": false,
+  "temporary_resources_removed": true,
+  "configs_sha256": {
+    "redis.conf": "b100c268f0b455e2d6894cf9105131b930c1eb1f07000aa4db44c25bd26b21de",
+    "redis-state.conf": "de083fbe185f750c2b98ea58b55dc0bdb7f405e137a85f70f72c731b9b85f8ac"
+  },
+  "reproduce": "bash scripts/test_redis_compose_network.sh"
+}

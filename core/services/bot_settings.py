@@ -1,9 +1,12 @@
 from typing import Dict, Any, List, Optional, Tuple
 import os
+import math
+import re
 
 from core.cache.redis_cache import CacheManager
 from repositories.bot_settings import BotSettingsRepository
 from core.utils.logger import get_logger
+from core.utils.subscription_config import parse_subscription_targets
 
 logger = get_logger(__name__)
 
@@ -14,12 +17,15 @@ class BotSettingsService:
     # Define all configurable settings with their metadata
     SETTINGS_METADATA = {
         'PORT': {
+            'min': 1,
+            'max': 65535,
             'type': 'int',
             'default': 8000,
             'description': 'Web server port',
             'category': 'server'
         },
         'CACHE_TIME': {
+            'min': 1,
             'type': 'int',
             'default': 300,
             'description': 'Search-result cache expiration in seconds (restart required)',
@@ -71,9 +77,34 @@ class BotSettingsService:
             'type': 'bool', 'default': False,
             'description': 'Show recommendation reasons', 'category': 'features'
         },
+        'FEATURE_INDEXED_MEDIA_SEARCH': {
+            'type': 'bool', 'default': False,
+            'description': 'Enable indexed word candidates after search-token backfill',
+            'category': 'features'
+        },
         'FEATURE_CONTENT_DASHBOARD': {
             'type': 'bool', 'default': False,
             'description': 'Enable the admin content dashboard', 'category': 'features'
+        },
+        'DATABASE_GLOBAL_OWNER_REGISTRY': {
+            'type': 'bool', 'default': False, 'category': 'database',
+            'description': 'Coordinate file ownership across multiple databases. Activate ownership with all writers stopped before restarting with this enabled. Restart required.'
+        },
+        'FEATURE_CANONICAL_MEDIA_METADATA': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Persist separate quality and pixel dimensions on new media. Check compatibility before rolling back to older images. Restart required.'
+        },
+        'FEATURE_QUOTA_DELIVERY_LEDGER': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Record quota reservations and one-time settlements. Uncertain deliveries require operator review. Restart required.'
+        },
+        'PROCESSING_DURABLE_INDEXING': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Store channel indexing jobs in MongoDB for retry and restart recovery. Restart required.'
+        },
+        'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': {
+            'type': 'bool', 'default': False, 'category': 'features',
+            'description': 'Store saved-search alert jobs in MongoDB for retry and recovery. Also requires Saved Alerts to be enabled. Restart required.'
         },
         'ADMINS': {
             'type': 'list',
@@ -94,15 +125,25 @@ class BotSettingsService:
             'category': 'access'
         },
         'AUTH_CHANNEL': {
-            'type': 'str',
-            'default': '',
-            'description': 'Channel ID for force subscription',
+            'type': 'list',
+            'default': [],
+            'description': 'Force-subscription channel IDs or @usernames (comma separated). Bot admin and Invite Users permission are checked before saving.',
             'category': 'subscription'
         },
         'AUTH_GROUPS': {
             'type': 'list',
             'default': [],
-            'description': 'Group IDs for force subscription (comma separated)',
+            'description': 'Force-subscription group IDs or @usernames (comma separated). Bot admin and Invite Users permission are checked before saving.',
+            'category': 'subscription'
+        },
+        'FORCE_SUB_INVITE_EXPIRE_MINUTES': {
+            'type': 'int', 'default': 15, 'min': 1, 'max': 525600,
+            'description': 'Invite-link lifetime in minutes. New links use this value after restart.',
+            'category': 'subscription'
+        },
+        'FORCE_SUB_INVITE_MEMBER_LIMIT': {
+            'type': 'int', 'default': 1, 'min': 1, 'max': 99999,
+            'description': 'Maximum simultaneous members admitted through each invite link. This is not a lifetime join counter. Restart required.',
             'category': 'subscription'
         },
         'SUPPORT_CHAT_ID': {
@@ -118,6 +159,7 @@ class BotSettingsService:
             'category': 'channels'
         },
         'MAX_BTN_SIZE': {
+            'min': 1,
             'type': 'int',
             'default': 12,
             'description': 'Maximum buttons per page',
@@ -142,6 +184,7 @@ class BotSettingsService:
             'category': 'database'
         },
         'DATABASE_SIZE_LIMIT_GB': {
+            'min': 1e-09,
             'type': 'float',
             'default': 0.5,
             'description': 'Database size limit in GB for auto-switching',
@@ -238,6 +281,7 @@ class BotSettingsService:
             'category': 'customization'
         },
         'WORKERS': {
+            'min': 1,
             'type': 'int',
             'default': 50,
             'description': 'Number of worker threads',
@@ -264,6 +308,7 @@ class BotSettingsService:
             'max': 36500,
         },
         'NON_PREMIUM_DAILY_LIMIT': {
+            'min': 0,
             'type': 'int',
             'default': 10,
             'description': 'Daily file limit for non-premium users',
@@ -276,6 +321,7 @@ class BotSettingsService:
             'category': 'premium'
         },
         'MESSAGE_DELETE_SECONDS': {
+            'min': 0,
             'type': 'int',
             'default': 300,
             'description': 'Auto-delete messages after seconds',
@@ -361,9 +407,51 @@ class BotSettingsService:
         },
     }
 
-    def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager):
+    def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager,
+                 *, database_config=None, telegram_client=None):
         self.settings_repo = settings_repo
         self.cache = cache_manager
+        self.telegram_client = telegram_client
+        if database_config is None:
+            from config.settings import settings
+            database_config = settings.database
+        self.database_config = database_config
+
+    async def owner_registry_policy(self) -> Dict[str, Any]:
+        """Source eligibility and activation recommendation; never activates data."""
+        from core.database.topology import validated_database_sources
+        from core.database.media_owners import GlobalMediaOwners
+        from types import SimpleNamespace
+
+        policy = {'editable': False, 'default': False, 'bound': False, 'note': ''}
+        try:
+            sources = validated_database_sources(self.database_config)
+        except ValueError as error:
+            policy['note'] = str(error)
+            return policy
+        if len(sources) < 2:
+            policy['note'] = 'Configure at least two distinct valid database sources to edit this setting.'
+            return policy
+        try:
+            collection = await self.settings_repo.db_pool.get_collection('media_owner_control')
+            binding = await collection.find_one({'_id': 'binding-v1'})
+            topology = await collection.find_one({'_id': 'topology-v1'})
+            owners = GlobalMediaOwners([SimpleNamespace(uri=uri, name=name) for uri, name in sources])
+            ready = bool(binding and binding.get('coordinator') == owners.primary
+                         and binding.get('source') == owners.primary and topology
+                         and topology.get('state') == 'ready'
+                         and topology.get('topology') == owners.topology)
+        except Exception as e:
+            logger.error(f"Failed to check media ownership activation status: {e}")
+            policy['note'] = 'Cannot verify ownership activation. Check database connectivity before editing.'
+            return policy
+        policy.update(editable=True, default=ready, bound=bool(binding))
+        policy['note'] = (
+            'Recommended: True. Ownership is activated; disabling it requires a separate retirement migration.'
+            if ready else
+            'Recommended: False until ownership activation is complete. If enabling, stop all writers and activate ownership before restarting.'
+        )
+        return policy
 
     async def initialize_settings(self) -> None:
         """Initialize settings from environment or defaults"""
@@ -373,6 +461,9 @@ class BotSettingsService:
             # Check if setting exists in DB
             existing = await self.settings_repo.get_setting(key)
             if not existing:
+                default = metadata['default']
+                if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+                    default = (await self.owner_registry_policy())['default']
                 # Get from environment or use default
                 env_value = os.environ.get(key)
                 if env_value is None:
@@ -384,14 +475,15 @@ class BotSettingsService:
                     env_value = os.environ.get(alias) if alias else None
 
                 if env_value is not None:
-                    value = self._parse_value(env_value, metadata['type'])
+                    value = (parse_subscription_targets(env_value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                             else self._parse_value(env_value, metadata['type']))
                 else:
-                    value = metadata['default']
+                    value = default
 
                 settings_to_save[key] = {
                     'value': value,
                     'type': metadata['type'],
-                    'default': metadata['default'],
+                    'default': default,
                     'description': metadata['description']
                 }
 
@@ -409,10 +501,14 @@ class BotSettingsService:
             if key in db_settings:
                 stored_value = db_settings[key].value
                 try:
+                    stored_value = (parse_subscription_targets(stored_value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                                    else self._parse_value(stored_value, metadata['type'], strict=True))
                     stored_value = self._validate_value_bounds(
                         key, stored_value, metadata
                     )
-                except ValueError as error:
+                except (ValueError, TypeError) as error:
+                    if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}:
+                        raise ValueError(f"Invalid stored force-subscription setting {key}; correct it before startup.") from error
                     logger.warning(
                         f"Ignoring invalid stored setting {key}: {error}"
                     )
@@ -434,16 +530,25 @@ class BotSettingsService:
                     'category': metadata['category']
                 }
 
+        policy = await self.owner_registry_policy()
+        owner_setting = result['DATABASE_GLOBAL_OWNER_REGISTRY']
+        owner_setting.update(default=policy['default'], editable=policy['editable'],
+                             edit_note=policy['note'])
+        if 'DATABASE_GLOBAL_OWNER_REGISTRY' not in db_settings:
+            owner_setting['value'] = policy['default']
         return result
 
     async def get_setting(self, key: str) -> Optional[Any]:
         """Get a single setting value"""
         setting = await self.settings_repo.get_setting(key)
         if setting:
-            return setting.value
+            return (parse_subscription_targets(setting.value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                    else setting.value)
 
         # Return default if not found
         if key in self.SETTINGS_METADATA:
+            if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+                return (await self.owner_registry_policy())['default']
             return self.SETTINGS_METADATA[key]['default']
 
         return None
@@ -456,14 +561,31 @@ class BotSettingsService:
         metadata = self.SETTINGS_METADATA[key]
 
         # Validate and parse value
-        parsed_value = self._parse_value(value, metadata['type'])
+        parsed_value = (parse_subscription_targets(value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
+                        else self._parse_value(value, metadata['type'], strict=True))
         parsed_value = self._validate_value_bounds(key, parsed_value, metadata)
+        default = metadata['default']
+        if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'} and parsed_value:
+            if self.telegram_client is None:
+                raise ValueError('Cannot verify force-subscription permissions. Reopen settings in the running bot and retry.')
+            from core.utils.subscription import SubscriptionManager
+            parsed_value = await SubscriptionManager.validate_targets(
+                self.telegram_client, parsed_value,
+                expected_type='channel' if key == 'AUTH_CHANNEL' else 'group'
+            )
+        if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+            policy = await self.owner_registry_policy()
+            if not policy['editable']:
+                raise ValueError(policy['note'])
+            if not parsed_value and policy['bound']:
+                raise ValueError('Activated media ownership cannot be disabled. A separate retirement migration is required.')
+            default = policy['default']
 
         return await self.settings_repo.set_setting(
             key=key,
             value=parsed_value,
             value_type=metadata['type'],
-            default_value=metadata['default'],
+            default_value=default,
             description=metadata['description']
         )
 
@@ -485,18 +607,36 @@ class BotSettingsService:
         if key not in self.SETTINGS_METADATA:
             return False
 
-        metadata = self.SETTINGS_METADATA[key]
+        default = self.SETTINGS_METADATA[key]['default']
+        if key == 'DATABASE_GLOBAL_OWNER_REGISTRY':
+            default = (await self.owner_registry_policy())['default']
+        return await self.update_setting(key, default)
 
-        return await self.settings_repo.set_setting(
-            key=key,
-            value=metadata['default'],
-            value_type=metadata['type'],
-            default_value=metadata['default'],
-            description=metadata['description']
-        )
-
-    def _parse_value(self, value: Any, value_type: str) -> Any:
+    def _parse_value(self, value: Any, value_type: str, *, strict: bool = False) -> Any:
         """Parse value based on type"""
+        if strict:
+            if value_type == 'int':
+                if isinstance(value, bool) or not isinstance(value, (str, int)):
+                    raise ValueError("Expected an integer")
+                if isinstance(value, str) and not re.fullmatch(r"[+-]?[0-9]+", value.strip()):
+                    raise ValueError("Expected an integer")
+            elif value_type == 'float':
+                try:
+                    parsed = float(value)
+                except (ValueError, TypeError, OverflowError) as error:
+                    raise ValueError("Expected a finite number") from error
+                if isinstance(value, bool) or not math.isfinite(parsed):
+                    raise ValueError("Expected a finite number")
+                return parsed
+            elif value_type == 'bool':
+                if isinstance(value, bool):
+                    return value
+                text = str(value).strip().lower()
+                if text in {'true', 'yes', '1', 'enable', 'enabled', 'y', 'on'}:
+                    return True
+                if text in {'false', 'no', '0', 'disable', 'disabled', 'n', 'off'}:
+                    return False
+                raise ValueError("Expected true or false")
         if value_type == 'int':
             if not value:
                 return 0
@@ -566,8 +706,10 @@ class BotSettingsService:
         for key, data in settings.items():
             if key in self.SETTINGS_METADATA:
                 try:
-                    await self.update_setting(key, data.get('value'))
-                    success_count += 1
+                    if await self.update_setting(key, data.get('value')):
+                        success_count += 1
+                    else:
+                        failed_count += 1
                 except Exception as e:
                     logger.error(f"Failed to import setting {key}: {e}")
                     failed_count += 1

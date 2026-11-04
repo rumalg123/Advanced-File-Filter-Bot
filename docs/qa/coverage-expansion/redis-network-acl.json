@@ -1,0 +1,5 @@
+{
+  "state_acl_rejects_unauthenticated_separate_container": true,
+  "state_acl_accepts_authenticated_separate_container": true,
+  "password_not_printed_or_passed_in_arguments": true
+}

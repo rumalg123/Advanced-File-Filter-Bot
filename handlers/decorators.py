@@ -1,9 +1,11 @@
+import html
 from functools import wraps
 from typing import Union, Optional, Callable
 
 from pyrogram import Client
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 
+from core.database.errors import USER_ACCESS_RETRY_MESSAGE
 from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from core.utils.messages import MessageHelper
@@ -153,50 +155,52 @@ require_subscription = SubscriptionRequired.require_subscription
 # Add this to handlers/decorators.py after the existing SubscriptionRequired class
 
 class BanCheck:
-    """Decorator class for checking if user is banned"""
+    """Check authoritative ban state before user operations."""
+
+    @staticmethod
+    async def _deny(message, html_text: str, plain_text: str):
+        if isinstance(message, CallbackQuery) or (
+            hasattr(message, 'answer') and hasattr(message, 'data')
+        ):
+            encoded = plain_text.encode('utf-8')
+            if len(encoded) > 200:
+                plain_text = encoded[:197].decode('utf-8', errors='ignore') + '…'
+            await message.answer(plain_text, show_alert=True)
+        elif hasattr(message, 'reply_text'):
+            await message.reply_text(html_text)
 
     @staticmethod
     def check_ban():
-        """Decorator to check if user is banned before executing commands"""
-
         def decorator(func: Callable):
             @wraps(func)
             async def wrapper(self, client: Client, message: Union[Message, CallbackQuery], *args, **kwargs):
                 user_id = extract_user_id(message)
-
                 if not user_id:
                     return
-
-                # Skip ban check for admins
-                if is_admin(user_id, self.bot.config.ADMINS):
+                admins = getattr(getattr(self.bot, 'config', None), 'ADMINS', []) or []
+                if is_admin(user_id, admins):
                     return await func(self, client, message, *args, **kwargs)
-
-                # Check if user is banned
-                user = await self.bot.user_repo.get_user(user_id)
-                if user and user.status == UserStatus.BANNED:
-                    if isinstance(message, Message):
-                        ban_text = (
-                            ErrorMessageFormatter.format_access_denied("You are banned from using this bot") + "\n"
-                            f"<b>Reason:</b> {user.ban_reason or 'No reason provided'}\n"
-                            f"<b>Banned on:</b> {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n"
-                            "Contact the bot admin if you think this is a mistake."
-                        )
-                        await message.reply_text(ban_text)
-                    elif isinstance(message, CallbackQuery):
-                        # Use plain text for alerts
-                        ban_text = (
-                            ErrorMessageFormatter.format_access_denied("You are banned from using this bot", plain_text=True) + "\n"
-                            f"Reason: {user.ban_reason or 'No reason provided'}\n"
-                            f"Banned on: {user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'}\n"
-                            "Contact the bot admin if you think this is a mistake."
-                        )
-                        await message.answer(ban_text, show_alert=True)
+                try:
+                    user = await self.bot.user_repo.get_user(user_id, use_cache=False)
+                except Exception:
+                    logger.warning("Ban state unavailable for %s", user_id, exc_info=True)
+                    await BanCheck._deny(message, USER_ACCESS_RETRY_MESSAGE, USER_ACCESS_RETRY_MESSAGE)
                     return
-
+                if user and user.status == UserStatus.BANNED:
+                    reason = user.ban_reason or 'No reason provided'
+                    ban_date = user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'Unknown'
+                    await BanCheck._deny(
+                        message,
+                        ErrorMessageFormatter.format_access_denied("You are banned from using this bot") + "\n"
+                        f"<b>Reason:</b> {html.escape(str(reason))}\n<b>Banned on:</b> {ban_date}\n"
+                        "Contact the bot admin if you think this is a mistake.",
+                        ErrorMessageFormatter.format_access_denied("You are banned from using this bot", plain_text=True) + "\n"
+                        f"Reason: {reason}\nBanned on: {ban_date}\n"
+                        "Contact the bot admin if you think this is a mistake.",
+                    )
+                    return
                 return await func(self, client, message, *args, **kwargs)
-
             return wrapper
-
         return decorator
 
 

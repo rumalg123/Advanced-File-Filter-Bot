@@ -84,11 +84,9 @@ setup_python_env() {
         python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
         log_info "Found Python $python_version"
         
-        # Install/upgrade requirements if file exists and has been updated
-        if [ -f "$REQUIREMENTS_FILE" ]; then
-            log_info "Checking Python dependencies"
-            pip install --user --no-deps --upgrade -r "$REQUIREMENTS_FILE" >/dev/null 2>&1
-        fi
+        # Dockerfile installs the complete dependency set during the build.
+        # Runtime upgrades can replace tested packages or prevent offline starts.
+        log_info "Using image dependencies; rebuild the image to update packages"
         
         log_info "Python environment ready (Docker mode)"
         return 0

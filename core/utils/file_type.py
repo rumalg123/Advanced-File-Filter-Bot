@@ -56,6 +56,7 @@ def get_file_type_from_string(media_type: str) -> FileType:
         'document': FileType.DOCUMENT,
         'photo': FileType.PHOTO,
         'animation': FileType.ANIMATION,
+        'application': FileType.APPLICATION,
     }
     return mapping.get(media_type.lower(), FileType.DOCUMENT)
 

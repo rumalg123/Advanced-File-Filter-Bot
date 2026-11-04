@@ -11,6 +11,9 @@ from pyrogram import Client, enums
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
+from config.settings import settings
+
+from core.utils.service_tasks import ServiceTasks
 from core.cache.config import CacheTTLConfig
 from core.cache.redis_cache import CacheManager
 from core.utils.caption import CaptionFormatter
@@ -36,9 +39,11 @@ class FileStoreService:
             media_repo: MediaRepository,
             cache_manager: CacheManager,
             config: Any,
-            batch_link_repo: Optional[BatchLinkRepository] = None
+            batch_link_repo: Optional[BatchLinkRepository] = None,
+            task_manager=None
 
     ):
+        self.tasks = ServiceTasks(task_manager)
         self.media_repo = media_repo
         self.cache = cache_manager
         self.config = config
@@ -180,7 +185,10 @@ class FileStoreService:
                 logger.info(f"Successfully saved new file to database with ref: {identifier}")
                 feature_service = getattr(self, 'feature_service', None)
                 if feature_service:
-                    feature_service.schedule_new_media(media_file)
+                    if hasattr(feature_service, "persist_new_media"):
+                        await feature_service.persist_new_media(media_file)
+                    else:
+                        feature_service.schedule_new_media(media_file)
             else:
                 # Error saving file and no duplicate found
                 logger.error(f"Failed to save file to database: {media_file_unique_id}")
@@ -227,74 +235,33 @@ class FileStoreService:
             protect: bool = False
     ) -> Optional[str]:
         """Create batch link for multiple files"""
-        # Parse message links
-        import re
-
-        # Updated regex pattern to handle both numeric IDs and usernames
-        link_pattern = re.compile(
-            r"(?:https?://)?(?:t\.me|telegram\.me|telegram\.dog)/"
-            r"(?:c/)?(\d+|[a-zA-Z][a-zA-Z0-9_-]*)/(\d+)/?$"
-        )
-
-        # Parse first link
-        match = link_pattern.match(first_msg_link.strip())
-        if not match:
-            logger.error(f"First link doesn't match pattern: {first_msg_link}")
+        first = TelegramLinkParser.parse_link(first_msg_link)
+        last = TelegramLinkParser.parse_link(last_msg_link)
+        if not first or not last or not TelegramLinkParser.is_valid_batch_range(
+            first.message_id, last.message_id, settings.processing.max_batch_messages
+        ):
+            logger.warning("Invalid batch message range")
             return None
 
-        f_chat_id = match.group(1)
-        f_msg_id = int(match.group(2))
-
-        # Handle channel IDs (numeric IDs from /c/ links need -100 prefix)
-        if f_chat_id.isdigit():
-            if '/c/' in first_msg_link:
-                f_chat_id = int("-100" + f_chat_id)
-            else:
-                # Regular numeric ID (might already have -100 prefix)
-                f_chat_id = int(f_chat_id)
-        else:
-            # It's a username, try to get channel info
-            try:
-                chat = await telegram_api.call_api(
-                    client.get_chat,
-                    f_chat_id,
-                    chat_id=None  # Username, not numeric ID
-                )
-                f_chat_id = chat.id
-            except Exception as e:
-                logger.error(f"Error resolving chat {f_chat_id}: {e}")
-                return None
-
-        # Parse last link
-        match = link_pattern.match(last_msg_link.strip())
-        if not match:
-            logger.error(f"Last link doesn't match pattern: {last_msg_link}")
+        # Resolve both formats before comparing, preserving mixed username/ID links.
+        chat_ids = []
+        for parsed in (first, last):
+            chat_id = parsed.chat_id
+            if chat_id is None:
+                try:
+                    chat = await telegram_api.call_api(
+                        client.get_chat, parsed.chat_identifier, chat_id=None
+                    )
+                    chat_id = chat.id
+                except Exception:
+                    logger.warning("Unable to resolve batch source", exc_info=True)
+                    return None
+            chat_ids.append(chat_id)
+        if chat_ids[0] != chat_ids[1]:
+            logger.warning("Batch links belong to different chats")
             return None
-
-        l_chat_id = match.group(1)
-        l_msg_id = int(match.group(2))
-
-        # Handle channel IDs
-        if l_chat_id.isdigit():
-            if '/c/' in last_msg_link:
-                l_chat_id = int("-100" + l_chat_id)
-            else:
-                l_chat_id = int(l_chat_id)
-        else:
-            try:
-                chat = await telegram_api.call_api(
-                    client.get_chat,
-                    l_chat_id,
-                    chat_id=None  # Username, not numeric ID
-                )
-                l_chat_id = chat.id
-            except Exception as e:
-                logger.error(f"Error resolving chat {l_chat_id}: {e}")
-                return None
-
-        if f_chat_id != l_chat_id:
-            logger.error(f"Chat IDs don't match: {f_chat_id} != {l_chat_id}")
-            return None
+        f_chat_id = chat_ids[0]
+        f_msg_id, l_msg_id = first.message_id, last.message_id
 
         # Create batch data
         string = f"{f_msg_id}_{l_msg_id}_{f_chat_id}_{'pbatch' if protect else 'batch'}"
@@ -558,7 +525,8 @@ class FileStoreService:
             user_id: int,
             file_identifier: str,
             protect: bool = False,
-            caption_func=None
+            caption_func=None,
+            delivery_progress=None,
     ) -> bool:
         """Send a stored file to user using file identifier"""
         try:
@@ -592,7 +560,7 @@ class FileStoreService:
 
             # Schedule auto-deletion if enabled
             if self.config.MESSAGE_DELETE_SECONDS > 0:
-                asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+                self.tasks.create(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS), auto_delete=True)
 
             return True
         except Exception as e:
@@ -604,7 +572,9 @@ class FileStoreService:
             client: Client,
             user_id: int,
             batch_data: List[Dict[str, Any]],
-            caption_func=None
+            caption_func=None,
+            delivery_progress=None,
+            access_check=None,
     ) -> Tuple[int, int]:
         """
         Send batch files to user
@@ -613,6 +583,8 @@ class FileStoreService:
         success_count = 0
 
         for file_data in batch_data:
+            if access_check is not None and not await access_check():
+                break
             # Initialize variables outside try block to avoid uninitialized variable warnings
             file_id_to_send = file_data.get("file_id", file_data.get("file_identifier"))
             caption = ""  # Default value
@@ -639,6 +611,8 @@ class FileStoreService:
                 )
 
                 # telegram_api.call_api already uses semaphore_manager internally
+                if delivery_progress is not None:
+                    delivery_progress.attempted += 1
                 sent_msg = await telegram_api.call_api(
                     client.send_cached_media,
                     user_id,
@@ -649,9 +623,12 @@ class FileStoreService:
                     chat_id=user_id
                 )
 
+                if delivery_progress is not None:
+                    delivery_progress.confirmed += 1
+
                 # Schedule auto-deletion if enabled
                 if self.config.MESSAGE_DELETE_SECONDS > 0:
-                    asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+                    self.tasks.create(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS), auto_delete=True)
 
                 success_count += 1
                 await asyncio.sleep(1)  # Avoid flooding
@@ -692,6 +669,8 @@ class FileStoreService:
             first_msg_id: int,
             last_msg_id: int,
             protect: bool = False,
+            delivery_progress=None,
+            access_check=None,
     ) -> Tuple[int, int, int]:
         """
         Send files directly from channel (DSTORE method)
@@ -707,6 +686,8 @@ class FileStoreService:
             async for message in bot.iter_messages(
                     chat_id, last_msg_id, first_msg_id
             ):
+                if access_check is not None and not await access_check():
+                    return success_count, last_msg_id - first_msg_id + 1, media_success_count
                 total_count += 1
 
                 if message.media:
@@ -743,6 +724,8 @@ class FileStoreService:
                         )
 
                         # telegram_api.call_api already uses semaphore_manager internally
+                        if delivery_progress is not None:
+                            delivery_progress.attempted += 1
                         sent_msg = await telegram_api.call_api(
                             message.copy,
                             user_id,
@@ -751,9 +734,12 @@ class FileStoreService:
                             parse_mode=CaptionFormatter.get_parse_mode()
                         )
 
+                        if delivery_progress is not None:
+                            delivery_progress.confirmed += 1
+
                         # Schedule auto-deletion if enabled
                         if self.config.MESSAGE_DELETE_SECONDS > 0:
-                            asyncio.create_task(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS))
+                            self.tasks.create(self._auto_delete_message(sent_msg, self.config.MESSAGE_DELETE_SECONDS), auto_delete=True)
 
                         sent_messages.append(sent_msg)
                         success_count += 1
@@ -773,7 +759,8 @@ class FileStoreService:
                             protect_content=protect
                         )
                         success_count += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Error sending non-media message: {e}")
                         continue
 
                 await asyncio.sleep(1)  # Avoid flooding

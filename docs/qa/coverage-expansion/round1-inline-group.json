@@ -1,0 +1,167 @@
+{
+  "date": "2026-10-30",
+  "round": 1,
+  "scope": [
+    "inline-search",
+    "group-search"
+  ],
+  "application_commit": "7b973bd4e104fc7e1b32fb9e78187e1fa259a1b9",
+  "source_manifest_sha256": "0f7ae5b1c1bcfc8f258d752bb5e187a66f98f3bef360dcaf1c47905a2f878351",
+  "fixes": {
+    "BUG-066": "8c5ba8b",
+    "BUG-067": "7b973bd"
+  },
+  "tests": {
+    "passed": 906,
+    "failed": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new_inline": 20,
+    "new_group": 8
+  },
+  "application_files": 121,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "automated": {
+    "covered_lines": 10032,
+    "num_statements": 17607,
+    "percent_covered": 53.609346352279026,
+    "percent_covered_display": "54",
+    "missing_lines": 7575,
+    "excluded_lines": 41,
+    "percent_statements_covered": 56.97733855852786,
+    "percent_statements_covered_display": "57",
+    "num_branches": 5846,
+    "num_partial_branches": 839,
+    "covered_branches": 2541,
+    "missing_branches": 3305,
+    "percent_branches_covered": 43.465617516250425,
+    "percent_branches_covered_display": "43"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12081,
+    "num_statements": 17607,
+    "percent_covered": 65.10894128682898,
+    "percent_covered_display": "65",
+    "missing_lines": 5526,
+    "excluded_lines": 41,
+    "percent_statements_covered": 68.6147554949736,
+    "percent_statements_covered_display": "69",
+    "num_branches": 5846,
+    "num_partial_branches": 1081,
+    "covered_branches": 3189,
+    "missing_branches": 2657,
+    "percent_branches_covered": 54.55011973999316,
+    "percent_branches_covered_display": "55"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 107,
+        "changed_files_discarded": 11
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 92,
+        "changed_files_discarded": 16
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 101,
+        "changed_files_discarded": 17
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 106,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 103,
+        "changed_files_discarded": 15
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 94,
+        "changed_files_discarded": 15
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 106,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 89,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 0
+      }
+    ],
+    "combined_percent": 65.10894128682898,
+    "policy": "Only files with identical start/end/current SHA256 are accepted."
+  },
+  "live": {
+    "scope": [
+      "inline-search",
+      "group-search"
+    ],
+    "checks": {
+      "inline_first_next_last": true,
+      "inline_no_results": true,
+      "inline_admin_and_normal": true,
+      "inline_cached_document_chosen": true,
+      "group_cross_user_pagination_denied": true,
+      "group_next_back_stable": true,
+      "group_callback_sizes": true,
+      "group_file_opens_private_delivery": true,
+      "group_query_html_is_literal": true,
+      "group_empty_search_is_quiet": true
+    },
+    "fixture_count": 12,
+    "passed": true,
+    "configuration": {
+      "premium_disabled": true,
+      "custom_filters_disabled": true,
+      "indexed_media_search": true,
+      "duplicate_grouping": true,
+      "group_page_size": 3,
+      "database": "disposable-local-mongodb",
+      "cache": "disposable-local-dual-redis"
+    }
+  },
+  "cleanup": {
+    "successful_run_messages": {
+      "admin": 38,
+      "normal": 4,
+      "group": 6
+    },
+    "earlier_fixture_cleanup": {
+      "owned_inline_fixture_messages_removed": 1,
+      "history_scan_limit": 50
+    },
+    "owned_containers_and_networks_remaining": 0,
+    "original_services_preserved": true
+  },
+  "static_checks": [
+    "Python compilation",
+    "Ruff F821/F822/F823",
+    "git diff --check"
+  ],
+  "limits": [
+    "100% whole-bot coverage remains open",
+    "Live inline media selection covered documents; other media types remain unverified in this round",
+    "Ban/subscription/premium/rate-limit/outage/deadline branches used automated fixtures, not live configuration changes",
+    "Earlier historical evidence is retained only for identical source-file hashes; operational production gates remain open",
+    "No production server or remote database accessed"
+  ],
+  "next_round": "Stop after this bounded round and wait for the operator to say continue."
+}

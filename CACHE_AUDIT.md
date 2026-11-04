@@ -1,5 +1,7 @@
 # Cache Correctness Audit and Remediation Register
 
+> Current continuation: [QA evidence and remaining gates](docs/qa/coverage-expansion/STATUS.md). Earlier dated test counts below are historical; source defaults and production rollout status remain separate from QA enablement.
+
 This document is the source of truth for the whole-system cache audit started on
 2026-07-18. Every cache-related runtime change and regression test must reference
 an issue ID below. The audit covers Redis access, serialization, key generation,
@@ -7,6 +9,21 @@ TTLs, repository caches, sessions, rate limits, invalidation, monitoring, and
 MongoDB/cache boundaries.
 
 Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
+
+## Current QA, 2026-10-31
+
+The latest bounded round passed **1,425 tests with zero failures or skips** and
+**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
+BUG-119–122 fix complete query identity, unavailable verification/statistics,
+concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
+payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
+persistence and handled failure recovery passed. Admin/owner bypasses and
+operator diagnostics remain. Source-matched coverage is **71.94% lines,
+59.71% branches, 68.89% combined**.
+The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
+configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
+100% coverage and production operational gates remain open. Earlier dated
+counts remain historical; no feature defaults or production limits changed.
 
 ## Live-safety contract
 
@@ -50,6 +67,10 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
 | CACHE-022 | Low | Fixed | Channel projection | Indexed-count updates invalidate the entity key but not the cached active-channel projection, so callers can see old channel metadata. Invalidate the projection after a successful count update. |
 | CACHE-023 | Medium | Fixed | Session identity | Default session IDs use one-second timestamps, allowing two same-user/same-type creations in one second to reuse a cache identity. Generate collision-resistant IDs so ownership checks remain meaningful. |
 | CACHE-024 | High | Fixed | Monitoring | Serialization analysis scans mixed Redis data types through scalar `GET`; recommendation and search-history sorted sets therefore emit a `WRONGTYPE` error per key, and the scan can traverse the entire database while looking for a small number of serializable samples. Inspect `TYPE` first, read only strings, use `DUMP` for type-agnostic size fallback, and bound examined keys without deleting or rewriting live data. |
+| CACHE-025 | High | Fixed | Premium entitlement | A cached decision can conflict with the current flag/expiry after TTL rounding or an invalidation race; malformed values violate the status tuple contract. Validate shape and current entitlement before returning a hit. See BUG-103 and the bounded premium QA record. |
+| CACHE-026 | Medium | Fixed | Recommendation rankings | Cached rankings ignore requested limits and feature flags and accept arbitrary dictionary shapes. Bind a versioned payload to its options and validate file/query/reason fields before a hit; legacy entries recompute automatically. See BUG-105. |
+| CACHE-027 | Medium | Fixed | Autocomplete history | Successful historical queries can outlive matching media or caption/filter settings. Keep history as history, but validate suggestion candidates against current indexed media and effective settings before publishing buttons. See BUG-110. |
+| CACHE-028 | Medium | Fixed | Media statistics payload validation | Any cached dictionary can be returned as statistics, including missing, negative or incorrectly typed totals. Validate nonnegative integer totals and the by-type map, invalidate malformed payloads and recompute from strict aggregation. BUG-120 records dashboard failure handling. |
 
 ## Remediation order
 
@@ -65,6 +86,12 @@ Status values: `Confirmed`, `Fixing`, `Fixed`, `Deferred`, `Blocked`.
    dependency checks, and update every status and verification result here.
 
 ## Verification log
+
+- 2026-10-29: [Extended QA](docs/QA_REPORT_20261029.md) passed the complete
+  470-test suite with real disposable cache/state Redis. Additional actual
+  checks covered ACL denial, noeviction OOM/session survival, dependency
+  outage/readiness recovery, RDB restoration with TTL, and live pagination across
+  restarts. Remote Redis migration and production activation were not performed.
 
 - 2026-07-18: Audit register created before runtime remediation. No broad Redis
   flush or destructive MongoDB migration is authorized or required.

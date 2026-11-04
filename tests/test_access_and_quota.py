@@ -47,12 +47,18 @@ async def test_premium_repository_uses_default_or_per_grant_duration(
 ):
     repo = UserRepository(CapturingPool(None), MemoryCache(), premium_duration_days=30)
     user = User(id=42, name='Premium User')
-    update = AsyncMock(return_value=True)
     monkeypatch.setattr(repo, 'get_user', AsyncMock(return_value=user))
-    monkeypatch.setattr(repo, 'update', update)
+    monkeypatch.setattr(repo, 'get_collection', AsyncMock(return_value=SimpleNamespace(
+        find_one_and_update=lambda: None,
+    )))
+    async def apply(function, *args, **kwargs):
+        repo.db_pool.calls.append((function, args, kwargs))
+        return {**repo._entity_to_dict(user), **args[1]['$set']}
+    monkeypatch.setattr(repo.db_pool, 'execute_with_retry', apply)
     repo.cache_invalidator = SimpleNamespace(
         invalidate_user_data=AsyncMock(),
         invalidate_premium_status=AsyncMock(),
+        invalidate_user_stats=AsyncMock(),
     )
 
     started_at = datetime.now(UTC)
@@ -66,7 +72,7 @@ async def test_premium_repository_uses_default_or_per_grant_duration(
         )
 
     assert success is True
-    update_data = update.await_args.args[1]
+    update_data = repo.db_pool.calls[-1][1][1]['$set']
     duration = (
         update_data['premium_expiry_date']
         - update_data['premium_activation_date']

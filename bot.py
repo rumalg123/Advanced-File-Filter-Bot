@@ -6,6 +6,7 @@ import aiohttp_cors
 
 from core.cache.config import CacheKeyGenerator, CacheTTLConfig
 from core.utils.performance import performance_monitor
+from core.utils.search_observability import search_telemetry
 from handlers.manager import HandlerManager
 
 UVLOOP_AVAILABLE = False
@@ -35,6 +36,7 @@ from core.utils.caption import CaptionFormatter
 from pyrogram.types import Message
 
 from core.cache.redis_cache import CacheManager
+from core.cache.routed_cache import RoutedCacheManager
 from core.concurrency.semaphore_manager import semaphore_manager
 from core.database.pool import DatabaseConnectionPool
 from core.database.multi_pool import MultiDatabaseManager
@@ -49,6 +51,7 @@ from core.services.filter import FilterService
 from core.services.features import FeatureService
 from core.services.indexing import IndexingService, IndexRequestService
 from core.services.maintenance import MaintenanceService
+from core.services.health_probes import register_probe_routes
 from core.utils.rate_limiter import RateLimiter
 from core.utils.subscription import SubscriptionManager
 from core.utils.telegram_api import telegram_api
@@ -95,6 +98,12 @@ class BotConfig:
         'FEATURE_RECENT_FILES': ('features', 'feature_recent_files'),
         'FEATURE_RECOMMENDATION_EXPLANATIONS': ('features', 'feature_recommendation_explanations'),
         'FEATURE_CONTENT_DASHBOARD': ('features', 'feature_content_dashboard'),
+        'FEATURE_INDEXED_MEDIA_SEARCH': ('features', 'feature_indexed_media_search'),
+        'FEATURE_CANONICAL_MEDIA_METADATA': ('features', 'feature_canonical_media_metadata'),
+        'FEATURE_QUOTA_DELIVERY_LEDGER': ('features', 'feature_quota_delivery_ledger'),
+        'PROCESSING_DURABLE_INDEXING': ('processing', 'durable_indexing'),
+        'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': ('processing', 'durable_saved_search_alerts'),
+        'DATABASE_GLOBAL_OWNER_REGISTRY': ('database', 'global_owner_registry'),
         'PREMIUM_DURATION_DAYS': ('features', 'premium_duration_days'),
         'NON_PREMIUM_DAILY_LIMIT': ('features', 'non_premium_daily_limit'),
         'PREMIUM_PRICE': ('features', 'premium_price'),
@@ -111,6 +120,8 @@ class BotConfig:
         'SUPPORT_GROUP_ID': ('channels', 'support_group_id'),
         'AUTH_CHANNEL': ('channels', 'auth_channel'),
         'AUTH_GROUPS': ('channels', 'auth_groups'),
+        'FORCE_SUB_INVITE_EXPIRE_MINUTES': ('channels', 'force_sub_invite_expire_minutes'),
+        'FORCE_SUB_INVITE_MEMBER_LIMIT': ('channels', 'force_sub_invite_member_limit'),
         'AUTH_USERS': ('channels', 'auth_users'),
         'ADMINS': ('channels', 'admins'),
         'CHANNELS': ('channels', 'channels'),
@@ -154,6 +165,7 @@ class BotConfig:
         self.DATABASE_NAMES = self._parse_database_names()
         self.DATABASE_SIZE_LIMIT_GB = self._settings.database.size_limit_gb
         self.DATABASE_AUTO_SWITCH = self._settings.database.auto_switch
+        self.DATABASE_GLOBAL_OWNER_REGISTRY = self._settings.database.global_owner_registry
 
         # Circuit breaker settings
         self.DATABASE_MAX_FAILURES = self._settings.database.max_failures
@@ -189,6 +201,11 @@ class BotConfig:
         self.FEATURE_RECENT_FILES = self._settings.features.feature_recent_files
         self.FEATURE_RECOMMENDATION_EXPLANATIONS = self._settings.features.feature_recommendation_explanations
         self.FEATURE_CONTENT_DASHBOARD = self._settings.features.feature_content_dashboard
+        self.FEATURE_INDEXED_MEDIA_SEARCH = self._settings.features.feature_indexed_media_search
+        self.FEATURE_CANONICAL_MEDIA_METADATA = self._settings.features.feature_canonical_media_metadata
+        self.FEATURE_QUOTA_DELIVERY_LEDGER = self._settings.features.feature_quota_delivery_ledger
+        self.PROCESSING_DURABLE_INDEXING = self._settings.processing.durable_indexing
+        self.PROCESSING_DURABLE_SAVED_SEARCH_ALERTS = self._settings.processing.durable_saved_search_alerts
 
         # Limits
         self.PREMIUM_DURATION_DAYS = self._settings.features.premium_duration_days
@@ -207,6 +224,9 @@ class BotConfig:
         self.REQ_CHANNEL = self._settings.channels.req_channel
         self.SUPPORT_GROUP_ID = self._settings.channels.support_group_id
         self.AUTH_CHANNEL = self._parse_auth_channel()
+        self.AUTH_CHANNELS = self._settings.channels.get_auth_channel_list()
+        self.FORCE_SUB_INVITE_EXPIRE_MINUTES = self._settings.channels.force_sub_invite_expire_minutes
+        self.FORCE_SUB_INVITE_MEMBER_LIMIT = self._settings.channels.force_sub_invite_member_limit
         
         # Lists from settings
         self.ADMINS = self._settings.channels.get_admin_list()
@@ -228,54 +248,19 @@ class BotConfig:
         self.PAYMENT_LINK = self._settings.messages.payment_link
     
     def _parse_auth_channel(self) -> Optional[Union[int, str]]:
-        """Parse auth channel from settings"""
-        auth_channel = self._settings.channels.auth_channel
-        if not auth_channel:
-            return None
-
-        if isinstance(auth_channel, int):
-            return auth_channel if auth_channel != 0 else None
-
-        auth_channel = str(auth_channel).strip()
-        if not auth_channel or auth_channel == '0':
-            return None
-
-        if auth_channel.lstrip('-').isdigit():
-            return int(auth_channel)
-        return auth_channel
+        """Keep the legacy first-channel attribute for existing gate checks."""
+        from core.utils.subscription_config import parse_subscription_targets
+        channels = parse_subscription_targets(self._settings.channels.auth_channel)
+        return channels[0] if channels else None
     
     def _parse_database_uris(self) -> List[str]:
         """Parse multiple database URIs from settings"""
-        uris = []
-        
-        # Always include primary DATABASE_URI first
-        if self.DATABASE_URI:
-            uris.append(self.DATABASE_URI)
-        
-        # Add additional URIs from settings
-        additional_uris = self._settings.database.get_additional_uris()
-        for uri in additional_uris:
-            if uri and uri not in uris:  # Avoid duplicates
-                uris.append(uri)
-        
-        return uris
-    
-    def _parse_database_names(self) -> List[str]:
-        """Parse multiple database names from settings"""
-        names = [self.DATABASE_NAME]
-        
-        # Always include primary DATABASE_NAME first
+        return [uri for uri, _ in self._settings.database.get_sources()]
 
-        # Add additional names from settings
-        additional_names = self._settings.database.get_additional_names()
-        names.extend(additional_names)
-        
-        # If no additional names specified, use same name for all databases
-        while len(names) < len(self.DATABASE_URIS):
-            names.append(self.DATABASE_NAME)
-        
-        return names[:len(self.DATABASE_URIS)]  # Trim to match URI count
-    
+    def _parse_database_names(self) -> List[str]:
+        """Parse names using the same normalized pairs as the URI list."""
+        return [name for _, name in self._settings.database.get_sources()]
+
     @property
     def is_multi_database_enabled(self) -> bool:
         """Check if multi-database mode is enabled"""
@@ -327,6 +312,14 @@ class BotConfig:
                         object.__setattr__(settings_obj, attr_name, value)
                     except Exception as e:
                         logger.warning(f"Failed to sync setting {key} to {settings_obj_name}.{attr_name}: {e}")
+
+        # Stored settings use strings for AUTH_CHANNEL. Apply the same parsing
+        # as environment startup: '0' disables the gate and numeric IDs must
+        # stay integers when passed to Telegram.
+        self.AUTH_CHANNEL = self._parse_auth_channel()
+        from core.utils.subscription_config import parse_subscription_targets
+        self.AUTH_CHANNELS = parse_subscription_targets(self._settings.channels.auth_channel)
+        self.AUTH_GROUPS = parse_subscription_targets(getattr(self, 'AUTH_GROUPS', []))
 
         logger.info(f"Synced {len(db_settings)} settings from database to config objects")
 
@@ -470,6 +463,7 @@ class MediaSearchBot(Client):
             # Register all handlers through manager
             for name, handler in handlers_config:
                 self.handler_manager.handler_instances[name] = handler
+                setattr(self, f"{name}_handler", handler)
                 logger.info(f"Registered handler: {name}")
 
             # Add filter handlers if enabled
@@ -484,6 +478,7 @@ class MediaSearchBot(Client):
 
                 for name, handler in filter_handlers:
                     self.handler_manager.handler_instances[name] = handler
+                    setattr(self, f"{name}_handler", handler)
                     logger.info(f"Registered filter handler: {name}")
 
             logger.info(f"Total handlers initialized: {len(self.handler_manager.handler_instances)}")
@@ -738,9 +733,7 @@ class MediaSearchBot(Client):
                 continue
 
             try:
-                media_repo = MediaRepository(db_info.pool, self.cache)
-                await media_repo.create_indexes()
-
+                # PH-016: single media index owner; no duplicate repository pass.
                 index_optimizer = IndexOptimizer(db_info.pool)
                 index_results = await index_optimizer.create_media_indexes()
                 successful_indexes = sum(1 for success in index_results.values() if success)
@@ -752,63 +745,60 @@ class MediaSearchBot(Client):
             except Exception as e:
                 logger.warning(f"Failed to create media indexes for database {db_index + 1}: {e}")
 
+    async def _initialize_storage(self):
+        """Load primary-backed flags before constructing media routing/workers."""
+        await self.db_pool.initialize(self.config.DATABASE_URI, self.config.DATABASE_NAME)
+        # Initialize Redis cache
+        await self.cache.initialize()
+        logger.info("Redis cache initialized")
+        self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
+        self.bot_settings_service = BotSettingsService(
+            self.bot_settings_repo,
+            self.cache,
+            database_config=self.config._settings.database,
+            telegram_client=self,
+        )
+        # Initialize settings from environment
+        await self.bot_settings_service.initialize_settings()
+        logger.info("Bot settings initialized")
+
+        # CRITICAL: Load settings from database and sync to all config objects
+        # This updates both BotConfig and the original settings objects (e.g., settings.features)
+        # so that module-level references like `_feature_config = settings.features` get updated values
+        db_settings = await self.bot_settings_service.get_all_settings()
+        self.config.sync_settings_from_db(db_settings)
+        logger.info("Loaded and synced settings from database")
+
+        if self.config.is_multi_database_enabled:
+            self.multi_db_manager = MultiDatabaseManager()
+            await self.multi_db_manager.initialize(
+                self.config.DATABASE_URIS,
+                self.config.DATABASE_NAMES,
+                size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
+                auto_switch=self.config.DATABASE_AUTO_SWITCH,
+                global_owner_registry=self.config.DATABASE_GLOBAL_OWNER_REGISTRY,
+            )
+            self.multi_db_manager.apply_runtime_settings(
+                size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
+                auto_switch=self.config.DATABASE_AUTO_SWITCH,
+                max_failures=self.config.DATABASE_MAX_FAILURES,
+                recovery_timeout=self.config.DATABASE_RECOVERY_TIMEOUT,
+                half_open_calls=self.config.DATABASE_HALF_OPEN_CALLS,
+            )
+
+        # Keep activation bindings authoritative even if a stored flag or the
+        # configured source list is changed. No activation is performed here.
+        owner_control = await self.db_pool.get_collection('media_owner_control')
+        owner_binding = await owner_control.find_one({'_id': 'binding-v1'})
+        if owner_binding and (not self.multi_db_manager or not self.config.DATABASE_GLOBAL_OWNER_REGISTRY):
+            raise RuntimeError('This database requires its activated media ownership configuration')
+        if self.config.DATABASE_GLOBAL_OWNER_REGISTRY and not self.multi_db_manager:
+            raise RuntimeError('Media ownership requires the complete multi-database topology')
+
     async def start(self):
         """Start the bot with all dependencies"""
         try:
-            # Initialize database connections
-            if self.config.is_multi_database_enabled:
-                logger.info(f"Multi-database mode enabled with {len(self.config.DATABASE_URIS)} databases")
-                
-                # Initialize multi-database manager
-                self.multi_db_manager = MultiDatabaseManager()
-                await self.multi_db_manager.initialize(
-                    self.config.DATABASE_URIS,
-                    self.config.DATABASE_NAMES,
-                    size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
-                    auto_switch=self.config.DATABASE_AUTO_SWITCH
-                )
-                logger.info("Multi-database manager initialized")
-                
-                # Still initialize single db_pool for backward compatibility
-                await self.db_pool.initialize(
-                    self.config.DATABASE_URI,
-                    self.config.DATABASE_NAME
-                )
-            else:
-                # Single database mode
-                await self.db_pool.initialize(
-                    self.config.DATABASE_URI,
-                    self.config.DATABASE_NAME
-                )
-                logger.info("Single database connection pool initialized")
-
-            # Initialize Redis cache
-            await self.cache.initialize()
-            logger.info("Redis cache initialized")
-            self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
-            self.bot_settings_service = BotSettingsService(
-                self.bot_settings_repo,
-                self.cache
-            )
-            # Initialize settings from environment
-            await self.bot_settings_service.initialize_settings()
-            logger.info("Bot settings initialized")
-
-            # CRITICAL: Load settings from database and sync to all config objects
-            # This updates both BotConfig and the original settings objects (e.g., settings.features)
-            # so that module-level references like `_feature_config = settings.features` get updated values
-            db_settings = await self.bot_settings_service.get_all_settings()
-            self.config.sync_settings_from_db(db_settings)
-            logger.info("Loaded and synced settings from database")
-
-            if self.multi_db_manager:
-                self.multi_db_manager.apply_runtime_settings(
-                    size_limit_gb=self.config.DATABASE_SIZE_LIMIT_GB,
-                    auto_switch=self.config.DATABASE_AUTO_SWITCH,
-                    max_failures=self.config.DATABASE_MAX_FAILURES,
-                    recovery_timeout=self.config.DATABASE_RECOVERY_TIMEOUT,
-                    half_open_calls=self.config.DATABASE_HALF_OPEN_CALLS
-                )
+            await self._initialize_storage()
 
             # Initialize concurrency limits from settings
             concurrency_limits = settings.get_concurrency_limits()
@@ -835,8 +825,7 @@ class MediaSearchBot(Client):
             self.feature_repo = FeatureRepository(self.db_pool)
 
 
-            # Create basic indexes (existing)
-            await self.media_repo.create_indexes()
+            # PH-016: IndexOptimizer owns media indexes in one pass below.
             await self.channel_repo.create_index([('enabled', 1)])  # Add index for channels
             await self.user_repo.create_index([('status', 1)])
             
@@ -913,7 +902,8 @@ class MediaSearchBot(Client):
                 self.media_repo,
                 self.cache,
                 self.config,
-                self.batch_link_repo
+                self.batch_link_repo,
+                task_manager=self.handler_manager,
             )
 
             # Initialize search history service
@@ -960,8 +950,11 @@ class MediaSearchBot(Client):
                 expire=CacheTTLConfig.BANNED_USERS_LIST
             )
             self.subscription_manager = SubscriptionManager(
-                auth_channel=self.config.AUTH_CHANNEL,
-                auth_groups=self.config.AUTH_GROUPS  # Now uses database values!
+                auth_channel=self.config.AUTH_CHANNELS,
+                auth_groups=self.config.AUTH_GROUPS,
+                cache_manager=self.cache,
+                invite_expire_minutes=self.config.FORCE_SUB_INVITE_EXPIRE_MINUTES,
+                invite_member_limit=self.config.FORCE_SUB_INVITE_MEMBER_LIMIT,
             )
             self.background_tasks = []
             # Start Pyrogram client
@@ -981,6 +974,9 @@ class MediaSearchBot(Client):
             await self._set_bot_commands()
             # Initialize handlers after bot is started
             await self._initialize_handlers()
+            # PH-018: only the explicitly opted-in durable alert mode creates
+            # a fixed number of restart-recoverable queue workers.
+            self.feature_service.start_alert_workers()
             
             # Start session manager cleanup task
             if hasattr(self, 'session_manager'):
@@ -1020,6 +1016,9 @@ class MediaSearchBot(Client):
             logger.info("Session manager stopped")
 
         # Get handler manager stats before cleanup
+        if self.filestore_service:
+            await self.filestore_service.tasks.close()
+
         if self.handler_manager:
             stats = self.handler_manager.get_stats()
             logger.info(f"Handler Manager Stats: {stats}")
@@ -1042,34 +1041,9 @@ class MediaSearchBot(Client):
         logger.info("=" * 60)
 
     def _get_git_info(self):
-        """Get current git information"""
-        import subprocess
-        try:
-            # Get current commit hash
-            hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
-                                       capture_output=True, text=True, check=True)
-            commit_hash = hash_result.stdout.strip()[:7]  # Short hash
-            
-            # Get commit date and message
-            commit_info = subprocess.run(['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'], 
-                                       capture_output=True, text=True, check=True)
-            commit_date, commit_message = commit_info.stdout.strip().split('|', 1)
-            
-            # Check for uncommitted changes
-            status_result = subprocess.run(['git', 'status', '--porcelain'], 
-                                         capture_output=True, text=True, check=True)
-            has_changes = bool(status_result.stdout.strip())
-            
-            return {
-                'hash': commit_hash,
-                'date': commit_date,
-                'message': commit_message,
-                'has_changes': has_changes,
-                'full_hash': hash_result.stdout.strip()
-            }
-        except Exception as e:
-            logger.error(f"Failed to get git info: {e}")
-            return None
+        """Get the Git checkout or last successfully applied update revision."""
+        from core.utils.runtime_version import get_runtime_version
+        return get_runtime_version()
 
     async def _send_startup_message(self):
         """Send startup message to log channel"""
@@ -1161,7 +1135,7 @@ class MediaSearchBot(Client):
                         for error in check_results['errors']:
                             error_msg += f"• <b>{error['type']}</b> <code>{error['id']}</code>\n"
                             error_msg += f"  Error: {error['error']}\n\n"
-                        error_msg += "Please add the bot to these channels/groups and make it an admin."
+                        error_msg += "Please add the bot to these channels/groups, make it an admin and enable Invite Users permission."
 
                         await telegram_api.call_api(
                             self.send_message,
@@ -1186,22 +1160,18 @@ class MediaSearchBot(Client):
         """Start web server for health checks"""
         app = web.Application()
 
-        # Health check endpoint
-        async def health_check(request):
-            health_data = await self.maintenance_service.get_system_health_data()
-            status = health_data.get('status', 'unhealthy')
-            http_status = 200 if status in ('healthy', 'degraded') else 503
-            return web.json_response({
-                'status': status,
-                'bot_username': self.bot_username,
-                'stats': health_data.get('stats', {}),
-                'meta': health_data.get('meta', {})
-            }, status=http_status)
+        # PH-013: cheap /health and /live, bounded /ready, and opt-in
+        # /health/details legacy diagnostics. No endpoint authentication or
+        # network binding change (PH-004 remains operator-deferred).
+        register_probe_routes(app, self)
 
         # Performance metrics endpoint
         async def performance_metrics(request):
             try:
                 metrics = await performance_monitor.get_metrics()
+                # PH-006: additive, bounded, in-process search telemetry.
+                # Does not change HTTP exposure or existing monitoring routes.
+                metrics["media_search"] = search_telemetry.snapshot()
                 # Backward-compatible aliases for existing consumers.
                 if 'cpu_percent' not in metrics:
                     metrics['cpu_percent'] = metrics.get('process_cpu_percent', 0.0)
@@ -1219,8 +1189,6 @@ class MediaSearchBot(Client):
                     'error': str(e)
                 }, status=500)
 
-        app.router.add_get('/', health_check)
-        app.router.add_get('/health', health_check)
         app.router.add_get('/metrics', performance_metrics)
         app.router.add_get('/performance', performance_metrics)
 
@@ -1376,7 +1344,22 @@ async def initialize_bot() -> MediaSearchBot:
 
     # Initialize components using centralized settings
     db_pool = DatabaseConnectionPool()
-    cache_manager = CacheManager(settings.redis.uri)
+    cache_manager = CacheManager(
+        settings.redis.uri,
+        username=settings.redis.username,
+        password_file=settings.redis.password_file,
+    )
+    if settings.redis.state_uri:
+        # The protected instance may have its own distinct ACL credentials.
+        # Neither credential source is required unless explicitly enabled.
+        cache_manager = RoutedCacheManager(
+            cache_manager,
+            CacheManager(
+                settings.redis.state_uri,
+                username=settings.redis.state_username,
+                password_file=settings.redis.state_password_file,
+            ),
+        )
     session_manager = UnifiedSessionManager(cache_manager)
     rate_limiter = RateLimiter(cache_manager)
 

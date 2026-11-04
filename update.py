@@ -7,6 +7,7 @@ backup creation, and rollback capabilities.
 """
 
 import ast
+import json
 import os
 import sys
 import shutil
@@ -48,6 +49,7 @@ class SecureUpdater:
         self.backup_dir = Path(backup_dir)
         self.current_dir = Path.cwd()
         self.temp_dir: Optional[Path] = None
+        self.last_backup: Optional[Path] = None
         
         # Docker detection
         self.in_docker = self._detect_docker_environment()
@@ -143,16 +145,16 @@ class SecureUpdater:
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        backup_path = self.backup_dir / f"backup_{timestamp}"
-        backup_path.mkdir(parents=True, exist_ok=True)
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_path = Path(tempfile.mkdtemp(prefix=f"backup_{timestamp}_", dir=self.backup_dir))
         
         logger.info(f"Creating backup at: {backup_path}")
         
         # Files to backup (exclude temp files, logs, etc.)
         important_files = [
             "*.py", "requirements.txt", "Dockerfile", "docker-compose.yml",
-            "redis.conf", "start.sh", "config/", "core/", "handlers/", "repositories/",
-            "README.md", "CLAUDE.md", ".env.example", "sample.env"
+            "redis.conf", "start.sh", "config/", "core/", "handlers/", "repositories/", "scripts/",
+            "README.md", "CLAUDE.md", ".env.example", "sample.env", ".runtime_revision.json"
         ]
         
         for pattern in important_files:
@@ -177,7 +179,7 @@ class SecureUpdater:
                             shutil.copytree(file_path, dest_path, dirs_exist_ok=True)
                             
             except Exception as e:
-                logger.warning(f"Failed to backup {pattern}: {e}")
+                raise RuntimeError(f"Backup incomplete for {pattern}; update aborted") from e
                 
         logger.info("Backup completed successfully")
         return backup_path
@@ -253,10 +255,11 @@ class SecureUpdater:
         
         # Files and directories to update
         update_items = [
-            "bot.py", "requirements.txt", "Dockerfile", "docker-compose.yml",
+            "requirements.txt", "Dockerfile", "docker-compose.yml",
             "redis.conf", "start.sh", "update.py",
-            "config/", "core/", "handlers/", "repositories/"
+            "config/", "core/", "handlers/", "repositories/", "scripts/"
         ]
+        update_items = list(dict.fromkeys([path.name for path in source_dir.glob('*.py')] + update_items))
         
         # Add Docker-specific handling
         if self.in_docker:
@@ -297,9 +300,33 @@ class SecureUpdater:
             except Exception as e:
                 logger.warning(f"Failed to cleanup temp directory: {e}")
                 
-    def update(self, skip_backup: bool = False) -> bool:
+    def _install_changed_requirements(self, source_dir: Path) -> None:
+        """Explicit updates install changed requirements with this Python interpreter."""
+        incoming = source_dir / 'requirements.txt'
+        installed = self.current_dir / 'requirements.txt'
+        if installed.exists() and incoming.read_bytes() == installed.read_bytes():
+            return
+        command = [sys.executable, '-m', 'pip', 'install', '--no-cache-dir']
+        if self.in_docker and sys.prefix == sys.base_prefix:
+            command.append('--user')
+        self._run_command([*command, '-r', str(incoming)])
+
+    def _source_revision(self, source_dir: Path):
+        """Read the fetched commit without requiring Git metadata in the installation."""
+        if not (source_dir / '.git/HEAD').is_file():
+            return None
+        commit = self._run_command(['git', 'rev-parse', 'HEAD'], cwd=source_dir).stdout.strip()
+        details = self._run_command(
+            ['git', 'log', '-1', '--format=%cd|%s', '--date=format:%Y-%m-%d %H:%M'],
+            cwd=source_dir).stdout.strip()
+        date, message = details.split('|', 1)
+        return {'hash': commit[:7], 'full_hash': commit, 'date': date,
+                'message': message, 'has_changes': False, 'branch': self.branch}
+
+    def update(self, skip_backup: bool = False, install_dependencies: bool = False) -> bool:
         """Perform secure update with backup and validation."""
         backup_path: Optional[Path] = None
+        apply_started = False
         
         try:
             logger.info("Starting secure update process...")
@@ -307,6 +334,7 @@ class SecureUpdater:
             # Create backup unless skipped
             if not skip_backup:
                 backup_path = self._create_backup()
+                self.last_backup = backup_path
                 
             # Clone repository
             source_dir = self._clone_repository()
@@ -315,9 +343,20 @@ class SecureUpdater:
             if not self._validate_update(source_dir):
                 logger.error("Update validation failed. Aborting.")
                 return False
+
+            revision = self._source_revision(source_dir)
+            if install_dependencies:
+                self._install_changed_requirements(source_dir)
                 
             # Apply update
+            apply_started = True
             self._apply_update(source_dir)
+
+            if revision:
+                revision_path = self.current_dir / '.runtime_revision.json'
+                temporary = revision_path.with_suffix('.tmp')
+                temporary.write_text(json.dumps(revision), encoding='utf-8')
+                temporary.replace(revision_path)
             
             logger.info("Update completed successfully!")
             if backup_path:
@@ -328,7 +367,12 @@ class SecureUpdater:
         except Exception as e:
             logger.error(f"Update failed: {e}")
             if backup_path:
-                logger.info(f"💾 Backup available for manual rollback at: {backup_path}")
+                if apply_started:
+                    logger.info(f"Restoring saved application files from: {backup_path}")
+                    if not self.rollback(str(backup_path)):
+                        logger.error(f"Automatic restore failed; manual recovery required from: {backup_path}")
+                else:
+                    logger.info(f"Application files unchanged; backup available at: {backup_path}")
             return False
             
         finally:
@@ -355,6 +399,10 @@ class SecureUpdater:
                     if dest_path.exists():
                         shutil.rmtree(dest_path)
                     shutil.copytree(item, dest_path)
+
+            if not (backup_dir / '.runtime_revision.json').exists():
+                (self.current_dir / '.runtime_revision.json').unlink(missing_ok=True)
+            (self.current_dir / '.runtime_revision.tmp').unlink(missing_ok=True)
                     
             logger.info("Rollback completed successfully!")
             return True

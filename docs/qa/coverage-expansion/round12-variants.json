@@ -1,0 +1,591 @@
+{
+  "date": "2026-10-31",
+  "round": 12,
+  "scope": [
+    "duplicate-grouping",
+    "variant-delivery",
+    "private-group-paging",
+    "cross-user-ownership"
+  ],
+  "application_and_tests_commit": "fe9e5fbc90618e85eabcdc6be88af9cef926d8df",
+  "source_manifest_sha256": "e0998b40ff000739ce1a233bec66af5acdecc557201b39f964f5d7083c03ef4f",
+  "fixes": {
+    "BUG-113": "bd8df2c",
+    "BUG-114": "290fa91"
+  },
+  "button_contract_tests_commit": "fe9e5fb",
+  "tests": {
+    "passed": 1335,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 25,
+    "seconds": 43.66,
+    "focused_related_passed": 58,
+    "container_format_cases": 10,
+    "meaningful_title_word_cases": 7,
+    "button_identity_ownership_cases": 8
+  },
+  "before_fixes": {
+    "formats": {
+      "failed": 8,
+      "passed": 2
+    },
+    "title_words": {
+      "failed": 5,
+      "passed": 2
+    }
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "all_four_new_process_shards_match_start_end_current_source": true,
+  "automated": {
+    "covered_lines": 11197,
+    "num_statements": 18031,
+    "percent_covered": 59.053249510803944,
+    "percent_covered_display": "59",
+    "missing_lines": 6834,
+    "excluded_lines": 41,
+    "percent_statements_covered": 62.098607952969886,
+    "percent_statements_covered_display": "62",
+    "num_branches": 5988,
+    "num_partial_branches": 895,
+    "covered_branches": 2987,
+    "missing_branches": 3001,
+    "percent_branches_covered": 49.88309953239813,
+    "percent_branches_covered_display": "50"
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12902,
+    "num_statements": 18031,
+    "percent_covered": 68.44997710146134,
+    "percent_covered_display": "68",
+    "missing_lines": 5129,
+    "excluded_lines": 41,
+    "percent_statements_covered": 71.55454495036327,
+    "percent_statements_covered_display": "72",
+    "num_branches": 5988,
+    "num_partial_branches": 1027,
+    "covered_branches": 3539,
+    "missing_branches": 2449,
+    "percent_branches_covered": 59.10153640614563,
+    "percent_branches_covered_display": "59"
+  },
+  "coverage_provenance": {
+    "shards": [
+      {
+        "shard": ".coverage.final-unit",
+        "matching_files": 64,
+        "changed_files_discarded": 54
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X1WMw3nx.HDlIUdQLWtXh",
+        "matching_files": 53,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.X9HS87Jx.Hw9e2hOMEBXh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XBlIp97x.HSEvEry7OIbh",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGD1oQ2x.HQjMvh0mbgqh",
+        "matching_files": 61,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XGI9t0Hx.Hfz1Whma0C5h",
+        "matching_files": 54,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XHLqkuRx.HiBnLHk1v2Kh",
+        "matching_files": 63,
+        "changed_files_discarded": 55
+      },
+      {
+        "shard": ".coverage.live.e99ba6f1869f.pid1.XfBwLljx.HKmlkPfGwSnh",
+        "matching_files": 51,
+        "changed_files_discarded": 57
+      },
+      {
+        "shard": ".coverage.round1-inline-group-live",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round1-unit",
+        "matching_files": 72,
+        "changed_files_discarded": 49
+      },
+      {
+        "shard": ".coverage.round10-phase1-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round10-phase2-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round10-phase3-live",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round10-unit",
+        "matching_files": 116,
+        "changed_files_discarded": 6
+      },
+      {
+        "shard": ".coverage.round11-phase1-live",
+        "matching_files": 121,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round11-phase2-live",
+        "matching_files": 121,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round11-phase3-live",
+        "matching_files": 121,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round11-unit",
+        "matching_files": 121,
+        "changed_files_discarded": 1
+      },
+      {
+        "shard": ".coverage.round12-phase1-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round12-phase2-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round12-phase3-live",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round12-unit",
+        "matching_files": 122,
+        "changed_files_discarded": 0
+      },
+      {
+        "shard": ".coverage.round2-sendall-batch-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round2-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round3-favorites-recent-live",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round3-unit",
+        "matching_files": 73,
+        "changed_files_discarded": 48
+      },
+      {
+        "shard": ".coverage.round4-alerts-reports-live",
+        "matching_files": 74,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.round4-unit",
+        "matching_files": 74,
+        "changed_files_discarded": 47
+      },
+      {
+        "shard": ".coverage.round5-phase1-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round5-phase2-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round5-unit",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round6-phase1-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round6-phase2-live",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round6-unit",
+        "matching_files": 102,
+        "changed_files_discarded": 19
+      },
+      {
+        "shard": ".coverage.round7-phase1-live",
+        "matching_files": 103,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.round7-unit",
+        "matching_files": 103,
+        "changed_files_discarded": 18
+      },
+      {
+        "shard": ".coverage.round8-unit",
+        "matching_files": 110,
+        "changed_files_discarded": 12
+      },
+      {
+        "shard": ".coverage.round8-validated-aggregate",
+        "matching_files": 110,
+        "changed_files_discarded": 12,
+        "kind": "validated historical aggregate, not a process shard",
+        "verification": {
+          "source_commit": "b2fcb381f8868af208e9f3944e39e3eeaf40c5e4",
+          "source_manifest_matches_committed_round8": true,
+          "all_file_execution_and_totals_equal_original_report": true,
+          "data_sha256": "5df644e3b3eb8117cd170969198e937bbbc68dfb7a65ca76aaebace6badb7018"
+        }
+      },
+      {
+        "shard": ".coverage.round9-phase1-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round9-phase2-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round9-phase3-live",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      },
+      {
+        "shard": ".coverage.round9-unit",
+        "matching_files": 114,
+        "changed_files_discarded": 8
+      }
+    ],
+    "combined_percent": 68.44997710146134,
+    "policy": "Raw process files require identical start/end/current SHA256. The labelled historical aggregate reproduces its recorded-source report exactly and contributes only unchanged files. No line/arc remapping; earlier round12 attempts are outside accepted inputs."
+  },
+  "runtime": {
+    "image_tag": "file-filter-bot:qa-multisub-20261030",
+    "image_id": "sha256:8ea67dde9ec1d7fbc27647ef52e427ae5b43c50d6d462fd517ae11fa3775873e",
+    "bundled_application_source": "b2fcb38",
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "pymongo": "4.19.0",
+    "motor": "3.7.1",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "new_deployment_image_built": false
+  },
+  "preflight": {
+    "three_distinct_human_accounts_authenticated": true,
+    "second_normal_session_key": "normal_user_2",
+    "updated_chat_ids_resolved": true,
+    "bot_admin_access_verified": true
+  },
+  "live": {
+    "scope": "duplicate-grouping-and-variant-delivery",
+    "checks": {
+      "second_normal_account_temporarily_joined_only_the_selected_qa_group": true,
+      "six_distinct_real_uploads_indexed_with_normalized_container_names": true,
+      "private_grouping_is_page_local_and_forward_back_keeps_every_original_file": true,
+      "inert_heading_is_free_and_selected_2160p_webm_delivers_its_exact_original_identity": true,
+      "second_normal_user_can_select_own_variant_without_charging_first_user": true,
+      "both_foreign_normal_and_admin_group_file_bulk_and_page_buttons_rejected_without_quota_or_menu_changes": true,
+      "group_owner_can_redirect_exact_file_and_paginate_after_foreign_attempts": true,
+      "grouped_private_send_all_delivers_three_files_once_and_charges_three_slots": true,
+      "foreign_normal_and_admin_bulk_deep_links_rejected_without_consuming_owner_state": true,
+      "group_owner_bulk_deep_link_still_delivers_every_variant_after_foreign_rejections": true,
+      "quota_ledger_settled_for_seven_first_user_and_one_second_user_confirmed_deliveries": true,
+      "grouping_disabled_with_redis_retained_removes_headings_in_existing_and_new_result_menus": true,
+      "reenabled_full_page_groups_three_episode_one_and_two_episode_two_variants_but_preserves_proper_title": true,
+      "premium_mode_preserves_normal_inline_restriction_and_admin_bypass": true,
+      "inline_results_remain_six_individually_selectable_files_when_grouping_enabled": true
+    },
+    "fixture_documents": 6,
+    "human_accounts": 3,
+    "passed": true,
+    "configuration": {
+      "grouping_initial_and_final": true,
+      "grouping_middle_phase": false,
+      "page_sizes": [
+        3,
+        3,
+        6
+      ],
+      "advanced_search": true,
+      "quota_delivery_ledger": true,
+      "premium_enforced": true,
+      "non_premium_daily_limit": 20,
+      "other_optional_features": false,
+      "auto_delete_seconds": 0,
+      "database": "disposable local MongoDB",
+      "cache": "disposable local dual Redis",
+      "targets": "three authenticated QA accounts and newly validated QA group/log channel",
+      "source_snapshot_mounted": true
+    }
+  },
+  "grouping_contract": {
+    "scope": "current result page",
+    "all_original_files_visible": true,
+    "headings_inert": true,
+    "group_count_does_not_change_bulk_count_or_quota": true,
+    "inline_results_individual": true,
+    "normal_inline_restricted_in_premium_mode": true,
+    "admin_inline_bypass_preserved": true,
+    "database_deduplication_or_deletion": false,
+    "expandable_picker_added": false,
+    "canonicalization": "known terminal formats; release noise only after year/episode/quality/encoding boundary; preserve meaningful title prefix"
+  },
+  "fixture_corrections": [
+    "Actor script imported a configuration-dependent helper before environment setup; removed unnecessary product imports",
+    "Heading assertions now distinguish variant noop headings from existing noop#owner pagination controls",
+    "Group back-page check now uses the returned edited message",
+    "Fixture page expectations use the existing indexed_at/_id ordering",
+    "Bulk acceptance uses confirmed files and settled quota instead of old completion message wording",
+    "Actor quota checks reuse authenticated IDs to avoid repeated identity API calls and respect SDK FloodWait",
+    "Normal inline results are intentionally disabled in premium mode; final acceptance checks that gate and uses the existing admin bypass for the six-file listing"
+  ],
+  "cleanup": {
+    "final_run": {
+      "messages_removed": {
+        "r12-admin": 22,
+        "r12-normal": 23,
+        "r12-normal2": 8,
+        "log_channel": 6,
+        "qa_group": 2
+      },
+      "errors": []
+    },
+    "membership": {
+      "membership_restored": true,
+      "owned_invite_revoked": true,
+      "service_messages_removed": 2,
+      "errors": []
+    },
+    "post_cleanup": {
+      "tracked_target_posts_removed_or_already_deleted": 7,
+      "errors": []
+    },
+    "final_recorded_messages_including_membership_service_messages": 63,
+    "earlier_runs": {
+      "attempt1": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 1,
+          "errors": []
+        }
+      },
+      "attempt2": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 1,
+          "errors": []
+        }
+      },
+      "attempt3": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 4,
+          "errors": []
+        },
+        "cleanup": {
+          "messages_removed": {
+            "r12-admin": 20,
+            "r12-normal": 4,
+            "r12-normal2": 2,
+            "log_channel": 4,
+            "qa_group": 0
+          },
+          "errors": []
+        },
+        "membership-cleanup": {
+          "membership_restored": true,
+          "owned_invite_revoked": true,
+          "service_messages_removed": 2,
+          "errors": []
+        }
+      },
+      "attempt4": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 5,
+          "errors": []
+        },
+        "cleanup": {
+          "messages_removed": {
+            "r12-admin": 20,
+            "r12-normal": 7,
+            "r12-normal2": 6,
+            "log_channel": 4,
+            "qa_group": 2
+          },
+          "errors": []
+        },
+        "membership-cleanup": {
+          "membership_restored": true,
+          "owned_invite_revoked": true,
+          "service_messages_removed": 2,
+          "errors": []
+        }
+      },
+      "attempt5": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 4,
+          "errors": []
+        },
+        "cleanup": {
+          "messages_removed": {
+            "r12-admin": 20,
+            "r12-normal": 4,
+            "r12-normal2": 2,
+            "log_channel": 4,
+            "qa_group": 0
+          },
+          "errors": []
+        },
+        "membership-cleanup": {
+          "membership_restored": true,
+          "owned_invite_revoked": true,
+          "service_messages_removed": 2,
+          "errors": []
+        }
+      },
+      "attempt6": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 5,
+          "errors": []
+        },
+        "cleanup": {
+          "messages_removed": {
+            "r12-admin": 20,
+            "r12-normal": 11,
+            "r12-normal2": 6,
+            "log_channel": 4,
+            "qa_group": 2
+          },
+          "errors": []
+        },
+        "membership-cleanup": {
+          "membership_restored": true,
+          "owned_invite_revoked": true,
+          "service_messages_removed": 2,
+          "errors": []
+        }
+      },
+      "attempt7": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 5,
+          "errors": []
+        },
+        "cleanup": {
+          "messages_removed": {
+            "r12-admin": 22,
+            "r12-normal": 11,
+            "r12-normal2": 8,
+            "log_channel": 4,
+            "qa_group": 2
+          },
+          "errors": []
+        },
+        "membership-cleanup": {
+          "membership_restored": true,
+          "owned_invite_revoked": true,
+          "service_messages_removed": 2,
+          "errors": []
+        }
+      },
+      "attempt8": {
+        "post_cleanup": {
+          "tracked_target_posts_removed_or_already_deleted": 7,
+          "errors": []
+        },
+        "cleanup": {
+          "messages_removed": {
+            "r12-admin": 22,
+            "r12-normal": 23,
+            "r12-normal2": 8,
+            "log_channel": 6,
+            "qa_group": 2
+          },
+          "errors": []
+        },
+        "membership-cleanup": {
+          "membership_restored": true,
+          "owned_invite_revoked": true,
+          "service_messages_removed": 2,
+          "errors": []
+        }
+      }
+    },
+    "earlier_coverage_excluded": true,
+    "memberships_restored": true,
+    "owned_invites_revoked": true,
+    "permissions_and_block_states_unchanged": true,
+    "owned_containers_anonymous_volumes_networks_removed": true,
+    "original_two_services_running_untouched": true,
+    "earlier_recorded_messages_removed": 264
+  },
+  "policy": {
+    "admin_owner_bypasses_preserved": true,
+    "operator_diagnostic_lines_unchanged": 405,
+    "operator_diagnostic_lines_context_updates_from_round8": 2,
+    "operator_diagnostics_removed": 0,
+    "new_product_features_or_flags_added": false,
+    "production_defaults_or_limits_changed": false,
+    "production_server_accessed": false,
+    "remote_atlas_accessed": false,
+    "deployment_environment_changed": false,
+    "mongo_migration_or_new_index_required": false
+  },
+  "validation": {
+    "python_compilation": true,
+    "ruff_F821_F822_F823": true,
+    "pip_check": true,
+    "markdown_links_anchors": true,
+    "json_privacy": true,
+    "git_diff_check": true,
+    "live_unhandled_error_or_traceback": false,
+    "local_markdown_links_checked": 267,
+    "live_error_log_entries": 0,
+    "expected_live_warning": "one handled Telegram FloodWait"
+  },
+  "limitations": [
+    "Whole-bot 100% remains open",
+    "Conservative filename heuristic; unknown tags and ambiguous titles can produce imperfect groups while every file remains visible",
+    "Grouping is page-local and retains every selectable file; variant counts are not global counts",
+    "Small local fixture, not representative Atlas/multidatabase latency or production load acceptance",
+    "Retained runtime image bundles older application; deployment must build the committed branch source"
+  ],
+  "next_bounded_scope": [
+    "request tracking lifecycle",
+    "admin request status transitions"
+  ]
+}

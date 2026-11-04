@@ -65,3 +65,23 @@ async def test_full_channel_queue_uses_overflow_without_blocking():
     await asyncio.wait_for(handler.handle_channel_media(SimpleNamespace(), message), timeout=0.1)
 
     assert handler.overflow_queue[0]["message"] is message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('validation_error',[None,'Bot cannot access this channel'])
+async def test_handled_index_link_stops_later_file_search(monkeypatch, validation_error):
+    from pyrogram import StopPropagation
+    from handlers.indexing import IndexingHandler
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    handler=object.__new__(IndexingHandler)
+    handler.bot=SimpleNamespace(config=SimpleNamespace(ADMINS=[1]))
+    handler.indexing_service=SimpleNamespace(validate_channel=AsyncMock(return_value=(123,validation_error)))
+    message=SimpleNamespace(from_user=SimpleNamespace(id=1),
+        text='https://t.me/c/123456/2',reply=AsyncMock())
+    client=SimpleNamespace(get_messages=AsyncMock())
+    monkeypatch.setattr('handlers.indexing.telegram_api.call_api',AsyncMock(return_value=SimpleNamespace(empty=False)))
+    with pytest.raises(StopPropagation):
+        await handler.handle_index_request(client,message)
+    message.reply.assert_awaited_once()

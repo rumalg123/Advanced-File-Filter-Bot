@@ -46,7 +46,7 @@ class SessionData:
     
     def is_expired(self) -> bool:
         """Check if session is expired"""
-        return datetime.now(UTC) > self.expires_at
+        return datetime.now(UTC) >= self.expires_at
     
     def is_active(self) -> bool:
         """Check if session is active and not expired"""
@@ -82,7 +82,7 @@ class UnifiedSessionManager:
     
     # Default TTL values for different session types
     DEFAULT_TTL = {
-        SessionType.EDIT: 300,      # 5 minutes
+        SessionType.EDIT: CacheTTLConfig.EDIT_SESSION,
         SessionType.SEARCH: 3600,   # 1 hour
         SessionType.INDEX: 1800,    # 30 minutes
         SessionType.BATCH: 7200,    # 2 hours
@@ -183,14 +183,18 @@ class UnifiedSessionManager:
             data=data
         )
         
-        # Cache the session
+        # PH-003: do not report a usable session when its state was rejected
+        # due to Redis OOM/unavailability. Remove a partially written session
+        # if its user pointer cannot be saved.
         cache_key = self._generate_cache_key(session_type, user_id, session_id)
-        await self.cache.set(cache_key, session.to_dict(), expire=ttl)
-        
-        # Also cache with just user_id for quick lookups
+        if not await self.cache.set(cache_key, session.to_dict(), expire=ttl):
+            raise RuntimeError("Operational session storage unavailable")
+
         user_cache_key = self._generate_cache_key(session_type, user_id)
-        await self.cache.set(user_cache_key, session_id, expire=ttl)
-        
+        if not await self.cache.set(user_cache_key, session_id, expire=ttl):
+            await self.cache.delete(cache_key)
+            raise RuntimeError("Operational session pointer storage unavailable")
+
         logger.debug(f"Created {session_type.value} session {session_id} for user {user_id}")
         return session_id
     
@@ -387,8 +391,10 @@ class UnifiedSessionManager:
         """Get edit session (backward compatibility)"""
         return await self.get_session(user_id, SessionType.EDIT)
     
-    async def cancel_edit_session(self, user_id: int) -> bool:
+    async def cancel_edit_session(self, user_id: int, session_id: Optional[str] = None) -> bool:
         """Cancel edit session (backward compatibility)"""
+        if session_id is not None:
+            return await self.cancel_session(user_id, SessionType.EDIT, session_id)
         return await self.cancel_session(user_id, SessionType.EDIT)
     
     async def create_search_session(self, user_id: int, session_id: str, data: Dict[str, Any]) -> str:
