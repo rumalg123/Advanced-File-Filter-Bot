@@ -312,3 +312,14 @@ counts remain historical; no feature defaults or production limits changed.
   Verified concurrent additions, duplicate requests, removal/activation races,
   foreign-user isolation, cache invalidation, and fallback selection.
   Live group/filter verification is pending in this bounded QA round.
+
+- **BUG-124 — Fixed; permission regressions passed.** Bulk filter deletion via
+  disconnect now requires the group owner or configured bot admin, matching
+  `/delall`. Private connection controls reject shared chat contexts and missing
+  connections. Activation and private filter retrieval recheck current group
+  administrator rights; configured admin bypasses remain. The Back button is
+  registered, and stale deactivation cannot clear a newer active group.
+- **BUG-125 — Fixed; membership regressions passed.** Cleanup retains connections
+  when Telegram membership verification is unavailable, and removes only known
+  nonmembers. Restricted users require `is_member=True`; unknown statuses are
+  not treated as membership. Configured bot admins retain their bypass.

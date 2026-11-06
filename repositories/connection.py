@@ -120,23 +120,19 @@ class ConnectionRepository(BaseRepository[UserConnection]):
             await self.cache_invalidator.invalidate_connection_cache(user_id)
         return success
 
-    async def make_inactive(self, user_id: str) -> bool:
-        """Make all connections inactive for user"""
+    async def make_inactive(self, user_id: str, group_id: Optional[str] = None) -> bool:
+        """Clear the selected active connection without affecting a newer selection."""
         user_id = str(user_id)
-
-        success = await self.update(
-            user_id,
-            {
-                "active_group": None,
-                "updated_at": datetime.now(UTC)
-            }
-        )
-
-        if success:
-            # Invalidate cache
+        predicate = {"_id": user_id}
+        if group_id is not None:
+            predicate["active_group"] = str(group_id)
+        collection = await self.get_collection()
+        result = await collection.update_one(predicate, {"$set": {
+            "active_group": None, "updated_at": datetime.now(UTC).isoformat(),
+        }})
+        if result.matched_count:
             await self.cache_invalidator.invalidate_connection_cache(user_id)
-
-        return success
+        return bool(result.matched_count)
 
     async def delete_connection(self, user_id: str, group_id: str) -> bool:
         """Delete a connection for user"""

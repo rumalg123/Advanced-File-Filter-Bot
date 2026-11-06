@@ -54,3 +54,12 @@ async def test_activation_and_removal_cannot_leave_a_dangling_active_group(mongo
         await asyncio.gather(repo.make_active('12', '-1001'), repo.delete_connection('12', '-1001'))
         assert await repo.get_all_connections('12') == ['-1002']
         assert await repo.get_active_connection('12') == '-1002'
+
+
+@pytest.mark.asyncio
+async def test_stale_deactivation_cannot_clear_newer_group(mongo_pool):
+    repo = ConnectionRepository(mongo_pool, Cache())
+    await repo.add_connection('12', '-1001')
+    await repo.add_connection('12', '-1002')
+    assert not await repo.make_inactive('12', '-1001')
+    assert await repo.get_active_connection('12') == '-1002'

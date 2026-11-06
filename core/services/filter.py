@@ -166,7 +166,7 @@ class FilterService:
             user_id = extract_user_id(message)
             if user_id:
                 active_group = await self.connection_service.get_active_connection(user_id)
-                if active_group:
+                if active_group and await self.connection_service.can_manage_group(client, user_id, active_group):
                     group_result = await self._check_filter_match(
                         client, message, text, str(active_group)
                     )

@@ -835,6 +835,9 @@ class SearchHandler:
         if not self.bot.filter_service or self.bot.config.DISABLE_FILTER:
             return False
 
+        if is_private and not await self.bot.connection_service.can_manage_group(client, user_id, int(group_id)):
+            return False
+
         try:
             # Check if any filter matches (exact match first, then fuzzy)
             keywords = await self.bot.filter_service.get_all_filters(group_id)
