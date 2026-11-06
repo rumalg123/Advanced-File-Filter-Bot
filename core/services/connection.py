@@ -1,6 +1,11 @@
+from html import escape
+
 from typing import Optional, List, Tuple, Dict, Any
 
 from pyrogram import Client, enums
+from pyrogram.errors import UserNotParticipant
+
+from core.utils.validators import has_admin_rights
 
 from core.utils.logger import get_logger
 from core.utils.telegram_api import telegram_api
@@ -13,8 +18,8 @@ async def verify_user_in_group(
         client: Client,
         user_id: int,
         group_id: int
-) -> bool:
-    """Verify if user is still in the group"""
+) -> Optional[bool]:
+    """Return known membership, or None when Telegram cannot verify it."""
     try:
         member = await telegram_api.call_api(
             client.get_chat_member,
@@ -22,13 +27,19 @@ async def verify_user_in_group(
             user_id,
             chat_id=group_id
         )
-        return member.status not in [
-            enums.ChatMemberStatus.LEFT,
-            enums.ChatMemberStatus.BANNED
-        ]
+        if member.status in (enums.ChatMemberStatus.OWNER, enums.ChatMemberStatus.ADMINISTRATOR,
+                             enums.ChatMemberStatus.MEMBER):
+            return True
+        if member.status == enums.ChatMemberStatus.RESTRICTED:
+            return member.is_member is True
+        if member.status in (enums.ChatMemberStatus.LEFT, enums.ChatMemberStatus.BANNED):
+            return False
+        return None
+    except UserNotParticipant:
+        return False
     except Exception as e:
         logger.error(f"Error verifying user {user_id} in group {group_id}: {e}")
-        return False
+        return None
 
 
 class ConnectionService:
@@ -41,6 +52,10 @@ class ConnectionService:
     ):
         self.connection_repo = connection_repo
         self.admins = admins
+
+    async def can_manage_group(self, client: Client, user_id: int, group_id: int) -> bool:
+        """Recheck current group rights while retaining the configured admin bypass."""
+        return await has_admin_rights(client, group_id, user_id, self.admins)
 
     async def connect_to_group(
             self,
@@ -100,7 +115,7 @@ class ConnectionService:
         success = await self.connection_repo.add_connection(str(user_id), str(group_id))
 
         if success:
-            return True, f"Successfully connected to <b>{title}</b>!", title
+            return True, f"Successfully connected to <b>{escape(title)}</b>!", title
         else:
             return False, "You're already connected to this chat!", title
 
@@ -178,10 +193,7 @@ class ConnectionService:
             group_id: str
     ) -> Tuple[bool, str]:
         """Set active connection for user (ensures only one active)"""
-        # First deactivate all connections
-        await self.connection_repo.deactivate_all_connections(str(user_id))
-
-        # Then activate the selected one
+        # One guarded write keeps the existing active group when the target is stale.
         success = await self.connection_repo.make_active(str(user_id), group_id)
 
         if success:
@@ -189,9 +201,9 @@ class ConnectionService:
         else:
             return False, "Failed to set active connection"
 
-    async def clear_active_connection(self, user_id: int) -> bool:
+    async def clear_active_connection(self, user_id: int, group_id: Optional[str] = None) -> bool:
         """Clear active connection for user"""
-        return await self.connection_repo.make_inactive(str(user_id))
+        return await self.connection_repo.make_inactive(str(user_id), group_id)
 
     async def cleanup_invalid_connections(
             self,
@@ -199,6 +211,8 @@ class ConnectionService:
             user_id: int
     ) -> int:
         """Remove connections where user is no longer member"""
+        if user_id in self.admins:
+            return 0
         connections = await self.connection_repo.get_all_connections(str(user_id))
         if not connections:
             return 0
@@ -208,7 +222,7 @@ class ConnectionService:
         for group_id in connections:
             try:
                 group_id_int = int(group_id)
-                if not await verify_user_in_group(client, user_id, group_id_int):
+                if await verify_user_in_group(client, user_id, group_id_int) is False:
                     if await self.connection_repo.delete_connection(str(user_id), group_id):
                         removed_count += 1
             except Exception as e:

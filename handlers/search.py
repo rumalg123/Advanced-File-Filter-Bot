@@ -835,6 +835,9 @@ class SearchHandler:
         if not self.bot.filter_service or self.bot.config.DISABLE_FILTER:
             return False
 
+        if is_private and not await self.bot.connection_service.can_manage_group(client, user_id, int(group_id)):
+            return False
+
         try:
             # Check if any filter matches (exact match first, then fuzzy)
             keywords = await self.bot.filter_service.get_all_filters(group_id)
@@ -849,8 +852,8 @@ class SearchHandler:
                         group_id, keyword
                     )
 
-                    if reply_text:
-                        reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+                    if reply_text or fileid not in (None, "None", ""):
+                        reply_text = (reply_text or "").replace("\\n", "\n").replace("\\t", "\t")
 
                         # Add a header to distinguish filter results
                         if is_private:
@@ -859,16 +862,15 @@ class SearchHandler:
                             filter_header = f"🔍 <b>Filter Match:</b>\n"
 
                         # Send filter response
-                        await self.bot.filter_service.send_filter_response(
+                        return await self.bot.filter_service.send_filter_response(
                             client,
                             message,
                             filter_header + reply_text,
                             btn,
                             alert,
-                            fileid
+                            fileid,
+                            group_id=group_id,
                         )
-
-                        return True
 
             # If no exact match, try fuzzy matching for typos (only for short keywords)
             short_keywords = [k for k in keywords if len(k) <= 10]
@@ -896,8 +898,8 @@ class SearchHandler:
                                         group_id, original_keyword
                                     )
 
-                                    if reply_text:
-                                        reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+                                    if reply_text or fileid not in (None, "None", ""):
+                                        reply_text = (reply_text or "").replace("\\n", "\n").replace("\\t", "\t")
 
                                         # Add a header to distinguish filter results
                                         if is_private:
@@ -906,16 +908,15 @@ class SearchHandler:
                                             filter_header = f"🔍 <b>Filter Match:</b>\n"
 
                                         # Send filter response
-                                        await self.bot.filter_service.send_filter_response(
+                                        return await self.bot.filter_service.send_filter_response(
                                             client,
                                             message,
                                             filter_header + reply_text,
                                             btn,
                                             alert,
-                                            fileid
+                                            fileid,
+                                            group_id=group_id,
                                         )
-
-                                        return True
                 except Exception as e:
                     logger.debug(f"Error in fuzzy filter matching: {e}")
 

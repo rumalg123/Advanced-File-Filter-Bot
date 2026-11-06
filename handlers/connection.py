@@ -1,4 +1,7 @@
+from html import escape
+
 from pyrogram import Client, filters, enums
+from pyrogram.errors import MessageNotModified
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.connection import ConnectionService
@@ -8,7 +11,7 @@ from core.utils.error_formatter import ErrorMessageFormatter
 from core.utils.logger import get_logger
 from handlers.decorators import check_ban
 from core.utils.telegram_api import telegram_api
-from core.utils.validators import extract_user_id, is_admin, is_group_admin
+from core.utils.validators import extract_user_id, is_admin, is_group_admin, is_group_owner
 from handlers.base import BaseHandler
 
 logger = get_logger(__name__)
@@ -38,7 +41,7 @@ class ConnectionHandler(BaseHandler):
 
         # Callback handlers - use BaseHandler's method
         self._register_callback_handlers([
-            (self.connection_callback, filters.regex(r"^groupcb:")),
+            (self.connection_callback, filters.regex(r"^(groupcb:|back_to_connections$)")),
             (self.connection_action_callback, filters.regex(
                 r"^(connect_group|deactivate_group|delete_connection|disconnect_group|disconnect_group_with_filters):")),
             (self.cleanup_connections_callback, filters.regex(r"^cleanup_connections$")),
@@ -109,7 +112,7 @@ class ConnectionHandler(BaseHandler):
                         await telegram_api.call_api(
                             client.send_message,
                             user_id,
-                            f"Connected to <b>{title}</b>!",
+                            f"Connected to <b>{escape(title)}</b>!",
                             parse_mode=CaptionFormatter.get_parse_mode(),
                             chat_id=user_id
                         )
@@ -207,12 +210,15 @@ class ConnectionHandler(BaseHandler):
     async def delete_group_filters_callback(self, client: Client, query: CallbackQuery):
         """Handle delete group filters callback"""
         user_id = extract_user_id(query)
-        group_id = query.data.split(":")[1]
-
-        # Check permission using validators
+        try:
+            group_id = int(query.data.split(":", 1)[1])
+        except (ValueError, IndexError):
+            return await query.answer("Invalid group", show_alert=True)
+        if not query.message or query.message.chat.id != group_id:
+            return await query.answer("Use the original group message", show_alert=True)
         if not is_admin(user_id, self.bot.config.ADMINS):
-            if not await is_group_admin(client, int(group_id), user_id):
-                return await query.answer("You need admin rights!", show_alert=True)
+            if not await is_group_owner(client, group_id, user_id):
+                return await query.answer("Only the group owner or bot admin can delete all filters!", show_alert=True)
 
         # Delete filters
         if self.bot.filter_service:
@@ -239,6 +245,13 @@ class ConnectionHandler(BaseHandler):
 
         await self._show_connections(client, message, user_id)
 
+    async def _edit_connection_message(self, message: Message, text: str, **kwargs):
+        try:
+            await message.edit_text(text, **kwargs)
+        except MessageNotModified:
+            # Repeated refreshes are already showing the requested state.
+            pass
+
     async def _show_connections(self, client: Client, message: Message, user_id: int, edit: bool = False):
         """Show the connection list for a specific user."""
 
@@ -246,7 +259,7 @@ class ConnectionHandler(BaseHandler):
 
         if not connections:
             if edit:
-                await message.edit_text("There are no active connections!! Connect to some groups first.")
+                await self._edit_connection_message(message, "There are no active connections!! Connect to some groups first.")
             else:
                 await message.reply_text(
                     "There are no active connections!! Connect to some groups first.",
@@ -276,7 +289,7 @@ class ConnectionHandler(BaseHandler):
         ])
 
         if edit:
-            await message.edit_text(
+            await self._edit_connection_message(message,
                 "Your connected group details:\n\n",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
@@ -287,20 +300,36 @@ class ConnectionHandler(BaseHandler):
                 quote=True
             )
 
+    async def _owns_private_menu(self, query: CallbackQuery) -> bool:
+        if (not query.message or query.message.chat.type != enums.ChatType.PRIVATE
+                or query.message.chat.id != query.from_user.id):
+            await query.answer("Open /connections in your private chat", show_alert=True)
+            return False
+        return True
+
+    async def _has_connection(self, user_id: int, group_id: str) -> bool:
+        connection = await self.connection_service.connection_repo.find_by_id(str(user_id), use_cache=False)
+        return bool(connection and any(g["group_id"] == group_id for g in connection.group_details))
+
     @check_ban()
     async def connection_callback(self, client: Client, query: CallbackQuery):
         """Handle connection selection callback"""
-        await query.answer()
-
+        if not await self._owns_private_menu(query):
+            return
         if query.data == "back_to_connections":
+            await query.answer()
             return await self._show_connections(client, query.message, query.from_user.id, edit=True)
 
         data = query.data.split(":")
         if len(data) != 3:
-            return
+            return await query.answer("Invalid connection data", show_alert=True)
 
         _, group_id, is_active = data
         user_id = query.from_user.id
+        if not group_id.removeprefix("-").isdigit() or not await self._has_connection(user_id, group_id):
+            return await query.answer("This connection no longer exists", show_alert=True)
+        is_active = str(await self.connection_service.connection_repo.is_active(str(user_id), group_id))
+        await query.answer()
 
         # Build action buttons
         buttons = []
@@ -345,7 +374,7 @@ class ConnectionHandler(BaseHandler):
 
             text = (
                 f"<b>Group Details</b>\n\n"
-                f"📌 Title: {title}\n"
+                f"📌 Title: {escape(title)}\n"
                 f"🆔 ID: <code>{group_id}</code>\n"
                 f"👥 Members: {members_count}\n"
                 f"✅ Status: {'Active' if is_active == 'True' else 'Inactive'}"
@@ -359,7 +388,7 @@ class ConnectionHandler(BaseHandler):
                 f"{ErrorMessageFormatter.format_warning('Unable to fetch group details')}"
             )
 
-        await query.message.edit_text(
+        await self._edit_connection_message(query.message,
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=CaptionFormatter.get_parse_mode()
@@ -368,6 +397,8 @@ class ConnectionHandler(BaseHandler):
     @check_ban()
     async def connection_action_callback(self, client: Client, query: CallbackQuery):
         """Handle connection action callbacks"""
+        if not await self._owns_private_menu(query):
+            return
         user_id = query.from_user.id
         data = query.data.split(":")
 
@@ -375,6 +406,13 @@ class ConnectionHandler(BaseHandler):
             return await query.answer(ErrorMessageFormatter.format_invalid("data", plain_text=True), show_alert=True)
 
         action, group_id = data
+        if not group_id.removeprefix("-").isdigit() or not await self._has_connection(user_id, group_id):
+            return await query.answer("This connection no longer exists", show_alert=True)
+        if action == "connect_group" and not await self.connection_service.can_manage_group(client, user_id, int(group_id)):
+            return await query.answer("You need to be an admin in the group!", show_alert=True)
+        if action == "disconnect_group_with_filters":
+            if not is_admin(user_id, self.bot.config.ADMINS) and not await is_group_owner(client, int(group_id), user_id):
+                return await query.answer("Only the group owner or bot admin can delete all filters!", show_alert=True)
 
         if action == "connect_group":
             # Make group active (will deactivate others automatically)
@@ -387,24 +425,21 @@ class ConnectionHandler(BaseHandler):
             else:
                 await query.answer(msg, show_alert=True)
 
-            # Refresh the current view
-            query.data = f"groupcb:{group_id}:True"  # Set is_active to True
-            await self.connection_callback(client, query)
+            await self._show_connections(client, query.message, user_id, edit=True)
 
         elif action == "deactivate_group":
             # Deactivate the group
-            success = await self.connection_service.clear_active_connection(user_id)
+            success = await self.connection_service.clear_active_connection(user_id, group_id)
 
             if success:
                 await query.answer(ErrorMessageFormatter.format_success("Connection deactivated!", plain_text=True), show_alert=True)
             else:
                 await query.answer(ErrorMessageFormatter.format_failed("to deactivate", plain_text=True), show_alert=True)
 
-            # Refresh the current view
-            query.data = f"groupcb:{group_id}:False"  # Set is_active to False
-            await self.connection_callback(client, query)
+            await self._show_connections(client, query.message, user_id, edit=True)
 
         elif action == "delete_connection":
+            await query.answer()
             # Ask about filters
             buttons = [
                 [
@@ -427,7 +462,7 @@ class ConnectionHandler(BaseHandler):
                 ]
             ]
 
-            await query.message.edit_text(
+            await self._edit_connection_message(query.message,
                 "Do you want to delete all filters from this group too?",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
@@ -443,8 +478,11 @@ class ConnectionHandler(BaseHandler):
             if success:
                 # If delete_filters is True, delete all filters
                 if delete_filters and not self.bot.config.DISABLE_FILTER:
-                    await self.bot.filter_service.delete_all_filters(str(group_id))
-                    await query.answer(ErrorMessageFormatter.format_success("Connection and filters deleted!", plain_text=True), show_alert=True)
+                    deleted = await self.bot.filter_service.delete_all_filters(str(group_id))
+                    if deleted:
+                        await query.answer(ErrorMessageFormatter.format_success("Connection and filters deleted!", plain_text=True), show_alert=True)
+                    else:
+                        await query.answer("Connection deleted; filters could not be deleted. Try /delall again.", show_alert=True)
                 else:
                     await query.answer(ErrorMessageFormatter.format_success("Connection deleted!", plain_text=True), show_alert=True)
             else:
@@ -456,8 +494,8 @@ class ConnectionHandler(BaseHandler):
     @check_ban()
     async def cleanup_connections_callback(self, client: Client, query: CallbackQuery):
         """Handle cleanup connections callback"""
-        await query.answer("Cleaning up invalid connections...", show_alert=True)
-
+        if not await self._owns_private_menu(query):
+            return
         user_id = query.from_user.id
         removed = await self.connection_service.cleanup_invalid_connections(
             client, user_id

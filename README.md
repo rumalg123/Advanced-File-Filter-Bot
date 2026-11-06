@@ -761,7 +761,29 @@ Available only when `DISABLE_FILTER=false`:
 | `/del keyword` | Delete one or more filters. Aliases: `/delf`, `/deletef`. |
 | `/delall` | Delete all filters after confirmation. Aliases: `/delallf`, `/deleteallf`. |
 
-Group administration checks still apply; enabling filters does not let ordinary users modify group filters.
+Group admins can connect, add, list and delete individual filters. The bot must
+also be an administrator. Configured bot admins retain their bypass. Private
+filter retrieval and activation recheck current group admin rights; demotion
+blocks access through old connections and alert buttons. Ordinary group members
+can trigger their current group's filters.
+
+Use `/add greeting Hello there, welcome to the group!` for a text response, or
+`/add "two word keyword" Complete response text` for a phrase. Reply to media
+with `/add keyword` to store that media. URL and alert syntax is supported:
+`[Open](buttonurl:https://example.com)` and `[Details](buttonalert:Your message)`.
+Send the syntax as literal text; API clients should disable Markdown conversion.
+Near-duplicate keywords are intentionally blocked; delete the existing filter
+before replacing it.
+
+`/connections` manages one active group per user. Switching/deleting connections
+uses guarded MongoDB writes, and cleanup retains connections when Telegram is
+unavailable. Disconnecting while keeping filters does not delete group data.
+Deleting all filters, including through disconnect controls, requires the group
+owner or a configured bot admin. `/delall` confirmations expire after five
+minutes and are consumed once. Old unbound confirmations require a new command.
+
+Keyboard storage remains compatible with historical URL/alert SDK repr records;
+new records use JSON. No MongoDB migration or Redis flush is required.
 
 ### File-store commands
 
@@ -1010,7 +1032,7 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,425 tests** with zero failures or skips, plus **16 live dashboard/analytics checks** with three QA accounts on wzgram 3.1.6. Admin access, aggregate totals, full-query reconciliation, indexing/caption changes, cache repair and retained/reset Redis behavior passed. Source-matched coverage is **71.94% lines and 59.71% branches**; whole-bot 100% and production operational gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md) for current scope, configuration and remaining checks.
+The latest bounded QA round passed **1,498 tests** with zero failures or skips and **28 live group-filter/connection checks** on wzgram 3.1.6. Fresh source-matched coverage is **70.54% lines and 57.58% branches**. Historical raw coverage was unavailable after restart; earlier totals remain dated evidence. Whole-bot 100% and production gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md).
 
 Useful additional checks:
 

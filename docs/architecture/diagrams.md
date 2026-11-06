@@ -743,6 +743,16 @@ default setting never rewrites existing user grant dates.
 
 Other additive collections include `saved_search_notifications` for alert deduplication and `search_analytics` for bounded zero-result analytics. Group filter documents are stored in `filters_<group_id>` collections, with `global_filters` used when no group is supplied.
 
+Connection additions, activation and removal update the current MongoDB document
+atomically rather than replacing cached group lists. Private filter reads and
+activation require current group administrator rights, retaining configured bot
+admin bypasses. Cleanup distinguishes confirmed nonmembership from unavailable
+Telegram checks. New keyboards use JSON; historical SDK repr records are decoded
+through a restricted AST parser. Delivered alert callbacks carry their source
+group and a compact keyword digest. `/delall` stores a five-minute confirmation
+under protected `deleteall_pending:filter:*` state and consumes it atomically
+before deleting filters; cancellation checks the actor and chat.
+
 ## 13. Docker deployment topology
 
 ```mermaid

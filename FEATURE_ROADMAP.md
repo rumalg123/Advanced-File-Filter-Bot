@@ -9,20 +9,23 @@ feature ID below. Multilingual search is explicitly out of scope.
 Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (configured)`,
 `Enabled`, `Blocked`.
 
-## Current QA, 2026-10-31
+## Current QA, 2026-11-06
 
-The latest bounded round passed **1,425 tests with zero failures or skips** and
-**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
-BUG-119–122 fix complete query identity, unavailable verification/statistics,
-concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
-payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
-persistence and handled failure recovery passed. Admin/owner bypasses and
-operator diagnostics remain. Source-matched coverage is **71.94% lines,
-59.71% branches, 68.89% combined**.
-The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
-configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
-100% coverage and production operational gates remain open. Earlier dated
-counts remain historical; no feature defaults or production limits changed.
+The group-filter/connection round passed **1,498 tests, zero failures or skips**
+and **28 live checks** on wzgram 3.1.6. BUG-123–132 and CACHE-029 cover atomic
+connections, current permissions, non-destructive cleanup, text/keyboards,
+source-bound alerts, single-use confirmations and captionless media. Admin/owner
+bypasses and all 889 baseline logger lines remain. Final live cleanup verified
+85 owned messages removed and both temporary member roles restored.
+
+Fresh source-matched coverage is **70.54% lines, 57.58% branches,
+67.29% combined** across all 122 application/operator Python files.
+October raw execution files were unavailable after restart and were not
+reconstructed; earlier aggregate percentages remain dated historical evidence.
+See [the current QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 15 evidence](docs/qa/coverage-expansion/round15-filters-connections.json).
+Whole-bot 100% and production acceptance remain open. No production access,
+feature defaults, deployment environment or production limits changed.
 
 ## Live-safety contract
 

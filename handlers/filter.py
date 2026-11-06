@@ -1,3 +1,7 @@
+from html import escape, unescape
+import re
+import secrets
+
 # handlers/filter.py
 import io
 import shlex
@@ -46,11 +50,41 @@ class FilterHandler(BaseHandler):
     # cleanup() method is inherited from BaseHandler
 
     def _split_quotes(self, text: str) -> List[str]:
-        """Split text respecting quotes"""
-        try:
-            return shlex.split(text)
-        except ValueError:
-            return text.split(None, 1)
+        """Read one quoted keyword and preserve the complete remaining body."""
+        delimiter = next((quote for quote in ("&quot;", "&#x27;", "&#39;")
+                          if text.lstrip().startswith(quote)), None)
+        if delimiter:
+            # Telegram's HTML unparser escapes literal quote characters too.
+            encoded = re.fullmatch(r"\s*" + re.escape(delimiter) + r"(.*?)" +
+                                   re.escape(delimiter) + r"(?:\s+(.*))?\s*", text, re.DOTALL)
+            if not encoded:
+                return []
+            token, body = encoded.groups()
+            keyword = unescape(token).strip()
+        else:
+            match = re.fullmatch(r'\s*("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[^\s"\']+)(?:\s+(.*))?\s*', text, re.DOTALL)
+            if not match:
+                return []
+            token, body = match.groups()
+            keyword = shlex.split(token)[0] if token[:1] in ('"', "'") else token
+            keyword = unescape(keyword).strip()
+        if not keyword:
+            return []
+        if body is None:
+            return [keyword]
+        body = body.strip()
+        for quote in ("&quot;", "&#x27;", "&#39;"):
+            if body.startswith(quote) and body.endswith(quote) and len(body) >= 2 * len(quote):
+                body = body[len(quote):-len(quote)]
+                break
+        if body[:1] in ('"', "'") and body[-1:] == body[:1]:
+            try:
+                quoted = shlex.split(body)
+                if len(quoted) == 1:
+                    body = quoted[0]
+            except ValueError:
+                pass
+        return [keyword, body]
 
     @check_ban()
     async def add_filter_command(self, client: Client, message: Message):
@@ -79,6 +113,8 @@ class FilterHandler(BaseHandler):
             return await message.reply_text("Command Incomplete :(", quote=True)
 
         extracted = self._split_quotes(args[1])
+        if not extracted:
+            return await message.reply_text('Use /add keyword response, or /add "multi word keyword" response.', quote=True)
         keyword = extracted[0].lower()
 
         # Check for similar existing filters using fuzzy matching
@@ -94,10 +130,10 @@ class FilterHandler(BaseHandler):
             
             if similar_filters:
                 suggestions = [f[0] for f in similar_filters]
-                suggestion_text = "\n".join([f"• <code>{s}</code>" for s in suggestions])
+                suggestion_text = "\n".join([f"• <code>{escape(s)}</code>" for s in suggestions])
                 warning_msg = (
                     f"⚠️ <b>Similar filter(s) already exist:</b>\n{suggestion_text}\n\n"
-                    f"The new filter <code>{keyword}</code> was not added.\n"
+                    f"The new filter <code>{escape(keyword)}</code> was not added.\n"
                     f"Near-duplicate filters are blocked automatically; rename the keyword "
                     f"or delete the existing filter first."
                 )
@@ -119,14 +155,14 @@ class FilterHandler(BaseHandler):
             str(group_id),
             keyword,
             reply_text,
-            str(btn),
+            self.filter_service.serialize_buttons(btn),
             fileid,
             str(alert) if alert else None
         )
 
         if success:
             return await message.reply_text(
-                f"Filter for <code>{keyword}</code> added in <b>{title}</b>",
+                f"Filter for <code>{escape(keyword)}</code> added in <b>{escape(title)}</b>",
                 quote=True,
                 parse_mode=CaptionFormatter.get_parse_mode()
             )
@@ -158,8 +194,8 @@ class FilterHandler(BaseHandler):
         count = await self.filter_service.count_filters(str(group_id))
 
         if count:
-            filterlist = f"Total number of filters in <b>{title}</b>: {count}\n"
-            keywords = "\n".join(f"{idx + 1}.  <code>{text}</code>" for idx, text in enumerate(sorted(filters)))
+            filterlist = f"Total number of filters in <b>{escape(title)}</b>: {count}\n"
+            keywords = "\n".join(f"{idx + 1}.  <code>{escape(text)}</code>" for idx, text in enumerate(sorted(filters)))
             filterlist += keywords
 
             if len(filterlist) > 4096:
@@ -171,12 +207,12 @@ class FilterHandler(BaseHandler):
                     keyword_file.name = "keywords.txt"
                     await message.reply_document(
                         document=keyword_file,
-                        caption=f"Total number of filters in <b>{title}</b>: {count}",
+                        caption=f"Total number of filters in <b>{escape(title)}</b>: {count}",
                         quote=True
                     )
                 return
         else:
-            filterlist = f"There are no active filters in <b>{title}</b>"
+            filterlist = f"There are no active filters in <b>{escape(title)}</b>"
 
         await message.reply_text(
             text=filterlist,
@@ -233,7 +269,7 @@ class FilterHandler(BaseHandler):
                 if deleted:
                     deleted_count += 1
                     await message.reply_text(
-                        f"<code>{filter_name}</code> deleted. I'll not respond to that filter anymore.",
+                        f"<code>{escape(filter_name)}</code> deleted. I'll not respond to that filter anymore.",
                         quote=True,
                         parse_mode=CaptionFormatter.get_parse_mode()
                     )
@@ -251,20 +287,19 @@ class FilterHandler(BaseHandler):
                 
                 if similar_filters:
                     suggestions = [f[0] for f in similar_filters]
-                    suggestion_text = "\n".join([f"• <code>{s}</code>" for s in suggestions])
+                    suggestion_text = "\n".join([f"• <code>{escape(s)}</code>" for s in suggestions])
                     await message.reply_text(
-                        f"❌ Filter <code>{filter_name}</code> not found.\n\n"
+                        f"❌ Filter <code>{escape(filter_name)}</code> not found.\n\n"
                         f"💡 <b>Did you mean?</b>\n{suggestion_text}\n\n"
-                        f"Use: <code>/del {' '.join(suggestions[:1])}</code>",
+                        f"Use: <code>/del {escape(' '.join(suggestions[:1]))}</code>",
                         quote=True
                     )
                 else:
                     not_found.append(filter_name)
         
         # Report any filters that weren't found and had no suggestions
-        if not_found and deleted_count == 0:
-            # Only show if we didn't delete anything and no suggestions were shown
-            pass  # Already handled above with suggestions
+        if not_found:
+            await message.reply_text("No matching filters: " + ", ".join(escape(name) for name in not_found), quote=True)
 
     @check_ban()
     async def delete_all_command(self, client: Client, message: Message):
@@ -287,12 +322,16 @@ class FilterHandler(BaseHandler):
         if not await self._is_owner_or_bot_admin(client, group_id, user_id):
             return await message.reply("Only group owner or bot admins can delete all filters!")
 
-        # Confirmation
+        # Store a short-lived confirmation on protected Redis state.
+        token = secrets.token_hex(12)
+        pending = {"group_id": group_id, "user_id": user_id, "chat_id": message.chat.id}
+        if not await self.bot.cache.set(f"deleteall_pending:filter:{token}", pending, expire=300):
+            return await message.reply_text("Confirmation unavailable. Please try /delall again.", quote=True)
         await message.reply_text(
-            f"This will delete all filters from '{title}'.\nDo you want to continue??",
+            f"This will delete all filters from '{escape(title)}'.\nDo you want to continue??",
             reply_markup=InlineKeyboardMarkup([
-                [ButtonBuilder.action_button(text="YES", callback_data=f"delallconfirm#{group_id}")],
-                [ButtonBuilder.action_button(text="CANCEL", callback_data="delallcancel")]
+                [ButtonBuilder.action_button(text="YES", callback_data=f"delallconfirm#{token}")],
+                [ButtonBuilder.action_button(text="CANCEL", callback_data=f"delallcancel#{token}")]
             ]),
             quote=True
         )

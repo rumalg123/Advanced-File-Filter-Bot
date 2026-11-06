@@ -1,5 +1,8 @@
 # QA evidence and remaining coverage
 
+> **Latest (2026-11-06): 1,498 tests and 28 live checks passed.** See [round 15](#bounded-qa-round-15--group-filters-and-connections-2026-11-06). Fresh coverage: 70.54% lines / 57.58% branches. Earlier dated sections are historical.
+
+
 Latest continuation: [content dashboard and zero-result analytics](#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31),
 **1,425 tests passed**, **71.94% lines / 59.71% branches / 68.89% combined**.
 Next bounded round: group filters and connections.
@@ -1632,3 +1635,84 @@ server services remain running untouched. Final logs contain one expected handle
 injected error with a chained traceback; retry and recovery passed, with no
 unhandled exception. Stop here until `continue`.
 **Next bounded scope: group filters and connections.**
+
+
+## Bounded QA round 15 — group filters and connections (2026-11-06)
+
+**Completed: 1,498 tests passed**, zero failures/errors/skips, with 22 existing
+warnings. The 73 new cases span five modules and include real-Mongo races,
+backend failures, Telegram roles, callback ownership, SDK strings/keyboards,
+captionless media and single-use deletion. Compile, undefined-name Ruff,
+dependency consistency and source/snapshot identity passed. All 889 baseline
+logger lines remain. Application/tests source: `a220499`;
+[sanitized evidence](round15-filters-connections.json).
+
+| Fix | Commit | Result |
+|---|---|---|
+| BUG-123 | `38428a4 / 0d7790e` | Passed automated acceptance and the applicable live paths. |
+| BUG-124 / BUG-125 | `1c1248d` | Passed automated acceptance and the applicable live paths. |
+| BUG-126 | `ee7864e` | Passed automated acceptance and the applicable live paths. |
+| BUG-127 | `9b4624a` | Passed automated acceptance and the applicable live paths. |
+| BUG-128 | `48c7e24` | Passed automated acceptance and the applicable live paths. |
+| BUG-129 | `736b6aa` | Passed automated acceptance and the applicable live paths. |
+| BUG-130 | `cd4d444` | Passed automated acceptance and the applicable live paths. |
+| BUG-131 | `0086bb5` | Passed automated acceptance and the applicable live paths. |
+| BUG-132 | `a220499` | Passed automated acceptance and the applicable live paths. |
+
+**28 live checks passed** using the declared QA bot, three authenticated human
+accounts and two declared QA groups. The owner/admin and existing normal member
+performed group flows; the third account participated in private startup checks.
+Temporary promotions/demotions exercised both administrator and ordinary-member
+roles. Configured admins kept their bypass.
+
+Verified connection admission/duplicate rejection, two-group selection, Back,
+activation/deactivation, stale controls after demotion, disconnect while retaining
+filters, safe no-op cleanup, and final privileged disconnect plus filter deletion.
+The final normal-user disconnect preserved group filters and the other user's
+independent connection. Filter QA covered full unquoted bodies, full quoted
+keyword storage (not merely a fuzzy match), formatting, group isolation, text,
+URL buttons, source-bound group/private alerts, captioned and captionless media,
+listing, invalid keywords, missing/exact deletion, permission denials and owner
+bulk-delete cancel/confirm. Demotion blocked private reads, writes, old alerts
+and activation without deleting the stored connection.
+
+The used confirmation's keyboard had already been removed, and Telegram rejected
+the replay with MessageIdInvalid. This is **transport rejection evidence**;
+application expiry/replay/concurrent-consumption guards passed automated tests.
+Actual successful cancel/confirm used the dedicated protected Redis backend.
+No false claim is made that the rejected replay reached the application.
+
+Two independent disposable local stacks supplied MongoDB plus cache/state Redis;
+no host ports were exposed. No Atlas or production service was contacted, no
+feature defaults/limits or deployment `.env` changed, and no deployment image was
+rebuilt. The retained runtime is Python 3.13.7 / wzgram 3.1.6 with mounted source;
+its bundled application remains older `b2fcb38`.
+
+| Fresh coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Automated suite | 64.57% | 52.86% | 61.64% |
+| Automated + this live pass | 70.54% | 57.58% | 67.29% |
+
+The denominator retains **18,263 statements, 6,112 branches and all 122 tracked
+non-test Python files**, including unimported operator modules. Both accepted
+shards match start/end/current SHA256 for every file. Failed/interrupted attempts
+were excluded. Raw October execution was missing after the workspace restart;
+it was not reconstructed from published totals. Earlier percentages remain
+historical and are not directly comparable to this fresh two-shard aggregate.
+New raw coverage and provenance are retained privately for the next continuation.
+Whole-bot **100% remains open**.
+
+Harness corrections included SDK default demotion privileges, account-specific
+private message IDs, literal Markdown/button syntax, URL normalization and silent
+group misses. Early Redis fixtures needed DB 0 and the CI eviction policies.
+Telegram join throttling was respected; the final pass used existing memberships
+and made no joins/leaves/invites. Early temporary invites were revoked and
+memberships restored. Final cleanup independently checked **85 owned messages
+removed, zero remaining, and 2/2 role baselines restored**. The original server
+services remained running. Disposable stacks and runners were removed.
+
+Remaining work includes uncovered error branches, large filter-list exports,
+anonymous-admin and additional media permutations, sustained production load,
+cloud restore and deployment-image acceptance. Completed bug details are retained
+in the authoritative registers, without adding temporary investigation documents.
+Stop here until `continue`. **Next bounded scope: file-store links and batch retrieval.**

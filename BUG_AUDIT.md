@@ -133,6 +133,17 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-121 | Medium | Fixed | Concurrent demand cleanup | Dashboard reconciliation can delete a new zero-result search recorded after its earlier match check because cleanup deletes only by query identity. | Guard dashboard deletion with the observed count and timestamp, including absent legacy fields, so newer demand survives. Keep the direct successful-search resolver compatible. |
 | BUG-122 | Medium | Fixed | Dashboard count and size semantics | Pending-request totals omit supported legacy processing records, and the Storage label describes referenced Telegram file bytes rather than MongoDB storage. | Share the active-request status set with request admission and label the sum as Total file size. |
 
+| BUG-123 | Medium | Fixed | Connection mutation races | Cached read/replace writes lose concurrent connections and stale activation clears the current selection. | Atomic guarded additions/removals/activation, idempotent duplicate requests, failure contracts and real-Mongo race tests. |
+| BUG-124 | High | Fixed | Connection permissions | Disconnect callbacks bypass bulk-deletion owner checks; stale private connections retain access after demotion. | Owner/admin checks for all bulk paths, current group rights for activation/private retrieval, private menu ownership, and preserved privileged bypasses. |
+| BUG-125 | Medium | Fixed | Connection cleanup | Transient Telegram failures are treated as nonmembership and delete valid connections. | Three-state membership checks retain unverifiable connections; restricted membership requires is_member=True. |
+| BUG-126 | Medium | Fixed | Filter content and keyboards | Command splitting truncates response bodies; SDK repr keyboards fail JSON decoding and failed sends count as matches. | Preserve response bodies, reject malformed keywords, decode historical repr safely, store JSON and honor delivery success. |
+| BUG-127 | High | Fixed | Filter alert source | Private alert callbacks look up the private chat as their source and long keywords exceed Telegram limits. | Source-group callbacks, bounded digest payloads, current private permissions, safe indexes and UTF-8 text limits. |
+| BUG-128 | Medium | Fixed | Bulk filter confirmation | Unbound cancel controls can remove another user's confirmation and old confirmations remain reusable. | Chat/actor-bound five-minute protected state, current owner/admin authorization and atomic single-use consumption. |
+| BUG-129 | Medium | Fixed | Captionless media filters | Search skips valid media filter records without captions. | Accept stored media IDs as content in exact/fuzzy search; private/group regressions and live media delivery. |
+| BUG-130 | Medium | Fixed | Telegram HTML filter syntax | SDK HTML escaping changes quoted keywords and button labels, URLs and alert text. | Real SDK string fixtures cover quoted/empty keywords and entity decoding; live storage asserts the full keyword. |
+| BUG-131 | Medium | Fixed | Connection preview acknowledgment | Delete Connection opens a preview without answering the Telegram callback. | Answer exactly once before editing the preview; regression and live callback pass. |
+| BUG-132 | Low | Fixed | Connection menu refresh | Refreshing unchanged connection details raises MessageNotModified. | Treat only that SDK error as an idempotent edit; empty/populated regressions and live no-op cleanup. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -174,20 +185,23 @@ are preserved for a separate follow-up. The raised ownership CLI default also
 exceeds the existing library's one-million inventory/activation bound and needs
 alignment before using the new default. No production service was accessed.
 
-## Current QA, 2026-10-31
+## Current QA, 2026-11-06
 
-The latest bounded round passed **1,425 tests with zero failures or skips** and
-**16 live dashboard/analytics checks** using three QA accounts on wzgram 3.1.6.
-BUG-119–122 fix complete query identity, unavailable verification/statistics,
-concurrent cleanup and aggregate count/size semantics; CACHE-028 validates stats
-payloads. Real searches/indexing, access, caption settings, toggles, Redis-reset
-persistence and handled failure recovery passed. Admin/owner bypasses and
-operator diagnostics remain. Source-matched coverage is **71.94% lines,
-59.71% branches, 68.89% combined**.
-The [current QA report](docs/qa/coverage-expansion/STATUS.md) records scope,
-configuration, cleanup and earlier feature/multidatabase evidence. Whole-bot
-100% coverage and production operational gates remain open. Earlier dated
-counts remain historical; no feature defaults or production limits changed.
+The group-filter/connection round passed **1,498 tests, zero failures or skips**
+and **28 live checks** on wzgram 3.1.6. BUG-123–132 and CACHE-029 cover atomic
+connections, current permissions, non-destructive cleanup, text/keyboards,
+source-bound alerts, single-use confirmations and captionless media. Admin/owner
+bypasses and all 889 baseline logger lines remain. Final live cleanup verified
+85 owned messages removed and both temporary member roles restored.
+
+Fresh source-matched coverage is **70.54% lines, 57.58% branches,
+67.29% combined** across all 122 application/operator Python files.
+October raw execution files were unavailable after restart and were not
+reconstructed; earlier aggregate percentages remain dated historical evidence.
+See [the current QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 15 evidence](docs/qa/coverage-expansion/round15-filters-connections.json).
+Whole-bot 100% and production acceptance remain open. No production access,
+feature defaults, deployment environment or production limits changed.
 
 ## Verification log
 
@@ -302,3 +316,73 @@ counts remain historical; no feature defaults or production limits changed.
   confirmations now use shared, manager-tracked auto-deletion based on the live
   `MESSAGE_DELETE_SECONDS` value. Incoming user commands, admin diagnostics, and
   deep-link subscription gates remain untouched. All 136 tests passed.
+
+## 2026-11-06 group connection QA
+
+- **BUG-123 — Fixed; local MongoDB regressions passed.** Concurrent connection
+  additions/removals previously replaced stale cached group lists. Mutations now
+  update the current MongoDB document atomically; activation requires the target
+  connection to exist and cannot clear the previous active group on failure.
+  Verified concurrent additions, duplicate requests, removal/activation races,
+  foreign-user isolation, cache invalidation, and fallback selection.
+  Live group/filter verification passed in bounded QA round 15.
+
+- **BUG-124 — Fixed; permission regressions passed.** Bulk filter deletion via
+  disconnect now requires the group owner or configured bot admin, matching
+  `/delall`. Private connection controls reject shared chat contexts and missing
+  connections. Activation and private filter retrieval recheck current group
+  administrator rights; configured admin bypasses remain. The Back button is
+  registered, and stale deactivation cannot clear a newer active group.
+- **BUG-125 — Fixed; membership regressions passed.** Cleanup retains connections
+  when Telegram membership verification is unavailable, and removes only known
+  nonmembers. Restricted users require `is_member=True`; unknown statuses are
+  not treated as membership. Configured bot admins retain their bypass.
+
+- **BUG-126 — Fixed; content/SDK regressions passed.** `/add` now preserves the
+  complete response after the keyword, accepts quoted keywords, and rejects empty
+  or malformed keywords. New keyboards use JSON; historical SDK repr keyboards
+  are decoded through a restricted AST parser, never `eval`. Text/media sends
+  construct real SDK buttons and return success only after Telegram accepts the
+  delivery. Filter UI labels are escaped, and deleting an absent filter returns
+  feedback. Existing near-duplicate rejection remains intentional.
+
+- **BUG-127 — Fixed; alert regressions passed.** New alert buttons include a
+  compact source-group identity and keyword digest, keeping long/Unicode
+  keywords within Telegram's callback limit. Connected private alerts resolve
+  the originating group and recheck live administrator rights; other-group
+  replays and negative indexes are rejected. Long alert text is UTF-8 bounded.
+  Legacy group buttons remain readable; old private buttons request refresh.
+
+- **BUG-128 — Fixed; confirmation regressions passed.** `/delall` now stores a
+  five-minute, chat-bound token on protected Redis state. Cancellation checks
+  the requester/privileged actor, confirmation rechecks current owner/admin
+  rights, and an atomic compare-and-delete consumes the token before mutation.
+  Replays, cross-chat use, unavailable state and legacy unbound controls fail
+  closed. Cancelling leaves the user's original command in place.
+
+- **BUG-123 follow-up verified:** failed atomic writes keep the repository's
+  existing `False` result contract and log the actual exception with traceback.
+  Four backend-failure regressions passed; malformed connection payloads now
+  receive an explicit callback response. All baseline logger statements remain.
+
+- **BUG-129 — Fixed; both private/group regressions passed.** Search now treats
+  a stored media ID as valid filter content when the caption is empty. Both
+  exact and fuzzy paths use the same delivery result. Captionless media no
+  longer falls through to unrelated media-search results or silent misses.
+
+- **BUG-130 — Fixed; real SDK string regressions passed.** Telegram's HTML
+  representation escapes keyword quotes, response quotes and button text/URLs.
+  The parser now recognizes encoded quote delimiters without unescaping the
+  response's HTML, rejects encoded empty/malformed keywords, and decodes button
+  labels, URLs and alert text once. SDK-backed fixtures prevent fuzzy matching
+  from hiding an incorrectly stored quoted keyword.
+
+- **BUG-131 — Fixed; callback regression passed.** Opening the Delete Connection
+  preview now acknowledges its callback exactly once before editing the menu.
+  The real Telegram timeout was reproduced in live QA; opening a preview no
+  longer leaves Telegram waiting for an unanswered query.
+
+- **BUG-132 — Fixed; SDK error regressions passed.** Repeated connection-list
+  refreshes now treat Telegram's `MessageNotModified` as a successful no-op.
+  Empty and populated lists are covered; other edit errors still propagate.
+  Cleanup no longer logs an unhandled error just because no connection changed.
