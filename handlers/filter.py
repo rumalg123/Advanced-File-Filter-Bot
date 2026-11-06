@@ -1,5 +1,6 @@
 from html import escape, unescape
 import re
+import secrets
 
 # handlers/filter.py
 import io
@@ -306,12 +307,16 @@ class FilterHandler(BaseHandler):
         if not await self._is_owner_or_bot_admin(client, group_id, user_id):
             return await message.reply("Only group owner or bot admins can delete all filters!")
 
-        # Confirmation
+        # Store a short-lived confirmation on protected Redis state.
+        token = secrets.token_hex(12)
+        pending = {"group_id": group_id, "user_id": user_id, "chat_id": message.chat.id}
+        if not await self.bot.cache.set(f"deleteall_pending:filter:{token}", pending, expire=300):
+            return await message.reply_text("Confirmation unavailable. Please try /delall again.", quote=True)
         await message.reply_text(
-            f"This will delete all filters from '{title}'.\nDo you want to continue??",
+            f"This will delete all filters from '{escape(title)}'.\nDo you want to continue??",
             reply_markup=InlineKeyboardMarkup([
-                [ButtonBuilder.action_button(text="YES", callback_data=f"delallconfirm#{group_id}")],
-                [ButtonBuilder.action_button(text="CANCEL", callback_data="delallcancel")]
+                [ButtonBuilder.action_button(text="YES", callback_data=f"delallconfirm#{token}")],
+                [ButtonBuilder.action_button(text="CANCEL", callback_data=f"delallcancel#{token}")]
             ]),
             quote=True
         )

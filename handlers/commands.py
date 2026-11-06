@@ -202,7 +202,7 @@ class CommandHandler(BaseHandler):
         self._register_handler(
             CallbackQueryHandler(
                 self.filter_callback_handler.handle_delall_cancel_callback,
-                filters.regex(r"^delallcancel$")
+                filters.regex(r"^delallcancel(?:#|$)")
             )
         )
 

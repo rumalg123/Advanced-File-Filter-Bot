@@ -338,3 +338,10 @@ counts remain historical; no feature defaults or production limits changed.
   the originating group and recheck live administrator rights; other-group
   replays and negative indexes are rejected. Long alert text is UTF-8 bounded.
   Legacy group buttons remain readable; old private buttons request refresh.
+
+- **BUG-128 — Fixed; confirmation regressions passed.** `/delall` now stores a
+  five-minute, chat-bound token on protected Redis state. Cancellation checks
+  the requester/privileged actor, confirmation rechecks current owner/admin
+  rights, and an atomic compare-and-delete consumes the token before mutation.
+  Replays, cross-chat use, unavailable state and legacy unbound controls fail
+  closed. Cancelling leaves the user's original command in place.
