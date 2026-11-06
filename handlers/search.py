@@ -862,16 +862,15 @@ class SearchHandler:
                             filter_header = f"🔍 <b>Filter Match:</b>\n"
 
                         # Send filter response
-                        await self.bot.filter_service.send_filter_response(
+                        return await self.bot.filter_service.send_filter_response(
                             client,
                             message,
                             filter_header + reply_text,
                             btn,
                             alert,
-                            fileid
+                            fileid,
+                            group_id=group_id,
                         )
-
-                        return True
 
             # If no exact match, try fuzzy matching for typos (only for short keywords)
             short_keywords = [k for k in keywords if len(k) <= 10]
@@ -909,16 +908,15 @@ class SearchHandler:
                                             filter_header = f"🔍 <b>Filter Match:</b>\n"
 
                                         # Send filter response
-                                        await self.bot.filter_service.send_filter_response(
+                                        return await self.bot.filter_service.send_filter_response(
                                             client,
                                             message,
                                             filter_header + reply_text,
                                             btn,
                                             alert,
-                                            fileid
+                                            fileid,
+                                            group_id=group_id,
                                         )
-
-                                        return True
                 except Exception as e:
                     logger.debug(f"Error in fuzzy filter matching: {e}")
 

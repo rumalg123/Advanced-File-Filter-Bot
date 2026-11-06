@@ -1,3 +1,4 @@
+import ast
 import json
 import re
 from typing import Optional, List, Tuple, Union
@@ -34,6 +35,62 @@ class FilterService:
         self.BTN_URL_REGEX = re.compile(
             r"(\[([^\[]+?)]\((buttonurl|buttonalert):/{0,2}(.+?)(:same)?\))"
         )
+
+    BUTTON_FIELDS = ("text", "url", "callback_data", "user_id", "switch_inline_query",
+                     "switch_inline_query_current_chat", "requires_password", "pay",
+                     "disabled", "icon_custom_emoji_id")
+
+    @classmethod
+    def serialize_buttons(cls, buttons) -> str:
+        """Store plain JSON; never persist SDK object reprs for new filters."""
+        if isinstance(buttons, str):
+            buttons = cls.deserialize_buttons(buttons)
+        return json.dumps([[{field: getattr(button, field) for field in cls.BUTTON_FIELDS
+                             if getattr(button, field, None) is not None}
+                            for button in row] for row in buttons], ensure_ascii=False)
+
+    @classmethod
+    def deserialize_buttons(cls, payload: str) -> List[List[InlineKeyboardButton]]:
+        """Read JSON and the historical SDK repr using a restricted AST parser."""
+        try:
+            rows = json.loads(payload)
+        except (ValueError, TypeError):
+            try:
+                tree = ast.parse(payload, mode="eval").body
+                if not isinstance(tree, ast.List):
+                    raise ValueError("Invalid keyboard")
+                rows = []
+                for row in tree.elts:
+                    if not isinstance(row, ast.List):
+                        raise ValueError("Invalid keyboard row")
+                    buttons = []
+                    for call in row.elts:
+                        if (not isinstance(call, ast.Call) or call.args
+                                or ast.unparse(call.func) != "pyrogram.types.InlineKeyboardButton"):
+                            raise ValueError("Invalid legacy button")
+                        fields = {}
+                        for item in call.keywords:
+                            if item.arg == "style" and ast.unparse(item.value) == "pyrogram.enums.ButtonStyle.DEFAULT":
+                                continue
+                            if item.arg not in cls.BUTTON_FIELDS:
+                                raise ValueError("Unsupported legacy button field")
+                            fields[item.arg] = ast.literal_eval(item.value)
+                        buttons.append(fields)
+                    rows.append(buttons)
+            except (ValueError, SyntaxError, TypeError) as exc:
+                raise ValueError("Invalid stored keyboard") from exc
+        if not isinstance(rows, list) or any(not isinstance(row, list) for row in rows):
+            raise ValueError("Invalid keyboard rows")
+        result = []
+        for row in rows:
+            decoded = []
+            for fields in row:
+                if (not isinstance(fields, dict) or not fields.get("text")
+                        or set(fields) - set(cls.BUTTON_FIELDS)):
+                    raise ValueError("Invalid button fields")
+                decoded.append(InlineKeyboardButton(**fields))
+            result.append(decoded)
+        return result
 
     async def get_active_group_id(self, client:Client,message: Message) -> Tuple[Optional[int], Optional[str]]:
         """Get the active group ID based on chat type and connections"""
@@ -196,10 +253,9 @@ class FilterService:
                     reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
 
                 if btn is not None:
-                    await self.send_filter_response(
-                        client, message, reply_text, btn, alert, fileid
+                    return await self.send_filter_response(
+                        client, message, reply_text, btn, alert, fileid, group_id=group_id
                     )
-                    return True
 
         # If no exact match, try fuzzy matching for typos (only for short keywords to avoid false positives)
         # Only use fuzzy matching for keywords <= 10 chars to avoid performance issues
@@ -232,10 +288,9 @@ class FilterService:
                                     reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
 
                                 if btn is not None:
-                                    await self.send_filter_response(
-                                        client, message, reply_text, btn, alert, fileid
+                                    return await self.send_filter_response(
+                                        client, message, reply_text, btn, alert, fileid, group_id=group_id
                                     )
-                                    return True
             except Exception as e:
                 logger.debug(f"Error in fuzzy filter matching: {e}")
 
@@ -243,111 +298,31 @@ class FilterService:
 
     async def send_filter_response(self, client: Client, message: Message,
                                    reply_text: str, btn: str, alert: str,
-                                   fileid: str) -> None:
-        """Send the filter response with concurrency control"""
+                                   fileid: str, *, group_id: Optional[str] = None) -> bool:
+        """Send a stored filter and report whether Telegram accepted it."""
         reply_id = message.reply_to_message.id if message.reply_to_message else message.id
         chat_id = message.chat.id
-
-        if is_private_chat(message):
-            try:
-                if fileid == "None":
-                    # Text-only response
-                    if btn == "[]":
-                        await telegram_api.call_api(
-                            client.send_message,
-                            chat_id,
-                            reply_text,
-                            disable_web_page_preview=True,
-                            protect_content=False,
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-                    else:
-                        # Text with buttons
-                        button = json.loads(btn)
-                        await telegram_api.call_api(
-                            client.send_message,
-                            chat_id,
-                            reply_text,
-                            disable_web_page_preview=True,
-                            reply_markup=InlineKeyboardMarkup(button),
-                            protect_content=False,
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-                else:
-                    # Media response
-                    if btn == "[]":
-                        await telegram_api.call_api(
-                            client.send_cached_media,
-                            chat_id,
-                            fileid,
-                            caption=reply_text or "",
-                            protect_content=False,
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-                    else:
-                        button = json.loads(btn)
-                        await telegram_api.call_api(
-                            client.send_cached_media,
-                            chat_id,
-                            fileid,
-                            caption=reply_text or "",
-                            reply_markup=InlineKeyboardMarkup(button),
-                            protect_content=False,
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-            except Exception as e:
+        try:
+            buttons = self.deserialize_buttons(btn or "[]")
+            kwargs = {"reply_to_message_id": reply_id}
+            if is_private_chat(message):
+                kwargs["protect_content"] = False
+            if buttons:
+                kwargs["reply_markup"] = InlineKeyboardMarkup(buttons)
+            if fileid in (None, "None", ""):
+                await telegram_api.call_api(
+                    client.send_message, chat_id, reply_text,
+                    disable_web_page_preview=True, chat_id=chat_id, **kwargs,
+                )
+            else:
+                await telegram_api.call_api(
+                    client.send_cached_media, chat_id, fileid,
+                    caption=reply_text or "", chat_id=chat_id, **kwargs,
+                )
+            return True
+        except Exception as e:
+            if is_private_chat(message):
                 logger.error(f"Error sending filter response in private chat: {e}")
-        else:
-            # Group chat response
-            try:
-                if fileid == "None":
-                    # Text-only response
-                    if btn == "[]":
-                        await telegram_api.call_api(
-                            client.send_message,
-                            chat_id,
-                            reply_text,
-                            disable_web_page_preview=True,
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-                    else:
-                        # Text with buttons
-                        button = json.loads(btn)
-                        await telegram_api.call_api(
-                            client.send_message,
-                            chat_id,
-                            reply_text,
-                            disable_web_page_preview=True,
-                            reply_markup=InlineKeyboardMarkup(button),
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-                else:
-                    # Media response
-                    if btn == "[]":
-                        await telegram_api.call_api(
-                            client.send_cached_media,
-                            chat_id,
-                            fileid,
-                            caption=reply_text or "",
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-                    else:
-                        button = json.loads(btn)
-                        await telegram_api.call_api(
-                            client.send_cached_media,
-                            chat_id,
-                            fileid,
-                            caption=reply_text or "",
-                            reply_markup=InlineKeyboardMarkup(button),
-                            reply_to_message_id=reply_id,
-                            chat_id=chat_id
-                        )
-            except Exception as e:
+            else:
                 logger.error(f"Error sending filter response in group chat: {e}")
+            return False

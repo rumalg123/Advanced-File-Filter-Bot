@@ -323,3 +323,11 @@ counts remain historical; no feature defaults or production limits changed.
   when Telegram membership verification is unavailable, and removes only known
   nonmembers. Restricted users require `is_member=True`; unknown statuses are
   not treated as membership. Configured bot admins retain their bypass.
+
+- **BUG-126 — Fixed; content/SDK regressions passed.** `/add` now preserves the
+  complete response after the keyword, accepts quoted keywords, and rejects empty
+  or malformed keywords. New keyboards use JSON; historical SDK repr keyboards
+  are decoded through a restricted AST parser, never `eval`. Text/media sends
+  construct real SDK buttons and return success only after Telegram accepts the
+  delivery. Filter UI labels are escaped, and deleting an absent filter returns
+  feedback. Existing near-duplicate rejection remains intentional.

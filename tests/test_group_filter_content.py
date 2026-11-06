@@ -1,0 +1,77 @@
+"""Filter bodies and keyboards survive storage and actual SDK serialization."""
+from types import SimpleNamespace as NS
+from unittest.mock import AsyncMock
+
+import pytest
+from pyrogram import enums
+from pyrogram.types import InlineKeyboardButton
+
+import core.services.filter as filters
+from core.services.filter import FilterService
+from handlers.filter import FilterHandler
+
+
+@pytest.mark.parametrize('source,expected', [
+    ('qa hello world with spaces', ['qa', 'hello world with spaces']),
+    ('"two words" <b>formatted body</b>', ['two words', '<b>formatted body</b>']),
+    ('qa "hello world"', ['qa', 'hello world']),
+    ("qa user's unquoted content", ['qa', "user's unquoted content"]),
+])
+def test_parser_preserves_the_complete_response(source, expected):
+    assert object.__new__(FilterHandler)._split_quotes(source) == expected
+
+
+@pytest.mark.parametrize('source', ['"" body', "'' body", '"unterminated', '   '])
+def test_parser_rejects_empty_or_malformed_keywords(source):
+    assert object.__new__(FilterHandler)._split_quotes(source) == []
+
+
+def service():
+    return FilterService(NS(), NS(), NS(), NS())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('private,media', [(False, False), (False, True), (True, False), (True, True)])
+async def test_keyboard_roundtrip_uses_sdk_buttons(monkeypatch, private, media):
+    svc = service()
+    payload = svc.serialize_buttons([[InlineKeyboardButton('URL', url='https://example.com')]])
+    api = AsyncMock()
+    monkeypatch.setattr(filters.telegram_api, 'call_api', api)
+    client = NS(send_message=object(), send_cached_media=object())
+    message = NS(id=7, reply_to_message=None, chat=NS(id=12 if private else -1001,
+                 type=enums.ChatType.PRIVATE if private else enums.ChatType.SUPERGROUP))
+    assert await svc.send_filter_response(client, message, 'complete response', payload, None,
+                                          'qa-media' if media else 'None', group_id='-1001')
+    keyboard = api.await_args.kwargs['reply_markup'].inline_keyboard
+    assert keyboard[0][0].url == 'https://example.com'
+    assert isinstance(keyboard[0][0], InlineKeyboardButton)
+
+
+def test_legacy_keyboard_repr_is_decoded_without_evaluation():
+    svc = service()
+    buttons = [[InlineKeyboardButton('URL', url='https://example.com')]]
+    assert svc.deserialize_buttons(str(buttons))[0][0].text == 'URL'
+    with pytest.raises(ValueError):
+        svc.deserialize_buttons("[[__import__('os').system('false')]]")
+
+
+@pytest.mark.asyncio
+async def test_failed_delivery_is_not_a_successful_match(monkeypatch):
+    svc = service()
+    svc.get_all_filters = AsyncMock(return_value=['qa'])
+    svc.get_filter = AsyncMock(return_value=('hello', '[]', None, 'None'))
+    monkeypatch.setattr(filters.telegram_api, 'call_api', AsyncMock(side_effect=ConnectionError('QA offline')))
+    msg = NS(id=7, reply_to_message=None, text='qa', chat=NS(id=-1001, type=enums.ChatType.SUPERGROUP))
+    assert not await svc._check_filter_match(NS(send_message=object()), msg, 'qa', '-1001')
+
+
+@pytest.mark.asyncio
+async def test_delete_absent_filter_reports_a_result():
+    handler = object.__new__(FilterHandler)
+    handler.bot = NS(config=NS(ADMINS=[12]))
+    handler.filter_service = NS(get_active_group_id=AsyncMock(return_value=(-1001, 'QA')),
+                                get_all_filters=AsyncMock(return_value=[]))
+    handler._check_admin_rights = AsyncMock(return_value=True)
+    message = NS(from_user=NS(id=12), text='/del absent', reply_text=AsyncMock())
+    await handler.delete_filter_command(None, message)
+    assert 'No matching filters' in message.reply_text.await_args.args[0]
