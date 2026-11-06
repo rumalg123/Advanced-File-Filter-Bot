@@ -130,3 +130,11 @@ async def test_filter_deletion_failure_does_not_report_success(monkeypatch):
     handler.bot.filter_service.delete_all_filters.return_value = False
     await handler.connection_action_callback(None, query)
     assert 'could not be deleted' in query.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_delete_connection_preview_acknowledges_callback_once():
+    handler, query = handler_fixture('delete_connection:-1001')
+    await handler.connection_action_callback(None, query)
+    query.answer.assert_awaited_once()
+    query.message.edit_text.assert_awaited_once()

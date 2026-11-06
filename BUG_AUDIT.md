@@ -362,3 +362,8 @@ counts remain historical; no feature defaults or production limits changed.
   response's HTML, rejects encoded empty/malformed keywords, and decodes button
   labels, URLs and alert text once. SDK-backed fixtures prevent fuzzy matching
   from hiding an incorrectly stored quoted keyword.
+
+- **BUG-131 — Fixed; callback regression passed.** Opening the Delete Connection
+  preview now acknowledges its callback exactly once before editing the menu.
+  The real Telegram timeout was reproduced in live QA; opening a preview no
+  longer leaves Telegram waiting for an unanswered query.

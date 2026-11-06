@@ -431,6 +431,7 @@ class ConnectionHandler(BaseHandler):
             await self._show_connections(client, query.message, user_id, edit=True)
 
         elif action == "delete_connection":
+            await query.answer()
             # Ask about filters
             buttons = [
                 [
