@@ -178,10 +178,7 @@ class ConnectionService:
             group_id: str
     ) -> Tuple[bool, str]:
         """Set active connection for user (ensures only one active)"""
-        # First deactivate all connections
-        await self.connection_repo.deactivate_all_connections(str(user_id))
-
-        # Then activate the selected one
+        # One guarded write keeps the existing active group when the target is stale.
         success = await self.connection_repo.make_active(str(user_id), group_id)
 
         if success:

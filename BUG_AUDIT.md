@@ -302,3 +302,13 @@ counts remain historical; no feature defaults or production limits changed.
   confirmations now use shared, manager-tracked auto-deletion based on the live
   `MESSAGE_DELETE_SECONDS` value. Incoming user commands, admin diagnostics, and
   deep-link subscription gates remain untouched. All 136 tests passed.
+
+## 2026-11-06 group connection QA
+
+- **BUG-123 — Fixed; local MongoDB regressions passed.** Concurrent connection
+  additions/removals previously replaced stale cached group lists. Mutations now
+  update the current MongoDB document atomically; activation requires the target
+  connection to exist and cannot clear the previous active group on failure.
+  Verified concurrent additions, duplicate requests, removal/activation races,
+  foreign-user isolation, cache invalidation, and fallback selection.
+  Live group/filter verification is pending in this bounded QA round.
