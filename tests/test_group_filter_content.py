@@ -89,3 +89,24 @@ async def test_captionless_media_filter_is_a_valid_search_match(private):
                      connection_service=NS(can_manage_group=AsyncMock(return_value=True)))
     assert await handler._check_and_send_filter(None, NS(), 'captionlessqa', '-1001', 12, private)
     assert svc.send_filter_response.await_args.args[5] == 'qa-media-file'
+
+
+@pytest.mark.parametrize('plain,expected', [
+    ('"two words" response with spaces', ['two words', 'response with spaces']),
+    ("'two words' response with spaces", ['two words', 'response with spaces']),
+    ('"" body', []), ("'' body", []), ('"unterminated', []),
+    ('qa "hello world"', ['qa', 'hello world']),
+])
+def test_telegram_html_escaping_does_not_change_keyword_syntax(plain, expected):
+    from pyrogram.types.messages_and_media.message import Str
+    encoded = Str(plain).init([]).html
+    assert object.__new__(FilterHandler)._split_quotes(encoded) == expected
+
+
+def test_button_labels_urls_and_alerts_decode_sdk_html_entities():
+    from pyrogram.types.messages_and_media.message import Str
+    body = 'body [A & B](buttonurl:https://example.com/?a=1&b=2) [Info](buttonalert:Tom & "QA")'
+    _, buttons, alerts = service().parse_filter_text(Str(body).init([]).html, 'qa')
+    assert buttons[0][0].text == 'A & B'
+    assert buttons[0][0].url == 'https://example.com/?a=1&b=2'
+    assert alerts == ['Tom & "QA"']

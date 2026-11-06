@@ -51,17 +51,32 @@ class FilterHandler(BaseHandler):
 
     def _split_quotes(self, text: str) -> List[str]:
         """Read one quoted keyword and preserve the complete remaining body."""
-        match = re.fullmatch(r'\s*("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[^\s"\']+)(?:\s+(.*))?\s*', text, re.DOTALL)
-        if not match:
-            return []
-        token, body = match.groups()
-        keyword = shlex.split(token)[0] if token[:1] in ('"', "'") else token
-        keyword = unescape(keyword).strip()
+        delimiter = next((quote for quote in ("&quot;", "&#x27;", "&#39;")
+                          if text.lstrip().startswith(quote)), None)
+        if delimiter:
+            # Telegram's HTML unparser escapes literal quote characters too.
+            encoded = re.fullmatch(r"\s*" + re.escape(delimiter) + r"(.*?)" +
+                                   re.escape(delimiter) + r"(?:\s+(.*))?\s*", text, re.DOTALL)
+            if not encoded:
+                return []
+            token, body = encoded.groups()
+            keyword = unescape(token).strip()
+        else:
+            match = re.fullmatch(r'\s*("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|[^\s"\']+)(?:\s+(.*))?\s*', text, re.DOTALL)
+            if not match:
+                return []
+            token, body = match.groups()
+            keyword = shlex.split(token)[0] if token[:1] in ('"', "'") else token
+            keyword = unescape(keyword).strip()
         if not keyword:
             return []
         if body is None:
             return [keyword]
         body = body.strip()
+        for quote in ("&quot;", "&#x27;", "&#39;"):
+            if body.startswith(quote) and body.endswith(quote) and len(body) >= 2 * len(quote):
+                body = body[len(quote):-len(quote)]
+                break
         if body[:1] in ('"', "'") and body[-1:] == body[:1]:
             try:
                 quoted = shlex.split(body)

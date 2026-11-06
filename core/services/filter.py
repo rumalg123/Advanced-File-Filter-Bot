@@ -1,3 +1,5 @@
+from html import unescape
+
 import ast
 import hashlib
 import json
@@ -146,7 +148,7 @@ class FilterService:
 
                 if match.group(3) == "buttonalert":
                     button = ButtonBuilder.action_button(
-                        text=match.group(2),
+                        text=unescape(match.group(2)),
                         callback_data=f"alertmessage:{i}:{keyword}"
                     )
                     if bool(match.group(5)) and buttons:
@@ -154,11 +156,11 @@ class FilterService:
                     else:
                         buttons.append([button])
                     i += 1
-                    alerts.append(match.group(4))
+                    alerts.append(unescape(match.group(4)))
                 else:
                     button = ButtonBuilder.action_button(
-                        text=match.group(2),
-                        url=match.group(4).replace(" ", "")
+                        text=unescape(match.group(2)),
+                        url=unescape(match.group(4)).replace(" ", "")
                     )
                     if bool(match.group(5)) and buttons:
                         buttons[-1].append(button)

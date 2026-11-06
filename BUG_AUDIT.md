@@ -355,3 +355,10 @@ counts remain historical; no feature defaults or production limits changed.
   a stored media ID as valid filter content when the caption is empty. Both
   exact and fuzzy paths use the same delivery result. Captionless media no
   longer falls through to unrelated media-search results or silent misses.
+
+- **BUG-130 — Fixed; real SDK string regressions passed.** Telegram's HTML
+  representation escapes keyword quotes, response quotes and button text/URLs.
+  The parser now recognizes encoded quote delimiters without unescaping the
+  response's HTML, rejects encoded empty/malformed keywords, and decodes button
+  labels, URLs and alert text once. SDK-backed fixtures prevent fuzzy matching
+  from hiding an incorrectly stored quoted keyword.
