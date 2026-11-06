@@ -63,23 +63,27 @@ class ConnectionRepository(BaseRepository[UserConnection]):
         user_id = str(user_id)
         group_id = str(group_id)
 
-        collection = await self.get_collection()
-        now = datetime.now(UTC).isoformat()
-        predicate = {"_id": user_id, "group_details.group_id": {"$ne": group_id}}
-        update = {
-            "$addToSet": {"group_details": {"group_id": group_id}},
-            "$set": {"active_group": group_id, "updated_at": now},
-            "$setOnInsert": {"created_at": now},
-        }
         try:
-            result = await collection.update_one(predicate, update, upsert=True)
-        except DuplicateKeyError:
-            # An existing group or concurrent first insert owns this user's _id.
-            result = await collection.update_one(predicate, update, upsert=False)
-        success = bool(result.matched_count or result.upserted_id is not None)
-        if success:
-            await self.cache_invalidator.invalidate_connection_cache(user_id)
-        return success
+            collection = await self.get_collection()
+            now = datetime.now(UTC).isoformat()
+            predicate = {"_id": user_id, "group_details.group_id": {"$ne": group_id}}
+            update = {
+                "$addToSet": {"group_details": {"group_id": group_id}},
+                "$set": {"active_group": group_id, "updated_at": now},
+                "$setOnInsert": {"created_at": now},
+            }
+            try:
+                result = await collection.update_one(predicate, update, upsert=True)
+            except DuplicateKeyError:
+                # An existing group or concurrent first insert owns this user's _id.
+                result = await collection.update_one(predicate, update, upsert=False)
+            success = bool(result.matched_count or result.upserted_id is not None)
+            if success:
+                await self.cache_invalidator.invalidate_connection_cache(user_id)
+            return success
+        except Exception as e:
+            logger.error("Connection add_connection failed for user %s: %s", user_id, e, exc_info=True)
+            return False
 
     async def get_active_connection(self, user_id: str) -> Optional[str]:
         """Get the active group from the stable, full connection entity cache."""
@@ -110,15 +114,19 @@ class ConnectionRepository(BaseRepository[UserConnection]):
         user_id = str(user_id)
         group_id = str(group_id)
 
-        collection = await self.get_collection()
-        result = await collection.update_one(
-            {"_id": user_id, "group_details.group_id": group_id},
-            {"$set": {"active_group": group_id, "updated_at": datetime.now(UTC).isoformat()}},
-        )
-        success = bool(result.matched_count)
-        if success:
-            await self.cache_invalidator.invalidate_connection_cache(user_id)
-        return success
+        try:
+            collection = await self.get_collection()
+            result = await collection.update_one(
+                {"_id": user_id, "group_details.group_id": group_id},
+                {"$set": {"active_group": group_id, "updated_at": datetime.now(UTC).isoformat()}},
+            )
+            success = bool(result.matched_count)
+            if success:
+                await self.cache_invalidator.invalidate_connection_cache(user_id)
+            return success
+        except Exception as e:
+            logger.error("Connection make_active failed for user %s: %s", user_id, e, exc_info=True)
+            return False
 
     async def make_inactive(self, user_id: str, group_id: Optional[str] = None) -> bool:
         """Clear the selected active connection without affecting a newer selection."""
@@ -126,54 +134,62 @@ class ConnectionRepository(BaseRepository[UserConnection]):
         predicate = {"_id": user_id}
         if group_id is not None:
             predicate["active_group"] = str(group_id)
-        collection = await self.get_collection()
-        result = await collection.update_one(predicate, {"$set": {
-            "active_group": None, "updated_at": datetime.now(UTC).isoformat(),
-        }})
-        if result.matched_count:
-            await self.cache_invalidator.invalidate_connection_cache(user_id)
-        return bool(result.matched_count)
+        try:
+            collection = await self.get_collection()
+            result = await collection.update_one(predicate, {"$set": {
+                "active_group": None, "updated_at": datetime.now(UTC).isoformat(),
+            }})
+            if result.matched_count:
+                await self.cache_invalidator.invalidate_connection_cache(user_id)
+            return bool(result.matched_count)
+        except Exception as e:
+            logger.error("Connection make_inactive failed for user %s: %s", user_id, e, exc_info=True)
+            return False
 
     async def delete_connection(self, user_id: str, group_id: str) -> bool:
         """Delete a connection for user"""
         user_id = str(user_id)
         group_id = str(group_id)
 
-        collection = await self.get_collection()
-        previous = await collection.find_one_and_update(
-            {"_id": user_id, "group_details.group_id": group_id},
-            [
-                {"$set": {"group_details": {"$filter": {
-                    "input": "$group_details", "as": "group",
-                    "cond": {"$ne": ["$$group.group_id", group_id]},
-                }}}},
-                {"$set": {
-                    "active_group": {"$cond": [
-                        {"$eq": ["$active_group", group_id]},
-                        {"$ifNull": [{"$arrayElemAt": ["$group_details.group_id", -1]}, None]},
-                        "$active_group",
-                    ]},
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }},
-            ],
-            return_document=ReturnDocument.BEFORE,
-        )
-        if previous is None:
-            return False
+        try:
+            collection = await self.get_collection()
+            previous = await collection.find_one_and_update(
+                {"_id": user_id, "group_details.group_id": group_id},
+                [
+                    {"$set": {"group_details": {"$filter": {
+                        "input": "$group_details", "as": "group",
+                        "cond": {"$ne": ["$$group.group_id", group_id]},
+                    }}}},
+                    {"$set": {
+                        "active_group": {"$cond": [
+                            {"$eq": ["$active_group", group_id]},
+                            {"$ifNull": [{"$arrayElemAt": ["$group_details.group_id", -1]}, None]},
+                            "$active_group",
+                        ]},
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    }},
+                ],
+                return_document=ReturnDocument.BEFORE,
+            )
+            if previous is None:
+                return False
 
-        # The pre-update document is only used to describe the committed change.
-        user_conn = self._dict_to_entity(previous)
-        user_conn.group_details = [g for g in user_conn.group_details if g["group_id"] != group_id]
-        if user_conn.active_group == group_id:
-            if user_conn.group_details:
-                user_conn.active_group = user_conn.group_details[-1]["group_id"]
-                logger.info(f"Active group changed from {group_id} to {user_conn.active_group} for user {user_id}")
-            else:
-                logger.info(f"No active groups left for user {user_id}")
-        await self.cache_invalidator.invalidate_connection_cache(user_id)
-        await self.cache_invalidator.invalidate_filter_cache(group_id)
-        logger.info(f"Deleted connection {group_id} for user {user_id}")
-        return True
+            # The pre-update document is only used to describe the committed change.
+            user_conn = self._dict_to_entity(previous)
+            user_conn.group_details = [g for g in user_conn.group_details if g["group_id"] != group_id]
+            if user_conn.active_group == group_id:
+                if user_conn.group_details:
+                    user_conn.active_group = user_conn.group_details[-1]["group_id"]
+                    logger.info(f"Active group changed from {group_id} to {user_conn.active_group} for user {user_id}")
+                else:
+                    logger.info(f"No active groups left for user {user_id}")
+            await self.cache_invalidator.invalidate_connection_cache(user_id)
+            await self.cache_invalidator.invalidate_filter_cache(group_id)
+            logger.info(f"Deleted connection {group_id} for user {user_id}")
+            return True
+        except Exception as e:
+            logger.error("Connection delete_connection failed for user %s: %s", user_id, e, exc_info=True)
+            return False
 
     async def delete_all_connections(self, user_id: str) -> bool:
         """Delete all connections for user"""

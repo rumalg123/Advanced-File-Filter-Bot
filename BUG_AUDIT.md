@@ -345,3 +345,8 @@ counts remain historical; no feature defaults or production limits changed.
   rights, and an atomic compare-and-delete consumes the token before mutation.
   Replays, cross-chat use, unavailable state and legacy unbound controls fail
   closed. Cancelling leaves the user's original command in place.
+
+- **BUG-123 follow-up verified:** failed atomic writes keep the repository's
+  existing `False` result contract and log the actual exception with traceback.
+  Four backend-failure regressions passed; malformed connection payloads now
+  receive an explicit callback response. All baseline logger statements remain.

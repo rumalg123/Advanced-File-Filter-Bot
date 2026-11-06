@@ -314,11 +314,11 @@ class ConnectionHandler(BaseHandler):
 
         data = query.data.split(":")
         if len(data) != 3:
-            return
+            return await query.answer("Invalid connection data", show_alert=True)
 
         _, group_id, is_active = data
         user_id = query.from_user.id
-        if not group_id.lstrip("-").isdigit() or not await self._has_connection(user_id, group_id):
+        if not group_id.removeprefix("-").isdigit() or not await self._has_connection(user_id, group_id):
             return await query.answer("This connection no longer exists", show_alert=True)
         is_active = str(await self.connection_service.connection_repo.is_active(str(user_id), group_id))
         await query.answer()
@@ -398,7 +398,7 @@ class ConnectionHandler(BaseHandler):
             return await query.answer(ErrorMessageFormatter.format_invalid("data", plain_text=True), show_alert=True)
 
         action, group_id = data
-        if not group_id.lstrip("-").isdigit() or not await self._has_connection(user_id, group_id):
+        if not group_id.removeprefix("-").isdigit() or not await self._has_connection(user_id, group_id):
             return await query.answer("This connection no longer exists", show_alert=True)
         if action == "connect_group" and not await self.connection_service.can_manage_group(client, user_id, int(group_id)):
             return await query.answer("You need to be an admin in the group!", show_alert=True)

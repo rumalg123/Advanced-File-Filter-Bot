@@ -63,3 +63,16 @@ async def test_stale_deactivation_cannot_clear_newer_group(mongo_pool):
     await repo.add_connection('12', '-1002')
     assert not await repo.make_inactive('12', '-1001')
     assert await repo.get_active_connection('12') == '-1002'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('method,args', [
+    ('add_connection', ('12', '-1001')), ('make_active', ('12', '-1001')),
+    ('make_inactive', ('12',)), ('delete_connection', ('12', '-1001')),
+])
+async def test_connection_write_failure_preserves_false_contract_and_exception_log(method, args, caplog):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    repo = ConnectionRepository(SimpleNamespace(get_collection=AsyncMock(side_effect=ConnectionError('QA backend unavailable'))), Cache())
+    assert not await getattr(repo, method)(*args)
+    assert 'QA backend unavailable' in caplog.text
