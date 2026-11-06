@@ -1,6 +1,7 @@
 from html import escape
 
 from pyrogram import Client, filters, enums
+from pyrogram.errors import MessageNotModified
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from core.services.connection import ConnectionService
@@ -244,6 +245,13 @@ class ConnectionHandler(BaseHandler):
 
         await self._show_connections(client, message, user_id)
 
+    async def _edit_connection_message(self, message: Message, text: str, **kwargs):
+        try:
+            await message.edit_text(text, **kwargs)
+        except MessageNotModified:
+            # Repeated refreshes are already showing the requested state.
+            pass
+
     async def _show_connections(self, client: Client, message: Message, user_id: int, edit: bool = False):
         """Show the connection list for a specific user."""
 
@@ -251,7 +259,7 @@ class ConnectionHandler(BaseHandler):
 
         if not connections:
             if edit:
-                await message.edit_text("There are no active connections!! Connect to some groups first.")
+                await self._edit_connection_message(message, "There are no active connections!! Connect to some groups first.")
             else:
                 await message.reply_text(
                     "There are no active connections!! Connect to some groups first.",
@@ -281,7 +289,7 @@ class ConnectionHandler(BaseHandler):
         ])
 
         if edit:
-            await message.edit_text(
+            await self._edit_connection_message(message,
                 "Your connected group details:\n\n",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
@@ -380,7 +388,7 @@ class ConnectionHandler(BaseHandler):
                 f"{ErrorMessageFormatter.format_warning('Unable to fetch group details')}"
             )
 
-        await query.message.edit_text(
+        await self._edit_connection_message(query.message,
             text,
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=CaptionFormatter.get_parse_mode()
@@ -454,7 +462,7 @@ class ConnectionHandler(BaseHandler):
                 ]
             ]
 
-            await query.message.edit_text(
+            await self._edit_connection_message(query.message,
                 "Do you want to delete all filters from this group too?",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )

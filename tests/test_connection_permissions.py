@@ -138,3 +138,13 @@ async def test_delete_connection_preview_acknowledges_callback_once():
     await handler.connection_action_callback(None, query)
     query.answer.assert_awaited_once()
     query.message.edit_text.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('items', [[], [{'id': '-1001', 'title': 'QA', 'is_active': True}]])
+async def test_refreshing_unchanged_connections_is_idempotent(items):
+    from pyrogram.errors import MessageNotModified
+    handler, query = handler_fixture('cleanup_connections')
+    handler.connection_service.get_all_connections = AsyncMock(return_value=items)
+    query.message.edit_text.side_effect = MessageNotModified()
+    await handler._show_connections(None, query.message, 12, edit=True)

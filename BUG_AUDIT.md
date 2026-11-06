@@ -367,3 +367,8 @@ counts remain historical; no feature defaults or production limits changed.
   preview now acknowledges its callback exactly once before editing the menu.
   The real Telegram timeout was reproduced in live QA; opening a preview no
   longer leaves Telegram waiting for an unanswered query.
+
+- **BUG-132 — Fixed; SDK error regressions passed.** Repeated connection-list
+  refreshes now treat Telegram's `MessageNotModified` as a successful no-op.
+  Empty and populated lists are covered; other edit errors still propagate.
+  Cleanup no longer logs an unhandled error just because no connection changed.
