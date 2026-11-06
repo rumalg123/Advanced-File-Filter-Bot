@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import json
 import re
 from typing import Optional, List, Tuple, Union
@@ -304,6 +305,16 @@ class FilterService:
         chat_id = message.chat.id
         try:
             buttons = self.deserialize_buttons(btn or "[]")
+            for row in buttons:
+                for button in row:
+                    data = button.callback_data
+                    if isinstance(data, str) and data.startswith("alertmessage:"):
+                        _, index, keyword = data.split(":", 2)
+                        source = group_id or (str(chat_id) if not is_private_chat(message) else None)
+                        if source is None or not str(source).lstrip("-").isdigit() or int(index) < 0:
+                            raise ValueError("Filter alert requires valid source context")
+                        digest = hashlib.sha256(keyword.encode()).hexdigest()[:16]
+                        button.callback_data = f"filteralert:{source}:{int(index)}:{digest}"
             kwargs = {"reply_to_message_id": reply_id}
             if is_private_chat(message):
                 kwargs["protect_content"] = False

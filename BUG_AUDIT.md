@@ -331,3 +331,10 @@ counts remain historical; no feature defaults or production limits changed.
   construct real SDK buttons and return success only after Telegram accepts the
   delivery. Filter UI labels are escaped, and deleting an absent filter returns
   feedback. Existing near-duplicate rejection remains intentional.
+
+- **BUG-127 — Fixed; alert regressions passed.** New alert buttons include a
+  compact source-group identity and keyword digest, keeping long/Unicode
+  keywords within Telegram's callback limit. Connected private alerts resolve
+  the originating group and recheck live administrator rights; other-group
+  replays and negative indexes are rejected. Long alert text is UTF-8 bounded.
+  Legacy group buttons remain readable; old private buttons request refresh.
