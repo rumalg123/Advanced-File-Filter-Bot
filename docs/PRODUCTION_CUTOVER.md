@@ -10,12 +10,12 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed 1,425 tests and 16 real-account dashboard/analytics
-checks on wzgram 3.1.6. Whole-tree source-matched coverage is 71.94%
-lines / 59.71% branches. Sustained production load, cloud
-restore and production-specific configuration/index checks remain release
-gates; 100% coverage is not the sole definition of production readiness.
-See [the QA evidence](qa/coverage-expansion/STATUS.md).
+The latest bounded QA passed **1,498 tests and 28 live group-filter/connection
+checks** on wzgram 3.1.6. Fresh whole-tree coverage is **70.54% lines /
+57.58% branches**; earlier raw execution was unavailable after restart,
+so previous aggregate metrics remain historical. Production load, cloud restore,
+configuration/index checks and a source-matched deployment image remain release
+gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
 
 Recommended initial scope:
 
@@ -33,14 +33,21 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application source is `49d9fc5`. Its complete suite and all
-three live phases used the wzgram 3.1.6 runtime from
-`file-filter-bot:qa-multisub-20261030` with the tested source snapshot mounted
-into the container. That image's bundled code remains the earlier `b2fcb38`;
-it is a runtime fixture for this round, not an updated deployment image.
-Build the new branch source for deployment and retain a validated rollback
-artifact. Historical image/archive checks certify their original source and
-dependencies. See the [current round evidence](qa/coverage-expansion/round14-dashboard.json).
+The current QA application/tests source is `a220499`. Its complete suite and
+live pass used the wzgram 3.1.6 runtime from
+`file-filter-bot:qa-multisub-20261030` with current source mounted into the
+container. The bundled code remains older `b2fcb38`; this is a runtime fixture,
+not a rebuilt deployment image. Build and validate the new branch source before
+deployment. See [the current round evidence](qa/coverage-expansion/round15-filters-connections.json).
+
+Group-filter/connection fixes require no MongoDB migration or Redis flush.
+Existing connection documents and historical URL/alert keyboards remain readable.
+Private connected-group retrieval now checks current administrator rights.
+Bulk deletion via disconnect requires the owner or configured bot admin.
+Old `/delall` controls and old private alert buttons should be refreshed after
+deployment. New confirmations expire after five minutes and use existing
+protected `deleteall_pending:*` routing. Enable the subsystem with the managed
+`DISABLE_FILTER=false` setting and restart if it is currently disabled.
 
 For the exact two-service stack supplied by the operator, use the
 [production command sequence](PRODUCTION_FROM_EXISTING_COMPOSE.md), including

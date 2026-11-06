@@ -1,0 +1,395 @@
+{
+  "date": "2026-11-06",
+  "round": 15,
+  "scope": [
+    "group-filters",
+    "group-connections"
+  ],
+  "application_and_tests_commit": "a220499e78343c1801d06d057a5e820ba2bae986",
+  "fixes": {
+    "BUG-123": "38428a4 / 0d7790e",
+    "BUG-124 / BUG-125": "1c1248d",
+    "BUG-126": "ee7864e",
+    "BUG-127": "9b4624a",
+    "BUG-128": "48c7e24",
+    "BUG-129": "736b6aa",
+    "BUG-130": "cd4d444",
+    "BUG-131": "0086bb5",
+    "BUG-132": "a220499"
+  },
+  "cache_fix": "CACHE-029",
+  "tests": {
+    "passed": 1498,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 73,
+    "seconds": 37.67,
+    "new_cases_by_module": {
+      "tests.test_connection_atomicity": 9,
+      "tests.test_connection_permissions": 27,
+      "tests.test_filter_delete_confirmation": 5,
+      "tests.test_group_filter_alerts": 8,
+      "tests.test_group_filter_content": 24
+    }
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "source_manifest_sha256": "19efc81ec3fcc98f82942f278af1c68a97bcd3f09b6aeda8a43e208574cc45cb",
+  "automated": {
+    "covered_lines": 11793,
+    "num_statements": 18263,
+    "percent_covered": 61.636923076923075,
+    "percent_covered_display": "62",
+    "missing_lines": 6470,
+    "excluded_lines": 41,
+    "num_branches": 6112,
+    "num_partial_branches": 965,
+    "covered_branches": 3231,
+    "missing_branches": 2881,
+    "percent_statements_covered": 64.57318074796035,
+    "percent_branches_covered": 52.86321989528796
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 12883,
+    "num_statements": 18263,
+    "percent_covered": 67.2902564102564,
+    "percent_covered_display": "67",
+    "missing_lines": 5380,
+    "excluded_lines": 41,
+    "num_branches": 6112,
+    "num_partial_branches": 1093,
+    "covered_branches": 3519,
+    "missing_branches": 2593,
+    "percent_statements_covered": 70.54153205935498,
+    "percent_branches_covered": 57.57526178010471
+  },
+  "scope_coverage": {
+    "repositories/connection.py": {
+      "automated": {
+        "covered_lines": 123,
+        "num_statements": 137,
+        "percent_covered": 86.66666666666667,
+        "percent_covered_display": "87",
+        "missing_lines": 14,
+        "excluded_lines": 0,
+        "num_branches": 28,
+        "num_partial_branches": 8,
+        "covered_branches": 20,
+        "missing_branches": 8,
+        "percent_statements_covered": 89.78102189781022,
+        "percent_branches_covered": 71.42857142857143
+      },
+      "automated_plus_live": {
+        "covered_lines": 129,
+        "num_statements": 137,
+        "percent_covered": 91.51515151515152,
+        "percent_covered_display": "92",
+        "missing_lines": 8,
+        "excluded_lines": 0,
+        "num_branches": 28,
+        "num_partial_branches": 6,
+        "covered_branches": 22,
+        "missing_branches": 6,
+        "percent_statements_covered": 94.16058394160584,
+        "percent_branches_covered": 78.57142857142857
+      }
+    },
+    "core/services/connection.py": {
+      "automated": {
+        "covered_lines": 52,
+        "num_statements": 119,
+        "percent_covered": 41.61490683229814,
+        "percent_covered_display": "42",
+        "missing_lines": 67,
+        "excluded_lines": 0,
+        "num_branches": 42,
+        "num_partial_branches": 3,
+        "covered_branches": 15,
+        "missing_branches": 27,
+        "percent_statements_covered": 43.69747899159664,
+        "percent_branches_covered": 35.714285714285715
+      },
+      "automated_plus_live": {
+        "covered_lines": 86,
+        "num_statements": 119,
+        "percent_covered": 70.80745341614907,
+        "percent_covered_display": "71",
+        "missing_lines": 33,
+        "excluded_lines": 0,
+        "num_branches": 42,
+        "num_partial_branches": 4,
+        "covered_branches": 28,
+        "missing_branches": 14,
+        "percent_statements_covered": 72.26890756302521,
+        "percent_branches_covered": 66.66666666666666
+      }
+    },
+    "handlers/connection.py": {
+      "automated": {
+        "covered_lines": 82,
+        "num_statements": 233,
+        "percent_covered": 32.62839879154078,
+        "percent_covered_display": "33",
+        "missing_lines": 151,
+        "excluded_lines": 0,
+        "num_branches": 98,
+        "num_partial_branches": 12,
+        "covered_branches": 26,
+        "missing_branches": 72,
+        "percent_statements_covered": 35.1931330472103,
+        "percent_branches_covered": 26.53061224489796
+      },
+      "automated_plus_live": {
+        "covered_lines": 160,
+        "num_statements": 233,
+        "percent_covered": 64.65256797583082,
+        "percent_covered_display": "65",
+        "missing_lines": 73,
+        "excluded_lines": 0,
+        "num_branches": 98,
+        "num_partial_branches": 20,
+        "covered_branches": 54,
+        "missing_branches": 44,
+        "percent_statements_covered": 68.6695278969957,
+        "percent_branches_covered": 55.10204081632652
+      }
+    },
+    "repositories/filter.py": {
+      "automated": {
+        "covered_lines": 95,
+        "num_statements": 130,
+        "percent_covered": 68.9873417721519,
+        "percent_covered_display": "69",
+        "missing_lines": 35,
+        "excluded_lines": 0,
+        "num_branches": 28,
+        "num_partial_branches": 6,
+        "covered_branches": 14,
+        "missing_branches": 14,
+        "percent_statements_covered": 73.07692307692307,
+        "percent_branches_covered": 50.0
+      },
+      "automated_plus_live": {
+        "covered_lines": 101,
+        "num_statements": 130,
+        "percent_covered": 74.0506329113924,
+        "percent_covered_display": "74",
+        "missing_lines": 29,
+        "excluded_lines": 0,
+        "num_branches": 28,
+        "num_partial_branches": 6,
+        "covered_branches": 16,
+        "missing_branches": 12,
+        "percent_statements_covered": 77.6923076923077,
+        "percent_branches_covered": 57.14285714285714
+      }
+    },
+    "core/services/filter.py": {
+      "automated": {
+        "covered_lines": 135,
+        "num_statements": 208,
+        "percent_covered": 59.47712418300654,
+        "percent_covered_display": "59",
+        "missing_lines": 73,
+        "excluded_lines": 0,
+        "num_branches": 98,
+        "num_partial_branches": 17,
+        "covered_branches": 47,
+        "missing_branches": 51,
+        "percent_statements_covered": 64.90384615384616,
+        "percent_branches_covered": 47.95918367346938
+      },
+      "automated_plus_live": {
+        "covered_lines": 152,
+        "num_statements": 208,
+        "percent_covered": 67.3202614379085,
+        "percent_covered_display": "67",
+        "missing_lines": 56,
+        "excluded_lines": 0,
+        "num_branches": 98,
+        "num_partial_branches": 18,
+        "covered_branches": 54,
+        "missing_branches": 44,
+        "percent_statements_covered": 73.07692307692307,
+        "percent_branches_covered": 55.10204081632652
+      }
+    },
+    "handlers/filter.py": {
+      "automated": {
+        "covered_lines": 97,
+        "num_statements": 216,
+        "percent_covered": 39.81481481481482,
+        "percent_covered_display": "40",
+        "missing_lines": 119,
+        "excluded_lines": 0,
+        "num_branches": 108,
+        "num_partial_branches": 16,
+        "covered_branches": 32,
+        "missing_branches": 76,
+        "percent_statements_covered": 44.907407407407405,
+        "percent_branches_covered": 29.629629629629626
+      },
+      "automated_plus_live": {
+        "covered_lines": 166,
+        "num_statements": 216,
+        "percent_covered": 71.60493827160494,
+        "percent_covered_display": "72",
+        "missing_lines": 50,
+        "excluded_lines": 0,
+        "num_branches": 108,
+        "num_partial_branches": 30,
+        "covered_branches": 66,
+        "missing_branches": 42,
+        "percent_statements_covered": 76.85185185185185,
+        "percent_branches_covered": 61.111111111111114
+      }
+    },
+    "handlers/callbacks_handlers/filter.py": {
+      "automated": {
+        "covered_lines": 88,
+        "num_statements": 106,
+        "percent_covered": 79.45205479452055,
+        "percent_covered_display": "79",
+        "missing_lines": 18,
+        "excluded_lines": 0,
+        "num_branches": 40,
+        "num_partial_branches": 10,
+        "covered_branches": 28,
+        "missing_branches": 12,
+        "percent_statements_covered": 83.01886792452831,
+        "percent_branches_covered": 70.0
+      },
+      "automated_plus_live": {
+        "covered_lines": 91,
+        "num_statements": 106,
+        "percent_covered": 82.1917808219178,
+        "percent_covered_display": "82",
+        "missing_lines": 15,
+        "excluded_lines": 0,
+        "num_branches": 40,
+        "num_partial_branches": 9,
+        "covered_branches": 29,
+        "missing_branches": 11,
+        "percent_statements_covered": 85.84905660377359,
+        "percent_branches_covered": 72.5
+      }
+    }
+  },
+  "coverage_provenance": {
+    "accepted_shards": [
+      {
+        "shard": "unit-final5",
+        "outcome": "passed",
+        "matching_files": 122,
+        "discarded_files": 0
+      },
+      {
+        "shard": "live-final10",
+        "outcome": "passed",
+        "matching_files": 122,
+        "discarded_files": 0
+      }
+    ],
+    "all_start_end_current_hashes_match": true,
+    "historical_execution_imported": false,
+    "failed_attempts_imported": false,
+    "line_or_arc_remapping": false,
+    "note": "Earlier raw coverage was unavailable after the workspace restart. October metrics remain historical; only two fresh passing shards are combined."
+  },
+  "live": {
+    "checks_passed": 28,
+    "checks": [
+      "isolated bot identity, storage and three distinct account preflight",
+      "ordinary group member cannot connect",
+      "group admin connect, duplicate rejection and second group",
+      "full text body survives group creation and member retrieval",
+      "connected private filter retrieval",
+      "group filter isolation with silent group miss",
+      "quoted keyword and HTML body",
+      "URL keyboard persisted and delivered",
+      "source-bound alert buttons in group and connected private chat",
+      "replied media filter cached delivery",
+      "captionless media filter delivery",
+      "ordinary group member can retrieve current group filter",
+      "ordinary members cannot mutate or list filters",
+      "filter listing and empty-keyword validation",
+      "connection details and registered Back button",
+      "connection deactivate and activate",
+      "group admin cannot bulk-delete via disconnect callback",
+      "demotion blocks private filter reads and writes",
+      "demotion blocks previously issued private alert",
+      "demoted admin cannot activate old connection button",
+      "disconnect keeps shared filters and other user connections intact",
+      "no-op connection cleanup acknowledges and refreshes safely",
+      "configured admin bypass retains private access",
+      "exact filter deletion and absent-filter feedback",
+      "owner bulk-delete cancellation keeps data",
+      "owner confirmed bulk-delete",
+      "used confirmation cannot delete subsequently added filters",
+      "configured admin disconnect can delete filters and final connection"
+    ],
+    "accounts_authenticated": 3,
+    "group_actors": 2,
+    "qa_groups": 2,
+    "join_or_leave_operations_final_pass": 0,
+    "temporary_role_changes_restored": true,
+    "callback_replay_layer": "Telegram rejected callback after keyboard removal",
+    "application_replay_and_race_guard": "automated regression and protected Redis single-use live confirmation",
+    "cleanup": {
+      "owned_message_handles": 102,
+      "unique_owned_messages": 85,
+      "deleted_handles": 102,
+      "remaining_owned_messages": 0,
+      "membership_baselines": 2,
+      "membership_matches": 2,
+      "revoked_invites": 0,
+      "checks": 28
+    },
+    "unhandled_application_errors_final_pass": 0
+  },
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.6",
+    "motor": "3.7.1",
+    "pymongo": "4.19.0",
+    "redis": "8.1.0",
+    "pydantic": "2.14.2",
+    "uvloop": "0.21.0",
+    "pytest": "8.3.5",
+    "pytest-asyncio": "0.26.0",
+    "coverage": "7.8.2",
+    "image": "file-filter-bot:qa-multisub-20261030",
+    "image_id": "sha256:8ea67dde9ec1d7fbc27647ef52e427ae5b43c50d6d462fd517ae11fa3775873e",
+    "bundled_application": "b2fcb38",
+    "tested_source": "mounted current snapshot; no deployment image rebuild claimed"
+  },
+  "validation": {
+    "compile": true,
+    "undefined_name_lint": true,
+    "dependency_consistency": true,
+    "baseline_logger_lines": 889,
+    "removed_baseline_logger_lines": 0
+  },
+  "isolation": {
+    "production_accessed": false,
+    "atlas_accessed": false,
+    "deployment_env_modified": false,
+    "defaults_or_limits_changed": false,
+    "local_mongodb_instances": 2,
+    "local_redis_instances": 4,
+    "host_ports_published": false,
+    "cleanup": {
+      "removed_owned_services": 6,
+      "owned_containers_remaining": 0,
+      "original_services_still_running": true
+    }
+  },
+  "remaining": [
+    "Whole-bot 100% coverage",
+    "Uncovered error branches and additional media/large-list/anonymous-admin permutations",
+    "Production load, cloud restore and deployment image acceptance"
+  ],
+  "next_bounded_scope": "file-store links and batch retrieval"
+}
