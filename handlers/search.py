@@ -852,8 +852,8 @@ class SearchHandler:
                         group_id, keyword
                     )
 
-                    if reply_text:
-                        reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+                    if reply_text or fileid not in (None, "None", ""):
+                        reply_text = (reply_text or "").replace("\\n", "\n").replace("\\t", "\t")
 
                         # Add a header to distinguish filter results
                         if is_private:
@@ -898,8 +898,8 @@ class SearchHandler:
                                         group_id, original_keyword
                                     )
 
-                                    if reply_text:
-                                        reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+                                    if reply_text or fileid not in (None, "None", ""):
+                                        reply_text = (reply_text or "").replace("\\n", "\n").replace("\\t", "\t")
 
                                         # Add a header to distinguish filter results
                                         if is_private:

@@ -350,3 +350,8 @@ counts remain historical; no feature defaults or production limits changed.
   existing `False` result contract and log the actual exception with traceback.
   Four backend-failure regressions passed; malformed connection payloads now
   receive an explicit callback response. All baseline logger statements remain.
+
+- **BUG-129 — Fixed; both private/group regressions passed.** Search now treats
+  a stored media ID as valid filter content when the caption is empty. Both
+  exact and fuzzy paths use the same delivery result. Captionless media no
+  longer falls through to unrelated media-search results or silent misses.

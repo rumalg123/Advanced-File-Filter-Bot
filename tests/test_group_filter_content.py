@@ -75,3 +75,17 @@ async def test_delete_absent_filter_reports_a_result():
     message = NS(from_user=NS(id=12), text='/del absent', reply_text=AsyncMock())
     await handler.delete_filter_command(None, message)
     assert 'No matching filters' in message.reply_text.await_args.args[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('private', [False, True])
+async def test_captionless_media_filter_is_a_valid_search_match(private):
+    from handlers.search import SearchHandler
+    handler = object.__new__(SearchHandler)
+    svc = NS(get_all_filters=AsyncMock(return_value=['captionlessqa']),
+             get_filter=AsyncMock(return_value=('', '[]', None, 'qa-media-file')),
+             send_filter_response=AsyncMock(return_value=True))
+    handler.bot = NS(config=NS(DISABLE_FILTER=False), filter_service=svc,
+                     connection_service=NS(can_manage_group=AsyncMock(return_value=True)))
+    assert await handler._check_and_send_filter(None, NS(), 'captionlessqa', '-1001', 12, private)
+    assert svc.send_filter_response.await_args.args[5] == 'qa-media-file'
