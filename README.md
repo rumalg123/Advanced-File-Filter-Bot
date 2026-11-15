@@ -424,7 +424,7 @@ Only media operations use the optional multi-database manager. Users, settings, 
 
 ### Settings menu labels and help
 
-`/bsetting` lists all 69 settings alphabetically by the displayed label, across
+`/bsetting` lists all 65 active settings alphabetically by the displayed label, across
 nine pages. Each detail view shows the configuration key, purpose, current/default
 values and type. Units and effects are explained in the description. Existing
 keys, saved values and callback identifiers are unchanged; reopen `/bsetting`
@@ -445,11 +445,13 @@ after updating to refresh an already-open menu's labels and positions.
 | `WORKERS` | Telegram Update Workers | Concurrent Telegram update handling. |
 | `PREMIUM_DURATION_DAYS` | Default Premium Days | Default duration for future grants; existing expiries do not change. |
 
-`SUPPORT_CHAT_ID`, `SUPPORT_GROUP`, `SUPPORT_GROUP_USERNAME` and `MAIN_CHANNEL`
-are explicitly marked **(Legacy)**: current handlers do not use these fields.
-Their help directs operators to the active support-button, request-group or
-force-subscription settings. They remain stored for compatibility. No migration,
-settings reset or Redis clearing is required for the presentation update.
+Unused `SUPPORT_CHAT_ID`, `SUPPORT_GROUP`, `SUPPORT_GROUP_USERNAME` and
+`MAIN_CHANNEL` controls have been removed from the menu and active catalog.
+Existing MongoDB rows are retained and ignored; old buttons cannot open edits or
+reset those values. New installations do not seed these unused fields. Use
+Support Button URL/Label, Request Group ID and Force-Sub Channels for active
+support/request/subscription behavior. Reopen `/bsetting` after deployment to
+refresh old menus. No migration, settings reset or Redis clearing is required.
 
 ### Channels, groups, and authorization
 
@@ -1114,13 +1116,14 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The settings-menu follow-up passed **1,605 tests** with zero failures or skips
-and **10 live checks** on Python 3.13.7 / wzgram 3.1.7, covering all 69 settings
-across nine Telegram pages and six detail/Back paths. Fresh current automated +
-live coverage is **70.24% lines / 57.23% branches**; including retained,
-source-matched history gives **73.04% lines / 60.99% branches**. All 122 tracked
-application/operator Python files remain in the denominator. Whole-bot 100% and
-production gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md).
+The retired-settings cleanup passed **1,606 tests** with zero failures or skips
+on Python 3.13.7 / wzgram 3.1.7. Automated SDK-backed rendering covers all 65
+active controls; stale legacy rows and old view/edit/reset buttons are checked.
+No new live Telegram pass was run for this small removal; the prior round-18
+live evidence remains historical. Current automated plus source-matched retained
+coverage is **73.06% lines / 61.06% branches**, across all 122 tracked application/operator
+Python files. Whole-bot 100% and production gates remain open. See the
+[QA record](docs/qa/coverage-expansion/STATUS.md).
 
 Useful additional checks:
 

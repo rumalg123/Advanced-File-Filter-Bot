@@ -11,21 +11,20 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-11-15
 
-The settings-presentation follow-up passed **1,605 tests**, zero failures/errors/
-skips, and **10 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-143 sorts
-all 69 controls by their visible labels across nine pages, clarifies request
-inboxes, result counts, units, scope and inactive legacy fields, and shows the
-configuration key in details. Existing setting keys, values, defaults, types,
-bounds, categories, access bypasses and callback identifiers are unchanged.
+The retired-settings cleanup passed **1,606 tests**, zero failures/errors/skips,
+on Python 3.13.7 / wzgram 3.1.7. BUG-144 removes SUPPORT_CHAT_ID, SUPPORT_GROUP,
+SUPPORT_GROUP_USERNAME and MAIN_CHANNEL from active metadata and menu labels.
+All **65 active settings** remain alphabetically ordered and unchanged. Stored
+retired rows are retained; old view/edit/reset controls and writes are rejected.
+No migration, settings reset or Redis clearing is needed.
 
-Fresh current automated + live coverage is **70.24% lines / 57.23% branches**;
-including source-matched retained history gives **73.04% lines / 60.99% branches**.
-All 122 tracked application/operator Python files remain in the denominator;
-changed historical execution is discarded. All **four owned live messages** were
-confirmed absent; no Telegram membership/role changes occurred. No Atlas or
-production services/configuration were changed. Whole-bot 100% and production
-acceptance remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md)
-and [round 18 evidence](docs/qa/coverage-expansion/round18-settings-menu.json).
+Current automated plus source-matched retained coverage is **73.06% lines / 61.06% branches**
+across all 122 application/operator Python files. Two changed historical files
+are discarded. No new live Telegram pass was run for this small removal; the ten
+round-18 UI checks remain historical. No Atlas or production service/configuration
+was changed. Whole-bot 100% and production acceptance remain open. See
+[the QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 19 evidence](docs/qa/coverage-expansion/round19-retired-settings.json).
 
 ## Live-safety contract
 

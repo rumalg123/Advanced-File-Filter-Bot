@@ -1,13 +1,13 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-11-15):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **1,605 tests and 10 live settings-menu checks passed**, zero failures or skips,
-> on wzgram 3.1.7. BUG-143 alphabetizes all 69 controls and clarifies labels/help
-> without changing setting keys, defaults or access rules. Fresh coverage:
-> **70.24% lines / 57.23% branches**. With source-matched retained history:
-> **73.04% lines / 60.99% branches**. No database migration or Redis flush is needed.
-> Whole-bot 100%, review, merge, deployment-image and production operational
-> acceptance remain open. Production untouched.
+> **1,606 tests passed**, zero failures or skips, on wzgram 3.1.7. BUG-144
+> removes four unused settings controls; 65 active controls remain alphabetical.
+> Stored retired rows remain untouched and old edit/reset controls are rejected.
+> Current automated plus source-matched retained coverage: **73.06% lines / 61.06% branches**.
+> No new Telegram pass was run; round-18 live evidence remains historical.
+> No migration or Redis flush is needed. Whole-bot 100%, review, merge and
+> production acceptance remain open. Production untouched.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The

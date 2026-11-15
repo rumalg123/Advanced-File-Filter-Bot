@@ -1,61 +1,47 @@
 {
   "date": "2026-11-15",
-  "application_commit": "f9e50d81c88c57c8fadaea89f6e6d7cfd81ceb49",
+  "application_commit": "638a08cfb633440e05ddda7d067185c3719107fc",
   "tests": {
-    "passed": 1605,
+    "passed": 1606,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "warnings": 22,
-    "new": 3,
-    "seconds": 39.6,
+    "new": 1,
+    "seconds": 40.15,
     "new_cases_by_module": {
-      "tests.test_settings_menu_presentation": 3
+      "tests.test_settings_menu_presentation": 1
     }
   },
   "application_files": 122,
   "denominator_matches_all_tracked_non_test_python": true,
   "automated": {
-    "covered_lines": 12249,
+    "covered_lines": 12254,
     "num_statements": 18480,
-    "percent_covered": 63.46652617928351,
-    "percent_covered_display": "63",
-    "missing_lines": 6231,
+    "percent_covered": 63.50299886529421,
+    "percent_covered_display": "64",
+    "missing_lines": 6226,
     "excluded_lines": 41,
     "num_branches": 6196,
-    "num_partial_branches": 1014,
-    "covered_branches": 3412,
-    "missing_branches": 2784,
-    "percent_statements_covered": 66.28246753246754,
-    "percent_branches_covered": 55.067785668173016
-  },
-  "automated_plus_current_live": {
-    "covered_lines": 12980,
-    "num_statements": 18480,
-    "percent_covered": 66.97195655697844,
-    "percent_covered_display": "67",
-    "missing_lines": 5500,
-    "excluded_lines": 41,
-    "num_branches": 6196,
-    "num_partial_branches": 1100,
-    "covered_branches": 3546,
-    "missing_branches": 2650,
-    "percent_statements_covered": 70.23809523809523,
-    "percent_branches_covered": 57.230471271788254
+    "num_partial_branches": 1010,
+    "covered_branches": 3416,
+    "missing_branches": 2780,
+    "percent_statements_covered": 66.30952380952381,
+    "percent_branches_covered": 55.13234344738541
   },
   "automated_plus_source_matched_history": {
-    "covered_lines": 13497,
+    "covered_lines": 13502,
     "num_statements": 18480,
-    "percent_covered": 70.01134705787,
+    "percent_covered": 70.0478197438807,
     "percent_covered_display": "70",
-    "missing_lines": 4983,
+    "missing_lines": 4978,
     "excluded_lines": 41,
     "num_branches": 6196,
-    "num_partial_branches": 1141,
-    "covered_branches": 3779,
-    "missing_branches": 2417,
-    "percent_statements_covered": 73.03571428571428,
-    "percent_branches_covered": 60.99096191091027
+    "num_partial_branches": 1137,
+    "covered_branches": 3783,
+    "missing_branches": 2413,
+    "percent_statements_covered": 73.06277056277057,
+    "percent_branches_covered": 61.055519690122665
   },
   "target_100_percent_reached": false,
   "largest_remaining_gaps": [
@@ -181,7 +167,8 @@
     }
   ],
   "historical_execution_imported": true,
-  "historical_round17_evidence": "round17-channel-settings.json",
+  "current_live_run": false,
+  "historical_round18_evidence": "round18-settings-menu.json",
   "historical_baseline": {
     "date": "2026-10-29",
     "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",

@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-15",
+  "round": 19,
+  "scope": "retire unused settings controls",
+  "application_and_tests_commit": "638a08cfb633440e05ddda7d067185c3719107fc",
+  "fixes": {
+    "BUG-144": "638a08c"
+  },
+  "removed_controls": [
+    "SUPPORT_CHAT_ID",
+    "SUPPORT_GROUP",
+    "SUPPORT_GROUP_USERNAME",
+    "MAIN_CHANNEL"
+  ],
+  "active_controls": 65,
+  "stored_rows_deleted": false,
+  "active_definitions_changed": false,
+  "tests": {
+    "passed": 1606,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 1,
+    "seconds": 40.15,
+    "new_cases_by_module": {
+      "tests.test_settings_menu_presentation": 1
+    }
+  },
+  "application_files": 122,
+  "source_manifest_sha256": "b3292c0a2a5083eba5ad2fe30c3addaff1551479389ff76e6c7a5a0539384237",
+  "automated": {
+    "covered_lines": 12254,
+    "num_statements": 18480,
+    "percent_covered": 63.50299886529421,
+    "percent_covered_display": "64",
+    "missing_lines": 6226,
+    "excluded_lines": 41,
+    "num_branches": 6196,
+    "num_partial_branches": 1010,
+    "covered_branches": 3416,
+    "missing_branches": 2780,
+    "percent_statements_covered": 66.30952380952381,
+    "percent_branches_covered": 55.13234344738541
+  },
+  "automated_plus_source_matched_history": {
+    "covered_lines": 13502,
+    "num_statements": 18480,
+    "percent_covered": 70.0478197438807,
+    "percent_covered_display": "70",
+    "missing_lines": 4978,
+    "excluded_lines": 41,
+    "num_branches": 6196,
+    "num_partial_branches": 1137,
+    "covered_branches": 3783,
+    "missing_branches": 2413,
+    "percent_statements_covered": 73.06277056277057,
+    "percent_branches_covered": 61.055519690122665
+  },
+  "retained_history": {
+    "origin": "round18 accepted aggregate",
+    "matching_files": 120,
+    "changed_files_discarded": 2
+  },
+  "current_live_run": false,
+  "validation": {
+    "compile": "passed",
+    "undefined_name_ruff": "passed",
+    "pip_check": "passed",
+    "active_metadata_invariance": "passed",
+    "stale_controls_no_writes": "passed"
+  },
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.7",
+    "fixture_image": "file-filter-bot:qa-runtime-20261115",
+    "source_and_venv_mounted": true,
+    "deployment_image_built": false
+  },
+  "cleanup": {
+    "owned_services_removed": 3,
+    "owned_services_remaining": 0,
+    "original_services_running": true,
+    "telegram_accessed": false,
+    "atlas_accessed": false,
+    "production_accessed": false
+  },
+  "remaining": [
+    "Whole-bot 100% coverage",
+    "Broader edit/save permutations",
+    "Production load/restore and deployment-image acceptance"
+  ],
+  "next_proposed_scope": "broadcasting and recovery"
+}

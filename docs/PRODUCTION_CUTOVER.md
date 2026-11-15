@@ -10,12 +10,14 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The settings-menu follow-up passed **1,605 tests and 10 live checks** on Python
-3.13.7 / wzgram 3.1.7, including all 69 settings across nine pages. Fresh current
-coverage is **70.24% lines / 57.23% branches**; including source-matched retained
-history gives **73.04% lines / 60.99% branches**. Production load, cloud restore,
-configuration/index checks and a source-matched deployment image remain release
-gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
+The retired-settings cleanup passed **1,606 tests**, zero failures or skips, on
+Python 3.13.7 / wzgram 3.1.7. The 65 active controls render alphabetically;
+legacy rows and old controls are covered by automated regressions. Current
+automated plus source-matched retained coverage is **73.06% lines / 61.06% branches**.
+No new Telegram pass was run for this small removal; previous UI live evidence
+remains historical. Production load, cloud restore, configuration/index checks
+and a source-matched deployment image remain release gates. See
+[the QA evidence](qa/coverage-expansion/STATUS.md).
 
 Recommended initial scope:
 
@@ -33,18 +35,19 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application/tests source is `f9e50d8`. Its complete suite and
-live pass used Python 3.13.7 / wzgram 3.1.7 with current source and an existing
+The current QA application/tests source is `638a08c`. Its complete suite used
+Python 3.13.7 / wzgram 3.1.7 with current source and an existing
 QA virtual environment mounted into `file-filter-bot:qa-runtime-20261115`.
 That runtime fixture bundles no application or dependencies; it is not a release
 image. Build and validate the branch source and dependency set before deployment.
-See [the current round evidence](qa/coverage-expansion/round18-settings-menu.json).
+See [the current round evidence](qa/coverage-expansion/round19-retired-settings.json).
 
 The settings-menu presentation update requires no database edits, settings reset
 or Redis flush. Restart with the new code and reopen `/bsetting`: names are sorted
 by visible label, details show the configuration key, and saved values are retained.
-Old callback identifiers still resolve their original setting. Four unused legacy
-fields are clearly identified; the support button uses Support Button URL/Label.
+Active callback identifiers still resolve their original setting. The four unused
+legacy controls are removed and their old edit/reset buttons are rejected. Stored
+rows are retained; the support button uses Support Button URL/Label.
 
 File-store/batch fixes need no MongoDB migration or Redis flush. New ordinary
 batch URLs persist opaque grants in the existing primary `batch_links`
