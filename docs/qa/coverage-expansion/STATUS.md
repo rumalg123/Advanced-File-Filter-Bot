@@ -1,6 +1,8 @@
 # QA evidence and remaining coverage
 
-> **Latest (2026-11-06): 1,498 tests and 28 live checks passed.** See [round 15](#bounded-qa-round-15--group-filters-and-connections-2026-11-06). Fresh coverage: 70.54% lines / 57.58% branches. Earlier dated sections are historical.
+> **Targeted hotfix (2026-11-15):** BUG-133 fixes subscription retries with welcome photos. Seven new regressions and 154 related tests passed; two MongoDB cases skipped. See [hotfix evidence](#subscription-photo-retry-hotfix-2026-11-15).
+
+> **Last bounded round (2026-11-06): 1,498 tests and 28 live checks passed.** See [round 15](#bounded-qa-round-15--group-filters-and-connections-2026-11-06). Fresh coverage: 70.54% lines / 57.58% branches. Earlier dated sections are historical.
 
 
 Latest continuation: [content dashboard and zero-result analytics](#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31),
@@ -1716,3 +1718,25 @@ anonymous-admin and additional media permutations, sustained production load,
 cloud restore and deployment-image acceptance. Completed bug details are retained
 in the authoritative registers, without adding temporary investigation documents.
 Stop here until `continue`. **Next bounded scope: file-store links and batch retrieval.**
+
+
+## Subscription photo retry hotfix (2026-11-15)
+
+The production `MessageProxy.reply_photo` traceback is fixed (BUG-133). The
+callback proxy now delegates the original message's photo reply while retaining
+the clicking user and the sent reply returned to managed auto-delete. Text
+welcomes, membership checks, admin/auth-user exemptions and actual send errors
+retain their existing behavior.
+
+- New regressions before the fix: **5 failed, 2 passed**. After: **7 passed**.
+- Related suite: **154 passed, 2 skipped**, zero failures. Skips are the two
+  `test_multisub_mongo.py` cases requiring a disposable local MongoDB.
+- Runtime: Python 3.13.7 / wzgram 3.1.7 in an isolated test environment.
+  Compile, undefined-name Ruff, dependency consistency and whitespace checks passed.
+- The tests execute the real callback and welcome handlers with SDK messages and
+  mocked sends. No real Telegram delivery, Atlas access or production restart
+  occurred. The full suite and whole-tree coverage were not rerun for this
+  targeted fix; the November 6 metrics above remain historical evidence.
+- No database or Redis migration, configuration changes or feature flags are
+  required. Deploy the corrected source. The next bounded QA scope remains
+  file-store links and batch retrieval.

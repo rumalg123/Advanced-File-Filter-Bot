@@ -144,6 +144,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-131 | Medium | Fixed | Connection preview acknowledgment | Delete Connection opens a preview without answering the Telegram callback. | Answer exactly once before editing the preview; regression and live callback pass. |
 | BUG-132 | Low | Fixed | Connection menu refresh | Refreshing unchanged connection details raises MessageNotModified. | Treat only that SDK error as an idempotent edit; empty/populated regressions and live no-op cleanup. |
 
+| BUG-133 | Medium | Fixed | Subscription welcome photo replay | Successful Try Again callbacks resume /start through MessageProxy, which lacks reply_photo when PICS is configured. | Delegate photo replies to the original message, preserve the callback actor and returned reply for auto-delete, and cover the real retry-to-welcome path with photos on/off and timers on/off. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -386,3 +388,28 @@ feature defaults, deployment environment or production limits changed.
   refreshes now treat Telegram's `MessageNotModified` as a successful no-op.
   Empty and populated lists are covered; other edit errors still propagate.
   Cleanup no longer logs an unhandled error just because no connection changed.
+
+
+## Subscription photo retry hotfix (2026-11-15)
+
+**BUG-133 fixed.** The production traceback dated 2026-11-11 reaches the welcome
+photo after membership verification succeeds. `MessageProxy` forwarded text
+replies but exposed no `reply_photo` method. It now binds the original message's
+photo reply, forwards its arguments and result, and preserves the clicking user.
+The new optional constructor argument is appended so existing positional calls
+retain their meaning. Real send exceptions continue to propagate.
+
+Seven regressions cover the real subscription callback → `/start` → welcome
+path with text/photos and enabled/disabled auto-delete, callback identity and
+argument forwarding, exception preservation and absent message context. Before
+the fix: **5 failed, 2 passed**. After: all seven passed. The related subscription,
+multisubscription, command cleanup and ban-route suite passed **154 tests**, with
+**2 MongoDB integration cases skipped** because no disposable MongoDB was
+supplied. Python compilation, undefined-name Ruff and `pip check` passed on
+Python 3.13.7 / wzgram 3.1.7.
+
+Validation used real SDK objects and mocked Telegram sends in an isolated
+container; no live photo delivery or production deployment is claimed. Telegram
+credentials and remote databases were not used. No settings, permission bypasses
+or operator logger lines changed. No database migration or Redis clearing is
+needed. Deploy the corrected code through the normal update/rebuild process.

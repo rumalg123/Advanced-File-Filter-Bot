@@ -487,7 +487,8 @@ class MessageProxy:
         reply_text: Optional[Callable] = None,
         reply: Optional[Callable] = None,
         message_id: Optional[int] = None,
-        date: Optional[datetime] = None
+        date: Optional[datetime] = None,
+        reply_photo: Optional[Callable] = None,
     ):
         # Core attributes
         self.from_user = from_user
@@ -500,6 +501,7 @@ class MessageProxy:
         # Reply methods - use provided callbacks or no-op
         self._reply_text = reply_text
         self._reply = reply
+        self._reply_photo = reply_photo
 
         # Message metadata
         self.reply_to_message = None
@@ -546,6 +548,12 @@ class MessageProxy:
             return await self._reply(*args, **kwargs)
         return None
 
+    async def reply_photo(self, *args, **kwargs):
+        """Forward photo replies to the source message, returning the sent message."""
+        if self._reply_photo:
+            return await self._reply_photo(*args, **kwargs)
+        return None
+
     @classmethod
     def from_callback_query(
         cls,
@@ -572,7 +580,8 @@ class MessageProxy:
             reply_text=query.message.reply_text if query.message else None,
             reply=query.message.reply if query.message else None,
             message_id=query.message.id if query.message else None,
-            date=query.message.date if query.message else None
+            date=query.message.date if query.message else None,
+            reply_photo=getattr(query.message, 'reply_photo', None) if query.message else None,
         )
 
 
