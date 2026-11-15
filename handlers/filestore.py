@@ -1,5 +1,7 @@
 from typing import Optional
 
+from config.settings import settings
+
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
@@ -174,7 +176,8 @@ class FileStoreHandler(BaseHandler):
         protect = cmd.lower().split("@", 1)[0] in ["/pbatch_premium", "/pbprem"]
 
         # Pre-validate links using robust parser
-        parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link)
+        parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link,
+            max_messages=settings.processing.max_batch_messages, require_same_chat=False)
         if not parsed_links:
             await message.reply(
                 ErrorMessageFormatter.format_invalid(
@@ -183,7 +186,7 @@ class FileStoreHandler(BaseHandler):
                     "• Both links are valid Telegram message links\n"
                     "• Both links are from the same channel\n"
                     "• First message ID is less than second message ID\n"
-                    "• Batch size is reasonable (< 10,000 messages)\n\n"
+                    f"• Batch size is within the configured limit ({settings.processing.max_batch_messages:,} messages)\n\n"
                     "<b>Valid formats:</b>\n"
                     "• <code>https://t.me/channel/123</code>\n"
                     "• <code>https://t.me/c/1234567890/123</code>"

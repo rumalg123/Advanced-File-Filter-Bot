@@ -134,7 +134,8 @@ class TelegramLinkParser:
             return None
     
     @classmethod
-    def parse_link_pair(cls, first_link: str, second_link: str) -> Optional[Tuple[ParsedTelegramLink, ParsedTelegramLink]]:
+    def parse_link_pair(cls, first_link: str, second_link: str, *,
+                        max_messages: int = 10000, require_same_chat: bool = True) -> Optional[Tuple[ParsedTelegramLink, ParsedTelegramLink]]:
         """
         Parse and validate a pair of Telegram links for batch operations
         
@@ -152,18 +153,18 @@ class TelegramLinkParser:
             return None
         
         # Validate that both links are from the same chat
-        if first_parsed.chat_identifier != second_parsed.chat_identifier:
+        if require_same_chat and first_parsed.chat_identifier != second_parsed.chat_identifier:
             logger.warning(f"Links are from different chats: {first_parsed.chat_identifier} vs {second_parsed.chat_identifier}")
             return None
         
         # Validate message ID order
-        if first_parsed.message_id >= second_parsed.message_id:
-            logger.warning(f"Invalid message order: {first_parsed.message_id} >= {second_parsed.message_id}")
+        if first_parsed.message_id > second_parsed.message_id:
+            logger.warning(f"Invalid message order: {first_parsed.message_id} > {second_parsed.message_id}")
             return None
         
         # Check for reasonable batch size
         message_count = second_parsed.message_id - first_parsed.message_id + 1
-        if message_count > 10000:  # Reasonable limit
+        if message_count > max_messages:
             logger.warning(f"Batch size too large: {message_count} messages")
             return None
         

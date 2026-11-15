@@ -344,7 +344,8 @@ class FileStoreService:
             return None
         
         # Use robust link parser
-        parsed_links = TelegramLinkParser.parse_link_pair(first_msg_link, last_msg_link)
+        parsed_links = TelegramLinkParser.parse_link_pair(first_msg_link, last_msg_link,
+            max_messages=settings.processing.max_batch_messages, require_same_chat=False)
         if not parsed_links:
             logger.error(f"Failed to parse link pair: {first_msg_link} -> {last_msg_link}")
             return None
@@ -367,6 +368,20 @@ class FileStoreService:
                 logger.error(f"Error resolving chat {first_parsed.chat_identifier}: {e}")
                 return None
         
+        last_chat_id = last_parsed.chat_id
+        if last_chat_id is None:
+            if last_parsed.chat_identifier == first_parsed.chat_identifier:
+                last_chat_id = chat_id
+            else:
+                try:
+                    last_chat_id = (await telegram_api.call_api(client.get_chat, last_parsed.chat_identifier, chat_id=None)).id
+                except Exception as e:
+                    logger.error("Error resolving last batch source %s: %s", last_parsed.chat_identifier, e)
+                    return None
+        if last_chat_id != chat_id:
+            logger.warning("Premium batch links belong to different chats")
+            return None
+
         if not await self._can_create_source_batch(client, created_by, chat_id):
             return None
 

@@ -150,6 +150,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-135 | High | Fixed | Batch source authorization | Unsigned ranges can be forged to read unrelated bot-accessible chats; public creators and missing premium storage can bypass source/access policy. | Store new ordinary ranges behind 128-bit opaque IDs, verify creators and source readability, restrict legacy ranges to configured sources with admin bypass, and never downgrade premium links. |
 
+| BUG-136 | Medium | Fixed | Premium batch range consistency | Premium commands retain a hard-coded 10,000-message cap, reject inclusive single-item ranges and compare source spelling instead of resolved identity. | Use the existing configured maximum, preserve single-item ranges, and resolve both endpoints before storing a trusted source grant. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -436,3 +438,9 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   Fifty-seven focused cases passed, including real MongoDB/cache-loss retrieval.
   The inaccurate premium-fallback diagnostic was changed to a fail-closed error;
   other existing operator logger lines remain. Live validation remains pending.
+
+- **BUG-136 fixed:** premium batch parsing honors the existing configured
+  maximum, including the operator's larger setting, and supports inclusive
+  single-message ranges and equivalent public/private source notation. Nine
+  focused range cases passed; forty related authorization/command cases passed.
+  The message-order diagnostic now correctly describes strictly reversed bounds.
