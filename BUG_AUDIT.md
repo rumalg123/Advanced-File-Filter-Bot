@@ -153,6 +153,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-141 | High | Fixed | File-store source setting forms | FILE_STORE_CHANNEL is loaded as a list, but legacy authorization stringifies it, breaking normal users' old links for configured file-only channels. | Normalize stored lists and environment forms, retain both configured source types and privileged bypasses; 41 focused tests passed. |
 
+| BUG-142 | High | Fixed | Conflicting indexing configuration | Commands update indexed_channels independently of CHANNELS settings; startup re-enables configured sources and removed channels can remain authorized through stale config. | Use the persisted registry for every indexing control and legacy-source check, seed only missing bootstrap IDs, preserve explicit disable/remove decisions and refresh handlers after settings edits. Real-Mongo regressions and all 1,602 tests passed. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -492,3 +494,14 @@ all 41 related source/command cases passed after the fix. Public creators still
 use membership and PUBLIC_FILE_STORE rather than a File Channels allowlist.
 The operator confirmed that normal users' unconfigured legacy sources must stay
 blocked until registered in either indexing or File Channels.
+
+**BUG-142 fixed:** Indexing Channels reads/writes the same registry used by
+/add_channel, /remove_channel and /toggle_channel. Environment/stored CHANNELS
+seed missing sources; existing enabled/disabled state is authoritative. Removal
+retains a disabled record and indexing history so stale bootstrap values cannot
+resurrect it. File Channels does not seed this registry. Legacy authorization
+reads current registry state instead of an outdated startup CHANNELS snapshot.
+Twelve new registry regressions passed, including real MongoDB restart, empty
+reset, concurrent additions, cache refresh, history preservation and failure
+handling; the complete suite passed 1,602 tests with 22 existing warnings. The
+existing startup import-error diagnostic moved with the import into the repository.

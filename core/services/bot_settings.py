@@ -115,7 +115,7 @@ class BotSettingsService:
         'CHANNELS': {
             'type': 'list',
             'default': [],
-            'description': 'Channels for auto-indexing (comma separated)',
+            'description': 'Active automatic-indexing channel IDs; shared with /add_channel, /remove_channel and /toggle_channel',
             'category': 'channels'
         },
         'AUTH_USERS': {
@@ -408,10 +408,11 @@ class BotSettingsService:
     }
 
     def __init__(self, settings_repo: BotSettingsRepository, cache_manager: CacheManager,
-                 *, database_config=None, telegram_client=None):
+                 *, database_config=None, telegram_client=None, channel_repo=None):
         self.settings_repo = settings_repo
         self.cache = cache_manager
         self.telegram_client = telegram_client
+        self.channel_repo = channel_repo
         if database_config is None:
             from config.settings import settings
             database_config = settings.database
@@ -491,6 +492,9 @@ class BotSettingsService:
         if settings_to_save:
             await self.settings_repo.bulk_upsert(settings_to_save)
             logger.info(f"Initialized {len(settings_to_save)} settings from environment")
+        if self.channel_repo is not None:
+            bootstrap = await self.settings_repo.get_setting('CHANNELS')
+            await self.channel_repo.seed_channels(bootstrap.value if bootstrap else [])
 
     async def get_all_settings(self) -> Dict[str, Any]:
         """Get all settings with values"""
@@ -530,6 +534,8 @@ class BotSettingsService:
                     'category': metadata['category']
                 }
 
+        if self.channel_repo is not None:
+            result['CHANNELS']['value'] = await self.channel_repo.get_active_channel_ids()
         policy = await self.owner_registry_policy()
         owner_setting = result['DATABASE_GLOBAL_OWNER_REGISTRY']
         owner_setting.update(default=policy['default'], editable=policy['editable'],
@@ -540,6 +546,8 @@ class BotSettingsService:
 
     async def get_setting(self, key: str) -> Optional[Any]:
         """Get a single setting value"""
+        if key == 'CHANNELS' and self.channel_repo is not None:
+            return await self.channel_repo.get_active_channel_ids()
         setting = await self.settings_repo.get_setting(key)
         if setting:
             return (parse_subscription_targets(setting.value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
@@ -563,7 +571,12 @@ class BotSettingsService:
         # Validate and parse value
         parsed_value = (parse_subscription_targets(value) if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'}
                         else self._parse_value(value, metadata['type'], strict=True))
+        if key == 'CHANNELS':
+            from repositories.channel import ChannelRepository
+            parsed_value = ChannelRepository.normalize_channel_ids(value)
         parsed_value = self._validate_value_bounds(key, parsed_value, metadata)
+        if key == 'CHANNELS' and self.channel_repo is not None:
+            return await self.channel_repo.replace_active_channels(parsed_value)
         default = metadata['default']
         if key in {'AUTH_CHANNEL', 'AUTH_GROUPS'} and parsed_value:
             if self.telegram_client is None:

@@ -526,19 +526,8 @@ class ChannelHandler:
     async def _setup_initial_channels(self):
         """Setup initial channels from config"""
         try:
-            # Add channels from environment config to database
-            for channel in self.bot.config.CHANNELS:
-                if channel and channel != 0:
-                    try:
-                        await self.channel_repo.add_channel(
-                            channel_id=channel if isinstance(channel, int) else 0,
-                            channel_username=channel if isinstance(channel, str) else None,
-                            added_by=None  # System added
-                        )
-                    except Exception as e:
-                        logger.error(f"Error adding channel {channel} from config: {e}")
-
-            # Register handlers
+            # Storage startup seeds missing configuration IDs once, preserving
+            # explicit disable/remove decisions. Register the current registry.
             await self.update_handlers()
 
         except asyncio.CancelledError:

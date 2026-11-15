@@ -617,6 +617,13 @@ class BotSettingsHandler(BaseHandler):
 
             if success:
                 await self.invalidate_related_caches(key)
+                if key == 'CHANNELS':
+                    channel_handler = getattr(self.bot, 'channel_handler', None)
+                    if channel_handler is not None:
+                        try:
+                            await channel_handler.update_handlers()
+                        except Exception as error:
+                            logger.warning('Indexing channels saved; handler refresh will retry: %s', error, exc_info=True)
                 await self.bot.cache.set(
                     CacheKeyGenerator.recent_settings_edit(user_id),
                     True,

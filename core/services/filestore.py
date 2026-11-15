@@ -261,7 +261,10 @@ class FileStoreService:
         """Unsigned legacy ranges are restricted to explicitly configured media sources."""
         if user_id in (getattr(self.config, 'ADMINS', []) or []):
             return True
-        targets = parse_subscription_targets(getattr(self.config, 'CHANNELS', []))
+        # Runtime commands change the registry; the boot-time config snapshot
+        # must not keep removed/disabled indexing channels authorized.
+        targets = (parse_subscription_targets(getattr(self.config, 'CHANNELS', []))
+                   if self.channel_repo is None else [])
         targets.extend(parse_subscription_targets(getattr(self.config, 'FILE_STORE_CHANNEL', [])))
         for target in targets:
             try:

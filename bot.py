@@ -752,11 +752,13 @@ class MediaSearchBot(Client):
         await self.cache.initialize()
         logger.info("Redis cache initialized")
         self.bot_settings_repo = BotSettingsRepository(self.db_pool, self.cache)
+        self.channel_repo = ChannelRepository(self.db_pool, self.cache)
         self.bot_settings_service = BotSettingsService(
             self.bot_settings_repo,
             self.cache,
             database_config=self.config._settings.database,
             telegram_client=self,
+            channel_repo=self.channel_repo,
         )
         # Initialize settings from environment
         await self.bot_settings_service.initialize_settings()
@@ -818,7 +820,7 @@ class MediaSearchBot(Client):
                 multi_db_manager=self.multi_db_manager,
                 search_cache_ttl=self.config.CACHE_TIME,
             )
-            self.channel_repo = ChannelRepository(self.db_pool, self.cache)
+            self.channel_repo = self.channel_repo or ChannelRepository(self.db_pool, self.cache)
             self.connection_repo = ConnectionRepository(self.db_pool, self.cache)
             self.filter_repo = FilterRepository(self.db_pool, self.cache, collection_name=self.config.COLLECTION_NAME)
             self.batch_link_repo = BatchLinkRepository(self.db_pool, self.cache)
