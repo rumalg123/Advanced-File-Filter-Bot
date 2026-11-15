@@ -11,22 +11,23 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-11-15
 
-The file-store/batch round passed **1,581 tests, zero failures or skips** and
-**25 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-134–139 and CACHE-030
-cover protected command forms, source authorization and persisted grants,
-premium bounds/bypasses, metadata lifetime/validation and quota admission.
-Configured admin/owner bypasses remain. Two misleading diagnostics were corrected;
-the other baseline logger statements remain. All **127 owned QA messages** were
-confirmed absent; no Telegram memberships or roles changed.
+The channel-configuration follow-up passed **1,602 tests**, zero failures/errors/
+skips, and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-141 restores
+legacy links for saved File Channels lists. BUG-142 / CACHE-031 unify indexing
+commands and settings on the persisted registry; removal/disable survives restart.
+File Channels adds batch-only sources without enabling indexing. Public creators
+use current source membership, independently of either source list. Normal users'
+unsigned old links still require a source in either list, as the operator chose.
+Configured admin/owner bypasses and existing limits remain.
 
-Fresh current automated + live coverage is **70.71% lines / 58.03% branches**.
-Including retained, source-matched round-15 execution gives **72.53% lines /
-60.41% branches / 69.48% combined**, across all 122 application/operator Python
-files. Changed-file historical execution is discarded. Missing older raw coverage
-was not reconstructed. See [the QA record](docs/qa/coverage-expansion/STATUS.md)
-and [round 16 evidence](docs/qa/coverage-expansion/round16-filestore.json).
-Whole-bot 100% and production acceptance remain open. Production, deployment
-configuration, feature defaults and existing configured limits are unchanged.
+Fresh current automated + live coverage is **70.92% lines / 58.05% branches**;
+including source-matched retained history gives **72.98% lines / 60.81% branches**.
+All 122 tracked application/operator Python files remain in the denominator;
+changed historical execution is discarded. All **51 final-pass messages** were
+confirmed absent, with no Telegram membership/role changes. No Atlas or production
+services/configuration were changed. Whole-bot 100% and production acceptance
+remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 17 evidence](docs/qa/coverage-expansion/round17-channel-settings.json).
 
 ## Live-safety contract
 

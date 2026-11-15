@@ -15,7 +15,7 @@
     "file": "bot.py",
     "missing_lines": 197,
     "missing_branches": 85,
-    "line_percent": 71.37
+    "line_percent": 71.41
   },
   {
     "file": "handlers/features.py",
@@ -36,12 +36,6 @@
     "line_percent": 23.16
   },
   {
-    "file": "handlers/commands_handlers/channel.py",
-    "missing_lines": 134,
-    "missing_branches": 44,
-    "line_percent": 11.26
-  },
-  {
     "file": "handlers/search.py",
     "missing_lines": 134,
     "missing_branches": 57,
@@ -58,6 +52,12 @@
     "missing_lines": 129,
     "missing_branches": 44,
     "line_percent": 61.72
+  },
+  {
+    "file": "core/services/filestore.py",
+    "missing_lines": 128,
+    "missing_branches": 57,
+    "line_percent": 72.53
   },
   {
     "file": "repositories/media.py",
@@ -84,12 +84,6 @@
     "line_percent": 75.11
   },
   {
-    "file": "handlers/channel.py",
-    "missing_lines": 115,
-    "missing_branches": 46,
-    "line_percent": 68.32
-  },
-  {
     "file": "core/cache/redis_cache.py",
     "missing_lines": 113,
     "missing_branches": 36,
@@ -108,22 +102,22 @@
     "line_percent": 47.37
   },
   {
-    "file": "core/services/filestore.py",
-    "missing_lines": 109,
-    "missing_branches": 44,
-    "line_percent": 76.81
-  },
-  {
     "file": "handlers/indexing.py",
     "missing_lines": 103,
     "missing_branches": 47,
     "line_percent": 41.14
   },
   {
+    "file": "handlers/channel.py",
+    "missing_lines": 97,
+    "missing_branches": 40,
+    "line_percent": 72.83
+  },
+  {
     "file": "handlers/commands_handlers/bot_settings.py",
-    "missing_lines": 91,
-    "missing_branches": 60,
-    "line_percent": 79.13
+    "missing_lines": 97,
+    "missing_branches": 63,
+    "line_percent": 78.1
   },
   {
     "file": "core/services/features.py",
@@ -136,6 +130,12 @@
     "missing_lines": 87,
     "missing_branches": 66,
     "line_percent": 86.26
+  },
+  {
+    "file": "handlers/commands_handlers/channel.py",
+    "missing_lines": 81,
+    "missing_branches": 30,
+    "line_percent": 46.36
   },
   {
     "file": "core/session/manager.py",
@@ -240,22 +240,10 @@
     "line_percent": 75.71
   },
   {
-    "file": "core/utils/media_extractor.py",
-    "missing_lines": 42,
-    "missing_branches": 34,
-    "line_percent": 17.65
-  },
-  {
     "file": "core/utils/logger.py",
     "missing_lines": 40,
     "missing_branches": 5,
     "line_percent": 60.78
-  },
-  {
-    "file": "core/services/bot_settings.py",
-    "missing_lines": 37,
-    "missing_branches": 20,
-    "line_percent": 83.03
   },
   {
     "file": "core/utils/validators.py",
@@ -268,6 +256,12 @@
     "missing_lines": 36,
     "missing_branches": 16,
     "line_percent": 80.33
+  },
+  {
+    "file": "core/services/bot_settings.py",
+    "missing_lines": 35,
+    "missing_branches": 19,
+    "line_percent": 84.85
   },
   {
     "file": "scripts/profile_media_search.py",
@@ -304,6 +298,12 @@
     "missing_lines": 31,
     "missing_branches": 11,
     "line_percent": 83.6
+  },
+  {
+    "file": "core/utils/media_extractor.py",
+    "missing_lines": 30,
+    "missing_branches": 27,
+    "line_percent": 41.18
   },
   {
     "file": "repositories/filter.py",
@@ -360,12 +360,6 @@
     "line_percent": 64.62
   },
   {
-    "file": "repositories/channel.py",
-    "missing_lines": 21,
-    "missing_branches": 14,
-    "line_percent": 78.79
-  },
-  {
     "file": "core/concurrency/semaphore_manager.py",
     "missing_lines": 19,
     "missing_branches": 10,
@@ -388,6 +382,12 @@
     "missing_lines": 18,
     "missing_branches": 12,
     "line_percent": 90.22
+  },
+  {
+    "file": "repositories/channel.py",
+    "missing_lines": 17,
+    "missing_branches": 7,
+    "line_percent": 88.67
   },
   {
     "file": "handlers/callbacks_handlers/pagination.py",
@@ -432,12 +432,6 @@
     "line_percent": 92.82
   },
   {
-    "file": "core/utils/media_factory.py",
-    "missing_lines": 13,
-    "missing_branches": 11,
-    "line_percent": 75.0
-  },
-  {
     "file": "repositories/bot_settings.py",
     "missing_lines": 13,
     "missing_branches": 12,
@@ -454,6 +448,12 @@
     "missing_lines": 12,
     "missing_branches": 0,
     "line_percent": 0.0
+  },
+  {
+    "file": "core/utils/media_factory.py",
+    "missing_lines": 11,
+    "missing_branches": 9,
+    "line_percent": 78.85
   },
   {
     "file": "core/utils/rate_limiter.py",

@@ -10,12 +10,11 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed **1,581 tests and 25 live file-store/batch checks**
-on Python 3.13.7 / wzgram 3.1.7. Fresh current automated + live coverage is
-**70.71% lines / 58.03% branches**; including retained, source-matched round-15
-execution gives **72.53% / 60.41%**. Production load, cloud restore,
-configuration/index checks and a source-matched deployment image remain release
-gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
+The channel-configuration follow-up passed **1,602 tests and 11 live checks** on
+Python 3.13.7 / wzgram 3.1.7. Fresh current coverage is **70.92% lines / 58.05% branches**;
+including source-matched retained history gives **72.98% lines / 60.81% branches**.
+Production load, cloud restore, configuration/index checks and a source-matched
+deployment image remain release gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
 
 Recommended initial scope:
 
@@ -33,12 +32,12 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application/tests source is `a8b6f84`. Its complete suite and
+The current QA application/tests source is `a6277d6`. Its complete suite and
 live pass used Python 3.13.7 / wzgram 3.1.7 with current source and an existing
 QA virtual environment mounted into `file-filter-bot:qa-runtime-20261115`.
 That runtime fixture bundles no application or dependencies; it is not a release
 image. Build and validate the branch source and dependency set before deployment.
-See [the current round evidence](qa/coverage-expansion/round16-filestore.json).
+See [the current round evidence](qa/coverage-expansion/round17-channel-settings.json).
 
 File-store/batch fixes need no MongoDB migration or Redis flush. New ordinary
 batch URLs persist opaque grants in the existing primary `batch_links`
@@ -50,6 +49,22 @@ Older bot versions cannot open the new ordinary URLs, so consider newly issued
 links when planning a code rollback. Existing premium URLs retain their format.
 Do not deploy intermediate QA commits: the disproved shortening change was
 reverted before the final accepted source and tests above.
+
+Channel-configuration fixes require no migration or broad Redis clearing. Deploy
+`a6277d6` or later, then use `/bsetting` → File Channels to register additional
+batch-only sources (space-separated IDs); save and restart. Normal users' existing
+unsigned URLs work when their source is either an active indexing channel or in
+File Channels. Public File Store can remain off for opening existing links.
+
+Indexing Channels now reflects the same registry as `/add_channel`, `/remove_channel`
+and `/toggle_channel`. Startup imports missing bootstrap IDs but preserves disabled
+entries. Removed channels remain stored with `enabled=false` and their history;
+this prevents resurrection after restart. Existing stored CHANNELS is bootstrap,
+not a second active list. Use runtime commands/settings after initialization.
+FILE_STORE_CHANNEL does not enable indexing. Public creators may use other
+readable sources when membership is verified; configured admin bypasses remain.
+Older startup code can re-enable IDs from its bootstrap list; review indexing
+state before any rollback to a version predating these registry fixes.
 
 Group-filter/connection fixes require no MongoDB migration or Redis flush.
 Existing connection documents and historical URL/alert keyboards remain readable.

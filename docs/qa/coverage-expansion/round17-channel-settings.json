@@ -1,0 +1,151 @@
+{
+  "date": "2026-11-15",
+  "round": 17,
+  "scope": "channel configuration and legacy compatibility",
+  "application_and_tests_commit": "a6277d6eaf681584929c421492d1400ffe32d01b",
+  "fixes": {
+    "BUG-141": "b5cb803",
+    "BUG-142 / CACHE-031": "a6277d6"
+  },
+  "tests": {
+    "passed": 1602,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 21,
+    "seconds": 35.51,
+    "new_cases_by_module": {
+      "tests.test_filestore_channel_settings": 9,
+      "tests.test_channel_configuration": 12
+    }
+  },
+  "application_files": 122,
+  "source_manifest_sha256": "fe2432534c95ab04ec7cbf88571e428d58f8972c7b2c15a733a2d9c0e5f55422",
+  "automated": {
+    "covered_lines": 12240,
+    "num_statements": 18480,
+    "percent_covered": 63.397633327929974,
+    "percent_covered_display": "63",
+    "missing_lines": 6240,
+    "excluded_lines": 41,
+    "num_branches": 6196,
+    "num_partial_branches": 1014,
+    "covered_branches": 3404,
+    "missing_branches": 2792,
+    "percent_statements_covered": 66.23376623376623,
+    "percent_branches_covered": 54.93867010974822
+  },
+  "automated_plus_current_live": {
+    "covered_lines": 13106,
+    "num_statements": 18480,
+    "percent_covered": 67.68925271518884,
+    "percent_covered_display": "68",
+    "missing_lines": 5374,
+    "excluded_lines": 41,
+    "num_branches": 6196,
+    "num_partial_branches": 1115,
+    "covered_branches": 3597,
+    "missing_branches": 2599,
+    "percent_statements_covered": 70.91991341991341,
+    "percent_branches_covered": 58.05358295674628
+  },
+  "automated_plus_source_matched_history": {
+    "covered_lines": 13486,
+    "num_statements": 18480,
+    "percent_covered": 69.92219160317718,
+    "percent_covered_display": "70",
+    "missing_lines": 4994,
+    "excluded_lines": 41,
+    "num_branches": 6196,
+    "num_partial_branches": 1144,
+    "covered_branches": 3768,
+    "missing_branches": 2428,
+    "percent_statements_covered": 72.97619047619047,
+    "percent_branches_covered": 60.81342801807617
+  },
+  "retained_history": {
+    "origin": "round16 accepted aggregate",
+    "matching_files": 116,
+    "changed_files_discarded": 6
+  },
+  "live": {
+    "passed": 11,
+    "checks": [
+      "two authenticated roles, QA bot identity and local storage",
+      "environment source appears in the shared indexing registry and indexes new media",
+      "normal legacy access accepts the indexing source and rejects the unconfigured source",
+      "saved File Channels list restores the original legacy URL without enabling indexing",
+      "add_channel updates Indexing Channels and immediately indexes new posts",
+      "an indexing source supports batch retrieval without a File Channels entry",
+      "remove_channel updates settings and stale bootstrap values cannot revive the source",
+      "toggle_channel shares the same persisted indexing state",
+      "Indexing Channels edits replace the active set and change actual automatic indexing",
+      "public creation uses real membership outside both source lists; its stored grant delivers",
+      "public mode does not bypass normal-user legacy source checks, including private logs"
+    ],
+    "cleanup": {
+      "checks": 11,
+      "unique_owned_messages": 51,
+      "remaining_owned_messages": 0,
+      "membership_or_telegram_role_changes": 0,
+      "expected_error_logs": 0
+    },
+    "unexpected_errors": 0,
+    "actual_telegram_commands": [
+      "add_channel",
+      "remove_channel",
+      "toggle_channel"
+    ],
+    "settings_edits": "Real settings service, followed by configuration sync and handler refresh; no new full settings-keyboard pass claimed.",
+    "public_creator_role": "Temporarily removed source-member actor from configured QA ADMINS; real Telegram membership verified. No Telegram roles changed."
+  },
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.7",
+    "fixture_image": "file-filter-bot:qa-runtime-20261115",
+    "source_and_venv_mounted": true,
+    "deployment_image_built": false
+  },
+  "validation": {
+    "compile": "passed",
+    "undefined_name_ruff": "passed",
+    "pip_check": "passed"
+  },
+  "policy": {
+    "indexing": "One indexed_channels registry, shared by commands and Indexing Channels; environment/stored CHANNELS bootstrap missing IDs only.",
+    "file_channels": "Additional batch-only sources, normalized list; no automatic indexing.",
+    "public_creation": "Enabled public store plus source membership; no indexing/File Channels allowlist. Configured admins bypass membership.",
+    "legacy": "Normal users require an active indexing source or File Channels entry; configured admins retain source bypass.",
+    "removal": "Persist disabled registry entry with history to prevent bootstrap resurrection.",
+    "existing_opaque_grants": "Remain valid independently of source-list edits.",
+    "limits_or_defaults_changed": false
+  },
+  "isolation": {
+    "local_disposable_mongodb": true,
+    "separate_cache_state_redis": true,
+    "published_host_ports": 0,
+    "atlas_accessed": false,
+    "production_accessed": false,
+    "cleanup": {
+      "owned_services_removed": 3,
+      "owned_service_containers_remaining": 0,
+      "private_bot_session_artifacts_removed": 2,
+      "original_services_running": true,
+      "live": {
+        "checks": 11,
+        "unique_owned_messages": 51,
+        "remaining_owned_messages": 0,
+        "membership_or_telegram_role_changes": 0,
+        "expected_error_logs": 0
+      }
+    }
+  },
+  "remaining": [
+    "Whole-bot 100% coverage",
+    "Broader settings-keyboard permutations",
+    "Production load and restore",
+    "Source-matched deployment image acceptance"
+  ],
+  "next_proposed_scope": "broadcasting and recovery"
+}

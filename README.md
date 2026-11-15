@@ -428,7 +428,7 @@ Only media operations use the optional multi-database manager. Users, settings, 
 |---|---:|---|
 | `LOG_CHANNEL` | `0` | Startup, maintenance, request, and operational log destination. `0` disables Telegram logging. |
 | `INDEX_REQ_CHANNEL` | `0` | Destination for index requests. Set it explicitly; `0` leaves the destination unset. |
-| `FILE_STORE_CHANNEL` | empty | Space-separated channel IDs used by file-store workflows. |
+| `FILE_STORE_CHANNEL` | empty | Space-separated additional batch-source IDs; File Channels in `/bsetting`. Does not enable indexing. |
 | `DELETE_CHANNEL` | unset | Optional channel involved in file-deletion workflows. |
 | `REQ_CHANNEL` | `0` | Destination for content requests. Set it explicitly; `0` leaves the destination unset. |
 | `SUPPORT_GROUP_ID` | unset | Group where messages beginning with `#request ` are handled. |
@@ -437,7 +437,7 @@ Only media operations use the optional multi-database manager. Users, settings, 
 | `FORCE_SUB_INVITE_EXPIRE_MINUTES` | `15` | Lifetime of newly generated join links, in minutes; range 1–525600. |
 | `FORCE_SUB_INVITE_MEMBER_LIMIT` | `1` | Telegram member limit for each new join link; range 1–99999. |
 | `AUTH_USERS` | empty | Comma-separated users allowed by authorization checks; admins are appended automatically. |
-| `CHANNELS` | `0` | Comma-separated numeric source-channel IDs for auto-indexing. `0` is discarded. Channels can also be managed with admin commands. |
+| `CHANNELS` | `0` | Comma-separated numeric IDs for initial auto-indexing setup. `0` is discarded. Runtime commands and Indexing Channels share the persisted registry. |
 | `PICS` | empty | Comma-separated image URLs used randomly by the start command. |
 
 For force subscription, the bot must be an administrator with **Invite Users**
@@ -785,6 +785,33 @@ minutes and are consumed once. Old unbound confirmations require a new command.
 Keyboard storage remains compatible with historical URL/alert SDK repr records;
 new records use JSON. No MongoDB migration or Redis flush is required.
 
+### Indexing Channels and File Channels
+
+`/add_channel`, `/remove_channel`, `/toggle_channel` and **Indexing Channels** in
+`/bsetting` operate on the same `indexed_channels` registry. The settings screen
+shows the current active IDs, including channels added through commands.
+Explicit edits replace the active set; commands and settings refresh indexing
+handlers. Removal retains a disabled record and indexing history so a restart
+cannot silently re-add the channel from stale bootstrap configuration.
+
+On first settings initialization, `.env CHANNELS` seeds indexing. Existing stored
+`CHANNELS` values are imported as bootstrap IDs if missing; existing enabled or
+disabled registry state wins. Later environment edits do not override persisted
+settings. Use the commands or Indexing Channels to change the active set.
+
+**File Channels** (`FILE_STORE_CHANNEL`) lists additional sources for file-store
+batch links and old-link compatibility, without subscribing them to indexing.
+A source may appear in both lists; it then indexes normally. To restore old batch
+URLs for a batch-only source, edit File Channels, enter its full negative channel
+ID (space-separated for multiple IDs), save and restart. Existing URLs need no
+regeneration after the source is registered and the updated code is deployed.
+The bot must retain Telegram access to read the original messages.
+
+Both active indexing sources and File Channels authorize normal users' unsigned
+legacy ranges. Removing an indexing source leaves its old links available only
+if it also remains in File Channels. Existing opaque grants retain the source
+approved when created; source-list edits do not revoke those grants.
+
 ### File-store commands
 
 When `PUBLIC_FILE_STORE=false`, these are admin-only. When it is `true`, they are registered publicly.
@@ -1058,13 +1085,12 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The latest bounded QA round passed **1,581 tests** with zero failures or skips
-and **25 live file-store/batch checks** on Python 3.13.7 / wzgram 3.1.7. Fresh
-current automated + live coverage is **70.71% lines / 58.03% branches**; adding
-retained, source-matched round-15 execution gives **72.53% / 60.41%**.
-All 122 tracked application/operator Python files remain in the denominator.
-Whole-bot 100% and production gates remain open. See the
-[QA record](docs/qa/coverage-expansion/STATUS.md).
+The channel-configuration follow-up passed **1,602 tests** with zero failures or
+skips and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. Fresh current
+automated + live coverage is **70.92% lines / 58.05% branches**; including retained,
+source-matched history gives **72.98% lines / 60.81% branches**. All 122 tracked
+application/operator Python files remain in the denominator. Whole-bot 100% and
+production gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md).
 
 Useful additional checks:
 

@@ -753,6 +753,16 @@ group and a compact keyword digest. `/delall` stores a five-minute confirmation
 under protected `deleteall_pending:filter:*` state and consumes it atomically
 before deleting filters; cancellation checks the actor and chat.
 
+Automatic indexing uses `indexed_channels` as its authoritative enabled state.
+Environment/stored CHANNELS seeds missing entries, preserving disabled records.
+/add_channel, /remove_channel, /toggle_channel and the Indexing Channels setting
+all operate on this registry; the settings value is a projection of current active
+IDs. Removal is a persisted disable, preserving history across bootstrap/restart.
+File Channels is a separate list of additional batch sources and never registers
+an indexing handler. Ordinary legacy authorization checks fresh enabled registry
+state plus normalized File Channels, with the configured admin bypass. New public
+creation checks current source membership rather than either configured list.
+
 Ordinary source batches now store an opaque `BL-*` grant in the primary
 `batch_links` collection, sharing the existing model/indexes with premium grants.
 Creation resolves both source links, enforces the configured range and verifies

@@ -1,67 +1,62 @@
 {
   "date": "2026-11-15",
-  "application_commit": "a8b6f849002fcece984764cfe4de81df9ef201c7",
+  "application_commit": "a6277d6eaf681584929c421492d1400ffe32d01b",
   "tests": {
-    "passed": 1581,
+    "passed": 1602,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "warnings": 22,
-    "new": 76,
-    "seconds": 36.24,
+    "new": 21,
+    "seconds": 35.51,
     "new_cases_by_module": {
-      "tests.test_filestore_command_forms": 16,
-      "tests.test_filestore_source_authorization": 16,
-      "tests.test_premium_batch_bounds": 9,
-      "tests.test_premium_batch_privileges": 16,
-      "tests.test_batch_metadata_contract": 11,
-      "tests.test_batch_source_quota_safety": 6,
-      "tests.test_filestore_short_reference": 2
+      "tests.test_filestore_channel_settings": 9,
+      "tests.test_channel_configuration": 12
     }
   },
   "application_files": 122,
   "denominator_matches_all_tracked_non_test_python": true,
   "automated": {
-    "covered_lines": 12169,
-    "num_statements": 18418,
-    "percent_covered": 63.225491789952855,
+    "covered_lines": 12240,
+    "num_statements": 18480,
+    "percent_covered": 63.397633327929974,
     "percent_covered_display": "63",
-    "missing_lines": 6249,
+    "missing_lines": 6240,
     "excluded_lines": 41,
-    "num_branches": 6186,
-    "num_partial_branches": 1015,
-    "covered_branches": 3387,
-    "missing_branches": 2799,
-    "percent_statements_covered": 66.07123466174394,
-    "percent_branches_covered": 54.75266731328807
+    "num_branches": 6196,
+    "num_partial_branches": 1014,
+    "covered_branches": 3404,
+    "missing_branches": 2792,
+    "percent_statements_covered": 66.23376623376623,
+    "percent_branches_covered": 54.93867010974822
   },
   "automated_plus_current_live": {
-    "covered_lines": 13023,
-    "num_statements": 18418,
-    "percent_covered": 67.52154121281093,
+    "covered_lines": 13106,
+    "num_statements": 18480,
+    "percent_covered": 67.68925271518884,
     "percent_covered_display": "68",
-    "missing_lines": 5395,
+    "missing_lines": 5374,
     "excluded_lines": 41,
-    "num_branches": 6186,
-    "num_partial_branches": 1082,
-    "covered_branches": 3590,
-    "missing_branches": 2596,
-    "percent_statements_covered": 70.70800304050385,
-    "percent_branches_covered": 58.034270934367925
+    "num_branches": 6196,
+    "num_partial_branches": 1115,
+    "covered_branches": 3597,
+    "missing_branches": 2599,
+    "percent_statements_covered": 70.91991341991341,
+    "percent_branches_covered": 58.05358295674628
   },
-  "automated_plus_source_matched_live": {
-    "covered_lines": 13358,
-    "num_statements": 18418,
-    "percent_covered": 69.48057226467242,
-    "percent_covered_display": "69",
-    "missing_lines": 5060,
+  "automated_plus_source_matched_history": {
+    "covered_lines": 13486,
+    "num_statements": 18480,
+    "percent_covered": 69.92219160317718,
+    "percent_covered_display": "70",
+    "missing_lines": 4994,
     "excluded_lines": 41,
-    "num_branches": 6186,
-    "num_partial_branches": 1121,
-    "covered_branches": 3737,
-    "missing_branches": 2449,
-    "percent_statements_covered": 72.52687588228906,
-    "percent_branches_covered": 60.41060459101196
+    "num_branches": 6196,
+    "num_partial_branches": 1144,
+    "covered_branches": 3768,
+    "missing_branches": 2428,
+    "percent_statements_covered": 72.97619047619047,
+    "percent_branches_covered": 60.81342801807617
   },
   "target_100_percent_reached": false,
   "largest_remaining_gaps": [
@@ -81,7 +76,7 @@
       "file": "bot.py",
       "missing_lines": 197,
       "missing_branches": 85,
-      "line_percent": 71.37
+      "line_percent": 71.41
     },
     {
       "file": "handlers/features.py",
@@ -102,12 +97,6 @@
       "line_percent": 23.16
     },
     {
-      "file": "handlers/commands_handlers/channel.py",
-      "missing_lines": 134,
-      "missing_branches": 44,
-      "line_percent": 11.26
-    },
-    {
       "file": "handlers/search.py",
       "missing_lines": 134,
       "missing_branches": 57,
@@ -124,6 +113,12 @@
       "missing_lines": 129,
       "missing_branches": 44,
       "line_percent": 61.72
+    },
+    {
+      "file": "core/services/filestore.py",
+      "missing_lines": 128,
+      "missing_branches": 57,
+      "line_percent": 72.53
     },
     {
       "file": "repositories/media.py",
@@ -150,12 +145,6 @@
       "line_percent": 75.11
     },
     {
-      "file": "handlers/channel.py",
-      "missing_lines": 115,
-      "missing_branches": 46,
-      "line_percent": 68.32
-    },
-    {
       "file": "core/cache/redis_cache.py",
       "missing_lines": 113,
       "missing_branches": 36,
@@ -174,21 +163,26 @@
       "line_percent": 47.37
     },
     {
-      "file": "core/services/filestore.py",
-      "missing_lines": 109,
-      "missing_branches": 44,
-      "line_percent": 76.81
-    },
-    {
       "file": "handlers/indexing.py",
       "missing_lines": 103,
       "missing_branches": 47,
       "line_percent": 41.14
+    },
+    {
+      "file": "handlers/channel.py",
+      "missing_lines": 97,
+      "missing_branches": 40,
+      "line_percent": 72.83
+    },
+    {
+      "file": "handlers/commands_handlers/bot_settings.py",
+      "missing_lines": 97,
+      "missing_branches": 63,
+      "line_percent": 78.1
     }
   ],
   "historical_execution_imported": true,
-  "historical_execution_policy": "Only retained round-15 execution on start/end/current SHA256-matching files is imported; missing earlier raw coverage is not reconstructed.",
-  "historical_round15_evidence": "round15-filters-connections.json",
+  "historical_round16_evidence": "round16-filestore.json",
   "historical_baseline": {
     "date": "2026-10-29",
     "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",

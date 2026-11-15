@@ -1,16 +1,15 @@
 # QA evidence and remaining coverage
 
-> **Last bounded round (2026-11-15): 1,581 tests and 25 live checks passed.**
-> See [round 16](#bounded-qa-round-16--file-store-links-and-batch-retrieval-2026-11-15).
-> Fresh current coverage: **70.71% lines / 58.03% branches**. Including retained,
-> source-matched round-15 execution: **72.53% / 60.41%**. Earlier dated sections
-> remain historical.
+> **Latest follow-up (2026-11-15): 1,602 tests and 11 live checks passed.**
+> See [round 17](#bounded-qa-round-17--channel-configuration-and-legacy-compatibility-2026-11-15).
+> Fresh current coverage: **70.92% lines / 58.05% branches**. Including retained,
+> source-matched history: **72.98% lines / 60.81% branches**. Earlier sections remain historical.
 
-Latest continuation: file-store links and batch retrieval, including the
-operator-approved compatibility policy for old unsigned source ranges.
-Configured admin/owner bypasses and operator diagnostics remain, with two
-misleading messages corrected. Whole-bot 100% remains open. This round is
-complete; wait for the operator's next `continue` before selecting another scope.
+Latest continuation: consistent indexing configuration and batch-only File Channels.
+Admin/owner bypasses, public source membership checks and existing limits remain.
+The operator chose configured sources for normal-user legacy links. Whole-bot
+100% remains open. This follow-up is complete; wait for `continue` before starting
+another feature scope. The proposed next scope remains broadcasting and recovery.
 
 Historical baseline: QA date 2026-10-29, application source `850bc31`.
 The operator authorized all supplied MongoDB copies, extra commented sources,
@@ -1824,3 +1823,77 @@ very large batch throughput, production load, cloud restore and a validated
 release image. No manifest byte-size budget or production-scale load acceptance
 is claimed. No new product feature/default was added. Stop here until `continue`;
 select the next bounded scope then.
+
+
+## Bounded QA round 17 — channel configuration and legacy compatibility (2026-11-15)
+
+**Completed: 1,602 tests passed**, zero failures/errors/skips, with 22 existing
+warnings. There are 21 new regressions: nine File Channels/public-source cases and
+12 registry cases. Four File Channels cases failed against the old parser; all
+41 related source/command cases and 126 broader settings/cache cases passed after
+fixes. Final complete run: 35.51 seconds. Compile, undefined-name Ruff and
+`pip check` passed. Source: `a6277d6`; [sanitized evidence](round17-channel-settings.json).
+
+| Fix | Commit | Result |
+|---|---|---|
+| BUG-141 | `b5cb803` | Normalize File Channels lists and environment forms; normal users' old URLs work for file-only sources. |
+| BUG-142 / CACHE-031 | `a6277d6` | Commands/settings share the indexing registry; fresh source authorization and restart-safe disable/removal. |
+
+The operator clarified the intended split: indexing controls enable automatic
+indexing; File Channels adds batch-only sources; indexing sources also support
+batch links. Public File Store permits source-member creators outside either
+list. Normal users' unsigned old URLs must still name a source in either list;
+the operator explicitly rejected unrestricted access to all bot-readable chats.
+Configured admin/owner bypasses are retained. Existing opaque grants remain valid
+independently of source-list edits. Existing processing limits/defaults are unchanged.
+
+The environment retains normal settings precedence: CHANNELS seeds the stored
+setting on initial setup; legacy stored IDs seed missing registry entries. The
+current enabled/disabled registry wins thereafter. Indexing Channels reads/writes
+that registry rather than a second list. Removing a channel persists enabled=false
+and keeps its history, so stale bootstrap values cannot revive it. The original
+startup-import diagnostic moved with the import code; other existing diagnostics
+remain. No destructive data migration or broad Redis clearing is required.
+
+**11 live checks passed** with the QA bot, refreshed admin session, ordinary
+account and declared QA channels. The refreshed admin session authenticated;
+all three supplied human sessions authenticated in preflight. Real `/add_channel`,
+`/remove_channel`, `/toggle_channel` and new human channel posts exercised actual
+automatic indexing. Settings edits used the real settings service with configuration
+sync/handler refresh; this is not a claim of a new end-to-end settings-keyboard pass.
+The original legacy URL delivered to the ordinary account after File Channels was
+saved as a list, without creating an indexing entry. A source in both lists indexed
+normally. Indexing-source batch retrieval needed no File Channels entry. Removal,
+stale bootstrap import, toggles and replacement of the active set behaved correctly.
+
+For public creation outside both lists, the source-member admin session temporarily
+lost its configured QA admin bypass inside the runtime. Telegram verified its real
+membership; its new stored grant delivered to the ordinary recipient. No Telegram
+roles or memberships changed. Unconfigured old links, including log-channel ranges,
+remained denied even with Public File Store enabled. The initial import-path runner
+failure happened before Telegram work. A separate harness attempt posted through
+the bot, which existing indexing deliberately skips; all nine owned messages were
+cleaned. The accepted run uses human posts. Failed attempts are excluded from coverage.
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Fresh automated suite | 66.23% | 54.94% | 63.40% |
+| Fresh automated + current live | 70.92% | 58.05% | 67.69% |
+| Current + source-matched retained history | 72.98% | 60.81% | 69.92% |
+
+The denominator retains all **122 tracked application/operator Python files**,
+**18,480 statements** and **6,196 branches**.
+Current automated/live shards match start/end/current SHA256. Retained round-16
+accepted history contributes only 116 unchanged files; six changed files are
+discarded. No execution is remapped and no unexecuted file is removed. Whole-bot
+100% remains open. Raw coverage and provenance are retained privately.
+
+Runtime: mounted current source/venv on the Python 3.13.7 / wzgram 3.1.7 fixture;
+no deployment image was built. MongoDB and cache/state Redis were disposable local
+services without host ports. No Atlas or production service/configuration was
+changed. Final cleanup confirmed **51 owned messages absent**, zero remaining and
+no membership/role changes. Disposable services/volumes and QA bot-session files
+were removed; original server services remained running. Remaining gates include
+uncovered branches, broader settings-UI permutations, production load/restore and
+release-image acceptance. Stop until `continue`; next proposed scope: broadcasting
+and recovery.
