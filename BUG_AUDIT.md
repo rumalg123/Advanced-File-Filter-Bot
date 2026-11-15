@@ -152,6 +152,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-136 | Medium | Fixed | Premium batch range consistency | Premium commands retain a hard-coded 10,000-message cap, reject inclusive single-item ranges and compare source spelling instead of resolved identity. | Use the existing configured maximum, preserve single-item ranges, and resolve both endpoints before storing a trusted source grant. |
 
+| BUG-137 | Medium | Fixed | Premium batch privileged access | Dedicated premium-batch policy rejects configured admins despite their explicit bot-wide bypass. | Preserve configured admin/owner access across premium and global feature states while leaving normal-user policy unchanged. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -444,3 +446,8 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   single-message ranges and equivalent public/private source notation. Nine
   focused range cases passed; forty related authorization/command cases passed.
   The message-order diagnostic now correctly describes strictly reversed bounds.
+
+- **BUG-137 fixed:** configured admins retain premium batch access even when
+  their own premium status is inactive. Thirty-two policy combinations and eight
+  related existing access/quota cases passed. Ordinary-user premium policy is
+  unchanged, including rejection of premium-only links in global free mode.

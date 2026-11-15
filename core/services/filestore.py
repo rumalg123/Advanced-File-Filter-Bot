@@ -478,6 +478,9 @@ class FileStoreService:
         Premium batch links now require global premium to be enabled
         """
         correlation_id = f"user_{user_id}_batch_{batch_link.id}"
+        if user_id in (getattr(self.config, 'ADMINS', []) or []):
+            logger.info("Privileged batch access granted for user %s", user_id)
+            return True, ""
 
         # Premium batch link check
         if batch_link.premium_only:
