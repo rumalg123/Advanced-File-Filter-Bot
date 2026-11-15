@@ -70,8 +70,8 @@ class BotSettingsHandler(BaseHandler):
         """Show settings menu with numbered page navigation"""
         settings = await self.settings_service.get_all_settings()
 
-        # Get all setting keys
-        all_keys = list(settings.keys())
+        # Sort by the labels operators see, independently of storage order.
+        all_keys = sorted(settings, key=lambda key: (self._get_display_name(key).casefold(), key))
         total_settings = len(all_keys)
         settings_per_page = 8
         total_pages = max(1, (total_settings + settings_per_page - 1) // settings_per_page)
@@ -309,6 +309,7 @@ class BotSettingsHandler(BaseHandler):
 
         text = (
             f"⚙️ <b>Setting: {self._get_display_name(key)}</b>\n\n"
+            f"🔑 <b>Configuration Key:</b> <code>{html.escape(key)}</code>\n"
             f"📝 <b>Description:</b> {description}\n"
             f"🔧 <b>Type:</b> <code>{setting_type}</code>\n"
             f"📌 <b>Current Value:</b> <code>{current_display}</code>\n"
@@ -833,77 +834,73 @@ class BotSettingsHandler(BaseHandler):
             os.execl(sys.executable, sys.executable, *sys.argv)
 
     def _get_display_name(self, key: str) -> str:
-        """Get shortened display name for settings"""
-        # Map long names to shorter versions
+        """Return a concise, purpose-specific label for the settings menu."""
         display_map = {
-            'USE_CAPTION_FILTER': 'Caption Filter',
-            'FEATURE_SAVED_SEARCH_ALERTS': 'Saved Alerts',
+            'PORT': 'Web Server Port',
+            'CACHE_TIME': 'Search Cache TTL (sec)',
+            'USE_CAPTION_FILTER': 'Search File Captions',
+            'FEATURE_SAVED_SEARCH_ALERTS': 'Saved Search Alerts',
             'FEATURE_FAVORITES': 'Favorites',
             'FEATURE_ADVANCED_SEARCH': 'Advanced Search',
-            'FEATURE_INDEXED_MEDIA_SEARCH': 'Indexed Search',
-            'FEATURE_RECOMMENDATION_FEEDBACK': 'Rec Feedback',
+            'FEATURE_RECOMMENDATION_FEEDBACK': 'Recommendation Feedback',
             'FEATURE_FILE_REPORTS': 'File Reports',
-            'FEATURE_SEARCH_AUTOCOMPLETE': 'Autocomplete',
-            'FEATURE_DUPLICATE_GROUPING': 'Group Variants',
+            'FEATURE_SEARCH_AUTOCOMPLETE': 'Search Autocomplete',
+            'FEATURE_DUPLICATE_GROUPING': 'Group File Variants',
             'FEATURE_REQUEST_TRACKING': 'Request Tracking',
             'FEATURE_RECENT_FILES': 'Recent Files',
-            'FEATURE_RECOMMENDATION_EXPLANATIONS': 'Rec Reasons',
+            'FEATURE_RECOMMENDATION_EXPLANATIONS': 'Recommendation Reasons',
+            'FEATURE_INDEXED_MEDIA_SEARCH': 'Indexed Media Search',
             'FEATURE_CONTENT_DASHBOARD': 'Content Dashboard',
-            'FEATURE_CANONICAL_MEDIA_METADATA': 'Canonical Metadata',
-            'FEATURE_QUOTA_DELIVERY_LEDGER': 'Quota Ledger',
-            'PROCESSING_DURABLE_INDEXING': 'Durable Indexing',
-            'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': 'Durable Alerts',
-            'DATABASE_GLOBAL_OWNER_REGISTRY': 'Media Owners',
-            'DISABLE_PREMIUM': 'Disable Premium',
-            'DISABLE_FILTER': 'Disable Filter',
-            'PUBLIC_FILE_STORE': 'Public Store',
-            'KEEP_ORIGINAL_CAPTION': 'Keep Caption',
-            'MESSAGE_DELETE_SECONDS': 'Auto Delete',
-            'NON_PREMIUM_DAILY_LIMIT': 'Daily Limit',
-            'PREMIUM_DURATION_DAYS': 'Premium Days',
-            'FILE_STORE_CHANNEL': 'File Channels',
-            'CUSTOM_FILE_CAPTION': 'File Caption',
-            'BATCH_FILE_CAPTION': 'Batch Caption',
-            'SUPPORT_GROUP_USERNAME': 'Support User',
-            'INDEX_REQ_CHANNEL': 'Index Channel',
-            'DELETE_CHANNEL': 'Delete Channel',
-            'AUTH_CHANNEL': 'Force Sub Channels',
-            'AUTH_GROUPS': 'Force Sub Groups',
+            'DATABASE_GLOBAL_OWNER_REGISTRY': 'Multi-DB File Ownership',
+            'FEATURE_CANONICAL_MEDIA_METADATA': 'Media Quality Metadata',
+            'FEATURE_QUOTA_DELIVERY_LEDGER': 'Delivery Quota Ledger',
+            'PROCESSING_DURABLE_INDEXING': 'Persistent Indexing Jobs',
+            'PROCESSING_DURABLE_SAVED_SEARCH_ALERTS': 'Persistent Alert Jobs',
+            'ADMINS': 'Bot Admin Users',
+            'CHANNELS': 'Indexing Channels',
+            'AUTH_USERS': 'Force-Sub Exempt Users',
+            'AUTH_CHANNEL': 'Force-Sub Channels',
+            'AUTH_GROUPS': 'Force-Sub Groups',
             'FORCE_SUB_INVITE_EXPIRE_MINUTES': 'Invite Expiry (min)',
             'FORCE_SUB_INVITE_MEMBER_LIMIT': 'Invite Member Limit',
-            'MAX_BTN_SIZE': 'Max Buttons',
-            'UPSTREAM_REPO': 'Upstream Repo',
-            'UPSTREAM_BRANCH': 'Upstream Branch',
-            'SUPPORT_CHAT_ID': 'Support Chat',
-            'DATABASE_NAME': 'DB Name',
-            'DATABASE_URI': 'DB URI',
-            'LOG_CHANNEL': 'Log Channel',
-            'MAIN_CHANNEL': 'Main Channel',
-            'SUPPORT_GROUP': 'Support Group',
-            'PICS': 'Random Pics',
-            'REQ_CHANNEL': 'Request Channel',
-            'SUPPORT_GROUP_URL': 'Support URL',
-            'SUPPORT_GROUP_NAME': 'Support Name',
-            'SUPPORT_GROUP_ID': 'Support ID',
-            'PAYMENT_LINK': 'Payment Link',
-            'USE_ORIGINAL_CAPTION_FOR_BATCH': 'Batch Original Caption',
-            'REQUEST_PER_DAY': "Requests per day",
-            'REQUEST_WARNING_LIMIT': "Request warning limit",
-            'AUTO_DELETE_MESSAGE': 'Auto Delete Msg',
-            'START_MESSAGE': 'Start Message',
-            'PREMIUM_PRICE': 'Premium Price',
-            'DATABASE_SIZE_LIMIT_GB': 'DB Size Limit (GB)',
-            'DATABASE_AUTO_SWITCH': 'DB Auto Switch',
-            'DATABASE_MAX_FAILURES': 'Circuit Max Failures',
-            'DATABASE_RECOVERY_TIMEOUT': 'Circuit Recovery Time',
-            'DATABASE_HALF_OPEN_CALLS': 'Circuit Half-Open Calls',
-            'PORT':'Port',
-            'CACHE_TIME':'Cache Time',
-            'ADMINS': 'Admin Users',
-            'CHANNELS': 'Indexing Channels',
-            'AUTH_USERS': 'Authorized Users',
-            'REDIS_URI': 'Redis URI',
-            'REQUEST_ONLY_FOR_PREMIUM': 'Request Only for Premium'
+            'DELETE_CHANNEL': 'File Deletion Channel',
+            'MAX_BTN_SIZE': 'Search Results per Page',
+            'UPSTREAM_REPO': 'Update Repository',
+            'UPSTREAM_BRANCH': 'Update Branch',
+            'REDIS_URI': 'Cache Redis URI',
+            'DATABASE_SIZE_LIMIT_GB': 'DB Switch Size (GiB)',
+            'DATABASE_AUTO_SWITCH': 'Auto-Switch Media DB',
+            'DATABASE_MAX_FAILURES': 'DB Failure Threshold',
+            'DATABASE_RECOVERY_TIMEOUT': 'DB Recovery Wait (sec)',
+            'DATABASE_HALF_OPEN_CALLS': 'DB Recovery Probe Calls',
+            'PUBLIC_FILE_STORE': 'Public Link Creation',
+            'LOG_CHANNEL': 'Bot Log Channel',
+            'INDEX_REQ_CHANNEL': 'Index Requests Channel',
+            'FILE_STORE_CHANNEL': 'File Channels',
+            'CUSTOM_FILE_CAPTION': 'File Caption Template',
+            'BATCH_FILE_CAPTION': 'Batch Caption Template',
+            'KEEP_ORIGINAL_CAPTION': 'Keep Original Captions',
+            'USE_ORIGINAL_CAPTION_FOR_BATCH': 'Original Batch Captions',
+            'WORKERS': 'Telegram Update Workers',
+            'DISABLE_PREMIUM': 'Disable Premium Rules',
+            'DISABLE_FILTER': 'Disable Filters/Connections',
+            'PREMIUM_DURATION_DAYS': 'Default Premium Days',
+            'NON_PREMIUM_DAILY_LIMIT': 'Daily File Limit',
+            'PREMIUM_PRICE': 'Premium Price Text',
+            'MESSAGE_DELETE_SECONDS': 'Auto-Delete Delay (sec)',
+            'DATABASE_URI': 'Primary MongoDB URI',
+            'DATABASE_NAME': 'Primary Database Name',
+            'PICS': 'Welcome Photo URLs',
+            'REQ_CHANNEL': 'Content Requests Channel',
+            'SUPPORT_GROUP_URL': 'Support Button URL',
+            'SUPPORT_GROUP_NAME': 'Support Button Label',
+            'SUPPORT_GROUP_ID': 'Request Group ID',
+            'PAYMENT_LINK': 'Payment Page URL',
+            'REQUEST_ONLY_FOR_PREMIUM': 'Premium-Only Requests',
+            'REQUEST_PER_DAY': 'Daily Request Limit',
+            'REQUEST_WARNING_LIMIT': 'Request Warning Limit',
+            'AUTO_DELETE_MESSAGE': 'Auto-Delete Notice Template',
+            'START_MESSAGE': 'Welcome Message Template',
         }
 
-        return display_map.get(key, key)
+        return display_map.get(key, key.replace('_', ' ').title())

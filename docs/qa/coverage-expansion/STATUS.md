@@ -1,14 +1,14 @@
 # QA evidence and remaining coverage
 
-> **Latest follow-up (2026-11-15): 1,602 tests and 11 live checks passed.**
-> See [round 17](#bounded-qa-round-17--channel-configuration-and-legacy-compatibility-2026-11-15).
-> Fresh current coverage: **70.92% lines / 58.05% branches**. Including retained,
-> source-matched history: **72.98% lines / 60.81% branches**. Earlier sections remain historical.
+> **Latest cleanup (2026-11-15): 1,606 tests passed.**
+> See [round 19](#bounded-qa-round-19--remove-unused-settings-controls-2026-11-15).
+> Current automated plus source-matched retained coverage: **73.06% lines / 61.06% branches**.
+> No new live pass was run for the four-control removal; earlier live results
+> remain dated historical evidence.
 
-Latest continuation: consistent indexing configuration and batch-only File Channels.
-Admin/owner bypasses, public source membership checks and existing limits remain.
-The operator chose configured sources for normal-user legacy links. Whole-bot
-100% remains open. This follow-up is complete; wait for `continue` before starting
+Latest continuation: remove unused settings controls, retaining their stored data.
+The 65 active settings remain alphabetically ordered and unchanged. Whole-bot
+100% remains open. This cleanup is complete; wait for `continue` before starting
 another feature scope. The proposed next scope remains broadcasting and recovery.
 
 Historical baseline: QA date 2026-10-29, application source `850bc31`.
@@ -1897,3 +1897,99 @@ were removed; original server services remained running. Remaining gates include
 uncovered branches, broader settings-UI permutations, production load/restore and
 release-image acceptance. Stop until `continue`; next proposed scope: broadcasting
 and recovery.
+
+
+## Bounded QA round 18 — settings menu order and explanations (2026-11-15)
+
+**Completed: 1,605 tests passed**, zero failures/errors/skips, with 22 existing
+warnings. Three new regressions cover every sorted page without dropped/duplicate
+settings, current help for an existing database record, and detail/Back navigation.
+The full run took 39.60 seconds. Compile, undefined-name Ruff, `pip check`,
+metadata invariance and source/provenance checks passed. Source: `f9e50d8`;
+[sanitized evidence](round18-settings-menu.json).
+
+**BUG-143 fixed** in `f9e50d8`. All 69 labels and descriptions were reviewed
+against their current consumers. Index Requests Channel identifies the source
+indexing-approval inbox, while Content Requests Channel identifies content review.
+Search Results per Page describes the file-result limit rather than total buttons.
+Public Link Creation explains creator access independently of existing-link access.
+Worker counts, database size units, premium defaults, support buttons and optional
+features now have purpose-specific labels/help. Details expose the configuration
+key so operators can match labels to deployment settings. Four inactive legacy
+fields are identified instead of implying active functionality.
+
+AST comparison confirmed every setting key, type, default, bound and category is
+unchanged; only metadata descriptions changed. Existing callback identifiers,
+protected settings, operator diagnostics and configured access bypasses remain.
+Stored older descriptions need no rewrite because detail rendering uses current
+metadata. Reopen old Telegram menus to refresh labels and page positions. No
+migration, settings reset, new product feature or Redis flush is required.
+
+**Ten live checks passed** using the refreshed primary-admin session and the QA
+bot, exclusively in their private conversation. Actual Telegram callbacks traversed
+all nine pages: each of the 69 controls appeared once in visible alphabetical
+order. Six selected settings (INDEX_REQ_CHANNEL, REQ_CHANNEL, MAX_BTN_SIZE,
+FILE_STORE_CHANNEL, PUBLIC_FILE_STORE and SUPPORT_CHAT_ID) opened their current
+description/configuration key and returned to the correct page with Back. Legacy
+labels and the worker label were verified; Close worked. Before/after comparison
+confirmed navigation changed no setting values. This pass did not exercise edits,
+saves, all Boolean switches or every other feature workflow.
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Fresh automated suite | 66.28% | 55.07% | 63.47% |
+| Fresh automated + current live | 70.24% | 57.23% | 66.97% |
+| Current + source-matched retained history | 73.04% | 60.99% | 70.01% |
+
+The denominator retains all **122 tracked application/operator Python files**,
+**18,480 statements** and **6,196 branches**.
+Both current passing shards match start/end/current SHA256. Retained round-17
+accepted history contributes only 120 unchanged files; two changed files are
+discarded. No execution is remapped and no unexecuted file is removed. Whole-bot
+100% remains open. Raw coverage and provenance are retained privately.
+
+Runtime: mounted current source and the retained Python 3.13.7 / wzgram 3.1.7 QA
+venv on the minimal runtime fixture; no deployment image was built. MongoDB and
+cache/state Redis were disposable local services without host ports. No Atlas or
+production service/configuration was changed. All **four owned messages** were
+confirmed absent, zero remaining, with no Telegram membership/role changes. QA
+services/volumes and bot-session files were removed; original server services
+stayed running. Remaining gates include uncovered branches, broader edit/save
+permutations, production load/restore and deployment-image acceptance. Stop until
+`continue`; next proposed scope: broadcasting and recovery.
+
+
+## Bounded QA round 19 — remove unused settings controls (2026-11-15)
+
+**Completed: 1,606 tests passed**, zero failures/errors/skips, with 22 existing
+warnings, in 40.15 seconds. BUG-144 is fixed in `638a08c`;
+[sanitized evidence](round19-retired-settings.json). Four inactive entries are
+removed from active metadata and labels: SUPPORT_CHAT_ID, SUPPORT_GROUP,
+SUPPORT_GROUP_USERNAME and MAIN_CHANNEL. Existing MongoDB rows remain untouched;
+initialization no longer seeds them. All 65 active definitions are unchanged.
+
+The SDK-backed page regression renders every active setting once in alphabetical
+order across nine pages. A new regression loads old stored rows and invokes all
+four retired view/edit/reset controls plus direct writes: no edit session or
+repository mutation occurs, and stored values remain intact. Active support-button,
+request-group and force-subscription settings remain available. Existing admin/
+owner bypasses, diagnostics and limits are unchanged. No migration or Redis flush
+is required; reopen /bsetting after deploying the code to refresh an old menu.
+
+Compile, undefined-name Ruff, pip check, metadata comparison and source/provenance
+checks passed. Current automated coverage is **66.31% lines /
+55.13% branches**. Including source-matched
+retained execution gives **73.06% lines / 61.06% branches** (70.05% combined).
+All 122 tracked non-test Python files remain in the denominator: 18,480 statements
+and 6,196 branches. The current passing shard matches start/end/current SHA256;
+retained round-18 accepted history contributes only 120 unchanged files, discarding
+two changed files. No execution is remapped and no unexecuted file is removed.
+
+No new Telegram pass was run for this small retirement; the ten round-18 live
+checks remain historical, not current acceptance. Tests used disposable local
+MongoDB/cache/state Redis on the mounted Python 3.13.7 / wzgram 3.1.7 runtime.
+No host ports, Atlas, Telegram accounts or production services/configuration were
+used. All three disposable services/volumes were removed; original server services
+stayed running. No deployment image was built. Whole-bot 100%, broader edit/save
+permutations, production load/restore and release-image acceptance remain open.
+Stop until continue; next proposed scope: broadcasting and recovery.

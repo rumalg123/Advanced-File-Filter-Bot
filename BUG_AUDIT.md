@@ -153,6 +153,9 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-141 | High | Fixed | File-store source setting forms | FILE_STORE_CHANNEL is loaded as a list, but legacy authorization stringifies it, breaking normal users' old links for configured file-only channels. | Normalize stored lists and environment forms, retain both configured source types and privileged bypasses; 41 focused tests passed. |
 | BUG-142 | High | Fixed | Conflicting indexing configuration | Commands update indexed_channels independently of CHANNELS settings; startup re-enables configured sources and removed channels can remain authorized through stale config. | Use the persisted registry for every indexing control and legacy-source check, seed only missing bootstrap IDs, preserve explicit disable/remove decisions and refresh handlers after settings edits. Real-Mongo regressions and all 1,602 tests passed. |
+| BUG-143 | Medium | Fixed | Settings menu discoverability and meaning | Settings follow metadata insertion order, labels confuse request inboxes with indexing and result counts with button counts, and terse help hides scope, units and unused legacy fields. | Sort by visible labels across pages; give all 69 controls accurate labels/help, expose the configuration key, identify inactive legacy settings and retain callback keys and setting defaults. All 1,605 tests passed. |
+
+| BUG-144 | Low | Fixed | Inactive settings controls | Four unused legacy fields still occupy the settings menu and accept meaningless edits. | Remove their active metadata and labels, retain stored historical rows, reject old view/edit/reset controls and preserve all 65 active definitions. All 1,606 tests passed. |
 
 ## Group search follow-up, 2026-10-30
 
@@ -197,23 +200,20 @@ alignment before using the new default. No production service was accessed.
 
 ## Current QA, 2026-11-15
 
-The channel-configuration follow-up passed **1,602 tests**, zero failures/errors/
-skips, and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-141 restores
-legacy links for saved File Channels lists. BUG-142 / CACHE-031 unify indexing
-commands and settings on the persisted registry; removal/disable survives restart.
-File Channels adds batch-only sources without enabling indexing. Public creators
-use current source membership, independently of either source list. Normal users'
-unsigned old links still require a source in either list, as the operator chose.
-Configured admin/owner bypasses and existing limits remain.
+The retired-settings cleanup passed **1,606 tests**, zero failures/errors/skips,
+on Python 3.13.7 / wzgram 3.1.7. BUG-144 removes SUPPORT_CHAT_ID, SUPPORT_GROUP,
+SUPPORT_GROUP_USERNAME and MAIN_CHANNEL from active metadata and menu labels.
+All **65 active settings** remain alphabetically ordered and unchanged. Stored
+retired rows are retained; old view/edit/reset controls and writes are rejected.
+No migration, settings reset or Redis clearing is needed.
 
-Fresh current automated + live coverage is **70.92% lines / 58.05% branches**;
-including source-matched retained history gives **72.98% lines / 60.81% branches**.
-All 122 tracked application/operator Python files remain in the denominator;
-changed historical execution is discarded. All **51 final-pass messages** were
-confirmed absent, with no Telegram membership/role changes. No Atlas or production
-services/configuration were changed. Whole-bot 100% and production acceptance
-remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md) and
-[round 17 evidence](docs/qa/coverage-expansion/round17-channel-settings.json).
+Current automated plus source-matched retained coverage is **73.06% lines / 61.06% branches**
+across all 122 application/operator Python files. Two changed historical files
+are discarded. No new live Telegram pass was run for this small removal; the ten
+round-18 UI checks remain historical. No Atlas or production service/configuration
+was changed. Whole-bot 100% and production acceptance remain open. See
+[the QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 19 evidence](docs/qa/coverage-expansion/round19-retired-settings.json).
 
 ## Verification log
 
@@ -513,3 +513,37 @@ indexing, and an indexing source worked without File Channels. Source membership
 allowed public creation outside both lists; unconfigured legacy/log sources
 remained blocked. Final cleanup confirmed 51 owned messages absent. No production
 changes or migration were performed. See the round-17 QA evidence.
+
+
+## Settings menu presentation follow-up (2026-11-15)
+
+**BUG-143 fixed:** /bsetting sorts by visible names rather than stored key order.
+Index Requests Channel and Content Requests Channel identify their distinct
+approval inboxes; Search Results per Page describes MAX_BTN_SIZE accurately.
+Public Link Creation, worker counts, units, premium defaults and support-button
+fields now explain their purpose. Four inactive legacy settings are explicitly
+identified. All 69 metadata descriptions were reviewed against current consumers.
+Detail views display the original configuration key. Existing defaults, types,
+bounds, categories, callback identifiers and access bypasses are unchanged.
+Three new page/detail/navigation regressions and all 1,605 tests passed; live
+Telegram acceptance is recorded in the current QA evidence. No migration or
+Redis clearing is required.
+
+Live BUG-143 acceptance passed all ten checks: all 69 settings appeared exactly
+once in alphabetical order over nine pages; six selected detail/Back paths and
+Close worked. The audit confirmed clear legacy labels and worker naming, with
+no setting values changed by navigation. Four owned messages were confirmed
+absent after cleanup. See round 18 for complete sanitized evidence.
+
+
+## Retired settings cleanup (2026-11-15)
+
+**BUG-144 fixed:** SUPPORT_CHAT_ID, SUPPORT_GROUP, SUPPORT_GROUP_USERNAME and
+MAIN_CHANNEL are removed from active metadata and labels. Existing MongoDB rows
+are retained and ignored by the menu; new installations no longer seed these
+fields. Existing guards reject their old view/edit/reset callbacks and writes.
+All 65 remaining definitions are unchanged and stay alphabetically ordered.
+The full suite passed 1,606 tests, including a new regression covering stored
+legacy rows and all four retired controls. No data migration or Redis clearing
+is required. The previous ten live UI checks remain dated round-18 evidence;
+no new Telegram run was performed for this small removal.

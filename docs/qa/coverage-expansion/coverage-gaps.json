@@ -13,9 +13,9 @@
   },
   {
     "file": "bot.py",
-    "missing_lines": 197,
-    "missing_branches": 85,
-    "line_percent": 71.41
+    "missing_lines": 195,
+    "missing_branches": 83,
+    "line_percent": 71.7
   },
   {
     "file": "handlers/features.py",
@@ -92,7 +92,7 @@
   {
     "file": "handlers/commands_handlers/user.py",
     "missing_lines": 113,
-    "missing_branches": 55,
+    "missing_branches": 54,
     "line_percent": 58.91
   },
   {
@@ -114,12 +114,6 @@
     "line_percent": 72.83
   },
   {
-    "file": "handlers/commands_handlers/bot_settings.py",
-    "missing_lines": 97,
-    "missing_branches": 63,
-    "line_percent": 78.1
-  },
-  {
     "file": "core/services/features.py",
     "missing_lines": 90,
     "missing_branches": 45,
@@ -130,6 +124,12 @@
     "missing_lines": 87,
     "missing_branches": 66,
     "line_percent": 86.26
+  },
+  {
+    "file": "handlers/commands_handlers/bot_settings.py",
+    "missing_lines": 85,
+    "missing_branches": 53,
+    "line_percent": 80.81
   },
   {
     "file": "handlers/commands_handlers/channel.py",
@@ -258,16 +258,16 @@
     "line_percent": 80.33
   },
   {
-    "file": "core/services/bot_settings.py",
-    "missing_lines": 35,
-    "missing_branches": 19,
-    "line_percent": 84.85
-  },
-  {
     "file": "scripts/profile_media_search.py",
     "missing_lines": 34,
     "missing_branches": 13,
     "line_percent": 69.09
+  },
+  {
+    "file": "core/services/bot_settings.py",
+    "missing_lines": 33,
+    "missing_branches": 17,
+    "line_percent": 85.71
   },
   {
     "file": "core/services/connection.py",

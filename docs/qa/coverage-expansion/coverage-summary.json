@@ -1,62 +1,47 @@
 {
   "date": "2026-11-15",
-  "application_commit": "a6277d6eaf681584929c421492d1400ffe32d01b",
+  "application_commit": "638a08cfb633440e05ddda7d067185c3719107fc",
   "tests": {
-    "passed": 1602,
+    "passed": 1606,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "warnings": 22,
-    "new": 21,
-    "seconds": 35.51,
+    "new": 1,
+    "seconds": 40.15,
     "new_cases_by_module": {
-      "tests.test_filestore_channel_settings": 9,
-      "tests.test_channel_configuration": 12
+      "tests.test_settings_menu_presentation": 1
     }
   },
   "application_files": 122,
   "denominator_matches_all_tracked_non_test_python": true,
   "automated": {
-    "covered_lines": 12240,
+    "covered_lines": 12254,
     "num_statements": 18480,
-    "percent_covered": 63.397633327929974,
-    "percent_covered_display": "63",
-    "missing_lines": 6240,
+    "percent_covered": 63.50299886529421,
+    "percent_covered_display": "64",
+    "missing_lines": 6226,
     "excluded_lines": 41,
     "num_branches": 6196,
-    "num_partial_branches": 1014,
-    "covered_branches": 3404,
-    "missing_branches": 2792,
-    "percent_statements_covered": 66.23376623376623,
-    "percent_branches_covered": 54.93867010974822
-  },
-  "automated_plus_current_live": {
-    "covered_lines": 13106,
-    "num_statements": 18480,
-    "percent_covered": 67.68925271518884,
-    "percent_covered_display": "68",
-    "missing_lines": 5374,
-    "excluded_lines": 41,
-    "num_branches": 6196,
-    "num_partial_branches": 1115,
-    "covered_branches": 3597,
-    "missing_branches": 2599,
-    "percent_statements_covered": 70.91991341991341,
-    "percent_branches_covered": 58.05358295674628
+    "num_partial_branches": 1010,
+    "covered_branches": 3416,
+    "missing_branches": 2780,
+    "percent_statements_covered": 66.30952380952381,
+    "percent_branches_covered": 55.13234344738541
   },
   "automated_plus_source_matched_history": {
-    "covered_lines": 13486,
+    "covered_lines": 13502,
     "num_statements": 18480,
-    "percent_covered": 69.92219160317718,
+    "percent_covered": 70.0478197438807,
     "percent_covered_display": "70",
-    "missing_lines": 4994,
+    "missing_lines": 4978,
     "excluded_lines": 41,
     "num_branches": 6196,
-    "num_partial_branches": 1144,
-    "covered_branches": 3768,
-    "missing_branches": 2428,
-    "percent_statements_covered": 72.97619047619047,
-    "percent_branches_covered": 60.81342801807617
+    "num_partial_branches": 1137,
+    "covered_branches": 3783,
+    "missing_branches": 2413,
+    "percent_statements_covered": 73.06277056277057,
+    "percent_branches_covered": 61.055519690122665
   },
   "target_100_percent_reached": false,
   "largest_remaining_gaps": [
@@ -74,9 +59,9 @@
     },
     {
       "file": "bot.py",
-      "missing_lines": 197,
-      "missing_branches": 85,
-      "line_percent": 71.41
+      "missing_lines": 195,
+      "missing_branches": 83,
+      "line_percent": 71.7
     },
     {
       "file": "handlers/features.py",
@@ -153,7 +138,7 @@
     {
       "file": "handlers/commands_handlers/user.py",
       "missing_lines": 113,
-      "missing_branches": 55,
+      "missing_branches": 54,
       "line_percent": 58.91
     },
     {
@@ -175,14 +160,15 @@
       "line_percent": 72.83
     },
     {
-      "file": "handlers/commands_handlers/bot_settings.py",
-      "missing_lines": 97,
-      "missing_branches": 63,
-      "line_percent": 78.1
+      "file": "core/services/features.py",
+      "missing_lines": 90,
+      "missing_branches": 45,
+      "line_percent": 73.61
     }
   ],
   "historical_execution_imported": true,
-  "historical_round16_evidence": "round16-filestore.json",
+  "current_live_run": false,
+  "historical_round18_evidence": "round18-settings-menu.json",
   "historical_baseline": {
     "date": "2026-10-29",
     "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",
