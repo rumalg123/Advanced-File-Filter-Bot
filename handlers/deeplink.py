@@ -439,19 +439,19 @@ class DeepLinkHandler(BaseCommandHandler):
         """Send batch files from a batch ID"""
         user_id = message.from_user.id
 
-        # Get batch data from filestore service
-        batch_data = await self.bot.filestore_service.get_batch_data(client, batch_id)
-
-        if not batch_data:
-            await message.reply_text(ErrorMessageFormatter.format_not_found("Batch") + " or expired")
-            return
-
         # Check access
         owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
         can_access, reason = await self.bot.user_repo.can_retrieve_file(user_id, owner_id)
 
         if not can_access:
             await message.reply_text(ErrorMessageFormatter.format_access_denied(html.escape(reason)))
+            return
+
+        # Get batch data from filestore service
+        batch_data = await self.bot.filestore_service.get_batch_data(client, batch_id)
+
+        if not batch_data:
+            await message.reply_text(ErrorMessageFormatter.format_not_found("Batch") + " or expired")
             return
 
         user = await self.bot.user_repo.get_user(user_id)

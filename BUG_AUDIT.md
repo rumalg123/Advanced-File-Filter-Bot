@@ -154,6 +154,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-137 | Medium | Fixed | Premium batch privileged access | Dedicated premium-batch policy rejects configured admins despite their explicit bot-wide bypass. | Preserve configured admin/owner access across premium and global feature states while leaving normal-user policy unchanged. |
 
+| BUG-138 | Medium | Fixed | Batch metadata cache and downloads | Metadata cache TTL is unused; malformed downloads leak files, invalid JSON shapes reach delivery, and denied users trigger downloads. | Validate JSON rows and configured count, expire immutable cached snapshots, clean temporary files on failure/cancellation, and authorize before downloading. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -451,3 +453,10 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   their own premium status is inactive. Thirty-two policy combinations and eight
   related existing access/quota cases passed. Ordinary-user premium policy is
   unchanged, including rejection of premium-only links in global free mode.
+
+- **BUG-138 fixed:** metadata is restricted to JSON documents and validated
+  rows, within the unchanged configured batch count. Cache lifetime is measured
+  from load rather than extended by every read, copies prevent caller mutation,
+  and temporary files are removed after success, failure or cancellation. Access
+  denial precedes downloads. Nine original regressions failed before the fix;
+  the eleven metadata cases and related quota regression suite passed after it.

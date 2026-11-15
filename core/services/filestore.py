@@ -1,4 +1,6 @@
 import asyncio
+from copy import deepcopy
+import tempfile
 import base64
 import hashlib
 import json
@@ -52,6 +54,7 @@ class FileStoreService:
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
         self.max_batch_cache_size = 100
         self.batch_cache_access_time = {}
+        self.batch_cache_created_at = {}
         self._batch_cache_lock = asyncio.Lock()  # Protect concurrent cache access
 
     async def _auto_delete_message(self, message: Message, delay: int):
@@ -129,6 +132,7 @@ class FileStoreService:
                 for key, _ in sorted_keys[:to_remove]:
                     self.batch_cache.pop(key, None)
                     self.batch_cache_access_time.pop(key, None)
+                    self.batch_cache_created_at.pop(key, None)
 
 
 
@@ -556,50 +560,80 @@ class FileStoreService:
         })
         return True, ""
 
+    @staticmethod
+    def _valid_batch_metadata(data) -> bool:
+        if not isinstance(data, list) or len(data) > settings.processing.max_batch_messages:
+            return False
+        for row in data:
+            if not isinstance(row, dict):
+                return False
+            identifier = row.get('file_id') or row.get('file_identifier')
+            if not isinstance(identifier, str) or not identifier.strip():
+                return False
+            if 'protect' in row and type(row['protect']) is not bool:
+                return False
+            size = row.get('size')
+            if size is not None and (type(size) is not int or size < 0):
+                return False
+            if any(row.get(field) is not None and not isinstance(row[field], str)
+                   for field in ('title', 'caption', 'file_unique_id', 'file_ref')):
+                return False
+        return True
+
     async def get_batch_data(
             self,
             client: Client,
             batch_identifier: str
     ) -> Optional[List[Dict[str, Any]]]:
-        """Retrieve batch data from cache or download"""
-        # Check in-memory cache first
-        if batch_identifier in self.batch_cache:
-            self.batch_cache_access_time[batch_identifier] = time.time()
-            return self.batch_cache[batch_identifier]
-
-        # Try to find file by identifier
+        """Load validated JSON metadata with bounded lifetime and owned temp files."""
+        now = time.monotonic()
+        cached = self.batch_cache.get(batch_identifier)
+        created = self.batch_cache_created_at.get(batch_identifier)
+        if (cached is not None and created is not None and now - created < self.batch_cache_ttl
+                and self._valid_batch_metadata(cached)):
+            self.batch_cache_access_time[batch_identifier] = now
+            return deepcopy(cached)
+        self.batch_cache.pop(batch_identifier, None)
+        self.batch_cache_access_time.pop(batch_identifier, None)
+        self.batch_cache_created_at.pop(batch_identifier, None)
         file = await self.media_repo.find_file(batch_identifier)
         if not file:
             return None
-
-        # Download from telegram using file_id with file processing concurrency control
+        name = (getattr(file, 'file_name', '') or '').lower()
+        mime = (getattr(file, 'mime_type', '') or '').lower()
+        if not name.endswith('.json') and mime not in ('application/json', 'text/json'):
+            logger.warning("Batch metadata source is not a JSON document")
+            return None
+        download_path = file_path = None
         try:
+            descriptor, download_path = tempfile.mkstemp(prefix='affb-batch-', suffix='.json')
+            os.close(descriptor)
             async with semaphore_manager.acquire('file_processing', f'download_{batch_identifier}'):
-                file_path = await telegram_api.call_api(
-                    client.download_media,
-                    file.file_id
-                )
-
+                file_path = await telegram_api.call_api(client.download_media, file.file_id, file_name=download_path)
                 if not file_path:
                     return None
-
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    batch_data = json.load(f)
-
-            # Clean up downloaded file
-            os.remove(file_path)
-
-            # Cache for future use
+                with open(file_path, 'r', encoding='utf-8') as stream:
+                    batch_data = json.load(stream)
+            if not self._valid_batch_metadata(batch_data):
+                logger.warning("Rejected invalid batch metadata for %s", batch_identifier)
+                return None
             if batch_data:
-                self.batch_cache[batch_identifier] = batch_data
-                self.batch_cache_access_time[batch_identifier] = time.time()
+                self.batch_cache[batch_identifier] = deepcopy(batch_data)
+                self.batch_cache_created_at[batch_identifier] = time.monotonic()
+                self.batch_cache_access_time[batch_identifier] = time.monotonic()
                 await self._cleanup_batch_cache()
-
             return batch_data
-
         except Exception as e:
             logger.error(f"Error retrieving batch data: {e}")
             return None
+        finally:
+            for path in {file_path, download_path} - {None}:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                except OSError as e:
+                    logger.warning("Could not remove batch temporary file: %s", e)
 
     async def send_stored_file(
             self,
@@ -668,7 +702,7 @@ class FileStoreService:
             if access_check is not None and not await access_check():
                 break
             # Initialize variables outside try block to avoid uninitialized variable warnings
-            file_id_to_send = file_data.get("file_id", file_data.get("file_identifier"))
+            file_id_to_send = file_data.get("file_id") or file_data.get("file_identifier")
             caption = ""  # Default value
             
             try:
