@@ -1,4 +1,6 @@
 import asyncio
+from copy import deepcopy
+import tempfile
 import base64
 import hashlib
 import json
@@ -22,6 +24,7 @@ from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
+from core.utils.subscription_config import parse_subscription_targets
 from core.utils.helpers import extract_file_ref, parse_media_metadata
 from core.utils.media_factory import MediaFileFactory
 from core.concurrency import semaphore_manager
@@ -29,6 +32,10 @@ from repositories.media import MediaRepository, MediaFile, FileType
 from repositories.batch_link import BatchLinkRepository, BatchLink
 
 logger = get_logger(__name__)
+
+
+class BatchSourceUnavailableError(RuntimeError):
+    """The source range could not be completely verified for quota admission."""
 
 
 class FileStoreService:
@@ -40,7 +47,8 @@ class FileStoreService:
             cache_manager: CacheManager,
             config: Any,
             batch_link_repo: Optional[BatchLinkRepository] = None,
-            task_manager=None
+            task_manager=None,
+            channel_repo=None,
 
     ):
         self.tasks = ServiceTasks(task_manager)
@@ -48,10 +56,12 @@ class FileStoreService:
         self.cache = cache_manager
         self.config = config
         self.batch_link_repo = batch_link_repo
+        self.channel_repo = channel_repo
         self.batch_cache = {}  # In-memory cache for batch files
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
         self.max_batch_cache_size = 100
         self.batch_cache_access_time = {}
+        self.batch_cache_created_at = {}
         self._batch_cache_lock = asyncio.Lock()  # Protect concurrent cache access
 
     async def _auto_delete_message(self, message: Message, delay: int):
@@ -129,6 +139,7 @@ class FileStoreService:
                 for key, _ in sorted_keys[:to_remove]:
                     self.batch_cache.pop(key, None)
                     self.batch_cache_access_time.pop(key, None)
+                    self.batch_cache_created_at.pop(key, None)
 
 
 
@@ -227,12 +238,58 @@ class FileStoreService:
         logger.info(f"Generated link: {link} for file_ref: {identifier}")
         return link
 
+    async def _can_create_source_batch(self, client: Client, user_id: int, chat_id: int) -> bool:
+        """Require an authorized creator for the source channel."""
+        admins = getattr(self.config, 'ADMINS', []) or []
+        if user_id not in admins:
+            if not user_id or not getattr(self.config, 'PUBLIC_FILE_STORE', False):
+                return False
+            try:
+                member = await telegram_api.call_api(client.get_chat_member, chat_id, user_id, chat_id=chat_id)
+                present = member.status in (enums.ChatMemberStatus.OWNER, enums.ChatMemberStatus.ADMINISTRATOR,
+                                            enums.ChatMemberStatus.MEMBER)
+                if member.status == enums.ChatMemberStatus.RESTRICTED:
+                    present = member.is_member is True
+                if not present:
+                    return False
+            except Exception as e:
+                logger.warning("Cannot verify file-store creator in source %s: %s", chat_id, e)
+                return False
+        return True
+
+    async def can_read_legacy_batch(self, client: Client, user_id: int, chat_id: int) -> bool:
+        """Unsigned legacy ranges are restricted to explicitly configured media sources."""
+        if user_id in (getattr(self.config, 'ADMINS', []) or []):
+            return True
+        # Runtime commands change the registry; the boot-time config snapshot
+        # must not keep removed/disabled indexing channels authorized.
+        targets = (parse_subscription_targets(getattr(self.config, 'CHANNELS', []))
+                   if self.channel_repo is None else [])
+        targets.extend(parse_subscription_targets(getattr(self.config, 'FILE_STORE_CHANNEL', [])))
+        for target in targets:
+            try:
+                resolved = int(target)
+            except (ValueError, TypeError):
+                try:
+                    chat = await telegram_api.call_api(client.get_chat, target, chat_id=None)
+                    resolved = chat.id
+                except Exception as e:
+                    logger.warning("Cannot resolve configured legacy batch source %s: %s", target, e)
+                    continue
+            if resolved and resolved == chat_id:
+                return True
+        if self.channel_repo is not None:
+            channel = await self.channel_repo.find_by_id(chat_id, use_cache=False)
+            return bool(channel and channel.enabled is True)
+        return False
+
     async def create_batch_link(
             self,
             client: Client,
             first_msg_link: str,
             last_msg_link: str,
-            protect: bool = False
+            protect: bool = False,
+            created_by: int = 0,
     ) -> Optional[str]:
         """Create batch link for multiple files"""
         first = TelegramLinkParser.parse_link(first_msg_link)
@@ -263,12 +320,26 @@ class FileStoreService:
         f_chat_id = chat_ids[0]
         f_msg_id, l_msg_id = first.message_id, last.message_id
 
-        # Create batch data
-        string = f"{f_msg_id}_{l_msg_id}_{f_chat_id}_{'pbatch' if protect else 'batch'}"
-        b_64 = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
+        if not self.batch_link_repo:
+            logger.error("BatchLinkRepository not initialized - cannot create a batch link")
+            return None
+        if not await self._can_create_source_batch(client, created_by, f_chat_id):
+            return None
+        try:
+            source_message = await telegram_api.call_api(client.get_messages, f_chat_id, f_msg_id, chat_id=f_chat_id)
+            if source_message is None or source_message.empty:
+                return None
+        except Exception as e:
+            logger.warning("Cannot read batch source %s: %s", f_chat_id, e)
+            return None
+        batch_id = f"BL-{uuid.uuid4().hex}"
+        batch = BatchLink(id=batch_id, source_chat_id=f_chat_id,
+                          from_msg_id=f_msg_id, to_msg_id=l_msg_id,
+                          protected=protect, premium_only=False, created_by=created_by)
+        if not await self.batch_link_repo.create_batch_link(batch):
+            return None
         me = await telegram_api.call_api(client.get_me)
-        bot_username = me.username
-        return f"https://t.me/{bot_username}?start=DSTORE-{b_64}"
+        return f"https://t.me/{me.username}?start=DSTORE-{batch_id}"
 
     async def create_premium_batch_link(
             self,
@@ -281,11 +352,12 @@ class FileStoreService:
     ) -> Optional[str]:
         """Create premium-only batch link using robust parsing and validation"""
         if not self.batch_link_repo:
-            logger.error("BatchLinkRepository not initialized - falling back to regular batch link")
-            return await self.create_batch_link(client, first_msg_link, last_msg_link, protect)
+            logger.error("BatchLinkRepository not initialized - cannot create a premium batch link")
+            return None
         
         # Use robust link parser
-        parsed_links = TelegramLinkParser.parse_link_pair(first_msg_link, last_msg_link)
+        parsed_links = TelegramLinkParser.parse_link_pair(first_msg_link, last_msg_link,
+            max_messages=settings.processing.max_batch_messages, require_same_chat=False)
         if not parsed_links:
             logger.error(f"Failed to parse link pair: {first_msg_link} -> {last_msg_link}")
             return None
@@ -308,15 +380,34 @@ class FileStoreService:
                 logger.error(f"Error resolving chat {first_parsed.chat_identifier}: {e}")
                 return None
         
+        last_chat_id = last_parsed.chat_id
+        if last_chat_id is None:
+            if last_parsed.chat_identifier == first_parsed.chat_identifier:
+                last_chat_id = chat_id
+            else:
+                try:
+                    last_chat_id = (await telegram_api.call_api(client.get_chat, last_parsed.chat_identifier, chat_id=None)).id
+                except Exception as e:
+                    logger.error("Error resolving last batch source %s: %s", last_parsed.chat_identifier, e)
+                    return None
+        if last_chat_id != chat_id:
+            logger.warning("Premium batch links belong to different chats")
+            return None
+
+        if not await self._can_create_source_batch(client, created_by, chat_id):
+            return None
+
         # Validate bot has access to source channel
         try:
             # Check if bot can access the first message (quick validation)
-            await telegram_api.call_api(
+            source_message = await telegram_api.call_api(
                 client.get_messages,
                 chat_id,
                 first_parsed.message_id,
                 chat_id=chat_id
             )
+            if source_message is None or source_message.empty:
+                return None
         except Exception as e:
             logger.error(f"Bot cannot access source channel {chat_id}: {e}")
             return None
@@ -399,6 +490,9 @@ class FileStoreService:
         Premium batch links now require global premium to be enabled
         """
         correlation_id = f"user_{user_id}_batch_{batch_link.id}"
+        if user_id in (getattr(self.config, 'ADMINS', []) or []):
+            logger.info("Privileged batch access granted for user %s", user_id)
+            return True, ""
 
         # Premium batch link check
         if batch_link.premium_only:
@@ -474,50 +568,80 @@ class FileStoreService:
         })
         return True, ""
 
+    @staticmethod
+    def _valid_batch_metadata(data) -> bool:
+        if not isinstance(data, list) or len(data) > settings.processing.max_batch_messages:
+            return False
+        for row in data:
+            if not isinstance(row, dict):
+                return False
+            identifier = row.get('file_id') or row.get('file_identifier')
+            if not isinstance(identifier, str) or not identifier.strip():
+                return False
+            if 'protect' in row and type(row['protect']) is not bool:
+                return False
+            size = row.get('size')
+            if size is not None and (type(size) is not int or size < 0):
+                return False
+            if any(row.get(field) is not None and not isinstance(row[field], str)
+                   for field in ('title', 'caption', 'file_unique_id', 'file_ref')):
+                return False
+        return True
+
     async def get_batch_data(
             self,
             client: Client,
             batch_identifier: str
     ) -> Optional[List[Dict[str, Any]]]:
-        """Retrieve batch data from cache or download"""
-        # Check in-memory cache first
-        if batch_identifier in self.batch_cache:
-            self.batch_cache_access_time[batch_identifier] = time.time()
-            return self.batch_cache[batch_identifier]
-
-        # Try to find file by identifier
+        """Load validated JSON metadata with bounded lifetime and owned temp files."""
+        now = time.monotonic()
+        cached = self.batch_cache.get(batch_identifier)
+        created = self.batch_cache_created_at.get(batch_identifier)
+        if (cached is not None and created is not None and now - created < self.batch_cache_ttl
+                and self._valid_batch_metadata(cached)):
+            self.batch_cache_access_time[batch_identifier] = now
+            return deepcopy(cached)
+        self.batch_cache.pop(batch_identifier, None)
+        self.batch_cache_access_time.pop(batch_identifier, None)
+        self.batch_cache_created_at.pop(batch_identifier, None)
         file = await self.media_repo.find_file(batch_identifier)
         if not file:
             return None
-
-        # Download from telegram using file_id with file processing concurrency control
+        name = (getattr(file, 'file_name', '') or '').lower()
+        mime = (getattr(file, 'mime_type', '') or '').lower()
+        if not name.endswith('.json') and mime not in ('application/json', 'text/json'):
+            logger.warning("Batch metadata source is not a JSON document")
+            return None
+        download_path = file_path = None
         try:
+            descriptor, download_path = tempfile.mkstemp(prefix='affb-batch-', suffix='.json')
+            os.close(descriptor)
             async with semaphore_manager.acquire('file_processing', f'download_{batch_identifier}'):
-                file_path = await telegram_api.call_api(
-                    client.download_media,
-                    file.file_id
-                )
-
+                file_path = await telegram_api.call_api(client.download_media, file.file_id, file_name=download_path)
                 if not file_path:
                     return None
-
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    batch_data = json.load(f)
-
-            # Clean up downloaded file
-            os.remove(file_path)
-
-            # Cache for future use
+                with open(file_path, 'r', encoding='utf-8') as stream:
+                    batch_data = json.load(stream)
+            if not self._valid_batch_metadata(batch_data):
+                logger.warning("Rejected invalid batch metadata for %s", batch_identifier)
+                return None
             if batch_data:
-                self.batch_cache[batch_identifier] = batch_data
-                self.batch_cache_access_time[batch_identifier] = time.time()
+                self.batch_cache[batch_identifier] = deepcopy(batch_data)
+                self.batch_cache_created_at[batch_identifier] = time.monotonic()
+                self.batch_cache_access_time[batch_identifier] = time.monotonic()
                 await self._cleanup_batch_cache()
-
             return batch_data
-
         except Exception as e:
             logger.error(f"Error retrieving batch data: {e}")
             return None
+        finally:
+            for path in {file_path, download_path} - {None}:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                except OSError as e:
+                    logger.warning("Could not remove batch temporary file: %s", e)
 
     async def send_stored_file(
             self,
@@ -586,7 +710,7 @@ class FileStoreService:
             if access_check is not None and not await access_check():
                 break
             # Initialize variables outside try block to avoid uninitialized variable warnings
-            file_id_to_send = file_data.get("file_id", file_data.get("file_identifier"))
+            file_id_to_send = file_data.get("file_id") or file_data.get("file_identifier")
             caption = ""  # Default value
             
             try:
@@ -645,7 +769,8 @@ class FileStoreService:
             bot,
             chat_id: int,
             first_msg_id: int,
-            last_msg_id: int
+            last_msg_id: int,
+            max_items: Optional[int] = None,
     ) -> int:
         """Count media messages in a channel range for quota reservation."""
         media_count = 0
@@ -656,8 +781,11 @@ class FileStoreService:
             ):
                 if message.media:
                     media_count += 1
+                    if max_items is not None and media_count >= max_items:
+                        return media_count
         except Exception as e:
             logger.error(f"Error counting channel media items: {e}")
+            raise BatchSourceUnavailableError("Source media count is unavailable") from e
 
         return media_count
 
@@ -671,6 +799,7 @@ class FileStoreService:
             protect: bool = False,
             delivery_progress=None,
             access_check=None,
+            media_limit: Optional[int] = None,
     ) -> Tuple[int, int, int]:
         """
         Send files directly from channel (DSTORE method)
@@ -679,6 +808,7 @@ class FileStoreService:
         success_count = 0
         total_count = 0
         media_success_count = 0
+        media_attempt_count = 0
         sent_messages = []  # Track sent messages for deletion
 
         try:
@@ -691,6 +821,8 @@ class FileStoreService:
                 total_count += 1
 
                 if message.media:
+                    if media_limit is not None and media_attempt_count >= media_limit:
+                        continue
                     # Initialize caption with default value to avoid uninitialized variable warnings
                     caption = message.caption.html if message.caption else ""
                     
@@ -724,6 +856,7 @@ class FileStoreService:
                         )
 
                         # telegram_api.call_api already uses semaphore_manager internally
+                        media_attempt_count += 1
                         if delivery_progress is not None:
                             delivery_progress.attempted += 1
                         sent_msg = await telegram_api.call_api(

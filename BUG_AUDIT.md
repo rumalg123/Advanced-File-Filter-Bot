@@ -132,7 +132,6 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-120 | High | Fixed | Dashboard verification and statistics failures | Failed media verification can be presented as confirmed unmet demand, single-database aggregate errors can look like zero files, and malformed stats caches can supply invalid totals. Dashboard failures lack retry feedback. | Stop uncertain verification, propagate cancellation, skip invalid current filter syntax without deleting history, validate stats payloads, use strict statistics aggregation, and return safe retry feedback with actual exception logging. |
 | BUG-121 | Medium | Fixed | Concurrent demand cleanup | Dashboard reconciliation can delete a new zero-result search recorded after its earlier match check because cleanup deletes only by query identity. | Guard dashboard deletion with the observed count and timestamp, including absent legacy fields, so newer demand survives. Keep the direct successful-search resolver compatible. |
 | BUG-122 | Medium | Fixed | Dashboard count and size semantics | Pending-request totals omit supported legacy processing records, and the Storage label describes referenced Telegram file bytes rather than MongoDB storage. | Share the active-request status set with request admission and label the sum as Total file size. |
-
 | BUG-123 | Medium | Fixed | Connection mutation races | Cached read/replace writes lose concurrent connections and stale activation clears the current selection. | Atomic guarded additions/removals/activation, idempotent duplicate requests, failure contracts and real-Mongo race tests. |
 | BUG-124 | High | Fixed | Connection permissions | Disconnect callbacks bypass bulk-deletion owner checks; stale private connections retain access after demotion. | Owner/admin checks for all bulk paths, current group rights for activation/private retrieval, private menu ownership, and preserved privileged bypasses. |
 | BUG-125 | Medium | Fixed | Connection cleanup | Transient Telegram failures are treated as nonmembership and delete valid connections. | Three-state membership checks retain unverifiable connections; restricted membership requires is_member=True. |
@@ -143,6 +142,17 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-130 | Medium | Fixed | Telegram HTML filter syntax | SDK HTML escaping changes quoted keywords and button labels, URLs and alert text. | Real SDK string fixtures cover quoted/empty keywords and entity decoding; live storage asserts the full keyword. |
 | BUG-131 | Medium | Fixed | Connection preview acknowledgment | Delete Connection opens a preview without answering the Telegram callback. | Answer exactly once before editing the preview; regression and live callback pass. |
 | BUG-132 | Low | Fixed | Connection menu refresh | Refreshing unchanged connection details raises MessageNotModified. | Treat only that SDK error as an idempotent edit; empty/populated regressions and live no-op cleanup. |
+| BUG-133 | Medium | Fixed | Subscription welcome photo replay | Successful Try Again callbacks resume /start through MessageProxy, which lacks reply_photo when PICS is configured. | Delegate photo replies to the original message, preserve the callback actor and returned reply for auto-delete, and cover the real retry-to-welcome path with photos on/off and timers on/off. |
+| BUG-134 | High | Fixed | Protected batch command forms | Qualified protected commands lose protection and repeated whitespace prevents batch creation. | Normalize the command username suffix and whitespace; all 16 ordinary/premium alias cases pass. |
+| BUG-135 | High | Fixed | Batch source authorization | Unsigned ranges can be forged to read unrelated bot-accessible chats; public creators and missing premium storage can bypass source/access policy. | Store new ordinary ranges behind 128-bit opaque IDs, verify creators and source readability, restrict legacy ranges to configured sources with admin bypass, and never downgrade premium links. |
+| BUG-136 | Medium | Fixed | Premium batch range consistency | Premium commands retain a hard-coded 10,000-message cap, reject inclusive single-item ranges and compare source spelling instead of resolved identity. | Use the existing configured maximum, preserve single-item ranges, and resolve both endpoints before storing a trusted source grant. |
+| BUG-137 | Medium | Fixed | Premium batch privileged access | Dedicated premium-batch policy rejects configured admins despite their explicit bot-wide bypass. | Preserve configured admin/owner access across premium and global feature states while leaving normal-user policy unchanged. |
+| BUG-138 | Medium | Fixed | Batch metadata cache and downloads | Metadata cache TTL is unused; malformed downloads leak files, invalid JSON shapes reach delivery, and denied users trigger downloads. | Validate JSON rows and configured count, expire immutable cached snapshots, clean temporary files on failure/cancellation, and authorize before downloading. |
+| BUG-139 | High | Fixed | Channel batch quota admission | Failed counting returns a partial/zero result and changed source contents can exceed the reserved media budget. | Deny before reservation on incomplete enumeration, stop counting once denial is certain, and cap attempted media delivery at the reservation. |
+
+
+| BUG-141 | High | Fixed | File-store source setting forms | FILE_STORE_CHANNEL is loaded as a list, but legacy authorization stringifies it, breaking normal users' old links for configured file-only channels. | Normalize stored lists and environment forms, retain both configured source types and privileged bypasses; 41 focused tests passed. |
+| BUG-142 | High | Fixed | Conflicting indexing configuration | Commands update indexed_channels independently of CHANNELS settings; startup re-enables configured sources and removed channels can remain authorized through stale config. | Use the persisted registry for every indexing control and legacy-source check, seed only missing bootstrap IDs, preserve explicit disable/remove decisions and refresh handlers after settings edits. Real-Mongo regressions and all 1,602 tests passed. |
 
 ## Group search follow-up, 2026-10-30
 
@@ -185,23 +195,25 @@ are preserved for a separate follow-up. The raised ownership CLI default also
 exceeds the existing library's one-million inventory/activation bound and needs
 alignment before using the new default. No production service was accessed.
 
-## Current QA, 2026-11-06
+## Current QA, 2026-11-15
 
-The group-filter/connection round passed **1,498 tests, zero failures or skips**
-and **28 live checks** on wzgram 3.1.6. BUG-123–132 and CACHE-029 cover atomic
-connections, current permissions, non-destructive cleanup, text/keyboards,
-source-bound alerts, single-use confirmations and captionless media. Admin/owner
-bypasses and all 889 baseline logger lines remain. Final live cleanup verified
-85 owned messages removed and both temporary member roles restored.
+The channel-configuration follow-up passed **1,602 tests**, zero failures/errors/
+skips, and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-141 restores
+legacy links for saved File Channels lists. BUG-142 / CACHE-031 unify indexing
+commands and settings on the persisted registry; removal/disable survives restart.
+File Channels adds batch-only sources without enabling indexing. Public creators
+use current source membership, independently of either source list. Normal users'
+unsigned old links still require a source in either list, as the operator chose.
+Configured admin/owner bypasses and existing limits remain.
 
-Fresh source-matched coverage is **70.54% lines, 57.58% branches,
-67.29% combined** across all 122 application/operator Python files.
-October raw execution files were unavailable after restart and were not
-reconstructed; earlier aggregate percentages remain dated historical evidence.
-See [the current QA record](docs/qa/coverage-expansion/STATUS.md) and
-[round 15 evidence](docs/qa/coverage-expansion/round15-filters-connections.json).
-Whole-bot 100% and production acceptance remain open. No production access,
-feature defaults, deployment environment or production limits changed.
+Fresh current automated + live coverage is **70.92% lines / 58.05% branches**;
+including source-matched retained history gives **72.98% lines / 60.81% branches**.
+All 122 tracked application/operator Python files remain in the denominator;
+changed historical execution is discarded. All **51 final-pass messages** were
+confirmed absent, with no Telegram membership/role changes. No Atlas or production
+services/configuration were changed. Whole-bot 100% and production acceptance
+remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 17 evidence](docs/qa/coverage-expansion/round17-channel-settings.json).
 
 ## Verification log
 
@@ -386,3 +398,118 @@ feature defaults, deployment environment or production limits changed.
   refreshes now treat Telegram's `MessageNotModified` as a successful no-op.
   Empty and populated lists are covered; other edit errors still propagate.
   Cleanup no longer logs an unhandled error just because no connection changed.
+
+
+## Subscription photo retry hotfix (2026-11-15)
+
+**BUG-133 fixed.** The production traceback dated 2026-11-11 reaches the welcome
+photo after membership verification succeeds. `MessageProxy` forwarded text
+replies but exposed no `reply_photo` method. It now binds the original message's
+photo reply, forwards its arguments and result, and preserves the clicking user.
+The new optional constructor argument is appended so existing positional calls
+retain their meaning. Real send exceptions continue to propagate.
+
+Seven regressions cover the real subscription callback → `/start` → welcome
+path with text/photos and enabled/disabled auto-delete, callback identity and
+argument forwarding, exception preservation and absent message context. Before
+the fix: **5 failed, 2 passed**. After: all seven passed. The related subscription,
+multisubscription, command cleanup and ban-route suite passed **154 tests**, with
+**2 MongoDB integration cases skipped** because no disposable MongoDB was
+supplied. Python compilation, undefined-name Ruff and `pip check` passed on
+Python 3.13.7 / wzgram 3.1.7.
+
+Validation used real SDK objects and mocked Telegram sends in an isolated
+container; no live photo delivery or production deployment is claimed. Telegram
+credentials and remote databases were not used. No settings, permission bypasses
+or operator logger lines changed. No database migration or Redis clearing is
+needed. Deploy the corrected code through the normal update/rebuild process.
+
+
+## File-store and batch QA (2026-11-15)
+
+- **BUG-134 fixed:** protected and ordinary batch commands preserve their
+  protection setting with qualified usernames and whitespace. Sixteen command
+  regressions passed; the original focused run reproduced eleven failures.
+  Actual protected batch delivery also passed in the completed live round.
+
+- **BUG-135 fixed:** new ordinary batch links persist their source, range and
+  protection behind an unguessable identifier. Public creation verifies current
+  source membership; configured admins retain their bypass. Unsigned legacy
+  links work for ordinary users only on configured media/file-store channels,
+  following the operator's explicit compatibility choice. Premium grants cannot
+  be opened through the ordinary route, and missing premium storage never
+  falls back to an ordinary link. Single-item ordinary grants persist correctly.
+  Fifty-seven focused cases passed, including real MongoDB/cache-loss retrieval.
+  The inaccurate premium-fallback diagnostic was changed to a fail-closed error;
+  other existing operator logger lines remain. Live legacy allow/deny, opaque
+  grant delivery and tampered/premium-route denial checks passed.
+
+- **BUG-136 fixed:** premium batch parsing honors the existing configured
+  maximum, including the operator's larger setting, and supports inclusive
+  single-message ranges and equivalent public/private source notation. Nine
+  focused range cases passed; forty related authorization/command cases passed.
+  The message-order diagnostic now correctly describes strictly reversed bounds.
+
+- **BUG-137 fixed:** configured admins retain premium batch access even when
+  their own premium status is inactive. Sixteen policy combinations and twenty-four
+  related existing access/quota cases passed. Ordinary-user premium policy is
+  unchanged, including rejection of premium-only links in global free mode.
+
+- **BUG-138 fixed:** metadata is restricted to JSON documents and validated
+  rows, within the unchanged configured batch count. Cache lifetime is measured
+  from load rather than extended by every read, copies prevent caller mutation,
+  and temporary files are removed after success, failure or cancellation. Access
+  denial precedes downloads. Nine original regressions failed before the fix;
+  the eleven metadata cases and related quota regression suite passed after it.
+
+- **BUG-139 fixed:** source-count errors produce safe retry feedback before
+  reservation or delivery. Counting stops at the daily limit plus one, and
+  media attempts cannot exceed the admitted budget if the source changes.
+  Non-media messages do not consume file quota. Six safety cases and eighteen
+  existing cancellation/ban/refund cases passed. Existing limits are unchanged.
+
+- **BUG-135 compatibility follow-up:** configured legacy sources include
+  enabled channels managed through admin commands, as well as environment media
+  and file-store channels. The enabled state is read afresh so a removed/disabled
+  dynamic source cannot remain authorized through a stale cache. Real MongoDB
+  activation/revocation and handler-wiring cases passed.
+
+- **QA correction:** the initial BUG-140 shortening hypothesis was withdrawn.
+  Media `_id` is the Telegram `file_id`; changing that update to `file_unique_id`
+  was incorrect and was reverted. Replacement regressions use the real media
+  repository and MongoDB to verify that normal/protected shortened links resolve
+  the same persisted record, instead of asserting a mocked update argument.
+
+The final current-source suite passed **1,581 tests** and the complete bounded
+live pass passed **25 checks**. The disproved shortening change is reverted in
+`ec49de8`; `a8b6f84` adds the real-Mongo regressions. No BUG-140 product fix is
+claimed. See [round 16](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-16--file-store-links-and-batch-retrieval-2026-11-15).
+
+
+## Channel settings follow-up (2026-11-15)
+
+**BUG-141 fixed:** multiple File Channels values now authorize legacy links after
+settings parsing. Four of nine new cases failed against the previous parser;
+all 41 related source/command cases passed after the fix. Public creators still
+use membership and PUBLIC_FILE_STORE rather than a File Channels allowlist.
+The operator confirmed that normal users' unconfigured legacy sources must stay
+blocked until registered in either indexing or File Channels.
+
+**BUG-142 fixed:** Indexing Channels reads/writes the same registry used by
+/add_channel, /remove_channel and /toggle_channel. Environment/stored CHANNELS
+seed missing sources; existing enabled/disabled state is authoritative. Removal
+retains a disabled record and indexing history so stale bootstrap values cannot
+resurrect it. File Channels does not seed this registry. Legacy authorization
+reads current registry state instead of an outdated startup CHANNELS snapshot.
+Twelve new registry regressions passed, including real MongoDB restart, empty
+reset, concurrent additions, cache refresh, history preservation and failure
+handling; the complete suite passed 1,602 tests with 22 existing warnings. The
+existing startup import-error diagnostic moved with the import into the repository.
+
+Live follow-up passed **11 checks** with the refreshed admin session. The actual
+normal account received the original legacy URL after File Channels was saved as
+a list, without creating an indexing entry. Commands changed real automatic
+indexing, and an indexing source worked without File Channels. Source membership
+allowed public creation outside both lists; unconfigured legacy/log sources
+remained blocked. Final cleanup confirmed 51 owned messages absent. No production
+changes or migration were performed. See the round-17 QA evidence.

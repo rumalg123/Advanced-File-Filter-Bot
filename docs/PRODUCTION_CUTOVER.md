@@ -10,12 +10,11 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed **1,498 tests and 28 live group-filter/connection
-checks** on wzgram 3.1.6. Fresh whole-tree coverage is **70.54% lines /
-57.58% branches**; earlier raw execution was unavailable after restart,
-so previous aggregate metrics remain historical. Production load, cloud restore,
-configuration/index checks and a source-matched deployment image remain release
-gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
+The channel-configuration follow-up passed **1,602 tests and 11 live checks** on
+Python 3.13.7 / wzgram 3.1.7. Fresh current coverage is **70.92% lines / 58.05% branches**;
+including source-matched retained history gives **72.98% lines / 60.81% branches**.
+Production load, cloud restore, configuration/index checks and a source-matched
+deployment image remain release gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
 
 Recommended initial scope:
 
@@ -33,12 +32,39 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application/tests source is `a220499`. Its complete suite and
-live pass used the wzgram 3.1.6 runtime from
-`file-filter-bot:qa-multisub-20261030` with current source mounted into the
-container. The bundled code remains older `b2fcb38`; this is a runtime fixture,
-not a rebuilt deployment image. Build and validate the new branch source before
-deployment. See [the current round evidence](qa/coverage-expansion/round15-filters-connections.json).
+The current QA application/tests source is `a6277d6`. Its complete suite and
+live pass used Python 3.13.7 / wzgram 3.1.7 with current source and an existing
+QA virtual environment mounted into `file-filter-bot:qa-runtime-20261115`.
+That runtime fixture bundles no application or dependencies; it is not a release
+image. Build and validate the branch source and dependency set before deployment.
+See [the current round evidence](qa/coverage-expansion/round17-channel-settings.json).
+
+File-store/batch fixes need no MongoDB migration or Redis flush. New ordinary
+batch URLs persist opaque grants in the existing primary `batch_links`
+collection and use its existing indexes. Normal users' old unsigned URLs work
+only for configured media/file-store or enabled managed indexing channels;
+regenerate links for other sources through an authorized creator. Public batch
+creation now verifies source membership; configured admins retain their bypass.
+Older bot versions cannot open the new ordinary URLs, so consider newly issued
+links when planning a code rollback. Existing premium URLs retain their format.
+Do not deploy intermediate QA commits: the disproved shortening change was
+reverted before the final accepted source and tests above.
+
+Channel-configuration fixes require no migration or broad Redis clearing. Deploy
+`a6277d6` or later, then use `/bsetting` → File Channels to register additional
+batch-only sources (space-separated IDs); save and restart. Normal users' existing
+unsigned URLs work when their source is either an active indexing channel or in
+File Channels. Public File Store can remain off for opening existing links.
+
+Indexing Channels now reflects the same registry as `/add_channel`, `/remove_channel`
+and `/toggle_channel`. Startup imports missing bootstrap IDs but preserves disabled
+entries. Removed channels remain stored with `enabled=false` and their history;
+this prevents resurrection after restart. Existing stored CHANNELS is bootstrap,
+not a second active list. Use runtime commands/settings after initialization.
+FILE_STORE_CHANNEL does not enable indexing. Public creators may use other
+readable sources when membership is verified; configured admin bypasses remain.
+Older startup code can re-enable IDs from its bootstrap list; review indexing
+state before any rollback to a version predating these registry fixes.
 
 Group-filter/connection fixes require no MongoDB migration or Redis flush.
 Existing connection documents and historical URL/alert keyboards remain readable.

@@ -21,7 +21,7 @@ def fixture():
         settle_quota_delivery=AsyncMock(return_value=True),
     )
     bot = SimpleNamespace(
-        config=SimpleNamespace(ADMINS=[], DISABLE_PREMIUM=False,
+        config=SimpleNamespace(ADMINS=[], CHANNELS=[-100123], DISABLE_PREMIUM=False,
             NON_PREMIUM_DAILY_LIMIT=10, MESSAGE_DELETE_SECONDS=0,
             CUSTOM_FILE_CAPTION=None, BATCH_FILE_CAPTION=None,
             KEEP_ORIGINAL_CAPTION=False, AUTO_DELETE_MESSAGE=None),
@@ -29,7 +29,7 @@ def fixture():
         cache=SimpleNamespace(get=AsyncMock(return_value={
             'user_id':42,'files':[{'file_unique_id':'one'}, {'file_unique_id':'two'}]})),
         media_repo=SimpleNamespace(find_files_batch=AsyncMock(return_value={})),
-        filestore_service=SimpleNamespace(get_batch_data=AsyncMock(return_value=[{},{}]),
+        filestore_service=SimpleNamespace(can_read_legacy_batch=AsyncMock(return_value=True), get_batch_data=AsyncMock(return_value=[{},{}]),
             send_batch_files=AsyncMock(side_effect=asyncio.CancelledError)),
     )
     message=SimpleNamespace(from_user=SimpleNamespace(id=42),

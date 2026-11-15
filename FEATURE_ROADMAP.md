@@ -9,23 +9,25 @@ feature ID below. Multilingual search is explicitly out of scope.
 Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (configured)`,
 `Enabled`, `Blocked`.
 
-## Current QA, 2026-11-06
+## Current QA, 2026-11-15
 
-The group-filter/connection round passed **1,498 tests, zero failures or skips**
-and **28 live checks** on wzgram 3.1.6. BUG-123–132 and CACHE-029 cover atomic
-connections, current permissions, non-destructive cleanup, text/keyboards,
-source-bound alerts, single-use confirmations and captionless media. Admin/owner
-bypasses and all 889 baseline logger lines remain. Final live cleanup verified
-85 owned messages removed and both temporary member roles restored.
+The channel-configuration follow-up passed **1,602 tests**, zero failures/errors/
+skips, and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-141 restores
+legacy links for saved File Channels lists. BUG-142 / CACHE-031 unify indexing
+commands and settings on the persisted registry; removal/disable survives restart.
+File Channels adds batch-only sources without enabling indexing. Public creators
+use current source membership, independently of either source list. Normal users'
+unsigned old links still require a source in either list, as the operator chose.
+Configured admin/owner bypasses and existing limits remain.
 
-Fresh source-matched coverage is **70.54% lines, 57.58% branches,
-67.29% combined** across all 122 application/operator Python files.
-October raw execution files were unavailable after restart and were not
-reconstructed; earlier aggregate percentages remain dated historical evidence.
-See [the current QA record](docs/qa/coverage-expansion/STATUS.md) and
-[round 15 evidence](docs/qa/coverage-expansion/round15-filters-connections.json).
-Whole-bot 100% and production acceptance remain open. No production access,
-feature defaults, deployment environment or production limits changed.
+Fresh current automated + live coverage is **70.92% lines / 58.05% branches**;
+including source-matched retained history gives **72.98% lines / 60.81% branches**.
+All 122 tracked application/operator Python files remain in the denominator;
+changed historical execution is discarded. All **51 final-pass messages** were
+confirmed absent, with no Telegram membership/role changes. No Atlas or production
+services/configuration were changed. Whole-bot 100% and production acceptance
+remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md) and
+[round 17 evidence](docs/qa/coverage-expansion/round17-channel-settings.json).
 
 ## Live-safety contract
 

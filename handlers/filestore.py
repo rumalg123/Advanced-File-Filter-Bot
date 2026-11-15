@@ -1,5 +1,7 @@
 from typing import Optional
 
+from config.settings import settings
+
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
@@ -65,7 +67,7 @@ class FileStoreHandler(BaseHandler):
         link = await self.filestore_service.create_file_link(
             client,
             message,
-            protect=protect
+            protect=protect,
         )
 
         if link:
@@ -77,7 +79,7 @@ class FileStoreHandler(BaseHandler):
     async def batch_command(self, client: Client, message: Message) -> None:
         """Generate batch link for multiple files"""
         # Parse command
-        parts = message.text.strip().split(" ")
+        parts = message.text.split()
 
         if len(parts) != 3:
             await message.reply(
@@ -88,7 +90,7 @@ class FileStoreHandler(BaseHandler):
 
         cmd, first_link, last_link = parts
         logger.debug(f"cmd: {cmd}, first_link: {first_link}, last_link: {last_link}")
-        protect = cmd.lower() == "/pbatch"
+        protect = cmd.lower().split("@", 1)[0] == "/pbatch"
 
         # Create batch link
         sts = await message.reply(
@@ -98,7 +100,8 @@ class FileStoreHandler(BaseHandler):
             client,
             first_link,
             last_link,
-            protect=protect
+            protect=protect,
+            created_by=message.from_user.id,
         )
 
         if link:
@@ -143,7 +146,7 @@ class FileStoreHandler(BaseHandler):
             return
 
         # Parse command with robust validation
-        parts = message.text.strip().split(" ")
+        parts = message.text.split()
 
         if len(parts) != 3:
             await message.reply(
@@ -170,10 +173,11 @@ class FileStoreHandler(BaseHandler):
         })
         
         # Determine if it's a protected batch
-        protect = cmd.lower() in ["/pbatch_premium", "/pbprem"]
+        protect = cmd.lower().split("@", 1)[0] in ["/pbatch_premium", "/pbprem"]
 
         # Pre-validate links using robust parser
-        parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link)
+        parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link,
+            max_messages=settings.processing.max_batch_messages, require_same_chat=False)
         if not parsed_links:
             await message.reply(
                 ErrorMessageFormatter.format_invalid(
@@ -182,7 +186,7 @@ class FileStoreHandler(BaseHandler):
                     "• Both links are valid Telegram message links\n"
                     "• Both links are from the same channel\n"
                     "• First message ID is less than second message ID\n"
-                    "• Batch size is reasonable (< 10,000 messages)\n\n"
+                    f"• Batch size is within the configured limit ({settings.processing.max_batch_messages:,} messages)\n\n"
                     "<b>Valid formats:</b>\n"
                     "• <code>https://t.me/channel/123</code>\n"
                     "• <code>https://t.me/c/1234567890/123</code>"

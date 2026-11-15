@@ -42,9 +42,14 @@ async def test_encoded_batch_rejects_invalid_range_chat_or_mode_before_access(mo
 @pytest.mark.parametrize('first,last', [(2, 2), (1, 4)])
 async def test_valid_batch_links_preserve_single_item_and_configured_boundary(monkeypatch, protected, first, last):
     monkeypatch.setattr(settings.processing, 'max_batch_messages', 4)
-    monkeypatch.setattr('core.services.filestore.telegram_api.call_api', AsyncMock(return_value=SimpleNamespace(username='testbot')))
-    service = FileStoreService(None, None, SimpleNamespace())
-    link = await service.create_batch_link(SimpleNamespace(get_me=AsyncMock()),
-        f'https://t.me/c/1234567890/{first}', f'https://t.me/c/1234567890/{last}', protect=protected)
-    decoded = base64.urlsafe_b64decode(link.split('DSTORE-')[1]+'===').decode()
-    assert decoded == f'{first}_{last}_-1001234567890_{"pbatch" if protected else "batch"}'
+    monkeypatch.setattr('core.services.filestore.telegram_api.call_api', AsyncMock(return_value=SimpleNamespace(username='testbot', empty=False)))
+    stored = []
+    async def persist(batch):stored.append(batch);return True
+    service = FileStoreService(None, None, SimpleNamespace(ADMINS=[1]),
+        batch_link_repo=SimpleNamespace(create_batch_link=AsyncMock(side_effect=persist)))
+    link = await service.create_batch_link(SimpleNamespace(get_me=AsyncMock(), get_messages=AsyncMock()),
+        f'https://t.me/c/1234567890/{first}', f'https://t.me/c/1234567890/{last}', protect=protected, created_by=1)
+    assert len(link.split('start=')[1]) <= 64
+    assert link.endswith('DSTORE-' + stored[0].id)
+    assert (stored[0].from_msg_id, stored[0].to_msg_id, stored[0].source_chat_id, stored[0].protected) == (
+        first, last, -1001234567890, protected)
