@@ -253,7 +253,7 @@ class BotSettingsService:
         'FILE_STORE_CHANNEL': {
             'type': 'list',
             'default': [],
-            'description': 'File store channel IDs (space separated)',
+            'description': 'Additional batch-source channel IDs (space separated); does not enable automatic indexing',
             'category': 'channels'
         },
         'CUSTOM_FILE_CAPTION': {

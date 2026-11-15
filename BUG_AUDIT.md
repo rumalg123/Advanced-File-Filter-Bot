@@ -151,6 +151,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-139 | High | Fixed | Channel batch quota admission | Failed counting returns a partial/zero result and changed source contents can exceed the reserved media budget. | Deny before reservation on incomplete enumeration, stop counting once denial is certain, and cap attempted media delivery at the reservation. |
 
 
+| BUG-141 | High | Fixed | File-store source setting forms | FILE_STORE_CHANNEL is loaded as a list, but legacy authorization stringifies it, breaking normal users' old links for configured file-only channels. | Normalize stored lists and environment forms, retain both configured source types and privileged bypasses; 41 focused tests passed. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -480,3 +482,13 @@ The final current-source suite passed **1,581 tests** and the complete bounded
 live pass passed **25 checks**. The disproved shortening change is reverted in
 `ec49de8`; `a8b6f84` adds the real-Mongo regressions. No BUG-140 product fix is
 claimed. See [round 16](docs/qa/coverage-expansion/STATUS.md#bounded-qa-round-16--file-store-links-and-batch-retrieval-2026-11-15).
+
+
+## Channel settings follow-up (2026-11-15)
+
+**BUG-141 fixed:** multiple File Channels values now authorize legacy links after
+settings parsing. Four of nine new cases failed against the previous parser;
+all 41 related source/command cases passed after the fix. Public creators still
+use membership and PUBLIC_FILE_STORE rather than a File Channels allowlist.
+The operator confirmed that normal users' unconfigured legacy sources must stay
+blocked until registered in either indexing or File Channels.

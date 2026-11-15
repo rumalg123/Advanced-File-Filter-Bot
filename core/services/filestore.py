@@ -24,6 +24,7 @@ from core.utils.validators import normalize_filename_for_search
 from core.utils.logger import get_logger
 from core.utils.link_parser import TelegramLinkParser, ParsedTelegramLink
 from core.utils.telegram_api import telegram_api
+from core.utils.subscription_config import parse_subscription_targets
 from core.utils.helpers import extract_file_ref, parse_media_metadata
 from core.utils.media_factory import MediaFileFactory
 from core.concurrency import semaphore_manager
@@ -260,13 +261,8 @@ class FileStoreService:
         """Unsigned legacy ranges are restricted to explicitly configured media sources."""
         if user_id in (getattr(self.config, 'ADMINS', []) or []):
             return True
-        configured = getattr(self.config, 'CHANNELS', []) or []
-        if isinstance(configured, str):
-            configured = configured.replace(',', ' ').split()
-        targets = list(configured)
-        filestore = getattr(self.config, 'FILE_STORE_CHANNEL', '')
-        if filestore:
-            targets.extend(str(filestore).replace(',', ' ').split())
+        targets = parse_subscription_targets(getattr(self.config, 'CHANNELS', []))
+        targets.extend(parse_subscription_targets(getattr(self.config, 'FILE_STORE_CHANNEL', [])))
         for target in targets:
             try:
                 resolved = int(target)
