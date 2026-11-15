@@ -1,0 +1,370 @@
+{
+  "date": "2026-11-15",
+  "round": 16,
+  "scope": [
+    "file-store-links",
+    "batch-retrieval"
+  ],
+  "application_and_tests_commit": "a8b6f849002fcece984764cfe4de81df9ef201c7",
+  "fixes": {
+    "BUG-134": "a307afe",
+    "BUG-135": "6c01ac7 / 5a2db1d",
+    "BUG-136": "72c35af",
+    "BUG-137": "233bb93",
+    "BUG-138": "f8ae0c4",
+    "BUG-139": "808b0bc"
+  },
+  "cache_fix": "CACHE-030",
+  "qa_correction": {
+    "withdrawn_issue": "BUG-140",
+    "revert": "ec49de8",
+    "real_mongo_regressions": "a8b6f84",
+    "reason": "Media MongoDB _id is file_id. The initial shortening-key change was incorrect and is absent from accepted source."
+  },
+  "tests": {
+    "passed": 1581,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "warnings": 22,
+    "new": 76,
+    "seconds": 36.24,
+    "new_cases_by_module": {
+      "tests.test_filestore_command_forms": 16,
+      "tests.test_filestore_source_authorization": 16,
+      "tests.test_premium_batch_bounds": 9,
+      "tests.test_premium_batch_privileges": 16,
+      "tests.test_batch_metadata_contract": 11,
+      "tests.test_batch_source_quota_safety": 6,
+      "tests.test_filestore_short_reference": 2
+    }
+  },
+  "application_files": 122,
+  "denominator_matches_all_tracked_non_test_python": true,
+  "source_manifest_sha256": "538df81db0710c0113c73dd8a564f7492e5f633b8fe792864082c907c798e7b2",
+  "automated": {
+    "covered_lines": 12169,
+    "num_statements": 18418,
+    "percent_covered": 63.225491789952855,
+    "percent_covered_display": "63",
+    "missing_lines": 6249,
+    "excluded_lines": 41,
+    "num_branches": 6186,
+    "num_partial_branches": 1015,
+    "covered_branches": 3387,
+    "missing_branches": 2799,
+    "percent_statements_covered": 66.07123466174394,
+    "percent_branches_covered": 54.75266731328807
+  },
+  "automated_plus_current_live": {
+    "covered_lines": 13023,
+    "num_statements": 18418,
+    "percent_covered": 67.52154121281093,
+    "percent_covered_display": "68",
+    "missing_lines": 5395,
+    "excluded_lines": 41,
+    "num_branches": 6186,
+    "num_partial_branches": 1082,
+    "covered_branches": 3590,
+    "missing_branches": 2596,
+    "percent_statements_covered": 70.70800304050385,
+    "percent_branches_covered": 58.034270934367925
+  },
+  "automated_plus_source_matched_live": {
+    "covered_lines": 13358,
+    "num_statements": 18418,
+    "percent_covered": 69.48057226467242,
+    "percent_covered_display": "69",
+    "missing_lines": 5060,
+    "excluded_lines": 41,
+    "num_branches": 6186,
+    "num_partial_branches": 1121,
+    "covered_branches": 3737,
+    "missing_branches": 2449,
+    "percent_statements_covered": 72.52687588228906,
+    "percent_branches_covered": 60.41060459101196
+  },
+  "scope_coverage": {
+    "core/services/filestore.py": {
+      "automated": {
+        "covered_lines": 339,
+        "num_statements": 470,
+        "percent_covered": 70.4968944099379,
+        "percent_covered_display": "70",
+        "missing_lines": 131,
+        "excluded_lines": 0,
+        "num_branches": 174,
+        "num_partial_branches": 37,
+        "covered_branches": 115,
+        "missing_branches": 59,
+        "percent_statements_covered": 72.12765957446808,
+        "percent_branches_covered": 66.0919540229885
+      },
+      "automated_plus_current_live": {
+        "covered_lines": 361,
+        "num_statements": 470,
+        "percent_covered": 76.24223602484471,
+        "percent_covered_display": "76",
+        "missing_lines": 109,
+        "excluded_lines": 0,
+        "num_branches": 174,
+        "num_partial_branches": 34,
+        "covered_branches": 130,
+        "missing_branches": 44,
+        "percent_statements_covered": 76.80851063829788,
+        "percent_branches_covered": 74.71264367816092
+      }
+    },
+    "handlers/filestore.py": {
+      "automated": {
+        "covered_lines": 51,
+        "num_statements": 82,
+        "percent_covered": 55.88235294117647,
+        "percent_covered_display": "56",
+        "missing_lines": 31,
+        "excluded_lines": 0,
+        "num_branches": 20,
+        "num_partial_branches": 6,
+        "covered_branches": 6,
+        "missing_branches": 14,
+        "percent_statements_covered": 62.19512195121951,
+        "percent_branches_covered": 30.0
+      },
+      "automated_plus_current_live": {
+        "covered_lines": 67,
+        "num_statements": 82,
+        "percent_covered": 76.47058823529412,
+        "percent_covered_display": "76",
+        "missing_lines": 15,
+        "excluded_lines": 0,
+        "num_branches": 20,
+        "num_partial_branches": 9,
+        "covered_branches": 11,
+        "missing_branches": 9,
+        "percent_statements_covered": 81.70731707317073,
+        "percent_branches_covered": 55.00000000000001
+      }
+    },
+    "handlers/deeplink.py": {
+      "automated": {
+        "covered_lines": 233,
+        "num_statements": 341,
+        "percent_covered": 62.7906976744186,
+        "percent_covered_display": "63",
+        "missing_lines": 108,
+        "excluded_lines": 0,
+        "num_branches": 132,
+        "num_partial_branches": 42,
+        "covered_branches": 64,
+        "missing_branches": 68,
+        "percent_statements_covered": 68.32844574780059,
+        "percent_branches_covered": 48.484848484848484
+      },
+      "automated_plus_current_live": {
+        "covered_lines": 264,
+        "num_statements": 341,
+        "percent_covered": 73.15010570824525,
+        "percent_covered_display": "73",
+        "missing_lines": 77,
+        "excluded_lines": 0,
+        "num_branches": 132,
+        "num_partial_branches": 42,
+        "covered_branches": 82,
+        "missing_branches": 50,
+        "percent_statements_covered": 77.41935483870968,
+        "percent_branches_covered": 62.121212121212125
+      }
+    },
+    "repositories/batch_link.py": {
+      "automated": {
+        "covered_lines": 113,
+        "num_statements": 189,
+        "percent_covered": 57.08502024291498,
+        "percent_covered_display": "57",
+        "missing_lines": 76,
+        "excluded_lines": 0,
+        "num_branches": 58,
+        "num_partial_branches": 20,
+        "covered_branches": 28,
+        "missing_branches": 30,
+        "percent_statements_covered": 59.78835978835979,
+        "percent_branches_covered": 48.275862068965516
+      },
+      "automated_plus_current_live": {
+        "covered_lines": 136,
+        "num_statements": 189,
+        "percent_covered": 68.82591093117409,
+        "percent_covered_display": "69",
+        "missing_lines": 53,
+        "excluded_lines": 0,
+        "num_branches": 58,
+        "num_partial_branches": 16,
+        "covered_branches": 34,
+        "missing_branches": 24,
+        "percent_statements_covered": 71.95767195767195,
+        "percent_branches_covered": 58.620689655172406
+      }
+    },
+    "core/utils/link_parser.py": {
+      "automated": {
+        "covered_lines": 65,
+        "num_statements": 90,
+        "percent_covered": 69.16666666666667,
+        "percent_covered_display": "69",
+        "missing_lines": 25,
+        "excluded_lines": 0,
+        "num_branches": 30,
+        "num_partial_branches": 10,
+        "covered_branches": 18,
+        "missing_branches": 12,
+        "percent_statements_covered": 72.22222222222221,
+        "percent_branches_covered": 60.0
+      },
+      "automated_plus_current_live": {
+        "covered_lines": 65,
+        "num_statements": 90,
+        "percent_covered": 69.16666666666667,
+        "percent_covered_display": "69",
+        "missing_lines": 25,
+        "excluded_lines": 0,
+        "num_branches": 30,
+        "num_partial_branches": 10,
+        "covered_branches": 18,
+        "missing_branches": 12,
+        "percent_statements_covered": 72.22222222222221,
+        "percent_branches_covered": 60.0
+      }
+    }
+  },
+  "coverage_provenance": [
+    {
+      "origin": "current",
+      "shard": "unit-final3",
+      "source_matches": 122,
+      "matched_execution_files": 122,
+      "changed_execution_files_discarded": 0
+    },
+    {
+      "origin": "current",
+      "shard": "live-attempt2",
+      "source_matches": 122,
+      "matched_execution_files": 122,
+      "changed_execution_files_discarded": 0
+    },
+    {
+      "origin": "round15",
+      "shard": "unit-final5",
+      "source_matches": 115,
+      "matched_execution_files": 115,
+      "changed_execution_files_discarded": 7
+    },
+    {
+      "origin": "round15",
+      "shard": "live-final10",
+      "source_matches": 115,
+      "matched_execution_files": 115,
+      "changed_execution_files_discarded": 7
+    }
+  ],
+  "live": {
+    "passed": 25,
+    "checks": [
+      "two authenticated roles, QA bot identity and local storage",
+      "normal/protected single links and duplicate media reuse",
+      "real single-file delivery, protection and exact quota debit",
+      "stored ordinary/protected ranges and qualified spaced commands",
+      "protected mixed media/text batch reserves and settles only media quota",
+      "remaining daily quota and denial after the limit",
+      "legacy ranges remain usable on configured media channels",
+      "forged legacy ranges cannot read unrelated sources or the QA log channel",
+      "admin-approved opaque grants can share an unconfigured source",
+      "cross-source and reversed generation are rejected",
+      "public batch creation rejects a creator without source membership",
+      "single-message ordinary batches persist and deliver",
+      "downloaded JSON metadata delivers per-file protection and settles quota",
+      "expired metadata cache reloads through Telegram",
+      "malformed metadata is rejected without quota or residual download files",
+      "premium aliases reuse a stored grant and deny nonpremium users",
+      "active premium receives protected batch without daily debit",
+      "expired premium is rechecked before batch admission",
+      "configured admin retains premium-batch bypass",
+      "tampered identifiers and premium-to-ordinary route switching fail closed",
+      "expired persisted grants deny before delivery or quota reservation",
+      "source-count failure gives retry feedback with no charge and recovers",
+      "Mongo-backed batch grants and quota state survive clearing both QA Redis databases",
+      "long references shorten through the canonical Mongo key and remain deliverable",
+      "public file-store permits an ordinary user to link their uploaded media"
+    ],
+    "cleanup": {
+      "checks": 25,
+      "unique_owned_messages": 127,
+      "remaining_owned_messages": 0,
+      "membership_or_telegram_role_changes": 0
+    },
+    "diagnostics": {
+      "expected_error_diagnostics": 3,
+      "explicit_error_probes": 2,
+      "unexpected_errors": 0,
+      "unexpected_tracebacks": 0
+    },
+    "transport": "Real Telegram private commands and replies with two authenticated existing user sessions and the QA bot.",
+    "role_setup": "Supplied admin session was revoked; a working normal session was configured as admin only in isolated QA runtime. No actual Telegram roles changed."
+  },
+  "legacy_compatibility": {
+    "operator_choice": "Keep old links only for configured media/file-store channels.",
+    "sources": "CHANNELS, FILE_STORE_CHANNEL, and fresh enabled indexed_channels records; configured admins retain source bypass.",
+    "new_ordinary_format": "DSTORE-BL-<128-bit opaque identifier>",
+    "storage": "Existing primary batch_links collection; no migration or Redis clearing required.",
+    "rollback": "Older bot code cannot open newly issued opaque ordinary URLs."
+  },
+  "runtime": {
+    "python": "3.13.7",
+    "wzgram": "3.1.7",
+    "motor": "3.7.1",
+    "pymongo": "4.20.0",
+    "redis": "8.1.0",
+    "pydantic": "2.14.3",
+    "uvloop": "0.21.0",
+    "pytest": "8.3.5",
+    "pytest-asyncio": "0.26.0",
+    "coverage": "7.8.2",
+    "fixture_image": "file-filter-bot:qa-runtime-20261115",
+    "source_and_venv_mounted": true,
+    "application_bundled": false,
+    "deployment_image_built": false
+  },
+  "validation": {
+    "compile": "passed",
+    "undefined_name_ruff": "passed",
+    "pip_check": "passed",
+    "application_source_matches_accepted_shards": true
+  },
+  "isolation": {
+    "local_disposable_mongodb": true,
+    "separate_cache_and_state_redis": true,
+    "published_host_ports": 0,
+    "atlas_accessed": false,
+    "production_accessed": false,
+    "configuration_or_existing_limits_changed": false,
+    "docker_cleanup": {
+      "removed_owned_services": 3,
+      "owned_containers_remaining": 0,
+      "original_services_running": true
+    },
+    "final_cleanup": {
+      "excluded_shard_artifacts_archived": 6,
+      "private_bot_session_artifacts_removed": 2,
+      "owned_containers_remaining": 0,
+      "original_services_running": true
+    }
+  },
+  "remaining": [
+    "Whole-bot 100% coverage",
+    "Additional media/subscription and error/cancellation permutations",
+    "Large-manifest byte/memory/concurrency measurements",
+    "Very-large-batch throughput",
+    "Production load and cloud restore",
+    "Source-matched deployment image acceptance"
+  ],
+  "next_bounded_scope": "Select after operator continue."
+}

@@ -753,6 +753,17 @@ group and a compact keyword digest. `/delall` stores a five-minute confirmation
 under protected `deleteall_pending:filter:*` state and consumes it atomically
 before deleting filters; cancellation checks the actor and chat.
 
+Ordinary source batches now store an opaque `BL-*` grant in the primary
+`batch_links` collection, sharing the existing model/indexes with premium grants.
+Creation resolves both source links, enforces the configured range and verifies
+the creator's membership (configured admins bypass membership). `DSTORE-BL-*`
+resolves the persisted grant and rejects premium-only or expired records before
+retrieval. Existing ban/subscription/premium/quota gates still apply. Legacy
+unsigned ranges require a configured media/file-store source or a fresh enabled
+managed-channel record; admins retain their source bypass. JSON manifests use
+validated independent snapshots with a load-time TTL and disposable downloads.
+Count failures deny admission; media attempts are bounded by the reservation.
+
 ## 13. Docker deployment topology
 
 ```mermaid

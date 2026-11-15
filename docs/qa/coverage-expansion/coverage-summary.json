@@ -1,51 +1,67 @@
 {
-  "date": "2026-11-06",
-  "application_commit": "a220499e78343c1801d06d057a5e820ba2bae986",
+  "date": "2026-11-15",
+  "application_commit": "a8b6f849002fcece984764cfe4de81df9ef201c7",
   "tests": {
-    "passed": 1498,
+    "passed": 1581,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
     "warnings": 22,
-    "new": 73,
-    "seconds": 37.67,
+    "new": 76,
+    "seconds": 36.24,
     "new_cases_by_module": {
-      "tests.test_connection_atomicity": 9,
-      "tests.test_connection_permissions": 27,
-      "tests.test_filter_delete_confirmation": 5,
-      "tests.test_group_filter_alerts": 8,
-      "tests.test_group_filter_content": 24
+      "tests.test_filestore_command_forms": 16,
+      "tests.test_filestore_source_authorization": 16,
+      "tests.test_premium_batch_bounds": 9,
+      "tests.test_premium_batch_privileges": 16,
+      "tests.test_batch_metadata_contract": 11,
+      "tests.test_batch_source_quota_safety": 6,
+      "tests.test_filestore_short_reference": 2
     }
   },
   "application_files": 122,
   "denominator_matches_all_tracked_non_test_python": true,
   "automated": {
-    "covered_lines": 11793,
-    "num_statements": 18263,
-    "percent_covered": 61.636923076923075,
-    "percent_covered_display": "62",
-    "missing_lines": 6470,
+    "covered_lines": 12169,
+    "num_statements": 18418,
+    "percent_covered": 63.225491789952855,
+    "percent_covered_display": "63",
+    "missing_lines": 6249,
     "excluded_lines": 41,
-    "num_branches": 6112,
-    "num_partial_branches": 965,
-    "covered_branches": 3231,
-    "missing_branches": 2881,
-    "percent_statements_covered": 64.57318074796035,
-    "percent_branches_covered": 52.86321989528796
+    "num_branches": 6186,
+    "num_partial_branches": 1015,
+    "covered_branches": 3387,
+    "missing_branches": 2799,
+    "percent_statements_covered": 66.07123466174394,
+    "percent_branches_covered": 54.75266731328807
+  },
+  "automated_plus_current_live": {
+    "covered_lines": 13023,
+    "num_statements": 18418,
+    "percent_covered": 67.52154121281093,
+    "percent_covered_display": "68",
+    "missing_lines": 5395,
+    "excluded_lines": 41,
+    "num_branches": 6186,
+    "num_partial_branches": 1082,
+    "covered_branches": 3590,
+    "missing_branches": 2596,
+    "percent_statements_covered": 70.70800304050385,
+    "percent_branches_covered": 58.034270934367925
   },
   "automated_plus_source_matched_live": {
-    "covered_lines": 12883,
-    "num_statements": 18263,
-    "percent_covered": 67.2902564102564,
-    "percent_covered_display": "67",
-    "missing_lines": 5380,
+    "covered_lines": 13358,
+    "num_statements": 18418,
+    "percent_covered": 69.48057226467242,
+    "percent_covered_display": "69",
+    "missing_lines": 5060,
     "excluded_lines": 41,
-    "num_branches": 6112,
-    "num_partial_branches": 1093,
-    "covered_branches": 3519,
-    "missing_branches": 2593,
-    "percent_statements_covered": 70.54153205935498,
-    "percent_branches_covered": 57.57526178010471
+    "num_branches": 6186,
+    "num_partial_branches": 1121,
+    "covered_branches": 3737,
+    "missing_branches": 2449,
+    "percent_statements_covered": 72.52687588228906,
+    "percent_branches_covered": 60.41060459101196
   },
   "target_100_percent_reached": false,
   "largest_remaining_gaps": [
@@ -56,12 +72,6 @@
       "line_percent": 56.58
     },
     {
-      "file": "core/services/filestore.py",
-      "missing_lines": 222,
-      "missing_branches": 93,
-      "line_percent": 34.9
-    },
-    {
       "file": "core/database/multi_pool.py",
       "missing_lines": 209,
       "missing_branches": 122,
@@ -69,9 +79,9 @@
     },
     {
       "file": "bot.py",
-      "missing_lines": 201,
-      "missing_branches": 90,
-      "line_percent": 70.78
+      "missing_lines": 197,
+      "missing_branches": 85,
+      "line_percent": 71.37
     },
     {
       "file": "handlers/features.py",
@@ -118,14 +128,8 @@
     {
       "file": "repositories/media.py",
       "missing_lines": 123,
-      "missing_branches": 57,
+      "missing_branches": 55,
       "line_percent": 73.89
-    },
-    {
-      "file": "handlers/channel.py",
-      "missing_lines": 119,
-      "missing_branches": 47,
-      "line_percent": 67.22
     },
     {
       "file": "handlers/delete.py",
@@ -140,37 +144,51 @@
       "line_percent": 49.36
     },
     {
-      "file": "handlers/commands_handlers/user.py",
-      "missing_lines": 118,
-      "missing_branches": 57,
-      "line_percent": 57.09
-    },
-    {
       "file": "repositories/features.py",
       "missing_lines": 116,
       "missing_branches": 53,
       "line_percent": 75.11
     },
     {
-      "file": "core/cache/redis_cache.py",
+      "file": "handlers/channel.py",
       "missing_lines": 115,
-      "missing_branches": 39,
-      "line_percent": 62.66
+      "missing_branches": 46,
+      "line_percent": 68.32
+    },
+    {
+      "file": "core/cache/redis_cache.py",
+      "missing_lines": 113,
+      "missing_branches": 36,
+      "line_percent": 63.31
+    },
+    {
+      "file": "handlers/commands_handlers/user.py",
+      "missing_lines": 113,
+      "missing_branches": 55,
+      "line_percent": 58.91
     },
     {
       "file": "core/cache/invalidation.py",
-      "missing_lines": 112,
+      "missing_lines": 110,
       "missing_branches": 10,
-      "line_percent": 46.41
+      "line_percent": 47.37
     },
     {
-      "file": "handlers/deeplink.py",
-      "missing_lines": 106,
-      "missing_branches": 66,
-      "line_percent": 66.98
+      "file": "core/services/filestore.py",
+      "missing_lines": 109,
+      "missing_branches": 44,
+      "line_percent": 76.81
+    },
+    {
+      "file": "handlers/indexing.py",
+      "missing_lines": 103,
+      "missing_branches": 47,
+      "line_percent": 41.14
     }
   ],
-  "historical_execution_imported": false,
+  "historical_execution_imported": true,
+  "historical_execution_policy": "Only retained round-15 execution on start/end/current SHA256-matching files is imported; missing earlier raw coverage is not reconstructed.",
+  "historical_round15_evidence": "round15-filters-connections.json",
   "historical_baseline": {
     "date": "2026-10-29",
     "application_commit": "850bc31a9014618f7ab99fdddaeb87d087e814c6",

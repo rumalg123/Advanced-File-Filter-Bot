@@ -10,10 +10,10 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The latest bounded QA passed **1,498 tests and 28 live group-filter/connection
-checks** on wzgram 3.1.6. Fresh whole-tree coverage is **70.54% lines /
-57.58% branches**; earlier raw execution was unavailable after restart,
-so previous aggregate metrics remain historical. Production load, cloud restore,
+The latest bounded QA passed **1,581 tests and 25 live file-store/batch checks**
+on Python 3.13.7 / wzgram 3.1.7. Fresh current automated + live coverage is
+**70.71% lines / 58.03% branches**; including retained, source-matched round-15
+execution gives **72.53% / 60.41%**. Production load, cloud restore,
 configuration/index checks and a source-matched deployment image remain release
 gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
 
@@ -33,12 +33,23 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application/tests source is `a220499`. Its complete suite and
-live pass used the wzgram 3.1.6 runtime from
-`file-filter-bot:qa-multisub-20261030` with current source mounted into the
-container. The bundled code remains older `b2fcb38`; this is a runtime fixture,
-not a rebuilt deployment image. Build and validate the new branch source before
-deployment. See [the current round evidence](qa/coverage-expansion/round15-filters-connections.json).
+The current QA application/tests source is `a8b6f84`. Its complete suite and
+live pass used Python 3.13.7 / wzgram 3.1.7 with current source and an existing
+QA virtual environment mounted into `file-filter-bot:qa-runtime-20261115`.
+That runtime fixture bundles no application or dependencies; it is not a release
+image. Build and validate the branch source and dependency set before deployment.
+See [the current round evidence](qa/coverage-expansion/round16-filestore.json).
+
+File-store/batch fixes need no MongoDB migration or Redis flush. New ordinary
+batch URLs persist opaque grants in the existing primary `batch_links`
+collection and use its existing indexes. Normal users' old unsigned URLs work
+only for configured media/file-store or enabled managed indexing channels;
+regenerate links for other sources through an authorized creator. Public batch
+creation now verifies source membership; configured admins retain their bypass.
+Older bot versions cannot open the new ordinary URLs, so consider newly issued
+links when planning a code rollback. Existing premium URLs retain their format.
+Do not deploy intermediate QA commits: the disproved shortening change was
+reverted before the final accepted source and tests above.
 
 Group-filter/connection fixes require no MongoDB migration or Redis flush.
 Existing connection documents and historical URL/alert keyboards remain readable.

@@ -9,23 +9,24 @@ feature ID below. Multilingual search is explicitly out of scope.
 Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (configured)`,
 `Enabled`, `Blocked`.
 
-## Current QA, 2026-11-06
+## Current QA, 2026-11-15
 
-The group-filter/connection round passed **1,498 tests, zero failures or skips**
-and **28 live checks** on wzgram 3.1.6. BUG-123–132 and CACHE-029 cover atomic
-connections, current permissions, non-destructive cleanup, text/keyboards,
-source-bound alerts, single-use confirmations and captionless media. Admin/owner
-bypasses and all 889 baseline logger lines remain. Final live cleanup verified
-85 owned messages removed and both temporary member roles restored.
+The file-store/batch round passed **1,581 tests, zero failures or skips** and
+**25 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-134–139 and CACHE-030
+cover protected command forms, source authorization and persisted grants,
+premium bounds/bypasses, metadata lifetime/validation and quota admission.
+Configured admin/owner bypasses remain. Two misleading diagnostics were corrected;
+the other baseline logger statements remain. All **127 owned QA messages** were
+confirmed absent; no Telegram memberships or roles changed.
 
-Fresh source-matched coverage is **70.54% lines, 57.58% branches,
-67.29% combined** across all 122 application/operator Python files.
-October raw execution files were unavailable after restart and were not
-reconstructed; earlier aggregate percentages remain dated historical evidence.
-See [the current QA record](docs/qa/coverage-expansion/STATUS.md) and
-[round 15 evidence](docs/qa/coverage-expansion/round15-filters-connections.json).
-Whole-bot 100% and production acceptance remain open. No production access,
-feature defaults, deployment environment or production limits changed.
+Fresh current automated + live coverage is **70.71% lines / 58.03% branches**.
+Including retained, source-matched round-15 execution gives **72.53% lines /
+60.41% branches / 69.48% combined**, across all 122 application/operator Python
+files. Changed-file historical execution is discarded. Missing older raw coverage
+was not reconstructed. See [the QA record](docs/qa/coverage-expansion/STATUS.md)
+and [round 16 evidence](docs/qa/coverage-expansion/round16-filestore.json).
+Whole-bot 100% and production acceptance remain open. Production, deployment
+configuration, feature defaults and existing configured limits are unchanged.
 
 ## Live-safety contract
 

@@ -1,16 +1,16 @@
 # QA evidence and remaining coverage
 
-> **Targeted hotfix (2026-11-15):** BUG-133 fixes subscription retries with welcome photos. Seven new regressions and 154 related tests passed; two MongoDB cases skipped. See [hotfix evidence](#subscription-photo-retry-hotfix-2026-11-15).
+> **Last bounded round (2026-11-15): 1,581 tests and 25 live checks passed.**
+> See [round 16](#bounded-qa-round-16--file-store-links-and-batch-retrieval-2026-11-15).
+> Fresh current coverage: **70.71% lines / 58.03% branches**. Including retained,
+> source-matched round-15 execution: **72.53% / 60.41%**. Earlier dated sections
+> remain historical.
 
-> **Last bounded round (2026-11-06): 1,498 tests and 28 live checks passed.** See [round 15](#bounded-qa-round-15--group-filters-and-connections-2026-11-06). Fresh coverage: 70.54% lines / 57.58% branches. Earlier dated sections are historical.
-
-
-Latest continuation: [content dashboard and zero-result analytics](#bounded-qa-round-14--content-dashboard-and-zero-result-analytics-2026-10-31),
-**1,425 tests passed**, **71.94% lines / 59.71% branches / 68.89% combined**.
-Next bounded round: group filters and connections.
-Configured admin/owner bypasses, public group previews and operator logging are
-preserved. Whole-bot 100% remains open. This round is complete; wait for the
-operator's next `continue` before starting another feature.
+Latest continuation: file-store links and batch retrieval, including the
+operator-approved compatibility policy for old unsigned source ranges.
+Configured admin/owner bypasses and operator diagnostics remain, with two
+misleading messages corrected. Whole-bot 100% remains open. This round is
+complete; wait for the operator's next `continue` before selecting another scope.
 
 Historical baseline: QA date 2026-10-29, application source `850bc31`.
 The operator authorized all supplied MongoDB copies, extra commented sources,
@@ -1740,3 +1740,87 @@ retain their existing behavior.
 - No database or Redis migration, configuration changes or feature flags are
   required. Deploy the corrected source. The next bounded QA scope remains
   file-store links and batch retrieval.
+
+
+## Bounded QA round 16 — file-store links and batch retrieval (2026-11-15)
+
+**Completed: 1,581 tests passed**, zero failures/errors/skips, with 22 existing
+warnings, in 36.24 seconds. The 76 new cases cover command forms, source
+permissions and grant persistence, premium range bounds/bypasses, JSON metadata,
+quota source failures and actual MongoDB short-reference resolution. Compile,
+undefined-name Ruff, dependency consistency and source/provenance checks passed.
+Application/tests source: `a8b6f84`; [sanitized evidence](round16-filestore.json).
+
+| Fix | Commit | Verified behavior |
+|---|---|---|
+| BUG-134 | `a307afe` | Qualified protected commands and repeated whitespace retain the requested protection. |
+| BUG-135 | `6c01ac7 / 5a2db1d` | Opaque persisted ordinary grants, creator membership, configured legacy-source compatibility and fresh enabled-source checks; premium routes fail closed. |
+| BUG-136 | `72c35af` | Existing configured bounds apply to premium aliases, inclusive single-message ranges and resolved source identity. |
+| BUG-137 | `233bb93` | Configured admin/owner premium-batch bypass remains; ordinary premium policy is unchanged. |
+| BUG-138 / CACHE-030 | `f8ae0c4` | JSON row validation, load-time snapshot TTL, independent copies and temporary-download cleanup. |
+| BUG-139 | `808b0bc` | Incomplete counting denies before charge; attempted media delivery stays within the reservation. |
+
+The operator explicitly chose to keep ordinary users' old unsigned batch URLs
+only on configured media/file-store channels. Enabled channels managed by admin
+commands also count as configured, using a fresh database read. Configured admins
+retain unrestricted legacy source access. New ordinary URLs use 128-bit opaque
+persisted grants in the existing primary `batch_links` collection; no migration
+or Redis clearing is required. Older code cannot open these new ordinary URLs.
+Existing configured batch/processing limits were not reduced; automated tests
+exercise the operator's large bound without sending 500,000 live messages.
+
+**25 live checks passed** through real Telegram private commands and bot replies,
+using the QA bot, two authenticated existing user sessions, two declared media
+channels and the QA log channel. The supplied admin session was revoked; one
+working normal account was configured as an admin only inside the disposable
+runtime, while the second retained the ordinary-user role. No `.env` or actual
+Telegram memberships/roles were changed. Tests covered normal/protected single
+and mixed-content batch delivery, exact daily quota settlement and denial,
+legacy-source allow/deny, forged log-source rejection, approved opaque grants,
+creator membership denial, source/range mismatch, single-item ranges, JSON
+protection and expiry/reload, malformed metadata cleanup, premium grants/expiry,
+admin bypass, tampered tokens and cross-route denial, persisted-grant expiry,
+source-count failure/recovery, real shortened-reference delivery and recovery
+after clearing both isolated QA Redis databases.
+
+**QA correction:** an initial shortening hypothesis confused the media unique
+identifier with MongoDB `_id`, which is the Telegram `file_id`. Its change was
+reverted in `ec49de8`. The final accepted source `a8b6f84` adds real MongoDB
+roundtrip regressions. BUG-140 was withdrawn; no additional product fix is
+claimed. Failed/intermediate runs are excluded from accepted coverage.
+
+The final diagnostic audit found **three expected error diagnostics**: malformed
+JSON, the explicitly injected count failure, and the existing successful long-ID
+shortening fallback. There were **zero unexpected errors or tracebacks**.
+Two misleading baseline logger messages were corrected (premium fallback and
+strictly reversed bounds); all other baseline logger statements remain.
+
+| Coverage | Lines | Branches | Combined |
+|---|---:|---:|---:|
+| Fresh current automated suite | 66.07% | 54.75% | 63.23% |
+| Fresh current automated + live | 70.71% | 58.03% | 67.52% |
+| Current + retained, source-matched round-15 execution | 72.53% | 60.41% | 69.48% |
+
+The denominator includes **18,418 statements, 6,186 branches and all 122 tracked
+non-test application/operator Python files**. Both current passing shards match
+start/end/current SHA256 for every file. Each retained round-15 shard contributes
+only its 115 unchanged files; seven changed files are discarded from each shard.
+Unexecuted tracked files remain in the denominator. Missing earlier raw execution
+was not reconstructed from summaries. Whole-bot **100% remains open**; current
+raw data and source provenance are retained privately for continuation.
+
+The Python 3.13.7 / wzgram 3.1.7 runtime mounted the current source and private
+virtual environment into a minimal QA fixture; no deployment image was built.
+MongoDB and cache/state Redis were disposable local services with no host ports.
+Atlas, production services and production configuration were not touched.
+Cleanup independently confirmed **127 owned messages absent**, zero remaining,
+no membership/role changes, and all three disposable services/volumes removed.
+The original server services stayed running. Live bot-session artifacts are
+removed after shutdown; credentials and raw Telegram evidence remain outside Git.
+
+Remaining gates include uncovered failures/cancellation branches, more media and
+subscription permutations, large-manifest byte/memory and concurrency benchmarks,
+very large batch throughput, production load, cloud restore and a validated
+release image. No manifest byte-size budget or production-scale load acceptance
+is claimed. No new product feature/default was added. Stop here until `continue`;
+select the next bounded scope then.

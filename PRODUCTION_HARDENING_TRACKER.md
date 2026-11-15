@@ -1,12 +1,16 @@
 # Production Hardening Tracker
 
-> **Current QA (2026-11-06):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **1,498 tests and 28 live group-filter/connection checks passed**, zero failures
-> or skips, on wzgram 3.1.6. BUG-123–132 / CACHE-029 are fixed. Admin/owner
-> bypasses and operator diagnostics remain. Fresh coverage: **70.54% lines,
-> 57.58% branches, 67.29% combined**. Historical raw coverage was
-> unavailable after restart and was not reconstructed. Whole-bot 100%, review,
-> merge and production operational acceptance remain open. Production untouched.
+> **Current QA (2026-11-15):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
+> **1,581 tests and 25 live file-store/batch checks passed**, zero failures or
+> skips, on wzgram 3.1.7. BUG-134–139 / CACHE-030 are fixed. Configured
+> admin/owner bypasses remain; two misleading diagnostics were corrected.
+> Fresh current coverage: **70.71% lines / 58.03% branches**. With retained,
+> source-matched round-15 execution: **72.53% lines / 60.41% branches**.
+> Old unsigned batch links remain usable by normal users only on configured
+> media/file-store or enabled managed sources, as approved by the operator.
+> New ordinary links use persisted opaque grants. No migration or Redis flush
+> is required. Whole-bot 100%, review, merge and production acceptance remain
+> open. Production untouched.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The
