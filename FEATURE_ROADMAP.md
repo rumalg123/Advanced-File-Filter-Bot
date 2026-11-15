@@ -11,23 +11,21 @@ Status values: `Planned`, `In progress`, `Implemented (off)`, `Implemented (conf
 
 ## Current QA, 2026-11-15
 
-The channel-configuration follow-up passed **1,602 tests**, zero failures/errors/
-skips, and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-141 restores
-legacy links for saved File Channels lists. BUG-142 / CACHE-031 unify indexing
-commands and settings on the persisted registry; removal/disable survives restart.
-File Channels adds batch-only sources without enabling indexing. Public creators
-use current source membership, independently of either source list. Normal users'
-unsigned old links still require a source in either list, as the operator chose.
-Configured admin/owner bypasses and existing limits remain.
+The settings-presentation follow-up passed **1,605 tests**, zero failures/errors/
+skips, and **10 live checks** on Python 3.13.7 / wzgram 3.1.7. BUG-143 sorts
+all 69 controls by their visible labels across nine pages, clarifies request
+inboxes, result counts, units, scope and inactive legacy fields, and shows the
+configuration key in details. Existing setting keys, values, defaults, types,
+bounds, categories, access bypasses and callback identifiers are unchanged.
 
-Fresh current automated + live coverage is **70.92% lines / 58.05% branches**;
-including source-matched retained history gives **72.98% lines / 60.81% branches**.
+Fresh current automated + live coverage is **70.24% lines / 57.23% branches**;
+including source-matched retained history gives **73.04% lines / 60.99% branches**.
 All 122 tracked application/operator Python files remain in the denominator;
-changed historical execution is discarded. All **51 final-pass messages** were
-confirmed absent, with no Telegram membership/role changes. No Atlas or production
-services/configuration were changed. Whole-bot 100% and production acceptance
-remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md) and
-[round 17 evidence](docs/qa/coverage-expansion/round17-channel-settings.json).
+changed historical execution is discarded. All **four owned live messages** were
+confirmed absent; no Telegram membership/role changes occurred. No Atlas or
+production services/configuration were changed. Whole-bot 100% and production
+acceptance remain open. See [the QA record](docs/qa/coverage-expansion/STATUS.md)
+and [round 18 evidence](docs/qa/coverage-expansion/round18-settings-menu.json).
 
 ## Live-safety contract
 

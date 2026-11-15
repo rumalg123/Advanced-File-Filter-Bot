@@ -422,28 +422,57 @@ Never commit `.env`. The repository `.gitignore` is intended to keep secrets out
 
 Only media operations use the optional multi-database manager. Users, settings, channels, connections, filters, links, and additive feature collections remain on the primary database.
 
+### Settings menu labels and help
+
+`/bsetting` lists all 69 settings alphabetically by the displayed label, across
+nine pages. Each detail view shows the configuration key, purpose, current/default
+values and type. Units and effects are explained in the description. Existing
+keys, saved values and callback identifiers are unchanged; reopen `/bsetting`
+after updating to refresh an already-open menu's labels and positions.
+
+| Setting key | Display label | Purpose |
+|---|---|---|
+| `INDEX_REQ_CHANNEL` | Index Requests Channel | Admin approval inbox for requests to index a source. |
+| `REQ_CHANNEL` | Content Requests Channel | Admin review inbox for missing-content requests. |
+| `CHANNELS` | Indexing Channels | Active automatic-indexing registry, shared with channel commands. |
+| `FILE_STORE_CHANNEL` | File Channels | Additional batch-only sources; does not enable indexing. |
+| `PUBLIC_FILE_STORE` | Public Link Creation | Controls who can create links; valid existing links remain retrievable. |
+| `MAX_BTN_SIZE` | Search Results per Page | File-result count, rather than the total number of keyboard buttons. |
+| `SUPPORT_GROUP_ID` | Request Group ID | Group accepting #request messages. |
+| `SUPPORT_GROUP_URL` | Support Button URL | Destination of the visible support button. |
+| `SUPPORT_GROUP_NAME` | Support Button Label | Text on that support button. |
+| `AUTH_USERS` | Force-Sub Exempt Users | Membership-check exemptions; does not grant admin status. |
+| `WORKERS` | Telegram Update Workers | Concurrent Telegram update handling. |
+| `PREMIUM_DURATION_DAYS` | Default Premium Days | Default duration for future grants; existing expiries do not change. |
+
+`SUPPORT_CHAT_ID`, `SUPPORT_GROUP`, `SUPPORT_GROUP_USERNAME` and `MAIN_CHANNEL`
+are explicitly marked **(Legacy)**: current handlers do not use these fields.
+Their help directs operators to the active support-button, request-group or
+force-subscription settings. They remain stored for compatibility. No migration,
+settings reset or Redis clearing is required for the presentation update.
+
 ### Channels, groups, and authorization
 
 | Variable | Default | Purpose |
 |---|---:|---|
 | `LOG_CHANNEL` | `0` | Startup, maintenance, request, and operational log destination. `0` disables Telegram logging. |
-| `INDEX_REQ_CHANNEL` | `0` | Destination for index requests. Set it explicitly; `0` leaves the destination unset. |
+| `INDEX_REQ_CHANNEL` | `0` | Index Requests Channel: admin approval inbox for source-indexing requests. Failed sends can fall back to LOG_CHANNEL. |
 | `FILE_STORE_CHANNEL` | empty | Space-separated additional batch-source IDs; File Channels in `/bsetting`. Does not enable indexing. |
-| `DELETE_CHANNEL` | unset | Optional channel involved in file-deletion workflows. |
-| `REQ_CHANNEL` | `0` | Destination for content requests. Set it explicitly; `0` leaves the destination unset. |
+| `DELETE_CHANNEL` | unset | Media posted/forwarded here queues deletion of matching catalog records; original Telegram source messages are retained. |
+| `REQ_CHANNEL` | `0` | Content Requests Channel: admin review inbox for missing titles. `0` uses LOG_CHANNEL. |
 | `SUPPORT_GROUP_ID` | unset | Group where messages beginning with `#request ` are handled. |
 | `AUTH_CHANNEL` | unset | Comma-separated force-subscription channel IDs or `@usernames`; a legacy single value still works. |
 | `AUTH_GROUPS` | empty | Comma-separated force-subscription group IDs or `@usernames`. |
 | `FORCE_SUB_INVITE_EXPIRE_MINUTES` | `15` | Lifetime of newly generated join links, in minutes; range 1–525600. |
 | `FORCE_SUB_INVITE_MEMBER_LIMIT` | `1` | Telegram member limit for each new join link; range 1–99999. |
-| `AUTH_USERS` | empty | Comma-separated users allowed by authorization checks; admins are appended automatically. |
+| `AUTH_USERS` | empty | Comma-separated users exempt from force-subscription membership checks; admins are appended automatically. Does not grant bot-admin status. |
 | `CHANNELS` | `0` | Comma-separated numeric IDs for initial auto-indexing setup. `0` is discarded. Runtime commands and Indexing Channels share the persisted registry. |
 | `PICS` | empty | Comma-separated image URLs used randomly by the start command. |
 
 For force subscription, the bot must be an administrator with **Invite Users**
 permission in every required channel/group. Use full Telegram IDs, including
-the `-100` prefix for channels and supergroups. In `/bsetting`, **Force Sub
-Channels** and **Force Sub Groups** accept comma-separated values. Before saving
+the `-100` prefix for channels and supergroups. In `/bsetting`, **Force-Sub
+Channels** and **Force-Sub Groups** accept comma-separated values. Before saving
 a nonempty edit, the bot resolves every target, checks its type and permissions,
 and stores canonical IDs. A failed check returns an actionable error without
 changing the saved setting or requesting a restart.
@@ -524,10 +553,10 @@ Defaults are `false`, with the activation-aware registry recommendation below.
 | `FEATURE_CANONICAL_MEDIA_METADATA` | Persist optional width, height and quality on new media; older-image rollback needs compatibility review. |
 | `FEATURE_QUOTA_DELIVERY_LEDGER` | Durable quota reservations and one-time settlements; uncertain deliveries need operator reconciliation. |
 | `PROCESSING_DURABLE_INDEXING` | MongoDB-backed channel indexing jobs with retries, restart recovery and a best-effort log-channel summary for each newly indexed, acknowledged job. |
-| `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` | MongoDB-backed alert jobs and bounded workers; also requires Saved Alerts enabled. |
+| `PROCESSING_DURABLE_SAVED_SEARCH_ALERTS` | MongoDB-backed alert jobs and bounded workers; also requires Saved Search Alerts enabled. |
 | `DATABASE_GLOBAL_OWNER_REGISTRY` | Coordinated permanent file ownership across multiple database sources; requires explicit ownership activation. |
 
-The **Media Owners** setting is locked when fewer than two distinct valid
+The **Multi-DB File Ownership** setting is locked when fewer than two distinct valid
 MongoDB URI/database pairs are configured. URI syntax and database names are
 validated without connecting or resolving SRV DNS for the menu. Repeated source
 identities, including credential/option variants of the same source, do not
@@ -1085,10 +1114,11 @@ Run the current test suite:
 python -m pytest -q
 ```
 
-The channel-configuration follow-up passed **1,602 tests** with zero failures or
-skips and **11 live checks** on Python 3.13.7 / wzgram 3.1.7. Fresh current
-automated + live coverage is **70.92% lines / 58.05% branches**; including retained,
-source-matched history gives **72.98% lines / 60.81% branches**. All 122 tracked
+The settings-menu follow-up passed **1,605 tests** with zero failures or skips
+and **10 live checks** on Python 3.13.7 / wzgram 3.1.7, covering all 69 settings
+across nine Telegram pages and six detail/Back paths. Fresh current automated +
+live coverage is **70.24% lines / 57.23% branches**; including retained,
+source-matched history gives **73.04% lines / 60.99% branches**. All 122 tracked
 application/operator Python files remain in the denominator. Whole-bot 100% and
 production gates remain open. See the [QA record](docs/qa/coverage-expansion/STATUS.md).
 

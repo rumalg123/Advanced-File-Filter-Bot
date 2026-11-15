@@ -1,15 +1,13 @@
 # Production Hardening Tracker
 
 > **Current QA (2026-11-15):** [results and remaining gates](docs/qa/coverage-expansion/STATUS.md).
-> **1,602 tests and 11 live channel-configuration checks passed**, zero failures
-> or skips, on wzgram 3.1.7. BUG-141/142 / CACHE-031 are fixed. Indexing
-> commands/settings share one persisted registry; File Channels restores old
-> links without enabling indexing. Public creation checks membership outside the
-> lists; ordinary legacy access requires either configured source list.
-> Fresh coverage: **70.92% lines / 58.05% branches**. With source-matched retained
-> history: **72.98% lines / 60.81% branches**. Admin/owner bypasses and limits remain.
-> No MongoDB migration or Redis flush is needed. Whole-bot 100%, review, merge,
-> deployment-image and production operational acceptance remain open.
+> **1,605 tests and 10 live settings-menu checks passed**, zero failures or skips,
+> on wzgram 3.1.7. BUG-143 alphabetizes all 69 controls and clarifies labels/help
+> without changing setting keys, defaults or access rules. Fresh coverage:
+> **70.24% lines / 57.23% branches**. With source-matched retained history:
+> **73.04% lines / 60.99% branches**. No database migration or Redis flush is needed.
+> Whole-bot 100%, review, merge, deployment-image and production operational
+> acceptance remain open. Production untouched.
 >
 > **Cutover decision:** the operator accepts up to 24 hours of downtime and an
 > empty Redis restart while retaining production MongoDB. The

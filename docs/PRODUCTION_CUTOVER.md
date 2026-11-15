@@ -10,11 +10,12 @@ server was accessed or changed from QA.
 ## Readiness and recommended scope
 
 The branch is a release candidate for a controlled single-MongoDB rollout.
-The channel-configuration follow-up passed **1,602 tests and 11 live checks** on
-Python 3.13.7 / wzgram 3.1.7. Fresh current coverage is **70.92% lines / 58.05% branches**;
-including source-matched retained history gives **72.98% lines / 60.81% branches**.
-Production load, cloud restore, configuration/index checks and a source-matched
-deployment image remain release gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
+The settings-menu follow-up passed **1,605 tests and 10 live checks** on Python
+3.13.7 / wzgram 3.1.7, including all 69 settings across nine pages. Fresh current
+coverage is **70.24% lines / 57.23% branches**; including source-matched retained
+history gives **73.04% lines / 60.99% branches**. Production load, cloud restore,
+configuration/index checks and a source-matched deployment image remain release
+gates. See [the QA evidence](qa/coverage-expansion/STATUS.md).
 
 Recommended initial scope:
 
@@ -32,12 +33,18 @@ Recommended initial scope:
   archive checksum are recorded. A build against unpinned requirements may
   resolve different dependencies and needs new QA.
 
-The current QA application/tests source is `a6277d6`. Its complete suite and
+The current QA application/tests source is `f9e50d8`. Its complete suite and
 live pass used Python 3.13.7 / wzgram 3.1.7 with current source and an existing
 QA virtual environment mounted into `file-filter-bot:qa-runtime-20261115`.
 That runtime fixture bundles no application or dependencies; it is not a release
 image. Build and validate the branch source and dependency set before deployment.
-See [the current round evidence](qa/coverage-expansion/round17-channel-settings.json).
+See [the current round evidence](qa/coverage-expansion/round18-settings-menu.json).
+
+The settings-menu presentation update requires no database edits, settings reset
+or Redis flush. Restart with the new code and reopen `/bsetting`: names are sorted
+by visible label, details show the configuration key, and saved values are retained.
+Old callback identifiers still resolve their original setting. Four unused legacy
+fields are clearly identified; the support button uses Support Button URL/Label.
 
 File-store/batch fixes need no MongoDB migration or Redis flush. New ordinary
 batch URLs persist opaque grants in the existing primary `batch_links`

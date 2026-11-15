@@ -13,9 +13,9 @@
   },
   {
     "file": "bot.py",
-    "missing_lines": 197,
-    "missing_branches": 85,
-    "line_percent": 71.41
+    "missing_lines": 195,
+    "missing_branches": 83,
+    "line_percent": 71.7
   },
   {
     "file": "handlers/features.py",
@@ -92,7 +92,7 @@
   {
     "file": "handlers/commands_handlers/user.py",
     "missing_lines": 113,
-    "missing_branches": 55,
+    "missing_branches": 54,
     "line_percent": 58.91
   },
   {
@@ -114,16 +114,16 @@
     "line_percent": 72.83
   },
   {
-    "file": "handlers/commands_handlers/bot_settings.py",
-    "missing_lines": 97,
-    "missing_branches": 63,
-    "line_percent": 78.1
-  },
-  {
     "file": "core/services/features.py",
     "missing_lines": 90,
     "missing_branches": 45,
     "line_percent": 73.61
+  },
+  {
+    "file": "handlers/commands_handlers/bot_settings.py",
+    "missing_lines": 88,
+    "missing_branches": 55,
+    "line_percent": 80.14
   },
   {
     "file": "repositories/user.py",

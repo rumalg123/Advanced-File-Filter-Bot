@@ -199,7 +199,7 @@ The primary `DATABASE_URI` / `DATABASE_NAME` remain unchanged. Keep existing
 user-feature and premium/access choices. Existing managed `bot_settings` records
 override environment initialization for all 17 rollout flags, including the
 five operational flags listed above. Confirm their effective values in
-`/bsetting`; editing `.env` alone does not replace existing records. Media Owners
+`/bsetting`; editing `.env` alone does not replace existing records. Multi-DB File Ownership
 is locked with one source. Redis clearing does
 not reset database settings, users, premium status or daily quota counters.
 Daily quota rollover in this version is 00:00 UTC.
