@@ -77,7 +77,7 @@ class FileStoreHandler(BaseHandler):
     async def batch_command(self, client: Client, message: Message) -> None:
         """Generate batch link for multiple files"""
         # Parse command
-        parts = message.text.strip().split(" ")
+        parts = message.text.split()
 
         if len(parts) != 3:
             await message.reply(
@@ -88,7 +88,7 @@ class FileStoreHandler(BaseHandler):
 
         cmd, first_link, last_link = parts
         logger.debug(f"cmd: {cmd}, first_link: {first_link}, last_link: {last_link}")
-        protect = cmd.lower() == "/pbatch"
+        protect = cmd.lower().split("@", 1)[0] == "/pbatch"
 
         # Create batch link
         sts = await message.reply(
@@ -143,7 +143,7 @@ class FileStoreHandler(BaseHandler):
             return
 
         # Parse command with robust validation
-        parts = message.text.strip().split(" ")
+        parts = message.text.split()
 
         if len(parts) != 3:
             await message.reply(
@@ -170,7 +170,7 @@ class FileStoreHandler(BaseHandler):
         })
         
         # Determine if it's a protected batch
-        protect = cmd.lower() in ["/pbatch_premium", "/pbprem"]
+        protect = cmd.lower().split("@", 1)[0] in ["/pbatch_premium", "/pbprem"]
 
         # Pre-validate links using robust parser
         parsed_links = TelegramLinkParser.parse_link_pair(first_link, last_link)

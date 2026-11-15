@@ -146,6 +146,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-133 | Medium | Fixed | Subscription welcome photo replay | Successful Try Again callbacks resume /start through MessageProxy, which lacks reply_photo when PICS is configured. | Delegate photo replies to the original message, preserve the callback actor and returned reply for auto-delete, and cover the real retry-to-welcome path with photos on/off and timers on/off. |
 
+| BUG-134 | High | Fixed | Protected batch command forms | Qualified protected commands lose protection and repeated whitespace prevents batch creation. | Normalize the command username suffix and whitespace; all 16 ordinary/premium alias cases pass. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -413,3 +415,11 @@ container; no live photo delivery or production deployment is claimed. Telegram
 credentials and remote databases were not used. No settings, permission bypasses
 or operator logger lines changed. No database migration or Redis clearing is
 needed. Deploy the corrected code through the normal update/rebuild process.
+
+
+## File-store and batch QA (2026-11-15)
+
+- **BUG-134 fixed:** protected and ordinary batch commands preserve their
+  protection setting with qualified usernames and whitespace. Sixteen command
+  regressions passed; the original focused run reproduced eleven failures.
+  The bounded live file-store/batch round is in progress.
