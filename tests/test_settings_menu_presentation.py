@@ -91,3 +91,32 @@ async def test_select_and_back_returns_to_the_setting_on_its_sorted_page():
     await handler.settings_callback(None, query)
     assert found.callback_data in [b.callback_data for b in setting_buttons(message)]
     query.answer.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_retired_database_rows_and_old_buttons_cannot_reopen_or_modify_settings():
+    retired = {'SUPPORT_CHAT_ID', 'SUPPORT_GROUP', 'SUPPORT_GROUP_USERNAME', 'MAIN_CHANNEL'}
+    records = {key: NS(value='preserved legacy value') for key in retired}
+    repo = NS(get_all_settings=AsyncMock(return_value=records),
+              set_setting=AsyncMock(), reset_to_default=AsyncMock())
+    service = BotSettingsService(repo, NS())
+    service.owner_registry_policy = AsyncMock(return_value={
+        'editable': False, 'default': False, 'bound': False, 'note': 'QA single source',
+    })
+    settings = await service.get_all_settings()
+    assert len(settings) == 65
+    assert retired.isdisjoint(settings)
+    handler = handler_with(settings)
+    handler.settings_service = service
+    handler.session_manager = NS(create_edit_session=AsyncMock())
+    message = NS(edit_text=AsyncMock(), reply_text=AsyncMock())
+    for key in retired:
+        for data in [f'bset_view_{key}_0', f'bset_edit_{key}', f'bset_default_{key}']:
+            query = NS(from_user=NS(id=1), data=data, answer=AsyncMock(), message=message)
+            await handler.settings_callback(None, query)
+            query.answer.assert_awaited_once()
+        assert not await service.update_setting(key, 'replacement')
+    handler.session_manager.create_edit_session.assert_not_awaited()
+    repo.set_setting.assert_not_awaited()
+    repo.reset_to_default.assert_not_awaited()
+    assert all(row.value == 'preserved legacy value' for row in records.values())

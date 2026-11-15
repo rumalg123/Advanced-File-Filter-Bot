@@ -155,6 +155,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 | BUG-142 | High | Fixed | Conflicting indexing configuration | Commands update indexed_channels independently of CHANNELS settings; startup re-enables configured sources and removed channels can remain authorized through stale config. | Use the persisted registry for every indexing control and legacy-source check, seed only missing bootstrap IDs, preserve explicit disable/remove decisions and refresh handlers after settings edits. Real-Mongo regressions and all 1,602 tests passed. |
 | BUG-143 | Medium | Fixed | Settings menu discoverability and meaning | Settings follow metadata insertion order, labels confuse request inboxes with indexing and result counts with button counts, and terse help hides scope, units and unused legacy fields. | Sort by visible labels across pages; give all 69 controls accurate labels/help, expose the configuration key, identify inactive legacy settings and retain callback keys and setting defaults. All 1,605 tests passed. |
 
+| BUG-144 | Low | Fixed | Inactive settings controls | Four unused legacy fields still occupy the settings menu and accept meaningless edits. | Remove their active metadata and labels, retain stored historical rows, reject old view/edit/reset controls and preserve all 65 active definitions. All 1,606 tests passed. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -533,3 +535,16 @@ once in alphabetical order over nine pages; six selected detail/Back paths and
 Close worked. The audit confirmed clear legacy labels and worker naming, with
 no setting values changed by navigation. Four owned messages were confirmed
 absent after cleanup. See round 18 for complete sanitized evidence.
+
+
+## Retired settings cleanup (2026-11-15)
+
+**BUG-144 fixed:** SUPPORT_CHAT_ID, SUPPORT_GROUP, SUPPORT_GROUP_USERNAME and
+MAIN_CHANNEL are removed from active metadata and labels. Existing MongoDB rows
+are retained and ignored by the menu; new installations no longer seed these
+fields. Existing guards reject their old view/edit/reset callbacks and writes.
+All 65 remaining definitions are unchanged and stay alphabetically ordered.
+The full suite passed 1,606 tests, including a new regression covering stored
+legacy rows and all four retired controls. No data migration or Redis clearing
+is required. The previous ten live UI checks remain dated round-18 evidence;
+no new Telegram run was performed for this small removal.

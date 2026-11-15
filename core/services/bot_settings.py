@@ -146,12 +146,6 @@ class BotSettingsService:
             'description': "Maximum simultaneous members admitted through each generated force-subscription invite link. This is not a lifetime join counter. Restart required.",
             'category': 'subscription'
         },
-        'SUPPORT_CHAT_ID': {
-            'type': 'int',
-            'default': 0,
-            'description': "Legacy support-chat ID retained for compatibility; current bot handlers do not use it. Use Request Group ID for #request messages and Support Button URL for the visible support link.",
-            'category': 'support'
-        },
         'DELETE_CHANNEL': {
             'type': 'int',
             'default': 0,
@@ -219,24 +213,6 @@ class BotSettingsService:
             'default': False,
             'description': "Allow normal users to create single-file and batch links. Channel-batch creators must belong to the source and the bot must be able to read it; the source need not be in File Channels or Indexing Channels. Turning this off keeps creation admin-only and does not disable opening valid existing links. Restart required.",
             'category': 'features'
-        },
-        'SUPPORT_GROUP': {
-            'type': 'str',
-            'default': '',
-            'description': "Legacy support-group link retained for compatibility; current buttons do not use it. Set Support Button URL to change the visible support link.",
-            'category': 'support'
-        },
-        'SUPPORT_GROUP_USERNAME': {
-            'type': 'str',
-            'default': '',
-            'description': "Legacy support username retained for compatibility; current handlers do not use it. Set Support Button URL for the support destination and Support Button Label for its text.",
-            'category': 'support'
-        },
-        'MAIN_CHANNEL': {
-            'type': 'str',
-            'default': '',
-            'description': "Legacy main-channel link retained for compatibility; current menus do not use it. Use Force-Sub Channels to require channel membership.",
-            'category': 'channels'
         },
         'LOG_CHANNEL': {
             'type': 'int',
