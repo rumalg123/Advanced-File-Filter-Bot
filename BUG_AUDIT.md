@@ -153,6 +153,7 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-141 | High | Fixed | File-store source setting forms | FILE_STORE_CHANNEL is loaded as a list, but legacy authorization stringifies it, breaking normal users' old links for configured file-only channels. | Normalize stored lists and environment forms, retain both configured source types and privileged bypasses; 41 focused tests passed. |
 | BUG-142 | High | Fixed | Conflicting indexing configuration | Commands update indexed_channels independently of CHANNELS settings; startup re-enables configured sources and removed channels can remain authorized through stale config. | Use the persisted registry for every indexing control and legacy-source check, seed only missing bootstrap IDs, preserve explicit disable/remove decisions and refresh handlers after settings edits. Real-Mongo regressions and all 1,602 tests passed. |
+| BUG-143 | Medium | Fixed | Settings menu discoverability and meaning | Settings follow metadata insertion order, labels confuse request inboxes with indexing and result counts with button counts, and terse help hides scope, units and unused legacy fields. | Sort by visible labels across pages; give all 69 controls accurate labels/help, expose the configuration key, identify inactive legacy settings and retain callback keys and setting defaults. All 1,605 tests passed. |
 
 ## Group search follow-up, 2026-10-30
 
@@ -513,3 +514,18 @@ indexing, and an indexing source worked without File Channels. Source membership
 allowed public creation outside both lists; unconfigured legacy/log sources
 remained blocked. Final cleanup confirmed 51 owned messages absent. No production
 changes or migration were performed. See the round-17 QA evidence.
+
+
+## Settings menu presentation follow-up (2026-11-15)
+
+**BUG-143 fixed:** /bsetting sorts by visible names rather than stored key order.
+Index Requests Channel and Content Requests Channel identify their distinct
+approval inboxes; Search Results per Page describes MAX_BTN_SIZE accurately.
+Public Link Creation, worker counts, units, premium defaults and support-button
+fields now explain their purpose. Four inactive legacy settings are explicitly
+identified. All 69 metadata descriptions were reviewed against current consumers.
+Detail views display the original configuration key. Existing defaults, types,
+bounds, categories, callback identifiers and access bypasses are unchanged.
+Three new page/detail/navigation regressions and all 1,605 tests passed; live
+Telegram acceptance is recorded in the current QA evidence. No migration or
+Redis clearing is required.
