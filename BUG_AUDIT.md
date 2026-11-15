@@ -158,7 +158,6 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-139 | High | Fixed | Channel batch quota admission | Failed counting returns a partial/zero result and changed source contents can exceed the reserved media budget. | Deny before reservation on incomplete enumeration, stop counting once denial is certain, and cap attempted media delivery at the reservation. |
 
-| BUG-140 | Medium | Fixed | Long single-file references | Shortening an oversized reference updates MongoDB by Telegram file_id instead of its file_unique_id key, so link generation fails. | Persist shortened references through the canonical record identity and retain normal/protected link modes within Telegram limits. |
 
 ## Group search follow-up, 2026-10-30
 
@@ -470,10 +469,6 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   media attempts cannot exceed the admitted budget if the source changes.
   Non-media messages do not consume file quota. Six safety cases and eighteen
   existing cancellation/ban/refund cases passed. Existing limits are unchanged.
-
-- **BUG-140 fixed:** oversized single-file references are shortened using
-  the record's canonical MongoDB key. Both normal and protected cases passed,
-  preserving the protection prefix and a Telegram-compatible token length.
 
 - **BUG-135 compatibility follow-up:** configured legacy sources include
   enabled channels managed through admin commands, as well as environment media

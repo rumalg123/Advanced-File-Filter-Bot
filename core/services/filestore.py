@@ -224,7 +224,7 @@ class FileStoreService:
                 logger.error(f"Cannot persist shortened file ref for {media_file_unique_id}")
                 return None
 
-            updated = await self.media_repo.update(file.file_unique_id, {'file_ref': short_ref})
+            updated = await self.media_repo.update(file.file_id, {'file_ref': short_ref})
             if not updated:
                 logger.error(f"Failed to persist shortened file ref for {media_file_unique_id}")
                 return None
