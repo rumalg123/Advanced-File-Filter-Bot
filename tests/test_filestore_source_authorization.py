@@ -96,3 +96,16 @@ async def test_single_item_grant_survives_cache_loss_in_real_mongo(mongo_pool, m
     assert stored.protected and stored.from_msg_id==stored.to_msg_id==4
     assert not stored.premium_only and stored.created_by==1
 
+
+
+@pytest.mark.asyncio
+async def test_admin_managed_legacy_sources_recheck_enabled_state_in_mongo(mongo_pool):
+    from repositories.channel import ChannelRepository
+    from test_repository_crud_contracts import Cache
+    channels=ChannelRepository(mongo_pool,Cache())
+    service=FileStoreService(None,None,NS(ADMINS=[1],CHANNELS=[],FILE_STORE_CHANNEL=''),channel_repo=channels)
+    assert not await service.can_read_legacy_batch(None,42,-100123)
+    assert await channels.add_channel(-100123,added_by=1)
+    assert await service.can_read_legacy_batch(None,42,-100123)
+    assert await channels.update_channel_status(-100123,False)
+    assert not await service.can_read_legacy_batch(None,42,-100123)

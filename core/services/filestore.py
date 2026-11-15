@@ -46,7 +46,8 @@ class FileStoreService:
             cache_manager: CacheManager,
             config: Any,
             batch_link_repo: Optional[BatchLinkRepository] = None,
-            task_manager=None
+            task_manager=None,
+            channel_repo=None,
 
     ):
         self.tasks = ServiceTasks(task_manager)
@@ -54,6 +55,7 @@ class FileStoreService:
         self.cache = cache_manager
         self.config = config
         self.batch_link_repo = batch_link_repo
+        self.channel_repo = channel_repo
         self.batch_cache = {}  # In-memory cache for batch files
         self.batch_cache_ttl = CacheTTLConfig.SEARCH_SESSION   # 1 hour
         self.max_batch_cache_size = 100
@@ -277,6 +279,9 @@ class FileStoreService:
                     continue
             if resolved and resolved == chat_id:
                 return True
+        if self.channel_repo is not None:
+            channel = await self.channel_repo.find_by_id(chat_id, use_cache=False)
+            return bool(channel and channel.enabled is True)
         return False
 
     async def create_batch_link(

@@ -904,6 +904,7 @@ class MediaSearchBot(Client):
                 self.config,
                 self.batch_link_repo,
                 task_manager=self.handler_manager,
+                channel_repo=self.channel_repo,
             )
 
             # Initialize search history service

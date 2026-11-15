@@ -474,3 +474,9 @@ needed. Deploy the corrected code through the normal update/rebuild process.
 - **BUG-140 fixed:** oversized single-file references are shortened using
   the record's canonical MongoDB key. Both normal and protected cases passed,
   preserving the protection prefix and a Telegram-compatible token length.
+
+- **BUG-135 compatibility follow-up:** configured legacy sources include
+  enabled channels managed through admin commands, as well as environment media
+  and file-store channels. The enabled state is read afresh so a removed/disabled
+  dynamic source cannot remain authorized through a stale cache. Real MongoDB
+  activation/revocation and handler-wiring cases passed.
