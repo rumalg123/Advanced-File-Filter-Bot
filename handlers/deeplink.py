@@ -8,6 +8,8 @@ from pyrogram.types import Message
 
 from config.settings import settings
 from core.utils.link_parser import TelegramLinkParser
+from core.services.filestore import BatchSourceUnavailableError
+from core.database.errors import FILE_LOOKUP_RETRY_MESSAGE
 
 from core.utils.caption import CaptionFormatter
 from core.utils.error_formatter import ErrorMessageFormatter
@@ -248,12 +250,14 @@ class DeepLinkHandler(BaseCommandHandler):
         reserved_count = 0
 
         if access_ctx.should_track_retrieval:
-            requested_count = await self.bot.filestore_service.count_channel_media_items(
-                self.bot,
-                chat_id,
-                f_msg_id,
-                l_msg_id
-            )
+            try:
+                requested_count = await self.bot.filestore_service.count_channel_media_items(
+                    self.bot, chat_id, f_msg_id, l_msg_id,
+                    max_items=self.bot.config.NON_PREMIUM_DAILY_LIMIT + 1,
+                )
+            except BatchSourceUnavailableError:
+                await self.safe_reply(message, FILE_LOOKUP_RETRY_MESSAGE)
+                return
             reserve_ok, reserved_count, reserve_message = await self.bot.user_repo.reserve_quota_atomic(
                 user_id,
                 requested_count,
@@ -280,6 +284,7 @@ class DeepLinkHandler(BaseCommandHandler):
                 l_msg_id,
                 protect=protect,
                 delivery_progress=delivery,
+                media_limit=int(reserved_count) if access_ctx.should_track_retrieval else None,
                 access_check=lambda: self.bot.user_repo.can_receive_content(user_id),
             )
 

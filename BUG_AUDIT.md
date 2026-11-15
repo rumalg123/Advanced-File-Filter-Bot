@@ -156,6 +156,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-138 | Medium | Fixed | Batch metadata cache and downloads | Metadata cache TTL is unused; malformed downloads leak files, invalid JSON shapes reach delivery, and denied users trigger downloads. | Validate JSON rows and configured count, expire immutable cached snapshots, clean temporary files on failure/cancellation, and authorize before downloading. |
 
+| BUG-139 | High | Fixed | Channel batch quota admission | Failed counting returns a partial/zero result and changed source contents can exceed the reserved media budget. | Deny before reservation on incomplete enumeration, stop counting once denial is certain, and cap attempted media delivery at the reservation. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -460,3 +462,9 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   and temporary files are removed after success, failure or cancellation. Access
   denial precedes downloads. Nine original regressions failed before the fix;
   the eleven metadata cases and related quota regression suite passed after it.
+
+- **BUG-139 fixed:** source-count errors produce safe retry feedback before
+  reservation or delivery. Counting stops at the daily limit plus one, and
+  media attempts cannot exceed the admitted budget if the source changes.
+  Non-media messages do not consume file quota. Six safety cases and eighteen
+  existing cancellation/ban/refund cases passed. Existing limits are unchanged.

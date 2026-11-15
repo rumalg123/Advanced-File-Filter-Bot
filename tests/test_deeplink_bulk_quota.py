@@ -21,7 +21,7 @@ def fixture():
         settle_quota_delivery=AsyncMock(return_value=True),
     )
     bot = SimpleNamespace(
-        config=SimpleNamespace(ADMINS=[], DISABLE_PREMIUM=False,
+        config=SimpleNamespace(ADMINS=[], CHANNELS=[-100123], DISABLE_PREMIUM=False,
             NON_PREMIUM_DAILY_LIMIT=10, MESSAGE_DELETE_SECONDS=0,
             CUSTOM_FILE_CAPTION=None, BATCH_FILE_CAPTION=None,
             KEEP_ORIGINAL_CAPTION=False, AUTO_DELETE_MESSAGE=None),

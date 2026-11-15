@@ -33,6 +33,10 @@ from repositories.batch_link import BatchLinkRepository, BatchLink
 logger = get_logger(__name__)
 
 
+class BatchSourceUnavailableError(RuntimeError):
+    """The source range could not be completely verified for quota admission."""
+
+
 class FileStoreService:
     """Service for managing file store operations"""
 
@@ -761,7 +765,8 @@ class FileStoreService:
             bot,
             chat_id: int,
             first_msg_id: int,
-            last_msg_id: int
+            last_msg_id: int,
+            max_items: Optional[int] = None,
     ) -> int:
         """Count media messages in a channel range for quota reservation."""
         media_count = 0
@@ -772,8 +777,11 @@ class FileStoreService:
             ):
                 if message.media:
                     media_count += 1
+                    if max_items is not None and media_count >= max_items:
+                        return media_count
         except Exception as e:
             logger.error(f"Error counting channel media items: {e}")
+            raise BatchSourceUnavailableError("Source media count is unavailable") from e
 
         return media_count
 
@@ -787,6 +795,7 @@ class FileStoreService:
             protect: bool = False,
             delivery_progress=None,
             access_check=None,
+            media_limit: Optional[int] = None,
     ) -> Tuple[int, int, int]:
         """
         Send files directly from channel (DSTORE method)
@@ -795,6 +804,7 @@ class FileStoreService:
         success_count = 0
         total_count = 0
         media_success_count = 0
+        media_attempt_count = 0
         sent_messages = []  # Track sent messages for deletion
 
         try:
@@ -807,6 +817,8 @@ class FileStoreService:
                 total_count += 1
 
                 if message.media:
+                    if media_limit is not None and media_attempt_count >= media_limit:
+                        continue
                     # Initialize caption with default value to avoid uninitialized variable warnings
                     caption = message.caption.html if message.caption else ""
                     
@@ -840,6 +852,7 @@ class FileStoreService:
                         )
 
                         # telegram_api.call_api already uses semaphore_manager internally
+                        media_attempt_count += 1
                         if delivery_progress is not None:
                             delivery_progress.attempted += 1
                         sent_msg = await telegram_api.call_api(
