@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import re
 import html
 
 from pyrogram import Client
@@ -79,7 +80,7 @@ class DeepLinkHandler(BaseCommandHandler):
         elif data.startswith("DSTORE-"):
             # Direct store request
             await self._send_dstore_files(client, message, data[7:])
-            
+
         elif data.startswith("PBLINK-"):
             # Premium batch link request
             batch_id = data[7:]  # Remove 'PBLINK-' prefix
@@ -193,33 +194,46 @@ class DeepLinkHandler(BaseCommandHandler):
         """Send files directly from channel"""
         user_id = message.from_user.id
 
-        # Decode DSTORE data
-        try:
-            decoded = base64.b64decode(
-                encoded + "=" * (-len(encoded) % 4), altchars=b"-_", validate=True
-            ).decode("ascii")
-            parts = decoded.split("_")
+        if encoded.startswith("BL-"):
+            if not re.fullmatch(r"BL-[0-9a-f]{32}", encoded):
+                return await self.safe_reply(message, ErrorMessageFormatter.format_invalid("batch link"))
+            batch_link = await self.bot.filestore_service.get_premium_batch_link(encoded)
+            if not batch_link or batch_link.premium_only:
+                return await self.safe_reply(message, ErrorMessageFormatter.format_not_found("Batch") + " or expired")
+            f_msg_id, l_msg_id, chat_id = batch_link.from_msg_id, batch_link.to_msg_id, batch_link.source_chat_id
+            protect = batch_link.protected
+            if not TelegramLinkParser.is_valid_batch_range(f_msg_id, l_msg_id, settings.processing.max_batch_messages):
+                return await self.safe_reply(message, ErrorMessageFormatter.format_invalid("batch range"))
+        else:
+            # Unsigned links remain compatible only for configured media sources.
+            try:
+                decoded = base64.b64decode(
+                    encoded + "=" * (-len(encoded) % 4), altchars=b"-_", validate=True
+                ).decode("ascii")
+                parts = decoded.split("_")
 
-            if len(parts) not in (3, 4):
-                raise ValueError("Invalid format")
+                if len(parts) not in (3, 4):
+                    raise ValueError("Invalid format")
 
-            f_msg_id = int(parts[0])
-            l_msg_id = int(parts[1])
-            chat_id = int(parts[2])
-            protect = parts[3] == "pbatch" if len(parts) > 3 else False
-            if (
-                not chat_id
-                or (len(parts) == 4 and parts[3] not in ("batch", "pbatch"))
-                or not TelegramLinkParser.is_valid_batch_range(
-                    f_msg_id, l_msg_id, settings.processing.max_batch_messages
-                )
-            ):
-                raise ValueError("Invalid batch range or mode")
-
-        except Exception as e:
-            logger.error(f"Failed to decode identifier: {encoded} Error: {e}")
-            await self.safe_reply(message, ErrorMessageFormatter.format_invalid("link format"))
-            return
+                f_msg_id = int(parts[0])
+                l_msg_id = int(parts[1])
+                chat_id = int(parts[2])
+                protect = parts[3] == "pbatch" if len(parts) > 3 else False
+                if (
+                    not chat_id
+                    or (len(parts) == 4 and parts[3] not in ("batch", "pbatch"))
+                    or not TelegramLinkParser.is_valid_batch_range(
+                        f_msg_id, l_msg_id, settings.processing.max_batch_messages
+                    )
+                ):
+                    raise ValueError("Invalid batch range or mode")
+            except Exception as e:
+                logger.error(f"Failed to decode identifier: {encoded} Error: {e}")
+                await self.safe_reply(message, ErrorMessageFormatter.format_invalid("link format"))
+                return
+            if not await self.bot.filestore_service.can_read_legacy_batch(client, user_id, chat_id):
+                await self.safe_reply(message, "This legacy batch source is unavailable. Please request a newly generated link.")
+                return
 
         # Check access
         owner_id = self.bot.config.ADMINS[0] if self.bot.config.ADMINS else None
@@ -605,7 +619,7 @@ class DeepLinkHandler(BaseCommandHandler):
     async def _send_premium_batch(self, client: Client, message: Message, batch_id: str):
         """Send premium batch files with access control"""
         user_id = message.from_user.id
-        
+
         # Get batch link details
         batch_link = await self.bot.filestore_service.get_premium_batch_link(batch_id)
         if not batch_link:
@@ -630,8 +644,8 @@ class DeepLinkHandler(BaseCommandHandler):
         global_premium_enabled = not self.bot.config.DISABLE_PREMIUM
         user_is_premium, _ = await self.bot.user_repo.check_and_update_premium_status(user)
         can_access, reason = await self.bot.filestore_service.check_premium_batch_access(
-            batch_link, 
-            user_id, 
+            batch_link,
+            user_id,
             user_is_premium,
             global_premium_enabled
         )

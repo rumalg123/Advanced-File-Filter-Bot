@@ -142,7 +142,7 @@ class BatchLinkRepository(BaseRepository[BatchLink]):
             logger.error("Invalid message IDs")
             return False
             
-        if batch_link.from_msg_id >= batch_link.to_msg_id:
+        if batch_link.from_msg_id > batch_link.to_msg_id:
             logger.error("Invalid message range")
             return False
 

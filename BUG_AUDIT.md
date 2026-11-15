@@ -148,6 +148,8 @@ Status values: `Open`, `In progress`, `Fixed`, `Blocked`.
 
 | BUG-134 | High | Fixed | Protected batch command forms | Qualified protected commands lose protection and repeated whitespace prevents batch creation. | Normalize the command username suffix and whitespace; all 16 ordinary/premium alias cases pass. |
 
+| BUG-135 | High | Fixed | Batch source authorization | Unsigned ranges can be forged to read unrelated bot-accessible chats; public creators and missing premium storage can bypass source/access policy. | Store new ordinary ranges behind 128-bit opaque IDs, verify creators and source readability, restrict legacy ranges to configured sources with admin bypass, and never downgrade premium links. |
+
 ## Group search follow-up, 2026-10-30
 
 BUG-067 escapes user text in the shared search caption formatter. **Eight
@@ -423,3 +425,14 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   protection setting with qualified usernames and whitespace. Sixteen command
   regressions passed; the original focused run reproduced eleven failures.
   The bounded live file-store/batch round is in progress.
+
+- **BUG-135 fixed:** new ordinary batch links persist their source, range and
+  protection behind an unguessable identifier. Public creation verifies current
+  source membership; configured admins retain their bypass. Unsigned legacy
+  links work for ordinary users only on configured media/file-store channels,
+  following the operator's explicit compatibility choice. Premium grants cannot
+  be opened through the ordinary route, and missing premium storage never
+  falls back to an ordinary link. Single-item ordinary grants persist correctly.
+  Fifty-seven focused cases passed, including real MongoDB/cache-loss retrieval.
+  The inaccurate premium-fallback diagnostic was changed to a fail-closed error;
+  other existing operator logger lines remain. Live validation remains pending.

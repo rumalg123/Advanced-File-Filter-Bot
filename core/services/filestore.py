@@ -227,12 +227,57 @@ class FileStoreService:
         logger.info(f"Generated link: {link} for file_ref: {identifier}")
         return link
 
+    async def _can_create_source_batch(self, client: Client, user_id: int, chat_id: int) -> bool:
+        """Require an authorized creator and a source the bot can actually read."""
+        admins = getattr(self.config, 'ADMINS', []) or []
+        if user_id not in admins:
+            if not user_id or not getattr(self.config, 'PUBLIC_FILE_STORE', False):
+                return False
+            try:
+                member = await telegram_api.call_api(client.get_chat_member, chat_id, user_id, chat_id=chat_id)
+                present = member.status in (enums.ChatMemberStatus.OWNER, enums.ChatMemberStatus.ADMINISTRATOR,
+                                            enums.ChatMemberStatus.MEMBER)
+                if member.status == enums.ChatMemberStatus.RESTRICTED:
+                    present = member.is_member is True
+                if not present:
+                    return False
+            except Exception as e:
+                logger.warning("Cannot verify file-store creator in source %s: %s", chat_id, e)
+                return False
+        return True
+
+    async def can_read_legacy_batch(self, client: Client, user_id: int, chat_id: int) -> bool:
+        """Unsigned legacy ranges are restricted to explicitly configured media sources."""
+        if user_id in (getattr(self.config, 'ADMINS', []) or []):
+            return True
+        configured = getattr(self.config, 'CHANNELS', []) or []
+        if isinstance(configured, str):
+            configured = configured.replace(',', ' ').split()
+        targets = list(configured)
+        filestore = getattr(self.config, 'FILE_STORE_CHANNEL', '')
+        if filestore:
+            targets.extend(str(filestore).replace(',', ' ').split())
+        for target in targets:
+            try:
+                resolved = int(target)
+            except (ValueError, TypeError):
+                try:
+                    chat = await telegram_api.call_api(client.get_chat, target, chat_id=None)
+                    resolved = chat.id
+                except Exception as e:
+                    logger.warning("Cannot resolve configured legacy batch source %s: %s", target, e)
+                    continue
+            if resolved and resolved == chat_id:
+                return True
+        return False
+
     async def create_batch_link(
             self,
             client: Client,
             first_msg_link: str,
             last_msg_link: str,
-            protect: bool = False
+            protect: bool = False,
+            created_by: int = 0,
     ) -> Optional[str]:
         """Create batch link for multiple files"""
         first = TelegramLinkParser.parse_link(first_msg_link)
@@ -263,12 +308,26 @@ class FileStoreService:
         f_chat_id = chat_ids[0]
         f_msg_id, l_msg_id = first.message_id, last.message_id
 
-        # Create batch data
-        string = f"{f_msg_id}_{l_msg_id}_{f_chat_id}_{'pbatch' if protect else 'batch'}"
-        b_64 = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
+        if not self.batch_link_repo:
+            logger.error("BatchLinkRepository not initialized - cannot create a batch link")
+            return None
+        if not await self._can_create_source_batch(client, created_by, f_chat_id):
+            return None
+        try:
+            source_message = await telegram_api.call_api(client.get_messages, f_chat_id, f_msg_id, chat_id=f_chat_id)
+            if source_message is None or source_message.empty:
+                return None
+        except Exception as e:
+            logger.warning("Cannot read batch source %s: %s", f_chat_id, e)
+            return None
+        batch_id = f"BL-{uuid.uuid4().hex}"
+        batch = BatchLink(id=batch_id, source_chat_id=f_chat_id,
+                          from_msg_id=f_msg_id, to_msg_id=l_msg_id,
+                          protected=protect, premium_only=False, created_by=created_by)
+        if not await self.batch_link_repo.create_batch_link(batch):
+            return None
         me = await telegram_api.call_api(client.get_me)
-        bot_username = me.username
-        return f"https://t.me/{bot_username}?start=DSTORE-{b_64}"
+        return f"https://t.me/{me.username}?start=DSTORE-{batch_id}"
 
     async def create_premium_batch_link(
             self,
@@ -281,8 +340,8 @@ class FileStoreService:
     ) -> Optional[str]:
         """Create premium-only batch link using robust parsing and validation"""
         if not self.batch_link_repo:
-            logger.error("BatchLinkRepository not initialized - falling back to regular batch link")
-            return await self.create_batch_link(client, first_msg_link, last_msg_link, protect)
+            logger.error("BatchLinkRepository not initialized - cannot create a premium batch link")
+            return None
         
         # Use robust link parser
         parsed_links = TelegramLinkParser.parse_link_pair(first_msg_link, last_msg_link)
@@ -308,15 +367,20 @@ class FileStoreService:
                 logger.error(f"Error resolving chat {first_parsed.chat_identifier}: {e}")
                 return None
         
+        if not await self._can_create_source_batch(client, created_by, chat_id):
+            return None
+
         # Validate bot has access to source channel
         try:
             # Check if bot can access the first message (quick validation)
-            await telegram_api.call_api(
+            source_message = await telegram_api.call_api(
                 client.get_messages,
                 chat_id,
                 first_parsed.message_id,
                 chat_id=chat_id
             )
+            if source_message is None or source_message.empty:
+                return None
         except Exception as e:
             logger.error(f"Bot cannot access source channel {chat_id}: {e}")
             return None

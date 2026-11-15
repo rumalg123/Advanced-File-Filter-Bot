@@ -65,7 +65,7 @@ class FileStoreHandler(BaseHandler):
         link = await self.filestore_service.create_file_link(
             client,
             message,
-            protect=protect
+            protect=protect,
         )
 
         if link:
@@ -98,7 +98,8 @@ class FileStoreHandler(BaseHandler):
             client,
             first_link,
             last_link,
-            protect=protect
+            protect=protect,
+            created_by=message.from_user.id,
         )
 
         if link:
