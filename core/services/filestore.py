@@ -238,7 +238,7 @@ class FileStoreService:
         return link
 
     async def _can_create_source_batch(self, client: Client, user_id: int, chat_id: int) -> bool:
-        """Require an authorized creator and a source the bot can actually read."""
+        """Require an authorized creator for the source channel."""
         admins = getattr(self.config, 'ADMINS', []) or []
         if user_id not in admins:
             if not user_id or not getattr(self.config, 'PUBLIC_FILE_STORE', False):

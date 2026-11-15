@@ -453,7 +453,7 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   The message-order diagnostic now correctly describes strictly reversed bounds.
 
 - **BUG-137 fixed:** configured admins retain premium batch access even when
-  their own premium status is inactive. Thirty-two policy combinations and eight
+  their own premium status is inactive. Sixteen policy combinations and twenty-four
   related existing access/quota cases passed. Ordinary-user premium policy is
   unchanged, including rejection of premium-only links in global free mode.
 
@@ -475,3 +475,9 @@ needed. Deploy the corrected code through the normal update/rebuild process.
   and file-store channels. The enabled state is read afresh so a removed/disabled
   dynamic source cannot remain authorized through a stale cache. Real MongoDB
   activation/revocation and handler-wiring cases passed.
+
+- **QA correction:** the initial BUG-140 shortening hypothesis was withdrawn.
+  Media `_id` is the Telegram `file_id`; changing that update to `file_unique_id`
+  was incorrect and was reverted. Replacement regressions use the real media
+  repository and MongoDB to verify that normal/protected shortened links resolve
+  the same persisted record, instead of asserting a mocked update argument.

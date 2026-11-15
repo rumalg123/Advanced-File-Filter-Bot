@@ -20,7 +20,7 @@ _processing_config = settings.processing
 
 @dataclass
 class BatchLink:
-    """Batch link entity for premium-only batch links"""
+    """Persisted source grant for ordinary or premium batch links"""
     id: str  # Unique identifier for the batch link
     source_chat_id: int  # Source chat/channel ID
     from_msg_id: int  # Starting message ID
